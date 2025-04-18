@@ -26,12 +26,15 @@ from api.repositories.data_products_repository import data_product_repo
 
 # Import Search Interfaces
 from api.common.search_interfaces import SearchableAsset, SearchIndexItem
+# Import the registry decorator
+from api.common.search_registry import searchable_asset
 
 from api.common.logging import setup_logging, get_logger
 setup_logging(level=logging.INFO)
 logger = get_logger(__name__)
 
 # Inherit from SearchableAsset
+@searchable_asset
 class DataProductsManager(SearchableAsset):
     def __init__(self, db: Session, ws_client: Optional[WorkspaceClient] = None):
         """

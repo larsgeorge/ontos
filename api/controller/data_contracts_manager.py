@@ -3,6 +3,8 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
+import os
+from pathlib import Path
 
 import yaml
 
@@ -19,15 +21,32 @@ from api.models.data_contracts import (
 
 # Import Search Interfaces
 from api.common.search_interfaces import SearchableAsset, SearchIndexItem
+# Import the registry decorator
+from api.common.search_registry import searchable_asset
 
 from api.common.logging import setup_logging, get_logger
 setup_logging(level=logging.INFO)
 logger = get_logger(__name__)
 
 # Inherit from SearchableAsset
+@searchable_asset
 class DataContractsManager(SearchableAsset):
-    def __init__(self):
+    def __init__(self, data_dir: Path):
         self._contracts: Dict[str, DataContract] = {}
+        self._data_dir = data_dir
+        self._load_initial_data()
+
+    def _load_initial_data(self):
+        """Loads initial data from the YAML file if it exists."""
+        yaml_path = self._data_dir / 'data_contracts.yaml'
+        if yaml_path.exists():
+            try:
+                self.load_from_yaml(str(yaml_path))
+                logger.info(f"Successfully loaded initial data contracts from {yaml_path}")
+            except Exception as e:
+                logger.error(f"Error loading initial data contracts from {yaml_path}: {e!s}")
+        else:
+            logger.warning(f"Initial data contracts YAML file not found at {yaml_path}")
 
     def create_contract(self, name: str, contract_text: str, format: str, version: str,
                        owner: str, description: Optional[str] = None) -> DataContract:

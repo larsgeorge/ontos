@@ -2,6 +2,8 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
+import os
+from pathlib import Path
 
 import yaml
 
@@ -9,16 +11,33 @@ from api.models.business_glossary import BusinessGlossary, Domain, GlossaryTerm
 
 # Import Search Interfaces
 from api.common.search_interfaces import SearchableAsset, SearchIndexItem
+# Import the registry decorator
+from api.common.search_registry import searchable_asset
 
 from api.common.logging import setup_logging, get_logger
 setup_logging(level=logging.INFO)
 logger = get_logger(__name__)
 
 # Inherit from SearchableAsset
+@searchable_asset
 class BusinessGlossariesManager(SearchableAsset):
-    def __init__(self):
+    def __init__(self, data_dir: Path):
         self._domains: Dict[str, Domain] = {}
         self._glossaries: Dict[str, BusinessGlossary] = {}
+        self._data_dir = data_dir
+        self._load_initial_data()
+
+    def _load_initial_data(self):
+        """Loads initial data from the YAML file if it exists."""
+        yaml_path = self._data_dir / 'business_glossaries.yaml'
+        if yaml_path.exists():
+            try:
+                self.load_from_yaml(str(yaml_path))
+                logger.info(f"Successfully loaded initial business glossary data from {yaml_path}")
+            except Exception as e:
+                logger.error(f"Error loading initial business glossary data from {yaml_path}: {e!s}")
+        else:
+            logger.warning(f"Initial business glossary YAML file not found at {yaml_path}")
 
     def create_term(self,
                    name: str,

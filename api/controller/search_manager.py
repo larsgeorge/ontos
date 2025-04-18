@@ -4,15 +4,6 @@ from typing import Any, Dict, List, Optional, Iterable
 # Import Search Interfaces
 from api.common.search_interfaces import SearchableAsset, SearchIndexItem
 
-# Remove direct manager imports if no longer needed for other purposes
-# from api.controller.business_glossaries_manager import BusinessGlossariesManager
-# from api.controller.data_contracts_manager import DataContractsManager
-# from api.controller.data_products_manager import DataProductsManager
-# from api.controller.notifications_manager import NotificationsManager
-# from api.models.data_products import DataProduct
-# from api.models.business_glossary import BusinessGlossaryTerm
-# from api.models.data_contracts import DataContract
-
 from api.common.logging import setup_logging, get_logger
 setup_logging(level=logging.INFO)
 logger = get_logger(__name__)
@@ -20,13 +11,15 @@ logger = get_logger(__name__)
 class SearchManager:
     def __init__(
         self,
-        searchable_managers: Iterable[SearchableAsset] # Accept an iterable of searchable managers
+        searchable_managers: Iterable[SearchableAsset]
     ):
-        """Initialize search manager with a collection of searchable asset managers."""
-        # self.notification_manager = NotificationsManager() # Keep if needed elsewhere
+        """Initialize search manager with a collection of pre-instantiated searchable asset managers."""
         self.searchable_managers = list(searchable_managers)
         self.index: List[SearchIndexItem] = []
-        self.build_index() # Build index on initialization
+        
+        logger.info(f"SearchManager initialized with {len(self.searchable_managers)} managers.")
+        
+        self.build_index() # Build index after receiving managers
 
     def build_index(self):
         """Builds or rebuilds the search index by querying searchable managers."""

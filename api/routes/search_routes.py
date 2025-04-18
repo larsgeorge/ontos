@@ -1,21 +1,26 @@
 import logging
 from typing import List, Dict, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+# Remove Session and WorkspaceClient imports if no longer needed directly
+# from sqlalchemy.sdk import Session 
+# from databricks.sdk import WorkspaceClient 
 
 from api.controller.search_manager import SearchManager
-# Import the manager dependency functions/instances
-from api.routes.data_product_routes import get_data_products_manager
-# Import the glossary manager instance directly
-from api.routes.business_glossary_routes import glossary_manager as business_glossary_manager_instance 
-# Import the contract manager instance directly
-from api.routes.data_contract_routes import contract_manager as data_contract_manager_instance 
-# Import the actual manager types for type hinting
-from api.controller.data_products_manager import DataProductsManager
-from api.controller.business_glossaries_manager import BusinessGlossariesManager
-from api.controller.data_contracts_manager import DataContractsManager
+# Remove direct manager imports as they are no longer needed here
+# from api.routes.data_product_routes import get_data_products_manager
+# from api.routes.business_glossary_routes import glossary_manager as business_glossary_manager_instance 
+# from api.routes.data_contract_routes import contract_manager as data_contract_manager_instance 
+# from api.controller.data_products_manager import DataProductsManager
+# from api.controller.business_glossaries_manager import BusinessGlossariesManager
+# from api.controller.data_contracts_manager import DataContractsManager
+
 # Import the search interfaces
 from api.common.search_interfaces import SearchableAsset, SearchIndexItem
+
+# Import dependencies for db and ws_client
+from api.common.database import get_db
+from api.common.workspace_client import get_workspace_client_dependency
 
 # Configure logging
 from api.common.logging import setup_logging, get_logger
@@ -25,47 +30,21 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["search"])
 
 # --- Manager Dependency ---
-_search_manager_instance: Optional[SearchManager] = None
+_search_manager_instance: Optional[SearchManager] = None # This global variable is now unused
 
 async def get_search_manager(
-    # Inject managers that use Depends
-    product_manager: DataProductsManager = Depends(get_data_products_manager),
-    # Contract manager is now injected via direct import below
-    # Glossary manager is now injected via direct import below
+    # Remove db and ws_client dependencies
+    # db: Session = Depends(get_db),
+    # ws_client: Optional[WorkspaceClient] = Depends(get_workspace_client_dependency()) 
+    request: Request # Inject Request object
 ) -> SearchManager:
-    """Dependency to get or create the SearchManager instance with injected searchable managers."""
-    global _search_manager_instance
-    if _search_manager_instance is None:
-        # Collect managers 
-        searchable_managers: List[SearchableAsset] = []
-        if isinstance(product_manager, SearchableAsset):
-            searchable_managers.append(product_manager)
-        else:
-             logger.warning("DataProductsManager does not implement SearchableAsset or failed injection.")
-             
-        if isinstance(data_contract_manager_instance, SearchableAsset):
-             searchable_managers.append(data_contract_manager_instance)
-        else:
-             logger.warning("Imported data_contract_manager_instance does not implement SearchableAsset.")
-
-        if isinstance(business_glossary_manager_instance, SearchableAsset):
-             searchable_managers.append(business_glossary_manager_instance)
-        else:
-             logger.warning("Imported business_glossary_manager_instance does not implement SearchableAsset.")
-
-        if len(searchable_managers) < 3: 
-            logger.warning(f"Only {len(searchable_managers)} searchable managers were collected (expected 3).")
-        else:
-             logger.info(f"{len(searchable_managers)} searchable managers collected.")
-             
-        try:
-            _search_manager_instance = SearchManager(
-                searchable_managers=searchable_managers
-            )
-        except Exception as e:
-             logger.exception("--- !!! FAILED TO INSTANTIATE SearchManager !!! ---")
-             raise e 
-    return _search_manager_instance
+    """Dependency to retrieve the SearchManager singleton instance from app.state."""
+    search_manager = getattr(request.app.state, 'search_manager', None)
+    if search_manager is None:
+        # This should not happen if startup was successful
+        logger.critical("SearchManager instance not found in app.state!")
+        raise HTTPException(status_code=500, detail="Search service is not available.")
+    return search_manager
 
 # --- Routes ---
 @router.get("/search", response_model=List[SearchIndexItem])

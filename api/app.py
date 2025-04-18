@@ -3,7 +3,7 @@ import mimetypes
 import time
 from pathlib import Path
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -34,9 +34,11 @@ from api.common.logging import setup_logging, get_logger
 from api.common.database import init_db, get_session_factory, SQLAlchemySession
 from api.controller.data_products_manager import DataProductsManager
 from api.controller.data_asset_reviews_manager import DataAssetReviewManager
-from databricks.sdk import WorkspaceClient
+from api.controller.data_contracts_manager import DataContractsManager
+from api.controller.business_glossaries_manager import BusinessGlossariesManager
+from api.controller.search_manager import SearchManager
 from api.common.workspace_client import get_workspace_client
-from api.controller.notifications_manager import NotificationsManager
+from api.utils.demo_data_loader import load_demo_data
 
 # Initialize configuration and logging first
 init_config()
@@ -47,65 +49,12 @@ logger = get_logger(__name__)
 logger.info(f"Starting application in {settings.ENV} mode.")
 logger.info(f"Debug mode: {settings.DEBUG}")
 
+# Define paths earlier for use in startup
+BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / "data"
+STATIC_ASSETS_PATH = BASE_DIR.parent / "static"
+
 # --- Helper Functions (Define BEFORE App Instantiation) ---
-
-# --- Demo Data Loading Function ---
-def load_demo_data(db_session: SQLAlchemySession, settings: Settings):
-    """Loads demo data if demo mode is enabled and tables are empty."""
-    logger.info(f"Inside load_demo_data. Checking APP_DEMO_MODE: {settings.APP_DEMO_MODE}")
-    if not settings.APP_DEMO_MODE:
-        logger.info("Demo mode is disabled. Skipping demo data loading.")
-        return
-
-    logger.info("Demo mode is enabled. Checking if demo data needs to be loaded...")
-    
-    # --- Data Products --- 
-    try:
-        logger.debug("Checking Data Products for demo data loading...")
-        dp_manager = DataProductsManager(db=db_session)
-        if dp_manager._repo.is_empty(db=db_session): 
-            YAML_PATH = Path('api/data/data_products.yaml')
-            if YAML_PATH.exists():
-                logger.info(f"Data Products table is empty. Loading demo data from {YAML_PATH}...")
-                success = dp_manager.load_from_yaml(str(YAML_PATH))
-                if success:
-                    logger.info("Successfully loaded demo data for Data Products.")
-                else:
-                    logger.error("Failed to load demo data for Data Products.")
-            else:
-                logger.warning(f"Demo mode enabled but {YAML_PATH} not found.")
-        else:
-            logger.info("Data Products table is not empty. Skipping demo data loading.")
-    except Exception as e:
-         logger.error(f"Error during Data Products demo data check/load: {e}", exc_info=True)
-
-    # --- Data Asset Reviews --- #
-    try:
-        logger.debug("Checking Data Asset Reviews for demo data loading...")
-        # Ensure dependencies for the manager are available
-        # Note: Getting ws_client might be complex outside request context.
-        # Consider alternative ways to provide it during startup if needed,
-        # or make ws_client optional in the manager for loading.
-        # Assuming get_workspace_client() works here for simplicity.
-        # Assuming a simple NotificationsManager instantiation works.
-        ws_client = get_workspace_client() # Placeholder - adjust if needed
-        notifications_mgr = NotificationsManager()
-        dar_manager = DataAssetReviewManager(db=db_session, ws_client=ws_client, notifications_manager=notifications_mgr)
-        YAML_PATH = Path('api/data/data_asset_reviews.yaml')
-        if YAML_PATH.exists():
-            # load_from_yaml now includes the check for empty table
-            logger.info(f"Attempting demo data load for Data Asset Reviews from {YAML_PATH}...")
-            success = dar_manager.load_from_yaml(str(YAML_PATH))
-            if success:
-                logger.info("Successfully loaded demo data for Data Asset Reviews.")
-            # else: # load_from_yaml logs errors/warnings internally
-            #    logger.error("Failed to load demo data for Data Asset Reviews.")
-        else:
-            logger.warning(f"Demo mode enabled but {YAML_PATH} not found.")
-    except Exception as e:
-         logger.error(f"Error during Data Asset Reviews demo data check/load: {e}", exc_info=True)
-
-    # --- Add similar blocks for other services --- 
 
 # --- Application Lifecycle Events ---
 
@@ -125,27 +74,104 @@ async def startup_event():
          raise RuntimeError("Application cannot start due to database initialization error.") from e
 
     # 2. Load Demo Data (conditionally)
-    db_session = None 
+    db_session_factory = None 
     try:
         # Get the factory *after* init_db has run
-        CurrentSessionFactory = get_session_factory()
+        db_session_factory = get_session_factory()
         # Directly try to create the session using the retrieved factory
-        db_session = CurrentSessionFactory()
+        db_session_for_startup = db_session_factory()
         current_settings = get_settings()
         logger.info(f"Attempting demo data load. Session created. Demo mode from settings: {current_settings.APP_DEMO_MODE}")
-        load_demo_data(db_session=db_session, settings=current_settings)
+        load_demo_data(db_session=db_session_for_startup, settings=current_settings)
         logger.info("Completed call to load_demo_data.")
-        db_session.commit()
+        db_session_for_startup.commit()
     except RuntimeError as e:
         # Catch error if get_session_factory indicates factory wasn't initialized
         logger.error(f"Cannot load demo data: {e}") 
     except Exception as e:
         logger.error(f"Error during demo data loading execution: {e}", exc_info=True)
-        if db_session: # Rollback only if session was created
-            db_session.rollback()
+        if db_session_for_startup: # Rollback only if session was created
+            db_session_for_startup.rollback()
     finally:
-        if db_session: # Close only if session was created
-            db_session.close()
+        if db_session_for_startup: # Close only if session was created
+            db_session_for_startup.close()
+            logger.info("Demo data DB session closed.")
+
+    # --- Initialize Dependencies (Workspace Client, Managers) ---
+    ws_client = None
+    try:
+        # Attempt to get workspace client (might return None if not configured)
+        current_settings = get_settings()
+        ws_client = get_workspace_client(settings=current_settings)
+        if ws_client:
+            logger.info("WorkspaceClient initialized successfully.")
+        else:
+            logger.warning("WorkspaceClient could not be initialized (likely missing config). Dependent features may fail.")
+    except Exception as e:
+        logger.error(f"Error initializing WorkspaceClient: {e}", exc_info=True)
+        # Continue startup, but log the error
+
+    # Create manager instances using dependencies
+    db_session_for_startup = None
+    app.state.manager_instances = {}
+    try:
+        db_session_for_startup = db_session_factory()
+        logger.info("Creating manager singletons...")
+        
+        # Instantiate managers requiring dependencies
+        dp_manager = DataProductsManager(db=db_session_for_startup, ws_client=ws_client)
+        app.state.manager_instances['data_products'] = dp_manager
+        logger.info("DataProductsManager singleton created.")
+        
+        # Instantiate managers requiring data_dir
+        dc_manager = DataContractsManager(data_dir=DATA_DIR)
+        app.state.manager_instances['data_contracts'] = dc_manager
+        logger.info("DataContractsManager singleton created.")
+        
+        # Instantiate managers requiring data_dir
+        bg_manager = BusinessGlossariesManager(data_dir=DATA_DIR)
+        app.state.manager_instances['business_glossaries'] = bg_manager
+        logger.info("BusinessGlossariesManager singleton created.")
+        
+        # Instantiate SearchManager with the collection of singletons
+        search_manager_instance = SearchManager(
+            searchable_managers=app.state.manager_instances.values()
+        )
+        app.state.search_manager = search_manager_instance
+        logger.info("SearchManager singleton created.")
+        
+        db_session_for_startup.commit() 
+        logger.info("Manager singletons created successfully.")
+        
+    except Exception as e:
+        logger.critical(f"Failed to create manager singletons during startup: {e}", exc_info=True)
+        if db_session_for_startup: db_session_for_startup.rollback()
+        # Decide if this is fatal. For now, log critical and continue, 
+        # but dependencies might fail later.
+    finally:
+        if db_session_for_startup:
+            db_session_for_startup.close()
+            logger.info("Startup DB session for manager instantiation closed.")
+
+    # --- Demo Data Loading (Uses a separate session) ---
+    db_session_for_demo = None 
+    try:
+        db_session_for_demo = db_session_factory()
+        current_settings = get_settings()
+        logger.info(f"Attempting demo data load. Demo mode: {current_settings.APP_DEMO_MODE}")
+        load_demo_data(db_session=db_session_for_demo, settings=current_settings) 
+        logger.info("Completed call to load_demo_data.")
+        db_session_for_demo.commit()
+    except RuntimeError as e:
+        # Catch error if get_session_factory indicates factory wasn't initialized
+        logger.error(f"Cannot load demo data: {e}") 
+    except Exception as e:
+        logger.error(f"Error during demo data loading execution: {e}", exc_info=True)
+        if db_session_for_demo: # Rollback only if session was created
+            db_session_for_demo.rollback()
+    finally:
+        if db_session_for_demo: # Close only if session was created
+            db_session_for_demo.close()
             logger.info("Demo data DB session closed.")
 
     logger.info("Application startup complete.")
@@ -158,7 +184,7 @@ async def shutdown_event():
 # --- FastAPI App Instantiation (AFTER defining lifecycle functions) ---
 
 # Define paths
-STATIC_ASSETS_PATH = Path(__file__).parent.parent / "static"
+# STATIC_ASSETS_PATH = Path(__file__).parent.parent / "static"
 logger.info(f"STATIC_ASSETS_PATH: {STATIC_ASSETS_PATH}")
 
 # mimetypes.add_type('application/javascript', '.js')

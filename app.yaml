@@ -16,3 +16,5 @@ env:
     value: "app_ucsak"
   - name: "DATABRICKS_VOLUME"
     value: "app_files"
+  - name: "APP_DEMO_MODE"
+    value: "true"

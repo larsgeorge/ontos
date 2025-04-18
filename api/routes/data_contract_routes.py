@@ -3,7 +3,7 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile, Depends, Request
 from fastapi.responses import JSONResponse
 
 from api.controller.data_contracts_manager import DataContractsManager
@@ -15,24 +15,20 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["data-contracts"])
 
-# Create a single instance of the manager
-contract_manager = DataContractsManager()
-
-# Check for YAML file in data directory
-yaml_path = Path(__file__).parent.parent / 'data' / 'data_contracts.yaml'
-if os.path.exists(yaml_path):
-    try:
-        # Load data from YAML file
-        contract_manager.load_from_yaml(str(yaml_path))
-        logger.info(f"Successfully loaded data contracts from {yaml_path}")
-    except Exception as e:
-        logger.error(f"Error loading data contracts from YAML: {e!s}")
+# Add dependency function to get the singleton
+async def get_data_contracts_manager(request: Request) -> DataContractsManager:
+    """Retrieves the DataContractsManager singleton from app.state."""
+    manager = request.app.state.manager_instances.get('data_contracts')
+    if manager is None:
+         logger.critical("DataContractsManager instance not found in app.state!")
+         raise HTTPException(status_code=500, detail="Data Contracts service is not available.")
+    return manager
 
 @router.get('/data-contracts')
-async def get_contracts():
+async def get_contracts(manager: DataContractsManager = Depends(get_data_contracts_manager)):
     """Get all data contracts"""
     try:
-        contracts = contract_manager.list_contracts()
+        contracts = manager.list_contracts()
 
         # Format the response to match what the frontend expects
         formatted_contracts = []
@@ -48,10 +44,10 @@ async def get_contracts():
         raise HTTPException(status_code=500, detail=error_msg)
 
 @router.get('/data-contracts/{contract_id}')
-async def get_contract(contract_id: str):
+async def get_contract(contract_id: str, manager: DataContractsManager = Depends(get_data_contracts_manager)):
     """Get a specific data contract"""
     try:
-        contract = contract_manager.get_contract(contract_id)
+        contract = manager.get_contract(contract_id)
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
 
@@ -63,10 +59,10 @@ async def get_contract(contract_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post('/data-contracts')
-async def create_contract(contract_data: dict):
+async def create_contract(contract_data: dict, manager: DataContractsManager = Depends(get_data_contracts_manager)):
     """Create a new data contract"""
     try:
-        contract = contract_manager.create_contract(
+        contract = manager.create_contract(
             name=contract_data['name'],
             contract_text=contract_data['contract_text'],
             format=contract_data.get('format', 'json'),  # Default to JSON if not specified
@@ -75,19 +71,15 @@ async def create_contract(contract_data: dict):
             description=contract_data.get('description')
         )
 
-        # Save to YAML
-        yaml_path = Path(__file__).parent.parent / 'data' / 'data_contracts.yaml'
-        contract_manager.save_to_yaml(str(yaml_path))
-
         return contract.to_dict()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put('/data-contracts/{contract_id}')
-async def update_contract(contract_id: str, contract_data: dict):
+async def update_contract(contract_id: str, contract_data: dict, manager: DataContractsManager = Depends(get_data_contracts_manager)):
     """Update a data contract"""
     try:
-        contract = contract_manager.get_contract(contract_id)
+        contract = manager.get_contract(contract_id)
         if not contract:
             logger.warning(f"Data contract not found for update with ID: {contract_id}")
             raise HTTPException(status_code=404, detail="Contract not found")
@@ -95,7 +87,7 @@ async def update_contract(contract_id: str, contract_data: dict):
         logger.info(f"Updating data contract with ID: {contract_id}")
 
         # Update contract
-        updated_contract = contract_manager.update_contract(
+        updated_contract = manager.update_contract(
             contract_id=contract_id,
             name=contract_data.get('name'),
             contract_text=contract_data.get('contract_text'),
@@ -106,10 +98,6 @@ async def update_contract(contract_id: str, contract_data: dict):
             status=contract_data.get('status')
         )
 
-        # Save to YAML
-        yaml_path = Path(__file__).parent.parent / 'data' / 'data_contracts.yaml'
-        contract_manager.save_to_yaml(str(yaml_path))
-
         return updated_contract.to_dict()
     except Exception as e:
         error_msg = f"Error updating data contract {contract_id}: {e!s}"
@@ -117,15 +105,15 @@ async def update_contract(contract_id: str, contract_data: dict):
         raise HTTPException(status_code=500, detail=error_msg)
 
 @router.delete('/data-contracts/{contract_id}')
-async def delete_contract(contract_id: str):
+async def delete_contract(contract_id: str, manager: DataContractsManager = Depends(get_data_contracts_manager)):
     """Delete a data contract"""
     try:
-        if not contract_manager.get_contract(contract_id):
+        if not manager.get_contract(contract_id):
             logger.warning(f"Data contract not found for deletion with ID: {contract_id}")
             raise HTTPException(status_code=404, detail="Contract not found")
 
         logger.info(f"Deleting data contract with ID: {contract_id}")
-        contract_manager.delete_contract(contract_id)
+        manager.delete_contract(contract_id)
         logger.info(f"Successfully deleted data contract with ID: {contract_id}")
         return None
     except Exception as e:
@@ -134,7 +122,7 @@ async def delete_contract(contract_id: str):
         raise HTTPException(status_code=500, detail=error_msg)
 
 @router.post('/data-contracts/upload')
-async def upload_contract(file: UploadFile = File(...)):
+async def upload_contract(file: UploadFile = File(...), manager: DataContractsManager = Depends(get_data_contracts_manager)):
     """Upload a contract file"""
     try:
         content_type = file.content_type
@@ -151,7 +139,7 @@ async def upload_contract(file: UploadFile = File(...)):
         contract_text = (await file.read()).decode('utf-8')
 
         # Create contract
-        contract = contract_manager.create_contract(
+        contract = manager.create_contract(
             name=filename,
             contract_text=contract_text,
             format=format,
@@ -160,19 +148,15 @@ async def upload_contract(file: UploadFile = File(...)):
             description=f"Uploaded {format.upper()} contract"
         )
 
-        # Save to YAML
-        yaml_path = Path(__file__).parent.parent / 'data' / 'data_contracts.yaml'
-        contract_manager.save_to_yaml(str(yaml_path))
-
         return contract.to_dict()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get('/data-contracts/{contract_id}/export')
-async def export_contract(contract_id: str):
+async def export_contract(contract_id: str, manager: DataContractsManager = Depends(get_data_contracts_manager)):
     """Export a contract as JSON"""
     try:
-        contract = contract_manager.get_contract(contract_id)
+        contract = manager.get_contract(contract_id)
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
 

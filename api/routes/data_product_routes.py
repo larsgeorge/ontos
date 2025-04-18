@@ -4,21 +4,21 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 import yaml
-from fastapi import APIRouter, HTTPException, UploadFile, File, Body, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, Body, Depends, Request
 from pydantic import ValidationError
 import uuid
-from sqlalchemy.orm import Session
+# Remove Session dependency if get_db is no longer used directly here
+# from sqlalchemy.orm import Session
 
 from api.controller.data_products_manager import DataProductsManager
 from api.models.data_products import DataProduct # Use the updated model
-from databricks.sdk import WorkspaceClient # Import base client type
+# Remove WorkspaceClient dependency if get_workspace_client_dependency is no longer used directly here
+# from databricks.sdk import WorkspaceClient 
 from databricks.sdk.errors import PermissionDenied # Import specific error
 
-# Import the dependency function
-from api.common.workspace_client import get_workspace_client_dependency
-
-# Import the DB session dependency
-from api.common.database import get_db
+# Remove dependency functions if no longer used directly here
+# from api.common.workspace_client import get_workspace_client_dependency
+# from api.common.database import get_db
 
 # Configure logging
 from api.common.logging import setup_logging, get_logger
@@ -29,12 +29,19 @@ router = APIRouter(prefix="/api", tags=["data-products"])
 
 # --- Helper to get manager instance with dependencies ---
 def get_data_products_manager(
-    db: Session = Depends(get_db),
-    ws_client: WorkspaceClient = Depends(get_workspace_client_dependency()) # Add ws_client dep
+    # Remove old dependencies
+    # db: Session = Depends(get_db),
+    # ws_client: WorkspaceClient = Depends(get_workspace_client_dependency()) 
+    request: Request # Inject Request
 ) -> DataProductsManager:
-    """Injects dependencies and returns a DataProductsManager instance."""
+    """Retrieves the DataProductsManager singleton from app.state."""
     # Pass both db and ws_client to the manager
-    return DataProductsManager(db=db, ws_client=ws_client) 
+    # return DataProductsManager(db=db, ws_client=ws_client) 
+    manager = request.app.state.manager_instances.get('data_products')
+    if manager is None:
+         logger.critical("DataProductsManager instance not found in app.state!")
+         raise HTTPException(status_code=500, detail="Data Products service is not available.")
+    return manager
 
 # --- ORDERING CRITICAL: Define ALL static paths before ANY dynamic paths --- 
 

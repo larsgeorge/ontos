@@ -311,6 +311,8 @@ def init_db(run_create_all: bool = True) -> None:
             db_url, 
             connect_args=connect_args,
             echo=settings.DEBUG,
+            pool_pre_ping=True,
+            pool_recycle=3600
         )
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
         logger.info(f"Database engine initialized for: {settings.DATABRICKS_HOST}")
