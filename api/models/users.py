@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional, List
 
 
 class UserInfo(BaseModel):
@@ -7,3 +8,4 @@ class UserInfo(BaseModel):
     username: str | None
     user: str | None
     ip: str | None
+    groups: Optional[List[str]] = None

@@ -11,14 +11,15 @@ import {
   DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, User, FlaskConical, Beaker } from 'lucide-react';
+import { LogOut, User as UserIcon, FlaskConical, Beaker } from 'lucide-react';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 
 interface UserInfoData {
   email: string | null;
-  username: string | null;
-  user: string | null;
+  username: string | null; // Often the same as email
+  user: string | null;     // Expected to hold displayName from SDK
   ip: string | null;
+  groups: string[] | null;
 }
 
 export default function UserInfo() {
@@ -30,26 +31,46 @@ export default function UserInfo() {
   useEffect(() => {
     if (hasFetched.current) return;
     
-    async function fetchUserInfo() {
+    async function fetchUserDetails() {
       try {
-        const response = await fetch('/api/user/info');
+        const response = await fetch('/api/user/details');
         if (!response.ok) {
-             throw new Error(`HTTP error! status: ${response.status}`);
+          // Throw an error to trigger the fallback
+          throw new Error(`Details fetch failed: ${response.status}`); 
         }
-        const data = await response.json();
+        const data: UserInfoData = await response.json();
         setUserInfo(data);
-      } catch (err: any) {
-        console.error('Failed to load user information:', err);
-        setError(err.message || 'Failed to load user information');
+        setError(null); // Clear previous errors if successful
+        console.log('Successfully fetched user details from SDK.');
+      } catch (detailsError: any) {
+        console.warn('Failed to fetch user details from SDK, falling back to headers:', detailsError.message);
+        // Fallback to fetching basic info from headers
+        try {
+            const fallbackResponse = await fetch('/api/user/info');
+            if (!fallbackResponse.ok) {
+                throw new Error(`Fallback fetch failed: ${fallbackResponse.status}`);
+            }
+            const fallbackData: UserInfoData = await fallbackResponse.json();
+            setUserInfo(fallbackData);
+            setError(null); // Clear previous errors if fallback successful
+            console.log('Successfully fetched user info from headers as fallback.');
+        } catch (fallbackError: any) {
+            console.error('Failed to load user information from both endpoints:', fallbackError);
+            setError(fallbackError.message || 'Failed to load user information');
+            setUserInfo(null); // Ensure userInfo is null on final failure
+        }
       }
     }
     
-    fetchUserInfo();
+    fetchUserDetails();
     hasFetched.current = true;
   }, []);
 
-  const displayName = userInfo?.username || userInfo?.email || userInfo?.user || 'Loading...';
+  // Prioritize 'user' (displayName from SDK), then 'username', then 'email'
+  const displayName = userInfo?.user || userInfo?.username || userInfo?.email || 'Loading...';
   const initials = displayName === 'Loading...' ? '?' : displayName.charAt(0).toUpperCase();
+  // Use the email field directly
+  const userEmail = userInfo?.email;
 
   return (
     <DropdownMenu>
@@ -63,9 +84,11 @@ export default function UserInfo() {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
+            {/* Display name is now the primary identifier */}
             <p className="text-sm font-medium leading-none">{displayName}</p>
-            {userInfo?.email && (
-              <p className="text-xs leading-none text-muted-foreground">{userInfo.email}</p>
+            {/* Show email below if available and different from displayName */}
+            {userEmail && userEmail !== displayName && (
+              <p className="text-xs leading-none text-muted-foreground">{userEmail}</p>
             )}
             {!userInfo && !error && <p className="text-xs text-muted-foreground">Loading info...</p>}
             {error && (
@@ -76,7 +99,7 @@ export default function UserInfo() {
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
             <DropdownMenuItem disabled>
-                <User className="mr-2 h-4 w-4" />
+                <UserIcon className="mr-2 h-4 w-4" />
                 <span>Profile</span>
             </DropdownMenuItem>
         </DropdownMenuGroup>
