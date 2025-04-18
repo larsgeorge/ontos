@@ -160,17 +160,12 @@ class DataProduct(BaseModel):
     # Add a validator to convert ORM Tag objects to strings
     @field_validator('tags', mode='before')
     def convert_tags_from_orm(cls, v: Any) -> List[str]:
-        logger.info(f"--- DEBUG [DataProduct Model tags validator] ---")
-        logger.info(f"Input value (v): {v}")
-        logger.info(f"Input type (type(v)): {type(v)}")
         # Check if the input looks like a list of ORM Tag objects
         if isinstance(v, list) and v and hasattr(v[0], 'name'):
             tag_names = [tag.name for tag in v if hasattr(tag, 'name')]
-            logger.info(f"Converted ORM tags to names: {tag_names}")
             return tag_names
         # If it's already a list of strings (e.g., from direct dict), pass through
         if isinstance(v, list) and all(isinstance(item, str) for item in v):
-             logger.info(f"Passing through existing list of strings: {v}")
              return v
         # Handle other cases or potential errors
         logger.warning(f"Unexpected type for tags validation: {type(v)}. Value: {v}. Returning empty list.")

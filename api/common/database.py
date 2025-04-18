@@ -306,7 +306,7 @@ def init_db(run_create_all: bool = True) -> None:
         # Create SQLAlchemy engine
         db_url = get_db_url(settings)
         logger.info(f"Database URL: {db_url}")
-        logger.info(f"Connect args: {connect_args}")
+        # logger.info(f"Connect args: {connect_args}")
         _engine = create_engine(
             db_url, 
             connect_args=connect_args,
