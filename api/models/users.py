@@ -1,5 +1,7 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict
+
+from api.common.features import FeatureAccessLevel
 
 
 class UserInfo(BaseModel):
@@ -9,3 +11,6 @@ class UserInfo(BaseModel):
     user: str | None
     ip: str | None
     groups: Optional[List[str]] = None
+
+# Type alias for the permissions response
+UserPermissions = Dict[str, FeatureAccessLevel]

@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings as SettingsIcon } from 'lucide-react';
+import { Settings as SettingsIcon, Users } from 'lucide-react';
+import RolesSettings from '@/components/settings/roles-settings';
 
 interface AppSettings {
   id: string;
@@ -98,6 +99,7 @@ export default function Settings() {
           <TabsTrigger value="databricks">Databricks</TabsTrigger>
           <TabsTrigger value="git">Git</TabsTrigger>
           <TabsTrigger value="jobs">Background Jobs</TabsTrigger>
+          <TabsTrigger value="roles">Roles</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
@@ -253,6 +255,10 @@ export default function Settings() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="roles">
+            <RolesSettings />
         </TabsContent>
       </Tabs>
 

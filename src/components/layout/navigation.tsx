@@ -12,6 +12,9 @@ import React from 'react';
 // Import the Zustand store hook
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { Button } from '@/components/ui/button';
+// Import permissions hook and types
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/settings';
 
 interface NavigationProps {
   isCollapsed: boolean;
@@ -21,8 +24,42 @@ export function Navigation({ isCollapsed }: NavigationProps) {
   const location = useLocation();
   // Select only the allowedMaturities from the store
   const allowedMaturities = useFeatureVisibilityStore((state) => state.allowedMaturities);
+  // Get permissions state and checker
+  const { permissions, isLoading: permissionsLoading, hasPermission } = usePermissions();
 
-  const navigationGroups = getNavigationGroups(allowedMaturities);
+  // Get navigation groups based on maturity filters
+  const rawNavigationGroups = getNavigationGroups(allowedMaturities);
+
+  // Filter groups and items based on permissions (only run when permissions are loaded)
+  const navigationGroups = React.useMemo(() => {
+    if (permissionsLoading || Object.keys(permissions).length === 0) {
+      // Return empty or skeleton while loading/empty to prevent flashing
+      return [];
+    }
+    return rawNavigationGroups
+      .map(group => ({
+        ...group,
+        // Filter items within the group
+        items: group.items.filter(item =>
+           // Settings and About might need special handling or always be visible
+           // For now, let's assume Settings requires ADMIN (handled by its roles)
+           // and About is always visible (doesn't have explicit permission)
+           item.id === 'about' || hasPermission(item.id, FeatureAccessLevel.READ_ONLY)
+        )
+      }))
+      .filter(group => group.items.length > 0); // Remove groups that become empty after filtering
+
+  }, [rawNavigationGroups, permissions, permissionsLoading, hasPermission]);
+
+  // Handle loading state for permissions
+  if (permissionsLoading) {
+     // Optional: Show a loading indicator instead of an empty sidebar
+     return (
+         <div className="p-4 text-sm text-muted-foreground">
+             Loading navigation...
+         </div>
+     );
+  }
 
   return (
     <ScrollArea className="h-full py-2">

@@ -43,20 +43,16 @@ class CachingWorkspaceClient(WorkspaceClient):
         Raises:
             TimeoutError: If the function call times out
         """
-        def handler(signum, frame):
-            raise TimeoutError(f"Function call timed out after {self._timeout} seconds")
-
-        # Set the timeout handler
-        original_handler = signal.signal(signal.SIGALRM, handler)
-        signal.alarm(self._timeout)
-
         try:
+            # Directly call the function without signal-based timeout
+            # Rely on underlying SDK/HTTP client timeouts configured elsewhere
+            # or add asyncio timeout if func is async and called in event loop
             result = func(*args, **kwargs)
             return result
-        finally:
-            # Restore the original handler and cancel the alarm
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, original_handler)
+        except Exception as e:
+             # Log the original exception if needed
+             logger.error(f"Error during API call in _make_api_call: {e}")
+             raise # Re-raise the original exception
 
     def _cache_result(self, key: str) -> Callable:
         def decorator(func: Callable) -> Callable:

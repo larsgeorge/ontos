@@ -16,6 +16,8 @@ import { RelativeDate } from '@/components/common/relative-date';
 import { useNavigate } from 'react-router-dom';
 import { DataTable } from "@/components/ui/data-table";
 import DataProductFormDialog from '@/components/data-products/data-product-form-dialog';
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/settings';
 
 // --- Helper Function Type Definition --- 
 type CheckApiResponseFn = <T>(
@@ -60,6 +62,15 @@ export default function DataProducts() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Get permissions
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
+  const featureId = 'data-products'; // ID for this feature
+
+  // Determine if user has specific access levels
+  const canRead = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_ONLY);
+  const canWrite = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_WRITE);
+  const canAdmin = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.ADMIN);
 
   // Fetch initial data for the table and dropdowns
   useEffect(() => {
@@ -201,6 +212,25 @@ export default function DataProducts() {
     fileInputRef.current?.click();
   };
 
+  // --- Define these outside the columns definition --- 
+  const handleEditClick = (product: DataProduct) => {
+      if (!canWrite) {
+          toast({ title: "Permission Denied", description: "You do not have permission to edit data products.", variant: "destructive" });
+          return;
+      }
+      handleOpenDialog(product);
+  };
+
+  const handleDeleteClick = (product: DataProduct) => {
+       if (!canAdmin) {
+          toast({ title: "Permission Denied", description: "You do not have permission to delete data products.", variant: "destructive" });
+          return;
+      }
+       if (product.id) {
+          handleDeleteProduct(product.id, false);
+       }
+  };
+
   // Keep Status Color Helper (used by table column)
   const getStatusColor = (status: string | undefined): "default" | "secondary" | "destructive" | "outline" => {
     const lowerStatus = status?.toLowerCase() || '';
@@ -298,10 +328,17 @@ export default function DataProducts() {
         const product = row.original;
         return (
           <div className="flex space-x-1 justify-end">
-            {/* Edit button now opens the dialog */}
-            <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(product)} title="Edit">
+            {/* Edit button now opens the dialog, conditionally enabled */}
+            <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleEditClick(product)} // Use wrapper function
+                disabled={!canWrite || permissionsLoading}
+                title={canWrite ? "Edit" : "Edit (Permission Denied)"}
+            >
               <Pencil className="h-4 w-4" />
             </Button>
+            {/* Delete button conditionally enabled */}
             {product.id && (
               <Button
                 variant="ghost"
@@ -309,9 +346,10 @@ export default function DataProducts() {
                 className="text-destructive hover:text-destructive"
                 onClick={(e) => {
                     e.stopPropagation(); // Prevent row click navigation
-                    handleDeleteProduct(product.id!, false);
+                    handleDeleteClick(product); // Use wrapper function
                 }}
-                title="Delete"
+                disabled={!canAdmin || permissionsLoading}
+                title={canAdmin ? "Delete" : "Delete (Permission Denied)"}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -320,7 +358,7 @@ export default function DataProducts() {
         );
       },
     },
-  ], [handleOpenDialog, handleDeleteProduct, getStatusColor]); // Update dependencies if needed
+  ], [handleOpenDialog, handleDeleteProduct, getStatusColor, canWrite, canAdmin, permissionsLoading]); // Add permission flags to dependency array
 
   // --- Render Logic ---
   return (
@@ -337,10 +375,15 @@ export default function DataProducts() {
         </Alert>
       )}
 
-      {loading ? (
+      {loading || permissionsLoading ? ( // Show loading if product or permissions are loading
         <div className="flex justify-center items-center h-64">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
         </div>
+      ) : !canRead ? ( // Show permission denied message if cannot read
+         <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>You do not have permission to view data products.</AlertDescription>
+          </Alert>
       ) : (
         <DataTable
           columns={columns}
@@ -348,11 +391,24 @@ export default function DataProducts() {
           searchColumn="info.title"
           toolbarActions={
             <>
-              <Button onClick={() => handleOpenDialog()} className="gap-2 h-9">
+              {/* Create Button - Conditionally enabled */}
+              <Button
+                  onClick={() => handleOpenDialog()}
+                  className="gap-2 h-9"
+                  disabled={!canWrite || permissionsLoading}
+                  title={canWrite ? "Create Data Product" : "Create (Permission Denied)"}
+              >
                 <Plus className="h-4 w-4" />
                 Create Product
               </Button>
-              <Button onClick={triggerFileUpload} className="gap-2 h-9" variant="outline" disabled={isUploading}>
+              {/* Upload Button - Conditionally enabled */}
+              <Button
+                  onClick={triggerFileUpload}
+                  className="gap-2 h-9"
+                  variant="outline"
+                  disabled={isUploading || !canWrite || permissionsLoading}
+                  title={canWrite ? "Upload Data Product File" : "Upload (Permission Denied)"}
+              >
                 <Upload className="h-4 w-4" />
                 {isUploading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</>) : 'Upload File'}
               </Button>
@@ -371,6 +427,10 @@ export default function DataProducts() {
               size="sm"
               className="h-9"
               onClick={async () => {
+                if (!canAdmin) {
+                  toast({ title: "Permission Denied", description: "You do not have permission to bulk delete.", variant: "destructive" });
+                  return;
+                }
                 const selectedIds = selectedRows.map(r => r.id).filter((id): id is string => !!id);
                 if (selectedIds.length === 0) return;
                 if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected product(s)?`)) return;

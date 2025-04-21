@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
+from fastapi import HTTPException, status
 
 from api.common.config import get_settings, init_config, Settings
 from api.common.middleware import ErrorHandlingMiddleware, LoggingMiddleware
@@ -39,6 +40,14 @@ from api.controller.business_glossaries_manager import BusinessGlossariesManager
 from api.controller.search_manager import SearchManager
 from api.common.workspace_client import get_workspace_client
 from api.utils.demo_data_loader import load_demo_data
+from api.controller.settings_manager import SettingsManager
+from api.controller.users_manager import UsersManager
+from api.controller.authorization_manager import AuthorizationManager
+from api.utils.startup_tasks import (
+    initialize_database,
+    initialize_managers,
+    load_initial_data
+)
 
 # Initialize configuration and logging first
 init_config()
@@ -54,126 +63,22 @@ BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 STATIC_ASSETS_PATH = BASE_DIR.parent / "static"
 
-# --- Helper Functions (Define BEFORE App Instantiation) ---
+# --- Dependency Providers (Defined globally or before app) ---
+
+# def get_auth_manager(request: Request) -> AuthorizationManager:
+# ... (rest of the function is removed)
 
 # --- Application Lifecycle Events ---
 
 # Application Startup Event
 async def startup_event():
     logger.info("Running application startup event...")
-    
-    # 1. Initialize database connection, create catalog/schema, and apply migrations
-    try:
-        init_db() 
-        logger.info("Database initialization complete.")
-    except ConnectionError as e:
-         logger.critical(f"Database connection/initialization failed on startup: {e}", exc_info=True)
-         raise RuntimeError("Application cannot start without database connection.") from e
-    except Exception as e:
-         logger.critical(f"An unexpected error occurred during startup database initialization: {e}", exc_info=True)
-         raise RuntimeError("Application cannot start due to database initialization error.") from e
-
-    # 2. Load Demo Data (conditionally)
-    db_session_factory = None 
-    try:
-        # Get the factory *after* init_db has run
-        db_session_factory = get_session_factory()
-        # Directly try to create the session using the retrieved factory
-        db_session_for_startup = db_session_factory()
-        current_settings = get_settings()
-        logger.info(f"Attempting demo data load. Session created. Demo mode from settings: {current_settings.APP_DEMO_MODE}")
-        load_demo_data(db_session=db_session_for_startup, settings=current_settings)
-        logger.info("Completed call to load_demo_data.")
-        db_session_for_startup.commit()
-    except RuntimeError as e:
-        # Catch error if get_session_factory indicates factory wasn't initialized
-        logger.error(f"Cannot load demo data: {e}") 
-    except Exception as e:
-        logger.error(f"Error during demo data loading execution: {e}", exc_info=True)
-        if db_session_for_startup: # Rollback only if session was created
-            db_session_for_startup.rollback()
-    finally:
-        if db_session_for_startup: # Close only if session was created
-            db_session_for_startup.close()
-            logger.info("Demo data DB session closed.")
-
-    # --- Initialize Dependencies (Workspace Client, Managers) ---
-    ws_client = None
-    try:
-        # Attempt to get workspace client (might return None if not configured)
-        current_settings = get_settings()
-        ws_client = get_workspace_client(settings=current_settings)
-        if ws_client:
-            logger.info("WorkspaceClient initialized successfully.")
-        else:
-            logger.warning("WorkspaceClient could not be initialized (likely missing config). Dependent features may fail.")
-    except Exception as e:
-        logger.error(f"Error initializing WorkspaceClient: {e}", exc_info=True)
-        # Continue startup, but log the error
-
-    # Create manager instances using dependencies
-    db_session_for_startup = None
-    app.state.manager_instances = {}
-    try:
-        db_session_for_startup = db_session_factory()
-        logger.info("Creating manager singletons...")
-        
-        # Instantiate managers requiring dependencies
-        dp_manager = DataProductsManager(db=db_session_for_startup, ws_client=ws_client)
-        app.state.manager_instances['data_products'] = dp_manager
-        logger.info("DataProductsManager singleton created.")
-        
-        # Instantiate managers requiring data_dir
-        dc_manager = DataContractsManager(data_dir=DATA_DIR)
-        app.state.manager_instances['data_contracts'] = dc_manager
-        logger.info("DataContractsManager singleton created.")
-        
-        # Instantiate managers requiring data_dir
-        bg_manager = BusinessGlossariesManager(data_dir=DATA_DIR)
-        app.state.manager_instances['business_glossaries'] = bg_manager
-        logger.info("BusinessGlossariesManager singleton created.")
-        
-        # Instantiate SearchManager with the collection of singletons
-        search_manager_instance = SearchManager(
-            searchable_managers=app.state.manager_instances.values()
-        )
-        app.state.search_manager = search_manager_instance
-        logger.info("SearchManager singleton created.")
-        
-        db_session_for_startup.commit() 
-        logger.info("Manager singletons created successfully.")
-        
-    except Exception as e:
-        logger.critical(f"Failed to create manager singletons during startup: {e}", exc_info=True)
-        if db_session_for_startup: db_session_for_startup.rollback()
-        # Decide if this is fatal. For now, log critical and continue, 
-        # but dependencies might fail later.
-    finally:
-        if db_session_for_startup:
-            db_session_for_startup.close()
-            logger.info("Startup DB session for manager instantiation closed.")
-
-    # --- Demo Data Loading (Uses a separate session) ---
-    db_session_for_demo = None 
-    try:
-        db_session_for_demo = db_session_factory()
-        current_settings = get_settings()
-        logger.info(f"Attempting demo data load. Demo mode: {current_settings.APP_DEMO_MODE}")
-        load_demo_data(db_session=db_session_for_demo, settings=current_settings) 
-        logger.info("Completed call to load_demo_data.")
-        db_session_for_demo.commit()
-    except RuntimeError as e:
-        # Catch error if get_session_factory indicates factory wasn't initialized
-        logger.error(f"Cannot load demo data: {e}") 
-    except Exception as e:
-        logger.error(f"Error during demo data loading execution: {e}", exc_info=True)
-        if db_session_for_demo: # Rollback only if session was created
-            db_session_for_demo.rollback()
-    finally:
-        if db_session_for_demo: # Close only if session was created
-            db_session_for_demo.close()
-            logger.info("Demo data DB session closed.")
-
+    # 1. Initialize Database
+    initialize_database()
+    # 2. Initialize Managers (requires app instance)
+    initialize_managers(app)
+    # 3. Load Initial/Demo Data
+    load_initial_data()
     logger.info("Application startup complete.")
 
 # Application Shutdown Event

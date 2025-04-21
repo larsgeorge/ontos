@@ -12,6 +12,7 @@ import uuid
 
 from api.controller.data_products_manager import DataProductsManager
 from api.models.data_products import DataProduct # Use the updated model
+from api.models.users import UserInfo # Needed for user context in auth
 # Remove WorkspaceClient dependency if get_workspace_client_dependency is no longer used directly here
 # from databricks.sdk import WorkspaceClient 
 from databricks.sdk.errors import PermissionDenied # Import specific error
@@ -19,6 +20,10 @@ from databricks.sdk.errors import PermissionDenied # Import specific error
 # Remove dependency functions if no longer used directly here
 # from api.common.workspace_client import get_workspace_client_dependency
 # from api.common.database import get_db
+
+# Import Permission Checker and Levels
+from api.common.authorization import PermissionChecker
+from api.common.features import FeatureAccessLevel
 
 # Configure logging
 from api.common.logging import setup_logging, get_logger
@@ -45,10 +50,13 @@ def get_data_products_manager(
 
 # --- ORDERING CRITICAL: Define ALL static paths before ANY dynamic paths --- 
 
-# --- Specific Helper Endpoints --- 
+# --- Specific Helper Endpoints (Read-Only Access Needed) --- 
 
 @router.get('/data-products/statuses', response_model=List[str])
-async def get_data_product_statuses(manager: DataProductsManager = Depends(get_data_products_manager)):
+async def get_data_product_statuses(
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY))
+):
     """Get all distinct data product statuses from info and output ports."""
     try:
         statuses = manager.get_distinct_statuses()
@@ -60,7 +68,10 @@ async def get_data_product_statuses(manager: DataProductsManager = Depends(get_d
         raise HTTPException(status_code=500, detail=error_msg)
 
 @router.get('/data-products/archetypes', response_model=List[str])
-async def get_data_product_archetypes(manager: DataProductsManager = Depends(get_data_products_manager)):
+async def get_data_product_archetypes(
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY))
+):
     """Get all distinct data product archetypes."""
     try:
         archetypes = manager.get_distinct_archetypes()
@@ -72,7 +83,10 @@ async def get_data_product_archetypes(manager: DataProductsManager = Depends(get
         raise HTTPException(status_code=500, detail=error_msg)
 
 @router.get('/data-products/owners', response_model=List[str])
-async def get_data_product_owners(manager: DataProductsManager = Depends(get_data_products_manager)):
+async def get_data_product_owners(
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY))
+):
     """Get all distinct data product owners."""
     try:
         owners = manager.get_distinct_owners()
@@ -84,7 +98,11 @@ async def get_data_product_owners(manager: DataProductsManager = Depends(get_dat
         raise HTTPException(status_code=500, detail=error_msg)
 
 @router.post("/data-products/upload", response_model=List[DataProduct], status_code=201)
-async def upload_data_products(file: UploadFile = File(...), manager: DataProductsManager = Depends(get_data_products_manager)):
+async def upload_data_products(
+    file: UploadFile = File(...),
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_WRITE))
+):
     """Upload a YAML or JSON file containing a list of data products."""
     if not (file.filename.endswith('.yaml') or file.filename.endswith('.json')):
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload a YAML or JSON file.")
@@ -177,7 +195,10 @@ async def upload_data_products(file: UploadFile = File(...), manager: DataProduc
 # --- Generic List/Create Endpoints --- 
 
 @router.get('/data-products', response_model=Any)
-async def get_data_products(manager: DataProductsManager = Depends(get_data_products_manager)):
+async def get_data_products(
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY))
+):
     """Get all data products."""
     try:
         logger.info("Retrieving all data products via get_data_products route...")
@@ -190,7 +211,11 @@ async def get_data_products(manager: DataProductsManager = Depends(get_data_prod
         raise HTTPException(status_code=500, detail=error_msg)
 
 @router.post('/data-products', response_model=DataProduct, status_code=201)
-async def create_data_product(payload: Dict[str, Any] = Body(...), manager: DataProductsManager = Depends(get_data_products_manager)):
+async def create_data_product(
+    payload: Dict[str, Any] = Body(...),
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_WRITE))
+):
     """Create a new data product from a JSON payload dictionary."""
     try:
         logger.info(f"Received raw payload for creation: {payload}")
@@ -232,7 +257,8 @@ async def create_data_product(payload: Dict[str, Any] = Body(...), manager: Data
 @router.get('/data-products/{product_id}', response_model=Any)
 async def get_data_product(
     product_id: str,
-    manager: DataProductsManager = Depends(get_data_products_manager)
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY))
 ) -> Any: # Return Any to allow returning a dict
     """Gets a single data product by its ID."""
     try:
@@ -247,7 +273,12 @@ async def get_data_product(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.put('/data-products/{product_id}', response_model=DataProduct)
-async def update_data_product(product_id: str, product_data: DataProduct = Body(...), manager: DataProductsManager = Depends(get_data_products_manager)):
+async def update_data_product(
+    product_id: str,
+    product_data: DataProduct = Body(...),
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_WRITE))
+):
     """Update an existing data product using a JSON payload conforming to the schema."""
     if product_id != product_data.id:
          raise HTTPException(status_code=400, detail="Product ID in path does not match ID in request body.")
@@ -275,7 +306,11 @@ async def update_data_product(product_id: str, product_data: DataProduct = Body(
         raise HTTPException(status_code=500, detail=error_msg)
 
 @router.delete('/data-products/{product_id}', status_code=204) # No content response
-async def delete_data_product(product_id: str, manager: DataProductsManager = Depends(get_data_products_manager)):
+async def delete_data_product(
+    product_id: str,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.ADMIN)) # Require ADMIN to delete
+):
     """Delete a data product by ID."""
     try:
         logger.info(f"Received request to delete data product ID: {product_id}")

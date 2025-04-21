@@ -31,17 +31,16 @@ export default defineConfig(({ command }) => ({
         target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
-        // configure: (proxy, _options) => {
-        //   proxy.on('proxyReq', (proxyReq, req, _res) => {
-        //     console.log(`[vite-proxy] Sending request ${req.method} ${req.url} to target ${proxyReq.host}${proxyReq.path}`);
-        //   });
-        //    proxy.on('proxyRes', (proxyRes, req, _res) => {
-        //     console.log(`[vite-proxy] Received response ${proxyRes.statusCode} for ${req.url}`);
-        //   });
-        //   proxy.on('error', (err, req, _res) => {
-        //     console.error(`[vite-proxy] Error for ${req.url}:`, err);
-        //   });
-        // },
+      },
+      '/docs': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/redoc': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
       },
     },
   },

@@ -319,7 +319,9 @@ def init_db(run_create_all: bool = True) -> None:
 
         if run_create_all:
             # Import all models here so Base knows about them
-            from api.db_models import data_products 
+            from api.db_models import data_products
+            # Import the new settings models
+            from api.db_models import settings as settings_db
             logger.info("Checking/creating database tables (conditional indexes)...")
             
             # --- Conditionally Modify Metadata BEFORE DDL Generation ---
