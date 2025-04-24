@@ -13,6 +13,7 @@ import { AppRole, FeatureConfig, FeatureAccessLevel } from '@/types/settings';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { ACCESS_LEVEL_ORDER } from '../../lib/permissions';
+import { features as orderedFeatures } from '@/config/features'; // Import the ordered features
 
 interface RoleFormDialogProps {
     isOpen: boolean;
@@ -202,9 +203,6 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         }
     };
 
-    // Get sorted feature keys for consistent rendering
-    const sortedFeatureIds = Object.keys(featuresConfig).sort();
-
     return (
         <Dialog open={isOpen} onOpenChange={handleCloseDialog}>
             <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
@@ -260,40 +258,50 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                             <div className="space-y-3 pt-4 border-t">
                                 <h4 className="font-medium">Feature Permissions</h4>
                                 <div className="max-h-[300px] overflow-y-auto pr-2 space-y-1">
-                                    {sortedFeatureIds.map((featureId) => {
-                                        const feature = featuresConfig[featureId];
-                                        if (!feature) return null; // Should not happen
-                                        const allowedLevels = feature.allowed_levels || [];
+                                    {orderedFeatures.map((feature) => {
+                                        const featureConf = featuresConfig[feature.id];
+                                        if (!featureConf) {
+                                            console.warn(`No backend config found for feature ID: ${feature.id}. Skipping permission setting.`);
+                                            return null;
+                                        }
+                                        const allowedLevels = Array.isArray(featureConf.allowed_levels) ? featureConf.allowed_levels : [];
+
                                         return (
-                                            <div key={featureId} className="flex items-center justify-between space-x-4 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
-                                                <Label htmlFor={`permissions-${featureId}`} className="text-sm font-normal flex-1">
-                                                    {feature.name}
-                                                </Label>
-                                                <Controller
-                                                    name={`feature_permissions.${featureId}`}
-                                                    control={control}
-                                                    render={({ field }) => (
-                                                        <Select
-                                                            value={field.value || FeatureAccessLevel.NONE} // Default to NONE if undefined
-                                                            onValueChange={field.onChange}
-                                                        >
-                                                            <SelectTrigger id={`permissions-${featureId}`} className="w-[180px]">
-                                                                <SelectValue placeholder="Select access" />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {allowedLevels.map((level) => (
-                                                                    <SelectItem key={level} value={level}>
-                                                                        {level}
-                                                                    </SelectItem>
-                                                                ))}
-                                                                {/* Add default NONE if not explicitly allowed? Maybe not needed if backend adds it. */}
-                                                                {/* {!allowedLevels.includes(FeatureAccessLevel.NONE) && (
-                                                                    <SelectItem value={FeatureAccessLevel.NONE}>{FeatureAccessLevel.NONE}</SelectItem>
-                                                                )} */}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    )}
-                                                />
+                                            <div key={feature.id} className="flex items-center justify-between space-x-4 py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                                                <Label htmlFor={`permissions-${feature.id}`} className="text-sm font-normal flex-1">
+                                                     {feature.name}
+                                                     <p className="text-xs text-muted-foreground">{feature.description}</p>
+                                                 </Label>
+                                                <div className="w-auto">
+                                                    <Controller
+                                                        name={`feature_permissions.${feature.id}`}
+                                                        control={control}
+                                                        render={({ field }) => (
+                                                            <Select
+                                                                value={field.value || FeatureAccessLevel.NONE}
+                                                                onValueChange={field.onChange}
+                                                                disabled={allowedLevels.length === 0}
+                                                            >
+                                                                <SelectTrigger id={`permissions-${feature.id}`} className="w-[180px]">
+                                                                    <SelectValue placeholder="Select access" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {allowedLevels.length > 0 ? (
+                                                                        [...allowedLevels]
+                                                                            .sort((a, b) => (ACCESS_LEVEL_ORDER[a] ?? -1) - (ACCESS_LEVEL_ORDER[b] ?? -1))
+                                                                            .map(level => (
+                                                                                <SelectItem key={level} value={level}>
+                                                                                    {level}
+                                                                                </SelectItem>
+                                                                            ))
+                                                                    ) : (
+                                                                        <SelectItem value="none" disabled>No levels</SelectItem>
+                                                                    )}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        )}
+                                                    />
+                                                </div>
                                             </div>
                                         );
                                     })}

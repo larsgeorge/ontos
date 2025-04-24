@@ -7,9 +7,8 @@ import {
   Column,
   ColumnDef,
 } from "@tanstack/react-table"
-import { Checkbox } from "@/components/ui/checkbox"
 import { useApi } from '@/hooks/use-api';
-import { DataProduct, DataProductStatus, DataProductArchetype, DataProductOwner, MetastoreTableInfo } from '@/types/data-product';
+import { DataProduct, DataProductStatus, DataProductArchetype, DataProductOwner } from '@/types/data-product';
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { RelativeDate } from '@/components/common/relative-date';

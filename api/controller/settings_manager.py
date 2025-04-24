@@ -258,7 +258,7 @@ class SettingsManager:
             # Get admin groups from settings
             try:
                 # Use the initialized self._settings object
-                admin_groups_str = self._settings.app_admin_default_groups or '[]'
+                admin_groups_str = self._settings.APP_ADMIN_DEFAULT_GROUPS or '[]'
                 admin_groups = json.loads(admin_groups_str)
                 if not isinstance(admin_groups, list):
                     logger.warning(f"APP_ADMIN_DEFAULT_GROUPS ({admin_groups_str}) is not a valid JSON list. Using default ['admins'].")

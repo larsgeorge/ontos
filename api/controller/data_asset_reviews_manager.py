@@ -31,11 +31,17 @@ from api.controller.notifications_manager import NotificationsManager
 # Import correct enum from notifications model
 from api.models.notifications import Notification, NotificationType
 
+# Import Search Interfaces
+from api.common.search_interfaces import SearchableAsset, SearchIndexItem
+# Import the registry decorator
+from api.common.search_registry import searchable_asset
+
 from api.common.logging import setup_logging, get_logger
 setup_logging(level=logging.INFO)
 logger = get_logger(__name__)
 
-class DataAssetReviewManager:
+@searchable_asset # Register this manager with the search system
+class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
     def __init__(self, db: Session, ws_client: WorkspaceClient, notifications_manager: NotificationsManager):
         """
         Initializes the DataAssetReviewManager.
@@ -453,4 +459,47 @@ class DataAssetReviewManager:
             return False
         except Exception as e:
             logger.error(f"Unexpected error loading data asset reviews from YAML {yaml_path}: {e}", exc_info=True)
-            return False 
+            return False
+
+    # --- Implementation of SearchableAsset ---
+    def get_search_index_items(self) -> List[SearchIndexItem]:
+        """Fetches data asset review requests and maps them to SearchIndexItem format."""
+        logger.info("Fetching data asset review requests for search indexing...")
+        items = []
+        try:
+            # Fetch all review requests (adjust limit if needed)
+            reviews_api = self.list_review_requests(limit=10000) # Fetch Pydantic models
+
+            for review in reviews_api:
+                if not review.id:
+                    logger.warning(f"Skipping review due to missing id: {review}")
+                    continue
+
+                # Create a descriptive title and potentially tags
+                title = f"Review Request by {review.requester_email} for {review.reviewer_email}"
+                if review.assets:
+                    title += f" ({len(review.assets)} assets)"
+
+                tags = [review.status.value] # Start with the overall status
+                tags.append(f"reviewer:{review.reviewer_email}")
+                tags.append(f"requester:{review.requester_email}")
+                if review.assets:
+                    tags.extend([asset.status.value for asset in review.assets]) # Add individual asset statuses
+                    tags.extend([asset.asset_fqn for asset in review.assets]) # Add asset FQNs as tags
+                    tags.extend([asset.asset_type.value for asset in review.assets]) # Add asset types
+
+                items.append(
+                    SearchIndexItem(
+                        id=f"review::{review.id}",
+                        type="data-asset-review",
+                        title=title,
+                        description=review.notes or f"Review request {review.id}",
+                        link=f"/data-asset-reviews/{review.id}",
+                        tags=list(set(tags)) # Remove duplicate tags
+                    )
+                )
+            logger.info(f"Prepared {len(items)} data asset reviews for search index.")
+            return items
+        except Exception as e:
+            logger.error(f"Error fetching or mapping data asset reviews for search: {e}", exc_info=True)
+            return [] # Return empty list on error 

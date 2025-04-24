@@ -19,9 +19,12 @@ from api.controller.search_manager import SearchManager
 from api.controller.settings_manager import SettingsManager
 from api.controller.users_manager import UsersManager
 from api.controller.authorization_manager import AuthorizationManager
+from api.controller.notifications_manager import NotificationsManager
 
 # Import Demo Data Loader
 from api.utils.demo_data_loader import load_demo_data
+# Import the search registry
+from api.common.search_registry import SEARCHABLE_ASSET_MANAGERS
 
 logger = get_logger(__name__)
 
@@ -93,13 +96,30 @@ def initialize_managers(app: FastAPI):
         app.state.manager_instances['business_glossaries'] = bg_manager
         logger.info("BusinessGlossariesManager singleton stored in app.state.")
 
-        dar_manager = DataAssetReviewManager(db=db_session)
+        # Initialize NotificationsManager (takes no arguments)
+        notifications_manager_instance = NotificationsManager()
+        app.state.manager_instances['notifications'] = notifications_manager_instance
+        logger.info("NotificationsManager singleton stored in app.state.")
+
+        # Initialize DataAssetReviewManager with all dependencies
+        dar_manager = DataAssetReviewManager(
+            db=db_session, 
+            ws_client=ws_client, 
+            notifications_manager=notifications_manager_instance
+        )
         app.state.manager_instances['data_asset_reviews'] = dar_manager
         logger.info("DataAssetReviewManager singleton stored in app.state.")
 
-        # Search Manager (depends on the collection)
+        # --- Initialize Search Manager --- #
+        # Filter managers based on the registry
+        registered_searchable_managers = [
+             manager for manager in app.state.manager_instances.values()
+             if manager.__class__ in SEARCHABLE_ASSET_MANAGERS
+        ]
+        logger.info(f"Found {len(registered_searchable_managers)} managers registered via @searchable_asset for SearchManager.")
+
         search_manager_instance = SearchManager(
-            searchable_managers=list(app.state.manager_instances.values()) # Ensure it's a list
+            searchable_managers=registered_searchable_managers
         )
         app.state.search_manager = search_manager_instance
         logger.info("SearchManager singleton stored in app.state.")

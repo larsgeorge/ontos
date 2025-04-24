@@ -556,7 +556,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
     return isValid;
   };
 
-  // JSON Text Area Change
+  // Restore original JSON Text Area Change handler
   const handleJsonChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const currentJson = event.target.value;
     setJsonString(currentJson);
@@ -628,23 +628,60 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
              return; // Prevent switching tabs
          }
          
-         // Prepare data for RHF (ensure all necessary fields/arrays exist)
-         const dataForForm = {
-            ...createDefaultProduct(), // Start with defaults
-            ...parsedData,
-            inputPorts: parsedData.inputPorts || [],
-            outputPorts: parsedData.outputPorts || [],
-            tags: parsedData.tags || [],
-            links: parsedData.links || {}, 
-            custom: parsedData.custom || {},
-            info: parsedData.info || { title: "", owner: "" },
+         // --- Improved Compare before resetting --- 
+         const currentValues = getValues();
+
+         // Prepare parsedData for comparison (apply defaults, ensure arrays)
+         const preparedParsedData = {
+             ...createDefaultProduct(),
+             ...parsedData,
+             inputPorts: parsedData.inputPorts || [],
+             outputPorts: parsedData.outputPorts || [],
+             tags: parsedData.tags || [],
+             links: parsedData.links || {}, 
+             custom: parsedData.custom || {}, 
+             info: parsedData.info || { title: "", owner: "" },
          };
 
-         reset(dataForForm); // Reset form with parsed data
-         // Update local state for custom editors
-         setLinksArray(linksObjectToArray(dataForForm.links));
-         setCustomArray(objectToArray(dataForForm.custom));
+         // Prepare currentValues for comparison (apply defaults, ensure arrays)
+         const preparedCurrentValues = {
+             ...createDefaultProduct(),
+             ...currentValues,
+             inputPorts: currentValues.inputPorts || [],
+             outputPorts: currentValues.outputPorts || [],
+             tags: currentValues.tags || [],
+             links: currentValues.links || {}, // RHF should hold the object synced from linksArray
+             custom: currentValues.custom || {}, // RHF should hold the object synced from customArray
+             info: currentValues.info || { title: "", owner: "" },
+         };
+
+         // Clean both before comparison
+         const cleanedParsed = cleanEmptyOptionalStrings(preparedParsedData);
+         const cleanedCurrent = cleanEmptyOptionalStrings(preparedCurrentValues);
+
+         // Compare using stringify
+         const isDifferent = JSON.stringify(cleanedParsed) !== JSON.stringify(cleanedCurrent);
+
+         console.log("[JSON -> UI] Comparing cleaned parsed:", JSON.stringify(cleanedParsed).substring(0, 200) + "...");
+         console.log("[JSON -> UI] Comparing cleaned current:", JSON.stringify(cleanedCurrent).substring(0, 200) + "...");
+         console.log("[JSON -> UI] Is data different?", isDifferent);
+
+         // Only reset RHF state if data is actually different
+         if (isDifferent) {
+             console.log("[JSON -> UI] Data differs, calling reset().");
+             // Reset with the raw parsed data
+             reset(parsedData);
+         } else {
+             console.log("[JSON -> UI] Data is the same, explicitly resetting dirty state.");
+             // Reset with current values, marking form as not dirty
+             reset(getValues(), { keepDirty: false }); 
+         }
+         
+         // Always update local state for Links/Custom editors to sync with JSON view
+         setLinksArray(linksObjectToArray(parsedData.links));
+         setCustomArray(objectToArray(parsedData.custom));
          setActiveTab('ui');
+
        } catch (error: any) {
           setIsJsonValid(false);
           setJsonParseError(`Invalid JSON: ${error.message}`);
@@ -811,460 +848,471 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 
                 {/* UI Editor Tab */} 
                 <TabsContent value="ui" className="mt-4 flex-grow min-h-0 flex flex-col"> 
-                    <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4 flex-grow flex flex-col min-h-0">
-                      <ScrollArea className="flex-grow pr-4"> 
-                          <div className="space-y-4 pb-4">
-                              {/* ID and Spec Version */} 
+                    {/* Inner scrollable div */}
+                    <div className="flex-grow overflow-y-auto pr-4">
+                      <form id="data-product-ui-form" onSubmit={handleSubmit(onFormSubmit)} className="space-y-4 pb-4">
+                          {/* ID and Spec Version */} 
+                          <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <Label htmlFor="productId">ID (unique identifier)</Label>
+                                <Input 
+                                  id="productId" 
+                                  {...register("id")} 
+                                  placeholder={isEditMode ? "(System ID)" : "e.g., my-unique-product (optional)"}
+                                  disabled={isEditMode} // Disable ID editing for existing products
+                                  className={isEditMode ? "bg-muted" : ""}
+                                />
+                                {errors.id && <p className="text-sm text-red-600 mt-1">{errors.id.message}</p>}
+                              </div>
+                              <div>
+                                <Label>Specification Version</Label>
+                                <Input value="0.0.1" readOnly disabled className="bg-muted"/>
+                              </div>
+                          </div>
+                          
+                          {/* Info Card */} 
+                          <Card>
+                            <CardHeader>
+                              <CardTitle>Info</CardTitle>
+                              <CardDescription>Basic information about the data product.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
                               <div className="grid grid-cols-2 gap-4">
                                   <div>
-                                    <Label htmlFor="productId">ID (unique identifier)</Label>
-                                    <Input 
-                                      id="productId" 
-                                      {...register("id")} 
-                                      placeholder={isEditMode ? "(System ID)" : "e.g., my-unique-product (optional)"}
-                                      disabled={isEditMode} // Disable ID editing for existing products
-                                      className={isEditMode ? "bg-muted" : ""}
-                                    />
-                                    {errors.id && <p className="text-sm text-red-600 mt-1">{errors.id.message}</p>}
+                                    <Label htmlFor="info.title">Title *</Label>
+                                    <Input id="info.title" {...register("info.title", { required: "Title is required" })} />
+                                    {errors.info?.title && <p className="text-sm text-red-600 mt-1">{errors.info.title.message}</p>}
                                   </div>
                                   <div>
-                                    <Label>Specification Version</Label>
-                                    <Input value="0.0.1" readOnly disabled className="bg-muted"/>
+                                    <Label htmlFor="info.owner">Owner *</Label>
+                                      {/* TODO: Consider using a Select if owners prop is populated and meant for dropdown */} 
+                                      <Input 
+                                        id="info.owner" 
+                                        {...register("info.owner", { required: "Owner is required" })} 
+                                      />
+                                    {errors.info?.owner && <p className="text-sm text-red-600 mt-1">{errors.info.owner.message}</p>}
                                   </div>
                               </div>
-                              
-                              {/* Info Card */} 
-                              <Card>
-                                <CardHeader>
-                                  <CardTitle>Info</CardTitle>
-                                  <CardDescription>Basic information about the data product.</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                  <div className="grid grid-cols-2 gap-4">
-                                      <div>
-                                        <Label htmlFor="info.title">Title *</Label>
-                                        <Input id="info.title" {...register("info.title", { required: "Title is required" })} />
-                                        {errors.info?.title && <p className="text-sm text-red-600 mt-1">{errors.info.title.message}</p>}
-                                      </div>
-                                      <div>
-                                        <Label htmlFor="info.owner">Owner *</Label>
-                                          {/* TODO: Consider using a Select if owners prop is populated and meant for dropdown */} 
-                                          <Input 
-                                            id="info.owner" 
-                                            {...register("info.owner", { required: "Owner is required" })} 
-                                          />
-                                        {errors.info?.owner && <p className="text-sm text-red-600 mt-1">{errors.info.owner.message}</p>}
-                                      </div>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-4">
-                                      <div>
-                                        <Label htmlFor="info.domain">Domain</Label>
-                                        <Input id="info.domain" {...register("info.domain")} />
-                                        {errors.info?.domain && <p className="text-sm text-red-600 mt-1">{errors.info.domain.message}</p>}
-                                      </div>
-                                      <div>
-                                        <Label htmlFor="info.archetype">Archetype</Label>
-                                        <Controller
-                                          name="info.archetype"
-                                          control={control}
-                                          render={({ field }) => (
-                                            <Select onValueChange={(value) => field.onChange(value === '' ? undefined : value)} value={field.value || ""}>
-                                              <SelectTrigger><SelectValue placeholder="Select archetype" /></SelectTrigger>
-                                              <SelectContent>
-                                                {archetypes.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                                              </SelectContent>
-                                            </Select>
-                                          )}
-                                        />
-                                        {errors.info?.archetype && <p className="text-sm text-red-600 mt-1">{errors.info.archetype.message}</p>}
-                                      </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                    <Label htmlFor="info.domain">Domain</Label>
+                                    <Input id="info.domain" {...register("info.domain")} />
+                                    {errors.info?.domain && <p className="text-sm text-red-600 mt-1">{errors.info.domain.message}</p>}
                                   </div>
                                   <div>
-                                    <Label htmlFor="info.description">Description</Label>
-                                    <Textarea id="info.description" {...register("info.description")} />
-                                    {errors.info?.description && <p className="text-sm text-red-600 mt-1">{errors.info.description.message}</p>}
+                                    <Label htmlFor="info.archetype">Archetype</Label>
+                                    <Controller
+                                      name="info.archetype"
+                                      control={control}
+                                      render={({ field }) => (
+                                        <Select onValueChange={(value) => field.onChange(value === '' ? undefined : value)} value={field.value || ""}>
+                                          <SelectTrigger><SelectValue placeholder="Select archetype" /></SelectTrigger>
+                                          <SelectContent>
+                                            {archetypes.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                                          </SelectContent>
+                                        </Select>
+                                      )}
+                                    />
+                                    {errors.info?.archetype && <p className="text-sm text-red-600 mt-1">{errors.info.archetype.message}</p>}
                                   </div>
-                                  <div>
-                                      <Label htmlFor="info.status">Status</Label>
-                                      <Controller
-                                        name="info.status"
-                                        control={control}
-                                        render={({ field }) => (
-                                          <Select onValueChange={(value) => field.onChange(value === '' ? undefined : value)} value={field.value || ""}>
-                                            <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                                            <SelectContent>
-                                              {statuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                            </SelectContent>
-                                          </Select>
-                                        )}
-                                      />
-                                      {errors.info?.status && <p className="text-sm text-red-600 mt-1">{errors.info.status.message}</p>}
-                                  </div>
-                                </CardContent>
-                              </Card>
+                              </div>
+                              <div>
+                                <Label htmlFor="info.description">Description</Label>
+                                <Textarea id="info.description" {...register("info.description")} />
+                                {errors.info?.description && <p className="text-sm text-red-600 mt-1">{errors.info.description.message}</p>}
+                              </div>
+                              <div>
+                                  <Label htmlFor="info.status">Status</Label>
+                                  <Controller
+                                    name="info.status"
+                                    control={control}
+                                    render={({ field }) => (
+                                      <Select onValueChange={(value) => field.onChange(value === '' ? undefined : value)} value={field.value || ""}>
+                                        <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                                        <SelectContent>
+                                          {statuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                        </SelectContent>
+                                      </Select>
+                                    )}
+                                  />
+                                  {errors.info?.status && <p className="text-sm text-red-600 mt-1">{errors.info.status.message}</p>}
+                              </div>
+                            </CardContent>
+                          </Card>
 
-                              {/* Input Ports Card */} 
-                              <Card>
-                                  <CardHeader>
-                                    <CardTitle>Input Ports</CardTitle>
-                                    <CardDescription>Sources feeding this product. Select tables from the metastore.</CardDescription>
-                                  </CardHeader>
-                                  <CardContent className="space-y-4">
-                                    {inputPortFields.map((field, index) => (
-                                      <Card key={field.id} className="p-4 pt-8 relative"> 
-                                          <Button 
-                                              variant="ghost" size="icon" 
-                                              className="absolute top-1 right-1 h-6 w-6 text-destructive" 
-                                              onClick={() => removeInputPort(index)} type="button" title="Remove Input Port">
-                                              <X className="h-4 w-4" />
-                                          </Button>
-                                          <div className="space-y-3">
-                                            <div className="grid grid-cols-2 gap-4">
-                                              <div>
-                                                <Label htmlFor={`inputPorts.${index}.id`}>Port ID *</Label>
-                                                <Input {...register(`inputPorts.${index}.id`, { required: "Port ID is required" })} />
-                                                {errors.inputPorts?.[index]?.id && <p className="text-sm text-red-600 mt-1">{errors.inputPorts[index].id?.message}</p>}
-                                              </div>
-                                              <div>
-                                                  <Label htmlFor={`inputPorts.${index}.name`}>Port Name *</Label>
-                                                  <Input {...register(`inputPorts.${index}.name`, { required: "Port Name is required" })} />
-                                                  {errors.inputPorts?.[index]?.name && <p className="text-sm text-red-600 mt-1">{errors.inputPorts[index].name?.message}</p>}
-                                              </div>
-                                            </div>
-                                            <div>
-                                              <Label htmlFor={`inputPorts.${index}.sourceSystemId`}>Source Table (Metastore) *</Label>
-                                              <Controller
-                                                  name={`inputPorts.${index}.sourceSystemId`}
-                                                  control={control}
-                                                  rules={{ required: "Source Table is required" }}
-                                                  render={({ field: controllerField }) => (
-                                                    <Popover open={isComboboxOpen[field.id] ?? false} onOpenChange={(open) => handleComboboxOpenChange(open, field.id)}>
-                                                      <PopoverTrigger asChild>
-                                                          <Button
-                                                            variant="outline"
-                                                            role="combobox"
-                                                            aria-expanded={isComboboxOpen[field.id] ?? false}
-                                                            className="w-full justify-between font-normal"
-                                                          >
-                                                            {controllerField.value || "Select source table..."}
-                                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                                          </Button>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0">
-                                                          <Command shouldFilter={false}>
-                                                              <CommandInput 
-                                                                placeholder="Search metastore tables..."
-                                                                value={tableSearchQuery} 
-                                                                onValueChange={handleTableSearchInputChange}
-                                                              />
-                                                              <CommandList>
-                                                                <CommandEmpty>
-                                                                    {isSearchingTables ? "Searching..." : "No tables found."}
-                                                                </CommandEmpty>
-                                                                <CommandGroup>
-                                                                  {tableSearchResults.map((table) => (
-                                                                      <CommandItem
-                                                                        key={table.full_name}
-                                                                        value={table.full_name} 
-                                                                        onSelect={(currentValue) => {
-                                                                            controllerField.onChange(currentValue === controllerField.value ? "" : currentValue);
-                                                                            handleComboboxOpenChange(false, field.id);
-                                                                        }}
-                                                                      >
-                                                                        <Check
-                                                                            className={cn("mr-2 h-4 w-4", controllerField.value === table.full_name ? "opacity-100" : "opacity-0")}
-                                                                          />
-                                                                          {table.full_name}
-                                                                      </CommandItem>
-                                                                    ))}
-                                                                </CommandGroup>
-                                                              </CommandList>
-                                                            </Command>
-                                                        </PopoverContent>
-                                                      </Popover>
-                                                  )}
+                          {/* Input Ports Card */} 
+                          <Card>
+                              <CardHeader>
+                                <CardTitle>Input Ports</CardTitle>
+                                <CardDescription>Sources feeding this product. Select tables from the metastore.</CardDescription>
+                              </CardHeader>
+                              <CardContent className="space-y-4">
+                                {inputPortFields.map((field, index) => (
+                                  <Card key={field.id} className="p-4 pt-8 relative"> 
+                                      <Button 
+                                          variant="ghost" size="icon" 
+                                          className="absolute top-1 right-1 h-6 w-6 text-destructive" 
+                                          onClick={() => removeInputPort(index)} type="button" title="Remove Input Port">
+                                          <X className="h-4 w-4" />
+                                      </Button>
+                                      <div className="space-y-3">
+                                        <div className="grid grid-cols-2 gap-4">
+                                          <div>
+                                            <Label htmlFor={`inputPorts.${index}.id`}>Port ID *</Label>
+                                            <Input {...register(`inputPorts.${index}.id`, { required: "Port ID is required" })} />
+                                            {errors.inputPorts?.[index]?.id && <p className="text-sm text-red-600 mt-1">{errors.inputPorts[index].id?.message}</p>}
+                                          </div>
+                                          <div>
+                                              <Label htmlFor={`inputPorts.${index}.name`}>Port Name *</Label>
+                                              <Input {...register(`inputPorts.${index}.name`, { required: "Port Name is required" })} />
+                                              {errors.inputPorts?.[index]?.name && <p className="text-sm text-red-600 mt-1">{errors.inputPorts[index].name?.message}</p>}
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <Label htmlFor={`inputPorts.${index}.sourceSystemId`}>Source Table (Metastore) *</Label>
+                                          <Controller
+                                              name={`inputPorts.${index}.sourceSystemId`}
+                                              control={control}
+                                              rules={{ required: "Source Table is required" }}
+                                              render={({ field: controllerField }) => (
+                                                <Popover open={isComboboxOpen[field.id] ?? false} onOpenChange={(open) => handleComboboxOpenChange(open, field.id)}>
+                                                  <PopoverTrigger asChild>
+                                                      <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        aria-expanded={isComboboxOpen[field.id] ?? false}
+                                                        className="w-full justify-between font-normal"
+                                                      >
+                                                        {controllerField.value || "Select source table..."}
+                                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                      </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0">
+                                                      <Command shouldFilter={false}>
+                                                          <CommandInput 
+                                                            placeholder="Search metastore tables..."
+                                                            value={tableSearchQuery} 
+                                                            onValueChange={handleTableSearchInputChange}
+                                                          />
+                                                          <CommandList>
+                                                            <CommandEmpty>
+                                                                {isSearchingTables ? "Searching..." : "No tables found."}
+                                                            </CommandEmpty>
+                                                            <CommandGroup>
+                                                              {tableSearchResults.map((table) => (
+                                                                  <CommandItem
+                                                                    key={table.full_name}
+                                                                    value={table.full_name} 
+                                                                    onSelect={(currentValue) => {
+                                                                        controllerField.onChange(currentValue === controllerField.value ? "" : currentValue);
+                                                                        handleComboboxOpenChange(false, field.id);
+                                                                    }}
+                                                                  >
+                                                                    <Check
+                                                                        className={cn("mr-2 h-4 w-4", controllerField.value === table.full_name ? "opacity-100" : "opacity-0")}
+                                                                      />
+                                                                      {table.full_name}
+                                                                  </CommandItem>
+                                                                ))}
+                                                            </CommandGroup>
+                                                          </CommandList>
+                                                        </Command>
+                                                    </PopoverContent>
+                                                  </Popover>
+                                              )}
+                                            />
+                                            {errors.inputPorts?.[index]?.sourceSystemId && <p className="text-sm text-red-600 mt-1">{errors.inputPorts[index].sourceSystemId?.message}</p>}
+                                            <input type="hidden" {...register(`inputPorts.${index}.type`, { value: 'table' })} />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor={`inputPorts.${index}.description`}>Description</Label>
+                                            <Textarea {...register(`inputPorts.${index}.description`)} />
+                                        </div>
+                                        <div>
+                                          <Label htmlFor={`inputPorts.${index}.tags`}>Tags</Label>
+                                          <Controller
+                                              name={`inputPorts.${index}.tags`}
+                                              control={control}
+                                              render={({ field }) => (
+                                                <Input 
+                                                    placeholder="Comma-separated tags"
+                                                    value={Array.isArray(field.value) ? field.value.join(', ') : ''}
+                                                    onChange={(e) => {
+                                                        const tags = e.target.value.split(',').map(tag => tag.trim()).filter(Boolean);
+                                                        field.onChange(tags);
+                                                    }}
                                                 />
-                                                {errors.inputPorts?.[index]?.sourceSystemId && <p className="text-sm text-red-600 mt-1">{errors.inputPorts[index].sourceSystemId?.message}</p>}
-                                                <input type="hidden" {...register(`inputPorts.${index}.type`, { value: 'table' })} />
+                                              )}
+                                          />
+                                        </div>
+                                        {/* Port Links/Custom Editor */}
+                                        <PortMetadataEditor 
+                                            control={control} 
+                                            register={register} 
+                                            getValues={getValues}
+                                            setValue={setValue}
+                                            portIndex={index} 
+                                            portType="inputPorts" 
+                                        />
+                                      </div>
+                                  </Card>
+                                ))}
+                                <Button 
+                                    type="button" variant="outline" 
+                                    onClick={() => appendInputPort({ 
+                                        id: `input-${inputPortFields.length + 1}`,
+                                        name: 'New Input Port',
+                                        sourceSystemId: '', // Required field
+                                        type: 'table', 
+                                        links: {}, custom: {}, tags: []
+                                    })}
+                                  > 
+                                    <Plus className="mr-2 h-4 w-4"/> Add Input Port 
+                                </Button>
+                              </CardContent>
+                          </Card>
+
+                          {/* Output Ports Card */} 
+                          <Card>
+                              <CardHeader>
+                                <CardTitle>Output Ports</CardTitle>
+                                <CardDescription>Outputs provided by this data product.</CardDescription>
+                              </CardHeader>
+                              <CardContent className="space-y-4">
+                                {outputPortFields.map((field, index) => (
+                                  <Card key={field.id} className="p-4 pt-8 relative">
+                                      <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6 text-destructive" onClick={() => removeOutputPort(index)} type="button" title="Remove Output Port">
+                                         <X className="h-4 w-4" />
+                                       </Button>
+                                       <div className="space-y-3">
+                                          <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                              <Label htmlFor={`outputPorts.${index}.id`}>Port ID *</Label>
+                                              <Input {...register(`outputPorts.${index}.id`, { required: "Port ID is required" })} />
+                                              {errors.outputPorts?.[index]?.id && <p className="text-sm text-red-600 mt-1">{errors.outputPorts[index].id?.message}</p>}
                                             </div>
                                             <div>
-                                                <Label htmlFor={`inputPorts.${index}.description`}>Description</Label>
-                                                <Textarea {...register(`inputPorts.${index}.description`)} />
+                                                <Label htmlFor={`outputPorts.${index}.name`}>Port Name *</Label>
+                                                <Input {...register(`outputPorts.${index}.name`, { required: "Port Name is required" })} />
+                                                {errors.outputPorts?.[index]?.name && <p className="text-sm text-red-600 mt-1">{errors.outputPorts[index].name?.message}</p>}
                                             </div>
-                                            <div>
-                                              <Label htmlFor={`inputPorts.${index}.tags`}>Tags</Label>
-                                              <Controller
-                                                  name={`inputPorts.${index}.tags`}
-                                                  control={control}
-                                                  render={({ field }) => (
-                                                    <Input 
-                                                        placeholder="Comma-separated tags"
-                                                        value={Array.isArray(field.value) ? field.value.join(', ') : ''}
-                                                        onChange={(e) => {
-                                                            const tags = e.target.value.split(',').map(tag => tag.trim()).filter(Boolean);
-                                                            field.onChange(tags);
-                                                        }}
-                                                    />
-                                                  )}
-                                              />
-                                            </div>
-                                            {/* Port Links/Custom Editor */}
-                                            <PortMetadataEditor 
-                                                control={control} 
-                                                register={register} 
-                                                getValues={getValues}
-                                                setValue={setValue}
-                                                portIndex={index} 
-                                                portType="inputPorts" 
+                                          </div>
+                                          <div>
+                                              <Label htmlFor={`outputPorts.${index}.description`}>Description</Label>
+                                              <Textarea {...register(`outputPorts.${index}.description`)} />
+                                          </div>
+                                          <div>
+                                            <Label htmlFor={`outputPorts.${index}.tags`}>Tags</Label>
+                                            <Controller
+                                                name={`outputPorts.${index}.tags`}
+                                                control={control}
+                                                render={({ field }) => (
+                                                  <Input 
+                                                      placeholder="Comma-separated tags"
+                                                      value={Array.isArray(field.value) ? field.value.join(', ') : ''}
+                                                      onChange={(e) => {
+                                                          const tags = e.target.value.split(',').map(tag => tag.trim()).filter(Boolean);
+                                                          field.onChange(tags);
+                                                      }}
+                                                  />
+                                                )}
                                             />
                                           </div>
-                                      </Card>
-                                    ))}
-                                    <Button 
-                                        type="button" variant="outline" 
-                                        onClick={() => appendInputPort({ 
-                                            id: `input-${inputPortFields.length + 1}`,
-                                            name: 'New Input Port',
-                                            sourceSystemId: '', // Required field
-                                            type: 'table', 
-                                            links: {}, custom: {}, tags: []
-                                        })}
-                                      > 
-                                        <Plus className="mr-2 h-4 w-4"/> Add Input Port 
-                                    </Button>
-                                  </CardContent>
-                              </Card>
-
-                              {/* Output Ports Card */} 
-                              <Card>
-                                  <CardHeader>
-                                    <CardTitle>Output Ports</CardTitle>
-                                    <CardDescription>Outputs provided by this data product.</CardDescription>
-                                  </CardHeader>
-                                  <CardContent className="space-y-4">
-                                    {outputPortFields.map((field, index) => (
-                                      <Card key={field.id} className="p-4 pt-8 relative">
-                                          <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-6 w-6 text-destructive" onClick={() => removeOutputPort(index)} type="button" title="Remove Output Port">
-                                             <X className="h-4 w-4" />
-                                           </Button>
-                                           <div className="space-y-3">
-                                              <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                  <Label htmlFor={`outputPorts.${index}.id`}>Port ID *</Label>
-                                                  <Input {...register(`outputPorts.${index}.id`, { required: "Port ID is required" })} />
-                                                  {errors.outputPorts?.[index]?.id && <p className="text-sm text-red-600 mt-1">{errors.outputPorts[index].id?.message}</p>}
-                                                </div>
-                                                <div>
-                                                    <Label htmlFor={`outputPorts.${index}.name`}>Port Name *</Label>
-                                                    <Input {...register(`outputPorts.${index}.name`, { required: "Port Name is required" })} />
-                                                    {errors.outputPorts?.[index]?.name && <p className="text-sm text-red-600 mt-1">{errors.outputPorts[index].name?.message}</p>}
-                                                </div>
-                                              </div>
-                                              <div>
-                                                  <Label htmlFor={`outputPorts.${index}.description`}>Description</Label>
-                                                  <Textarea {...register(`outputPorts.${index}.description`)} />
-                                              </div>
-                                              <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <Label htmlFor={`outputPorts.${index}.type`}>Type</Label>
-                                                    <Input {...register(`outputPorts.${index}.type`)} placeholder="e.g., table, view, api"/>
-                                                </div>
-                                                <div>
-                                                    <Label htmlFor={`outputPorts.${index}.status`}>Status</Label>
-                                                    <Controller
-                                                      name={`outputPorts.${index}.status`}
-                                                      control={control}
-                                                      render={({ field }) => (
-                                                        <Select onValueChange={(value) => field.onChange(value === '' ? undefined : value)} value={field.value || ""}>
-                                                          <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                                                          <SelectContent>
-                                                            {statuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                                          </SelectContent>
-                                                        </Select>
-                                                      )}
-                                                    />
-                                                </div>
-                                              </div>
-                                              {/* TODO: Add fields for server, containsPii, autoApprove, dataContractId if needed in UI */} 
-                                              {/* Port Links/Custom Editor */} 
-                                              <PortMetadataEditor 
-                                                  control={control} 
-                                                  register={register} 
-                                                  getValues={getValues}
-                                                  setValue={setValue}
-                                                  portIndex={index} 
-                                                  portType="outputPorts" 
-                                              />
-                                           </div>
-                                      </Card>
-                                    ))}
-                                    <Button 
-                                      type="button" variant="outline" 
-                                      onClick={() => appendOutputPort({ 
-                                          id: `output-${outputPortFields.length + 1}`,
-                                          name: 'New Output Port', 
-                                          type: 'table', 
-                                          containsPii: false, autoApprove: false,
-                                          links: {}, custom: {}, tags: [] 
-                                       })}
-                                    > 
-                                      <Plus className="mr-2 h-4 w-4"/> Add Output Port 
-                                    </Button>
-                                  </CardContent>
-                              </Card>
-
-                              {/* Main Tags Card */} 
-                              <Card>
-                                <CardHeader>
-                                  <CardTitle>Tags</CardTitle>
-                                  <CardDescription>Add relevant tags (comma-separated).</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <Controller
-                                        name="tags"
-                                        control={control}
-                                        render={({ field }) => (
-                                          <Input 
-                                              placeholder="e.g., finance, customer, pii"
-                                              value={Array.isArray(field.value) ? field.value.join(', ') : ''}
-                                              onChange={(e) => {
-                                                  const tags = e.target.value.split(',').map(tag => tag.trim()).filter(Boolean);
-                                                  field.onChange(tags);
-                                              }}
+                                          {/* Port Links/Custom Editor */}
+                                          <PortMetadataEditor 
+                                              control={control} 
+                                              register={register} 
+                                              getValues={getValues}
+                                              setValue={setValue}
+                                              portIndex={index} 
+                                              portType="outputPorts" 
                                           />
-                                        )}
-                                    />
-                                </CardContent>
-                              </Card>
+                                       </div>
+                                  </Card>
+                                ))}
+                                <Button 
+                                  type="button" variant="outline" 
+                                  onClick={() => appendOutputPort({ 
+                                      id: `output-${outputPortFields.length + 1}`,
+                                      name: 'New Output Port', 
+                                      description: '', // Add description
+                                      type: 'table', 
+                                      links: {}, custom: {}, tags: [] 
+                                   })}
+                                > 
+                                  <Plus className="mr-2 h-4 w-4"/> Add Output Port 
+                                </Button>
+                              </CardContent>
+                          </Card>
 
-                              {/* Main Links Card */} 
-                              <Card>
-                                  <CardHeader>
-                                      <CardTitle>Links</CardTitle>
-                                      <CardDescription>Add relevant links (e.g., documentation, dashboards).</CardDescription>
-                                  </CardHeader>
-                                  <CardContent className="space-y-3">
-                                      {linksArray.map((link, index) => (
-                                        <div key={`main-link-${index}`} className="flex items-center gap-2">
-                                            <Input 
-                                                placeholder="Link Key (e.g., docs)" 
-                                                value={link.key}
-                                                onChange={(e) => {
-                                                    const newLinks = [...linksArray];
-                                                    newLinks[index].key = e.target.value;
-                                                    setLinksArray(newLinks);
-                                                }}
-                                                className="flex-1"
-                                            />
-                                            <Input 
-                                                placeholder="URL *" 
-                                                value={link.url}
-                                                onChange={(e) => {
-                                                  const newLinks = [...linksArray];
-                                                  newLinks[index].url = e.target.value;
-                                                  setLinksArray(newLinks);
-                                                }}
-                                                className="flex-1"
-                                            />
-                                            <Input 
-                                                placeholder="Description" 
-                                                value={link.description}
-                                                onChange={(e) => {
-                                                  const newLinks = [...linksArray];
-                                                  newLinks[index].description = e.target.value;
-                                                  setLinksArray(newLinks);
-                                                }}
-                                                className="flex-1"
-                                            />
-                                            <Button type="button" variant="ghost" size="icon" onClick={() => setLinksArray(linksArray.filter((_, i) => i !== index))} className="text-destructive" title="Remove Link">
-                                                <X className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                      ))}
-                                      <Button type="button" variant="outline" onClick={() => setLinksArray([...linksArray, { key: '', url: '', description: '' }])}>
-                                        <Plus className="mr-2 h-4 w-4"/> Add Link
-                                      </Button>
-                                  </CardContent>
-                              </Card>
-                              
-                              {/* Main Custom Properties Card */} 
-                              <Card>
-                                <CardHeader>
-                                    <CardTitle>Custom Properties</CardTitle>
-                                    <CardDescription>Add custom key-value metadata.</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                      {customArray.map((custom, index) => (
-                                        <div key={`main-custom-${index}`} className="flex items-center gap-2">
-                                            <Input 
-                                                placeholder="Property Key" 
-                                                value={custom.key}
-                                                onChange={(e) => {
-                                                    const newCustom = [...customArray];
-                                                    newCustom[index].key = e.target.value;
-                                                    setCustomArray(newCustom);
-                                                }}
-                                                className="flex-1"
-                                            />
-                                            <Input 
-                                                placeholder="Property Value (string)" 
-                                                value={custom.value} // Treat as string in UI
-                                                onChange={(e) => {
-                                                  const newCustom = [...customArray];
-                                                  newCustom[index].value = e.target.value;
-                                                  setCustomArray(newCustom);
-                                                }}
-                                                className="flex-1"
-                                            />
-                                            <Button type="button" variant="ghost" size="icon" onClick={() => setCustomArray(customArray.filter((_, i) => i !== index))} className="text-destructive" title="Remove Property">
-                                                <X className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                      ))}
-                                      <Button type="button" variant="outline" onClick={() => setCustomArray([...customArray, { key: '', value: '' }])}>
-                                        <Plus className="mr-2 h-4 w-4"/> Add Custom Property
-                                      </Button>
-                                </CardContent>
-                              </Card>
-                          </div>
-                      </ScrollArea>
-                      
-                      {/* Form Error Display */} 
-                      {formError && (
-                          <Alert variant="destructive" className="mt-auto"> {/* Stick to bottom */} 
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertDescription>{formError}</AlertDescription>
-                          </Alert>
-                        )}
+                          {/* Main Tags Card */} 
+                          <Card>
+                            <CardHeader>
+                              <CardTitle>Tags</CardTitle>
+                              <CardDescription>Add relevant tags (comma-separated).</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Controller
+                                    name="tags"
+                                    control={control}
+                                    render={({ field }) => (
+                                      <Input 
+                                          placeholder="e.g., finance, customer, pii"
+                                          value={Array.isArray(field.value) ? field.value.join(', ') : ''}
+                                          onChange={(e) => {
+                                              const tags = e.target.value.split(',').map(tag => tag.trim()).filter(Boolean);
+                                              field.onChange(tags);
+                                          }}
+                                      />
+                                    )}
+                                />
+                            </CardContent>
+                          </Card>
 
-                      {/* UI Form Footer */} 
-                      <DialogFooter className="mt-auto pt-4 border-t"> 
-                        <Button type="button" variant="outline" onClick={() => handleCloseDialog(false)} disabled={isSubmitting}>Cancel</Button>
-                        <Button type="submit" disabled={isSubmitting || isLoadingProduct}>
-                          {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
-                          {isSubmitting ? "Saving..." : (isEditMode ? 'Update Product' : 'Create Product')}
-                        </Button>
-                      </DialogFooter>
-                    </form>
+                          {/* Main Links Card */} 
+                          <Card>
+                              <CardHeader>
+                                  <CardTitle>Links</CardTitle>
+                                  <CardDescription>Add relevant links (e.g., documentation, dashboards).</CardDescription>
+                              </CardHeader>
+                              <CardContent className="space-y-3">
+                                  {linksArray.map((link, index) => (
+                                    <div key={`main-link-${index}`} className="flex items-center gap-2">
+                                        <Input 
+                                            placeholder="Link Key (e.g., docs)" 
+                                            value={link.key}
+                                            onChange={(e) => {
+                                                const newLinks = [...linksArray];
+                                                newLinks[index].key = e.target.value;
+                                                setLinksArray(newLinks);
+                                            }}
+                                            className="flex-1"
+                                        />
+                                        <Input 
+                                            placeholder="URL *" 
+                                            value={link.url}
+                                            onChange={(e) => {
+                                              const newLinks = [...linksArray];
+                                              newLinks[index].url = e.target.value;
+                                              setLinksArray(newLinks);
+                                            }}
+                                            className="flex-1"
+                                        />
+                                        <Input 
+                                            placeholder="Description" 
+                                            value={link.description}
+                                            onChange={(e) => {
+                                              const newLinks = [...linksArray];
+                                              newLinks[index].description = e.target.value;
+                                              setLinksArray(newLinks);
+                                            }}
+                                            className="flex-1"
+                                        />
+                                        <Button type="button" variant="ghost" size="icon" onClick={() => setLinksArray(linksArray.filter((_, i) => i !== index))} className="text-destructive" title="Remove Link">
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                  ))}
+                                  <Button type="button" variant="outline" onClick={() => setLinksArray([...linksArray, { key: '', url: '', description: '' }])}>
+                                    <Plus className="mr-2 h-4 w-4"/> Add Link
+                                  </Button>
+                              </CardContent>
+                          </Card>
+                          
+                          {/* Main Custom Properties Card */} 
+                          <Card>
+                            <CardHeader>
+                                <CardTitle>Custom Properties</CardTitle>
+                                <CardDescription>Add custom key-value metadata.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                  {customArray.map((custom, index) => (
+                                    <div key={`main-custom-${index}`} className="flex items-center gap-2">
+                                        <Input 
+                                            placeholder="Property Key" 
+                                            value={custom.key}
+                                            onChange={(e) => {
+                                                const newCustom = [...customArray];
+                                                newCustom[index].key = e.target.value;
+                                                setCustomArray(newCustom);
+                                            }}
+                                            className="flex-1"
+                                        />
+                                        <Input 
+                                            placeholder="Property Value (string)" 
+                                            value={custom.value} // Treat as string in UI
+                                            onChange={(e) => {
+                                              const newCustom = [...customArray];
+                                              newCustom[index].value = e.target.value;
+                                              setCustomArray(newCustom);
+                                            }}
+                                            className="flex-1"
+                                        />
+                                        <Button type="button" variant="ghost" size="icon" onClick={() => setCustomArray(customArray.filter((_, i) => i !== index))} className="text-destructive" title="Remove Property">
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                  ))}
+                                  <Button type="button" variant="outline" onClick={() => setCustomArray([...customArray, { key: '', value: '' }])}>
+                                    <Plus className="mr-2 h-4 w-4"/> Add Custom Property
+                                  </Button>
+                            </CardContent>
+                          </Card>
+                      </form> 
+                    </div> {/* End inner scrollable div */}
+
+                  {/* Error Display - Outside scrollable div, inside TabsContent */} 
+                  {formError && (
+                      <div className="px-6 pt-2 pb-0"> {/* Add padding */} 
+                        <Alert variant="destructive">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>{formError}</AlertDescription>
+                        </Alert>
+                      </div>
+                    )}
+                    
+                  {/* UI Form Footer - Outside scrollable div, inside TabsContent */} 
+                  <DialogFooter className="px-6 pb-6 pt-4 border-t">
+                    <Button type="button" variant="outline" onClick={() => handleCloseDialog(false)} disabled={isSubmitting}>Cancel</Button>
+                    <Button 
+                      type="submit" 
+                      form="data-product-ui-form" 
+                      disabled={isSubmitting || isLoadingProduct}
+                    >
+                      {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+                      {isSubmitting ? "Saving..." : (isEditMode ? 'Update Product' : 'Create Product')}
+                    </Button>
+                  </DialogFooter>
                 </TabsContent>
 
                 {/* JSON Editor Tab */} 
-                <TabsContent value="json" className="mt-4 flex-grow flex flex-col min-h-0">
-                    <div className="flex-grow flex flex-col space-y-2">
+                {/* Restore layout: TabsContent scrolls */} 
+                <TabsContent value="json" className="mt-4 flex-grow min-h-0 overflow-y-auto pr-4 space-y-2">
+                    {/* Remove temporary style tag */} 
+                    {/* <style>{`
+                        .json-editor-wrapper pre {
+                            overflow: auto !important;
+                            max-height: 100%; 
+                        }
+                    `}</style> */} 
+                    {/* Remove inner wrapper div */}
+                    {/* <div className="pr-4 space-y-2 flex flex-col json-editor-wrapper"> */} 
                       <Label htmlFor="jsonEditor">JSON Payload</Label>
+                      {/* Restore Textarea */}
                       <Textarea
                           id="jsonEditor"
                           value={jsonString}
-                          onChange={handleJsonChange}
+                          onChange={handleJsonChange} // Use original handler
                           disabled={isSubmitting || isLoadingProduct}
                           className={cn(
-                              "font-mono text-sm flex-grow resize-none", // Take available space
+                              // Standard textarea styling, fixed height
+                              "font-mono text-sm h-[400px] resize-none w-full", 
                               (!isJsonValid || jsonParseError) && "border-destructive focus-visible:ring-destructive"
                           )}
                           placeholder='Enter or edit the Data Product JSON...'
                         />
                        {/* Status/Error Display Area */} 
-                       <div className="text-sm min-h-[40px]"> {/* Reserve space */} 
+                       <div className="text-sm min-h-[40px]"> 
                           {jsonParseError ? (
                               <p className="text-destructive">Syntax Error: {jsonParseError}</p>
                           ) : validationStatusMessage && (
@@ -1275,7 +1323,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                        </div>
                        {/* Detailed Errors Accordion */} 
                        {!isJsonValid && !jsonParseError && schemaValidationErrors && schemaValidationErrors.length > 0 && (
-                           <Accordion type="single" collapsible className="w-full border-t pt-2">
+                           <Accordion type="single" collapsible className="w-full border-t pt-2 pb-2"> {/* Add pb-2 for spacing before footer */} 
                              <AccordionItem value="item-1" className="border-b-0">
                                <AccordionTrigger className="text-sm text-destructive hover:no-underline py-1">
                                    Show {schemaValidationErrors.length} validation details
@@ -1290,9 +1338,10 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                              </AccordionItem>
                            </Accordion>
                        )}
-                    </div>
-                    {/* JSON Tab Footer */} 
-                    <DialogFooter className="mt-auto pt-4 border-t"> 
+                    {/* </div> */} {/* Remove closing wrapper div */} 
+
+                    {/* Footer scrolls with content */}
+                    <DialogFooter className="px-6 pb-6 pt-4 border-t"> 
                       <Button type="button" variant="outline" onClick={() => handleCloseDialog(false)} disabled={isSubmitting}>Cancel</Button>
                       <Button 
                         type="button" 
@@ -1309,6 +1358,6 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
       </DialogContent>
     </Dialog>
   );
-}
+};
 
-export default DataProductFormDialog; 
+export default DataProductFormDialog;

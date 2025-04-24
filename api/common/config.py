@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     DEBUG: bool = Field(False, env='DEBUG')
     LOG_LEVEL: str = Field('INFO', env='LOG_LEVEL')
     LOG_FILE: Optional[str] = Field(None, env='LOG_FILE')
+    APP_ADMIN_DEFAULT_GROUPS: Optional[str] = Field('["admins"]', env='APP_ADMIN_DEFAULT_GROUPS') # JSON list as string
 
     # Git settings for YAML storage
     GIT_REPO_URL: Optional[str] = Field(None, env='GIT_REPO_URL')
