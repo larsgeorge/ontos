@@ -6,123 +6,172 @@ You are an expert in **Python, FastAPI, scalable API development, TypeScript, Re
 - Use **functional and declarative programming patterns**; use classes when necessary.
 - Prefer **iteration and modularization** over code duplication.
 - Use descriptive variable names with auxiliary verbs (e.g., `is_active`, `has_permission`, `isLoading`, `hasError`).
-- Follow proper **naming conventions**:  
-  - For Python: use lowercase with underscores (e.g., `routers/user_routes.py`).  
-  - For TypeScript: use lowercase with dashes for directories (e.g., `components/auth-wizard`).
+- Follow proper **naming conventions**:
+  - For Python: use lowercase with underscores (e.g., `routers/user_routes.py`, `db_models/data_products.py`, `repositories/settings_repository.py`).
+  - For TypeScript: use lowercase with dashes for directories and files (e.g., `components/auth-wizard`, `views/data-products.tsx`).
 - The project is ASF 2.0 licensed and open-source, hosted at https://github.com/larsgeorge/ucsak-app
 
 ### Project Overview
 
-The project implements a web application that is run as a Databricks App, which are regular Python apps that are started via the information provided in an `app.yaml` configuration file. The app provides Unity Catalog and general Databricks related services, including the ability to create and managed the following objects:
+The project implements a web application designed to run as a **Databricks App**. Databricks Apps are Python web applications configured via an `app.yaml` file (Databricks Asset Bundle format). This app provides Unity Catalog and general Databricks-related services, focusing on metadata management, governance, and operational tools.
 
-- Data Products, which group Databricks assets, like tables, views, functions, models, dashboards, jobs, etc., and are implemented as tags on the these objects. For example, tag keys may include `data-product-name` to store the name, `data-product-domain` to store the data domain, and so on.
-- Data Contracts, which instrument Data Product with technical metadata. This is modelled after the Open Data Contract Standard project. Contracts help to assign tags to the Data Product assets, implement quality controls, verify access privileges, show sample data, and more.
-- Business Glossaries, where there is a hierarchy that provides a glossary for each level of organizational unit, like company, line of business, department, team or project. They are combined for an actual user bottom up, that is, they are merged into a single operational glossary, where lower-level gloassaries can override terms on higher levels. Each gloassary contains terms that can have tags, a markdown description, a status (if the term is approved, live, deprecated, in draft, and so on) to express its lifecycle, assigned assets, and more. Terms can be created and then propagated.
-- Master Data Management, uses the Zingg.ai open-source project to implement MDM.
-- Entitlements, comnbines access privilegs into personas, and then lets the user assign them to directory groups. 
-- Security, allows to enable andvanced security features on assets, such as differential privacy.
-- Compliance, allows to create rules that are verified and computes an overall score of how many of these rules are met.
-- Catalog Commander, a Norton Commander inspired, side-by-side catalog explorer that lets users rearrange their data assets, including the ability to copy or move tables and schemas.
-- Settings, here the user can enable the background Databricks jobs that do the actual heavy lifting, among other settings.
-- About, a summary information page, linking to the source repository.
+**Core Features:**
 
-More requirements:
-- Each app feature is implemented via a dedicated React View for the frontend, and a dedicated FastAPI-based endpoint providing the necessary REST functions to list, create, get, update, and delete entities. 
-- There is a separate class in `api/routes` for each service endpoint.
-- All endpoints are prefixed with `api/`, for example, `api/data-products`.
-- The FastAPI code delegates all non REST related work to a dedicated service controller class, which is named like the service and postfixed with `_manager`, for example, `data_products_manager`. The controller classes live in the `api/controller` directory.
-- All metadata of the app is managed in Pydantic dataclasses and saved in Postgres or Delta tables via the JDBC connector. The dataclasses are located in the `api/models` directory.
-- Each controller loads sample data, if present, fron YAML files in `api/data`.
-- The controller code does not run heavy workloads directly but delegates the work to Databricks Workflows which are installed via the Settings route. A dedicated job runner class manages all the job operations, like starting, or stopping jobs, or query the status of the job, which the UI shows as a progress bar where necessary.
-- The UI has a notification system that is shared by all services to notify the user about asynchronous operations, like job progress.
-- There is also a shared search service, which indexes all dataclasses so that users can find, for example Data Products, Data Contracts, Business Glossary terms, and so on via prefix search on their main attributes and tags.
-- The data can also, in addition to using the JDBC connector, save the data for each service as YAML files (same format as the example data in `api/data`) in a Git repositoy, which is configured in the Settings. Upon modifications a background process detects the changes and asks the user via the notification system to trigger a commit and push of the settings files to external repo. This is done via a button in the UI that asks for a commit message (prepopulated with the current date and time, like `update_2025_03_29_17_48`).
+- **Data Products:** Group Databricks assets (tables, views, functions, models, dashboards, jobs, notebooks) using tags (e.g., `data-product-name`, `data-product-domain`). Managed by `DataProductsManager`.
+- **Data Contracts:** Instrument Data Products with technical metadata based on the Open Data Contract Standard. Managed by `DataContractsManager`. Includes schema validation, quality checks, access control verification, sample data display, etc.
+- **Business Glossaries:** Hierarchical glossaries per organizational unit (company, LOB, department, team, project). Merged bottom-up for users, allowing overrides. Terms have tags, markdown descriptions, lifecycle status, assigned assets. Managed by `BusinessGlossariesManager`.
+- **Master Data Management (MDM):** Integrates with Zingg.ai for MDM capabilities. Managed by `MasterDataManagementManager`.
+- **Entitlements:** Combines access privileges into personas (roles) and assigns them to directory groups. Managed by `EntitlementsManager`.
+- **Security:** Enables advanced security features (e.g., differential privacy) on assets. Managed by `SecurityFeaturesManager`.
+- **Compliance:** Define and verify compliance rules, calculating an overall score. Managed by `ComplianceManager`.
+- **Catalog Commander:** Norton Commander-inspired dual-pane explorer for managing catalog assets (copy/move tables/schemas). Managed by `CatalogCommanderManager`.
+- **Data Asset Reviews:** Workflow for reviewing and approving assets (tables, views, functions). Managed by `DataAssetReviewManager`. Includes notifications for reviewers/requesters.
+- **Settings:** Configure app settings, Databricks connection, Git integration, background jobs, and RBAC (Roles). Managed by `SettingsManager`.
+- **About:** Application summary and links.
+
+**System Components & Requirements:**
+
+- **Frontend:** Each feature has a dedicated React View (`src/views`).
+- **Backend:** Each feature has a dedicated FastAPI endpoint (`api/routes`), prefixed with `/api/` (e.g., `/api/data-products`).
+- **Controller Pattern:** FastAPI routes delegate business logic to service controller classes (`api/controller/*_manager.py`, e.g., `DataProductsManager`).
+- **Repository Pattern:** Controllers delegate database operations to repository classes (`api/repositories/*_repository.py`, e.g., `DataProductRepository`).
+- **Database Models:** SQLAlchemy models define the database schema (`api/db_models/*.py`).
+- **API Models:** Pydantic models define the API request/response structure and perform validation (`api/models/*.py`). Data is often mapped between DB and API models.
+- **Data Storage:** Metadata (settings, roles, reviews, etc.) is stored in a database (e.g., Postgres or potentially Databricks SQL using JDBC/ODBC). Configuration can optionally be synced to a Git repository as YAML files.
+- **Background Jobs:** Heavy workloads (syncing, validation) are delegated to Databricks Workflows, installed and managed via the Settings UI and `SettingsManager`. A job runner class handles job operations.
+- **Notifications:** A shared system (`NotificationsManager`) notifies users about asynchronous operations (job progress, review requests).
+- **Search:** A shared search service (`SearchManager`) indexes data from various managers (those implementing `SearchableAsset` via the `@searchable_asset` decorator and `SEARCHABLE_ASSET_MANAGERS` registry). Users can search across features (Data Products, Contracts, Glossary Terms, Reviews, etc.).
+- **Git Sync:** Changes to configurations (potentially other data) can be saved as YAML files to a configured Git repository. A background process detects changes and prompts the user (via notifications) to commit/push with a pre-filled message.
+- **Startup:** The `api/app.py` defines the FastAPI app. `api/utils/startup_tasks.py` handles initialization: database setup (`initialize_database`), manager instantiation (`initialize_managers`), and demo data loading (`load_initial_data`). Managers are stored as singletons in `app.state` and accessed via FastAPI dependencies (e.g., `get_data_products_manager`).
 
 ### Project Structure
 
-- **Frontend**:  
-  - **Language**: TypeScript  
-  - **Framework**: React  
-  - **UI Library**: Shadcn UI
+- **Frontend**: (`./src`)
+  - **Language**: TypeScript
+  - **Framework**: React
+  - **UI Library**: Shadcn UI & Tailwind CSS
   - **Build Tool**: Vite
-  - **Directory Structure**:  
-    - `src/`: Main source code  
+  - **Directory Structure**:
+    - `src/`: Main source code
     - `src/index.html`: Main HTML file
-    - `src/components`: The Tailwind CSS and Shadcn UI components
-    - `src/views`: The Tailwind CSS and Shadcn UI views
-    - Configuration Files:  
-      - `tsconfig.json`  
-      - `pyproject.toml`  
+    - `src/main.tsx`: Application entry point
+    - `src/App.tsx`: Root component with routing
+    - `src/components/`: Reusable UI components (Tailwind CSS + Shadcn UI)
+      - `src/components/ui/`: Base Shadcn UI components
+      - `src/components/common/`: App-specific common components (e.g., `RelativeDate`)
+      - `src/components/<feature>/`: Feature-specific components (e.g., `data-products/data-product-form-dialog.tsx`)
+    - `src/views/`: Page-level components corresponding to features (e.g., `data-products.tsx`, `settings.tsx`)
+    - `src/hooks/`: Custom React hooks (e.g., `useApi`, `useToast`)
+    - `src/stores/`: State management (e.g., Zustand for `permissions-store`, `breadcrumb-store`)
+    - `src/types/`: TypeScript type definitions (e.g., `data-product.ts`, `settings.ts`)
+    - `src/config/`: Application configuration (e.g., `features.ts`)
+    - `src/lib/`: Utility functions (e.g., `utils.ts`)
+  - **Configuration Files**:
+    - `tsconfig.json`, `tsconfig.node.json`
+    - `vite.config.ts`
+    - `tailwind.config.js`
+    - `postcss.config.js`
+    - `index.html` (entry point)
+    - `package.json`
 
-- **Backend**:  
-  - **Language**: Python  
-  - **Framework**: FastAPI  
-  - **Build Tool**: hatch
-  - **Database**: Databricks SQL
-  - **Directory Structure**:  
-    - `api/`: Main source code  
-    - `api/controller/`: Manager classes that implement controllers, calling Databricks APIs etc.
-    - `api/models/`: Dataclasses for each service holding the operational data in memory.
-    - `api/routes/`: The FastAPI route code for each service, calling the controller classes.
-    - `api/utils/`: Helper classes.
-    - Environment Configuration:  
-      - `.env` / `.env.example`: Environment variables.
-      - `api/data`: Example data for every service, provided as YAML files.
-      - `api/schemas`: Holds JSON schema files that are used to validate Data Contracts, or other such data.
-      - `api/workflows`: YAML files defining the details needed to create the Databricks jobs.
-      - `api/app.yaml`: Configuration file for the Databricks Apps as a Databricks Asset Bundle.
+- **Backend**: (`./api`)
+  - **Language**: Python
+  - **Framework**: FastAPI
+  - **Build Tool**: hatch (`pyproject.toml`)
+  - **Database ORM**: SQLAlchemy
+  - **Directory Structure**:
+    - `api/`: Main source code
+    - `api/controller/`: Manager classes implementing business logic (e.g., `data_products_manager.py`).
+    - `api/models/`: Pydantic models for API data structures (e.g., `data_products.py`, `settings.py`).
+    - `api/db_models/`: SQLAlchemy ORM models defining database tables (e.g., `data_products.py`).
+    - `api/repositories/`: Database access layer using the Repository pattern (e.g., `data_products_repository.py`).
+    - `api/routes/`: FastAPI routers defining API endpoints (e.g., `data_product_routes.py`).
+    - `api/utils/`: Helper classes and functions (e.g., `startup_tasks.py`, `demo_data_loader.py`).
+    - `api/common/`: Shared utilities and base classes.
+      - `api/common/database.py`: Database setup and session management.
+      - `api/common/config.py`: Settings loading (`Settings` model) and management.
+      - `api/common/logging.py`: Logging setup.
+      - `api/common/workspace_client.py`: Databricks SDK client setup.
+      - `api/common/dependencies.py`: FastAPI dependency injectors (e.g., `get_settings_manager`, `get_auth_manager`).
+      - `api/common/authorization.py`: Permissions checking logic (`PermissionChecker`, user detail fetching).
+      - `api/common/features.py`: Feature definitions and access levels (`FeatureAccessLevel` enum).
+      - `api/common/search_interfaces.py`: `SearchableAsset` interface definition.
+      - `api/common/search_registry.py`: `@searchable_asset` decorator and registry (`SEARCHABLE_ASSET_MANAGERS`).
+      - `api/common/middleware.py`: Custom FastAPI middleware (Logging, Error Handling).
+      - `api/common/repository.py`: Base repository class (`CRUDBase`).
+    - **Configuration & Data**:
+      - `.env` / `.env.example`: Environment variables (loaded by `api/common/config.py`).
+      - `api/data/`: Example/Demo data for services (YAML files, e.g., `data_products.yaml`). Loaded by managers or `demo_data_loader.py`.
+      - `api/schemas/`: JSON schema files (e.g., for Data Contract validation).
+      - `api/workflows/`: YAML definitions for Databricks jobs/workflows.
+      - `api/app.yaml`: Databricks App configuration (Asset Bundle format).
+    - `api/app.py`: FastAPI application entry point.
 
 ### Code Style and Structure
 
 **Backend (Python/FastAPI)**:
 
-- Use `def` for pure functions and `async def` for asynchronous operations.
-- **Type Hints**: Use Python type hints for all function signatures. Prefer Pydantic models for input validation.
-- **File Structure**: Follow clear separation with directories for routes, utilities, static content, and models/schemas.
-- **RORO Pattern**: Use the "Receive an Object, Return an Object" pattern.
-- **Error Handling**:  
-  - Handle errors at the beginning of functions with early returns.  
-  - Use guard clauses and avoid deeply nested if statements.  
-  - Implement proper logging and custom error types.
+- Use `def` for pure functions and `async def` for asynchronous operations (FastAPI route handlers, SDK calls).
+- **Type Hints**: Use Python type hints extensively. Use Pydantic models for API input/output validation and SQLAlchemy models for DB interaction.
+- **File Structure**: Maintain clear separation of concerns (routes, controllers, repositories, models, db_models, common utilities).
+- **RORO Pattern**: API models follow "Receive an Object, Return an Object". Controllers often receive/return API models, mapping to/from DB models via the repository.
+- **Error Handling**:
+  - Use FastAPI's `HTTPException` for API errors.
+  - Handle specific exceptions (e.g., `SQLAlchemyError`, `ValidationError`, `DatabricksError`, `NotFound`) in controllers/repositories.
+  - Use guard clauses and early returns.
+  - Implement structured logging via `api/common/logging.py`.
+- **Dependency Injection**: Rely heavily on FastAPI's DI for providing database sessions, managers, settings, and workspace clients to routes (see `api/common/dependencies.py` and manager getters in route files). Managers are initialized as singletons in `app.state` during startup.
 
 **Frontend (TypeScript/React)**:
 
-- **TypeScript Usage**: Use TypeScript for all code. Prefer interfaces over types. Avoid enums; use maps instead.
-- **Functional Components**: Write all components as functional components with proper TypeScript interfaces.
-- **UI and Styling**: Implement responsive design using Material UI, adopting a web-first approach.
-- **Performance**:  
-  - Minimize `use client`, `useEffect`, and `setState` hooks. Favor server-side rendering where possible.  
-  - Wrap client components in `Suspense` with fallback for improved performance.
+- **TypeScript Usage**: Use TypeScript strictly. Prefer interfaces (`interface`) over types (`type`) for defining object shapes where applicable. Use mapped types or utility types instead of enums.
+- **Functional Components**: Write all components as functional components using hooks.
+- **UI and Styling**: Use **Shadcn UI** components built on **Tailwind CSS**. Follow responsive design principles.
+- **State Management**: Use `useState`, `useEffect`, `useContext` for local/shared state. Use Zustand (`stores/`) for global state (e.g., permissions, breadcrumbs).
+- **Data Fetching**: Use a custom hook (`hooks/useApi`) wrapping `fetch` or `axios` for API interactions. Handle loading and error states explicitly. Use `async/await`.
+- **Forms**: Use `react-hook-form` for form management and validation, often integrated with Shadcn UI components and Zod for schema validation.
+- **Performance**:
+  - Minimize `useEffect`, `useState`.
+  - Use `React.memo`, `useMemo`, `useCallback` where appropriate.
+  - Consider server-side patterns if applicable, although primary interaction is client-side with API.
+  - Use `Suspense` for lazy loading components if needed.
 
 ### Performance Optimization
 
 **Backend**:
 
-- **Asynchronous Operations**: Minimize blocking I/O operations using async functions.
-- **Caching**: Implement caching strategies for frequently accessed data using Redis or in-memory stores.
-- **Lazy Loading**: Use lazy loading techniques for large datasets and API responses.
+- **Asynchronous Operations**: Use `async/await` for SDK calls and potentially database operations if using an async driver.
+- **Database Query Optimization**: Use efficient SQLAlchemy queries (e.g., `selectinload` for eager loading relationships in repositories). Add database indexes where needed (`db_models`).
+- **Caching**: Consider caching for frequently accessed, rarely changing data (e.g., settings, roles) if performance becomes an issue.
 
 **Frontend**:
 
-- **React Components**: Favor server-side rendering and avoid heavy client-side rendering where possible.
-- **Dynamic Loading**: Implement dynamic loading for non-critical components and optimize image loading using WebP format with lazy loading.
+- **Component Memoization**: Use `React.memo`, `useMemo`, `useCallback`.
+- **Bundle Size**: Monitor bundle size and use code splitting/lazy loading if necessary.
+- **Efficient Data Fetching**: Fetch only necessary data. Use libraries like TanStack Query for caching/staleness management if needed.
 
 ### Project Conventions
 
 **Backend**:
 
-1. Follow **RESTful API design principles**.
-2. Rely on **FastAPI's dependency injection system** for managing state and shared resources.
-3. Use **SQLAlchemy 2.0** for ORM features, if applicable.
-4. Ensure **CORS** is properly configured for local development.
-5. No authentication or authorization is required for users to access the platform.
+1. Follow **RESTful API design**. Endpoints grouped by resource in `api/routes`.
+2. Use **FastAPI's dependency injection** (via `Depends`) extensively. Access singletons via `request.app.state` within dependency functions.
+3. Use **SQLAlchemy** for ORM. Employ the **Repository pattern** for database abstraction.
+4. Ensure **CORS** is configured in `api/app.py` for local development.
+5. **Authorization**: Implemented via `api/common/authorization.py` (`PermissionChecker` dependency) based on user groups and role definitions stored in the database (managed by `SettingsManager` and `AuthorizationManager`). User details (including groups) are fetched via Databricks SDK (`api/controller/users_manager.py`, `api/common/authorization.py`). Permissions defined in `api/common/features.py`.
+6. **Configuration**: Managed by `api/common/config.py` using Pydantic's `BaseSettings` loading from `.env` and environment variables.
+7. **Search**: Managers implement `SearchableAsset` interface and use `@searchable_asset` decorator. `SearchManager` collects items and provides search endpoint.
 
 **Frontend**:
 
-1. Optimize **Web Vitals** (LCP, CLS, FID).
-2. Limit `use client` hooks to small, specific components for Web API access.
+1. Optimize **Web Vitals**.
+2. Use `useToast` hook (based on Shadcn UI Toaster) for user feedback.
+3. Use Zustand stores (`stores/`) for cross-component state.
+4. Fetch user permissions via `/api/user/permissions` endpoint and store using `permissions-store`. Use `usePermissions` hook to check access levels (e.g., `hasPermission(featureId, FeatureAccessLevel.READ_WRITE)`). Conditionally render UI elements or disable actions based on permissions.
+5. Use `breadcrumb-store` to dynamically update breadcrumbs, especially for detail pages.
 
 ### Testing and Deployment
 
-- Implement **unit tests** for both frontend and backend.
-- Ensure proper input validation, sanitization, and error handling throughout the application.
+- Implement **unit tests** (e.g., using `pytest` for backend, Jest/React Testing Library for frontend).
+- Ensure proper input validation (Pydantic on backend, Zod/react-hook-form on frontend) and error handling.
+- **Deployment**: Deployed as a Databricks App via `databricks bundle deploy` using `api/app.yaml`. Requires building the frontend (`npm run build`) so static assets are placed in `./static` before deployment.
