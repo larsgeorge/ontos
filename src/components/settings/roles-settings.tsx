@@ -37,6 +37,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 // import { usePermissions } from '@/stores/permissions-store'; // Assuming permissions check needed
+import { usePermissions } from '@/stores/permissions-store'; // Import the permissions hook
 
 export default function RolesSettings() {
     const { get, delete: deleteApi } = useApi();
@@ -51,6 +52,7 @@ export default function RolesSettings() {
     // const featureId = 'settings'; // Or appropriate feature ID
     // const canWrite = hasPermission(featureId, FeatureAccessLevel.READ_WRITE);
     // const canAdmin = hasPermission(featureId, FeatureAccessLevel.ADMIN);
+    const { fetchPermissions, fetchAvailableRoles } = usePermissions(); // Get both actions
 
     const fetchData = async () => {
         setIsLoading(true);
@@ -87,6 +89,17 @@ export default function RolesSettings() {
         setIsDialogOpen(true);
     };
 
+    // Helper function to refresh permissions and roles
+    const refreshPermissionsAndRoles = async () => {
+        try {
+            await Promise.all([fetchPermissions(), fetchAvailableRoles()]);
+            toast({ title: 'Permissions Updated', description: 'User permissions and available roles refreshed.' });
+        } catch (err: any) {
+            console.error("Error refreshing permissions/roles:", err);
+            toast({ title: 'Refresh Failed', description: `Could not refresh permissions/roles: ${err.message}`, variant: 'destructive' });
+        }
+    };
+
     const handleDeleteRole = async (roleId: string, roleName: string) => {
         if (!confirm(`Are you sure you want to delete the role "${roleName}"?`)) return;
 
@@ -100,6 +113,8 @@ export default function RolesSettings() {
             await deleteApi(`/api/settings/roles/${roleId}`);
             toast({ title: 'Success', description: `Role "${roleName}" deleted.` });
             fetchData(); // Refresh list
+            await fetchPermissions(); // Refresh user permissions
+            await refreshPermissionsAndRoles(); // Call the combined refresh helper
         } catch (err: any) {
             console.error("Error deleting role:", err);
             const errorMsg = err.message || 'Failed to delete role.';
@@ -108,8 +123,10 @@ export default function RolesSettings() {
         }
     };
 
-    const handleDialogSubmitSuccess = () => {
+    const handleDialogSubmitSuccess = async () => {
         fetchData(); // Refresh data after successful dialog submission
+        await fetchPermissions(); // Refresh user permissions
+        await refreshPermissionsAndRoles(); // Call the combined refresh helper
     };
 
     // --- Column Definitions ---
@@ -192,7 +209,7 @@ export default function RolesSettings() {
             },
             enableHiding: false,
         },
-    ], [handleOpenDialog, handleDeleteRole]); // Add dependencies if needed (e.g., canWrite, canAdmin)
+    ], [handleOpenDialog, handleDeleteRole, refreshPermissionsAndRoles]); // Add refreshPermissionsAndRoles to dependency array
 
     return (
         <Card>
