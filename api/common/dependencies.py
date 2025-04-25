@@ -4,6 +4,7 @@ from typing import Optional
 from api.controller.authorization_manager import AuthorizationManager
 from api.controller.settings_manager import SettingsManager
 from api.controller.users_manager import UsersManager
+from api.controller.notifications_manager import NotificationsManager
 from api.common.logging import get_logger
 # Import DB session dependency
 from api.common.database import get_db
@@ -64,4 +65,23 @@ def get_users_manager(
         # Raise error if not found in state - implies startup issue
         logger.critical("UsersManager not found in application state during request!")
         raise HTTPException(status_code=503, detail="User details service not configured.")
-    return users_manager 
+    return users_manager
+
+def get_notifications_manager(
+    request: Request # Inject request to access app state
+) -> NotificationsManager:
+    """Dependency provider for NotificationsManager."""
+    # Use the singleton stored in app.state
+    notifications_manager = getattr(request.app.state, "notifications_manager", None)
+    # Retrieve from the manager_instances dictionary
+    manager_instances = getattr(request.app.state, "manager_instances", None)
+    if not manager_instances:
+        logger.critical("Manager instances dictionary not found in application state!")
+        raise HTTPException(status_code=503, detail="Notification service not available.")
+
+    notifications_manager = manager_instances.get('notifications')
+    if not notifications_manager:
+        # Raise error if not found in state - implies startup issue
+        logger.critical("NotificationsManager not found in application state during request!")
+        raise HTTPException(status_code=503, detail="Notification service not configured.")
+    return notifications_manager 

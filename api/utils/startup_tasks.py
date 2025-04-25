@@ -97,7 +97,7 @@ def initialize_managers(app: FastAPI):
         logger.info("BusinessGlossariesManager singleton stored in app.state.")
 
         # Initialize NotificationsManager (takes no arguments)
-        notifications_manager_instance = NotificationsManager()
+        notifications_manager_instance = NotificationsManager(settings_manager=settings_manager_instance)
         app.state.manager_instances['notifications'] = notifications_manager_instance
         logger.info("NotificationsManager singleton stored in app.state.")
 
@@ -138,10 +138,14 @@ def initialize_managers(app: FastAPI):
             db_session.close()
             logger.info("DB session for manager instantiation closed.")
 
-def load_initial_data(settings: Optional[Settings] = None):
+def load_initial_data(
+    settings: Settings, # Keep settings for APP_DEMO_MODE check
+    settings_manager: SettingsManager # Add settings_manager parameter
+):
     """Loads demo data if configured."""
-    if settings is None:
-        settings = get_settings()
+    # No longer need to get settings here if passed from startup
+    # if settings is None:
+    #     settings = get_settings()
 
     if not settings.APP_DEMO_MODE:
         logger.info("Demo mode is disabled. Skipping demo data loading.")
@@ -152,7 +156,19 @@ def load_initial_data(settings: Optional[Settings] = None):
     db_session = None
     try:
         db_session = session_factory()
-        load_demo_data(db_session=db_session, settings=settings)
+        # --- Remove lines getting settings_manager from app.state ---
+        # from fastapi import FastAPI # Assuming 'app' instance is the global one
+        # settings_manager_instance = app.state.settings_manager if hasattr(app.state, 'settings_manager') else None
+        # if not settings_manager_instance:
+        #      logger.error("Cannot load demo data: SettingsManager not found in app.state.")
+        #      return # Or raise an error
+
+        # Call load_demo_data with the passed-in manager
+        load_demo_data(
+            db_session=db_session,
+            settings=settings,
+            settings_manager=settings_manager # Use the passed-in manager
+        )
         logger.info("Completed call to load_demo_data.")
         db_session.commit()
     except RuntimeError as e:

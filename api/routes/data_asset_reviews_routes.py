@@ -23,6 +23,8 @@ from api.common.workspace_client import get_workspace_client_dependency
 from databricks.sdk import WorkspaceClient
 
 from api.common.logging import setup_logging, get_logger
+from api.common.dependencies import get_notifications_manager
+
 setup_logging(level=logging.INFO)
 logger = get_logger(__name__)
 
@@ -35,14 +37,6 @@ router = APIRouter(prefix="/api", tags=["data-asset-reviews"])
 # or pass the db session to it if needed.
 # For now, let's assume it can be instantiated simply.
 # If NotificationsManager is already a singleton or available via another dependency, use that.
-
-def get_notifications_manager() -> NotificationsManager:
-    # This is a placeholder. Replace with actual way to get the manager instance.
-    # Option 1: Simple instantiation (if stateless)
-    return NotificationsManager()
-    # Option 2: Dependency Injection (if NotificationsManager is complex)
-    # Depends on how NotificationsManager is set up elsewhere
-    # return Depends(get_actual_notifications_manager_dependency)
 
 def get_data_asset_review_manager(
     db: Session = Depends(get_db),

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Bell, Info, AlertCircle, CheckCircle2, X } from 'lucide-react';
+import { Bell, Info, AlertCircle, CheckCircle2, X, CheckSquare } from 'lucide-react';
 import { Button } from './button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './dropdown-menu';
 import { Badge } from './badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 import { ScrollArea } from './scroll-area';
+import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request-dialog';
 
 interface Notification {
   id: string;
@@ -15,10 +16,14 @@ interface Notification {
   created_at: string;
   read: boolean;
   can_delete: boolean;
+  action_type?: string;
+  action_payload?: Record<string, any>;
 }
 
 export default function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [selectedNotificationPayload, setSelectedNotificationPayload] = useState<Record<string, any> | null>(null);
 
   useEffect(() => {
     fetchNotifications();
@@ -62,6 +67,21 @@ export default function NotificationBell() {
     }
   };
 
+  const handleOpenConfirmDialog = (payload: Record<string, any> | undefined | null) => {
+    if (payload) {
+      setSelectedNotificationPayload(payload);
+      setIsConfirmDialogOpen(true);
+    } else {
+      console.error("Cannot open confirmation dialog: payload is missing.");
+    }
+  };
+
+  const handleDecisionMade = () => {
+    fetchNotifications();
+    setSelectedNotificationPayload(null);
+    setIsConfirmDialogOpen(false);
+  };
+
   const getIcon = (type: string) => {
     switch (type) {
       case 'info':
@@ -80,6 +100,7 @@ export default function NotificationBell() {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
+    <>
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -110,7 +131,12 @@ export default function NotificationBell() {
               <DropdownMenuItem
                 key={notification.id}
                 className="flex items-start gap-2 p-2"
-                onClick={() => handleMarkRead(notification.id)}
+                onClick={() => !notification.read && handleMarkRead(notification.id)}
+                onSelect={(e) => {
+                  if (notification.action_type) {
+                    e.preventDefault();
+                  }
+                }}
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
@@ -126,6 +152,20 @@ export default function NotificationBell() {
                     <p className="text-xs text-muted-foreground mt-1">
                       {notification.description}
                     </p>
+                  )}
+                  {notification.action_type === 'handle_role_request' && notification.action_payload && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="mt-2 h-7 px-2 text-xs gap-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenConfirmDialog(notification.action_payload);
+                      }}
+                    >
+                      <CheckSquare className="h-3.5 w-3.5" />
+                      Approve/Deny
+                    </Button>
                   )}
                   <p className="text-xs text-muted-foreground mt-1">
                     {new Date(notification.created_at).toLocaleString()}
@@ -153,5 +193,16 @@ export default function NotificationBell() {
         </ScrollArea>
       </DropdownMenuContent>
     </DropdownMenu>
+    {isConfirmDialogOpen && selectedNotificationPayload && (
+      <ConfirmRoleRequestDialog
+        isOpen={isConfirmDialogOpen}
+        onOpenChange={setIsConfirmDialogOpen}
+        requesterEmail={selectedNotificationPayload?.requester_email ?? 'Unknown User'}
+        roleId={selectedNotificationPayload?.role_id ?? 'Unknown Role ID'}
+        roleName={selectedNotificationPayload?.role_name ?? 'Unknown Role Name'}
+        onDecisionMade={handleDecisionMade}
+      />
+    )}
+    </>
   );
 } 

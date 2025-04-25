@@ -10,6 +10,10 @@ from ..controller.settings_manager import SettingsManager
 from ..models.settings import AppRole, AppRoleCreate
 from ..common.database import get_db
 from ..common.dependencies import get_settings_manager
+from ..models.settings import HandleRoleRequest
+from ..models.notifications import Notification, NotificationType
+from ..common.dependencies import get_notifications_manager
+from ..controller.notifications_manager import NotificationsManager
 
 # Configure logging
 from api.common.logging import setup_logging, get_logger
@@ -162,6 +166,89 @@ async def delete_role(
     except Exception as e:
         logger.error(f"Error deleting role '{role_id}': {e!s}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- Role Request Handling --- 
+@router.post("/settings/roles/handle-request", status_code=status.HTTP_200_OK)
+async def handle_role_request_decision(
+    request_data: HandleRoleRequest = Body(..., embed=False),
+    settings_manager: SettingsManager = Depends(get_settings_manager),
+    notifications_manager: NotificationsManager = Depends(get_notifications_manager)
+):
+    """Handles the admin decision (approve/deny) for a role access request."""
+    logger.info(f"Handling role request decision for user '{request_data.requester_email}' and role ID '{request_data.role_id}'. Approved: {request_data.approved}")
+
+    # 1. Get Role Name (for notification)
+    try:
+        role = settings_manager.get_app_role(request_data.role_id)
+        if not role:
+             # Should not happen if request was valid, but check anyway
+             logger.error(f"Role ID '{request_data.role_id}' not found while handling decision.")
+             raise HTTPException(status_code=404, detail=f"Role with ID '{request_data.role_id}' not found.")
+        role_name = role.name
+    except Exception as e:
+        logger.error(f"Error retrieving role {request_data.role_id} during decision handling: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving role details.")
+
+    # 2. TODO: Implement actual access grant/modification logic here if needed
+    #    This might involve: 
+    #    - Calling SettingsManager to update AppRoleDb.assigned_groups (if groups are managed directly)
+    #    - Triggering an external workflow (e.g., ITSM ticket, Databricks SCIM API call)
+    #    - For now, we only send the notification.
+    if request_data.approved:
+        logger.info(f"Role request APPROVED for {request_data.requester_email} (Role: {role_name}). (Actual group assignment logic is currently skipped). ")
+        # Example (if managing groups directly):
+        # try:
+        #    settings_manager.add_user_group_to_role(request_data.role_id, request_data.requester_group) # Need user's group?
+        # except ValueError as e:
+        #    raise HTTPException(status_code=400, detail=str(e))
+    else:
+        logger.info(f"Role request DENIED for {request_data.requester_email} (Role: {role_name}).")
+
+    # 3. Create notification for the requester
+    try:
+        decision_title = f"Role Request { 'Approved' if request_data.approved else 'Denied' }"
+        decision_subtitle = f"Role: {role_name}"
+        decision_description = (
+            f"Your request for the role '{role_name}' has been { 'approved' if request_data.approved else 'denied' }."
+            + (f"\n\nAdmin Message: {request_data.message}" if request_data.message else "")
+        )
+        notification_type = NotificationType.SUCCESS if request_data.approved else NotificationType.WARNING
+
+        requester_notification = Notification(
+            type=notification_type,
+            title=decision_title,
+            subtitle=decision_subtitle,
+            description=decision_description,
+            recipient=request_data.requester_email,
+            can_delete=True
+        )
+        notifications_manager.create_notification(requester_notification)
+        logger.info(f"Sent decision notification to requester '{request_data.requester_email}'")
+
+        # 4. TODO: Mark the original admin notification as handled/read/deleted?
+        #    This might require finding the original notification based on payload.
+        #    Needs a new method in NotificationsManager, e.g., find_and_update_notification.
+        # Mark the original admin notification as handled (read)
+        handled_payload = {
+            "requester_email": request_data.requester_email,
+            "role_id": request_data.role_id
+            # Role name might differ if edited, so match on email/role_id
+        }
+        handled = notifications_manager.handle_actionable_notification(
+            action_type="handle_role_request",
+            action_payload=handled_payload
+        )
+        if handled:
+             logger.info("Marked original admin notification for role request as handled.")
+        else:
+             logger.warning("Could not find the original admin notification to mark as handled.")
+
+        return {"message": f"Role request decision processed successfully for {request_data.requester_email}."}
+
+    except Exception as e:
+        logger.error(f"Error sending decision notification for role request (Role: {request_data.role_id}, User: {request_data.requester_email}): {e}", exc_info=True)
+        # Don't expose internal errors directly
+        raise HTTPException(status_code=500, detail="Failed to send decision notification due to an internal error.")
 
 # --- Registration --- 
 

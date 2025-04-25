@@ -1,11 +1,16 @@
 import logging
 import os
 from pathlib import Path
+from typing import List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
 
+from api.models.users import UserInfo
 from api.controller.notifications_manager import NotificationNotFoundError, NotificationsManager
 from api.models.notifications import Notification
+from api.common.dependencies import get_notifications_manager, get_db
+from api.common.authorization import get_user_details_from_sdk
 
 # Configure logging
 from api.common.logging import setup_logging, get_logger
@@ -13,57 +18,72 @@ setup_logging(level=logging.INFO)
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["notifications"])
-notifications_manager = NotificationsManager()
 
-# Check for YAML file in data directory
-yaml_path = Path(__file__).parent.parent / 'data' / 'notifications.yaml'
-if os.path.exists(yaml_path):
-    # Load data from YAML file
+@router.get('/notifications', response_model=List[Notification])
+async def get_notifications(
+    db: Session = Depends(get_db),
+    user_info: UserInfo = Depends(get_user_details_from_sdk),
+    manager: NotificationsManager = Depends(get_notifications_manager)
+):
+    """Get notifications filtered for the current user."""
     try:
-        notifications_manager.load_from_yaml()
-        logger.info(f"Successfully loaded notifications data from {yaml_path}")
-    except Exception as e:
-        logger.error(f"Error loading notifications data: {e!s}")
-else:
-    logger.warning(f"Notifications YAML file not found at {yaml_path}")
-
-@router.get('/notifications')
-async def get_notifications():
-    """Get all notifications"""
-    try:
-        logger.info("Retrieving all notifications")
-        notifications = notifications_manager.get_notifications()
+        logger.info(f"Retrieving notifications for user: {user_info.email} with groups: {user_info.groups}")
+        notifications = manager.get_notifications(db=db, user_info=user_info)
+        logger.info(f"Number of notifications retrieved: {len(notifications)}")
         return notifications
     except Exception as e:
-        logger.error(f"Error retrieving notifications: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error retrieving notifications: {e!s}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error retrieving notifications.")
 
-@router.post('/notifications')
-async def create_notification(notification: Notification):
-    """Create a new notification"""
+@router.post('/notifications', response_model=Notification)
+async def create_notification(
+    notification: Notification,
+    db: Session = Depends(get_db),
+    manager: NotificationsManager = Depends(get_notifications_manager)
+):
+    """Create a new notification."""
     try:
-        return notifications_manager.create_notification(notification)
+        created_notification = manager.create_notification(db=db, notification=notification)
+        return created_notification
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error creating notification: {e!s}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error creating notification.")
 
-@router.delete('/notifications/{notification_id}')
-async def delete_notification(notification_id: str):
-    """Delete a notification"""
+@router.delete('/notifications/{notification_id}', status_code=204)
+async def delete_notification(
+    notification_id: str,
+    db: Session = Depends(get_db),
+    manager: NotificationsManager = Depends(get_notifications_manager)
+):
+    """Delete a notification by ID."""
     try:
-        notifications_manager.delete_notification(notification_id)
-        return {"status": "success"}
+        deleted = manager.delete_notification(db=db, notification_id=notification_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Notification not found")
+        return None
+    except HTTPException as e:
+        raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error deleting notification {notification_id}: {e!s}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error deleting notification.")
 
-@router.put('/notifications/{notification_id}/read')
-async def mark_notification_read(notification_id: str):
-    """Mark a notification as read"""
+@router.put('/notifications/{notification_id}/read', response_model=Notification)
+async def mark_notification_read(
+    notification_id: str,
+    db: Session = Depends(get_db),
+    manager: NotificationsManager = Depends(get_notifications_manager)
+):
+    """Mark a notification as read."""
     try:
-        return notifications_manager.mark_notification_read(notification_id)
-    except NotificationNotFoundError:
-        raise HTTPException(status_code=404, detail="Notification not found")
+        updated_notification = manager.mark_notification_read(db=db, notification_id=notification_id)
+        if updated_notification is None:
+            raise HTTPException(status_code=404, detail="Notification not found")
+        return updated_notification
+    except HTTPException as e:
+        raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error marking notification {notification_id} as read: {e!s}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error marking notification as read.")
 
 def register_routes(app):
     """Register notification routes with the FastAPI app."""

@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/button';
 // Import permissions hook and types
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
+// Add Home icon
+import { Home as HomeIcon } from 'lucide-react';
 
 interface NavigationProps {
   isCollapsed: boolean;
@@ -61,10 +63,67 @@ export function Navigation({ isCollapsed }: NavigationProps) {
      );
   }
 
+  // Define the Home link separately
+  const homeLink: FeatureConfig = {
+    id: 'home',
+    name: 'Home',
+    path: '/',
+    description: 'Dashboard overview', // Optional description
+    icon: HomeIcon, // Use imported HomeIcon
+    group: 'System', // Assign to a group, or handle separately
+    maturity: 'ga', // Treat as GA
+  };
+
   return (
     <ScrollArea className="h-full py-2">
       <TooltipProvider delayDuration={0}>
         <nav className={cn("grid px-2 gap-1 justify-items-center")}>
+          {/* Render Home Link First */}
+          {
+            isCollapsed ? (
+                  <Tooltip key={homeLink.path}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          'flex items-center justify-center rounded-lg p-2 transition-colors',
+                          location.pathname === homeLink.path
+                            ? 'bg-muted text-primary'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        )}
+                        aria-label={homeLink.name}
+                        asChild
+                      >
+                        <NavLink to={homeLink.path}>
+                          <homeLink.icon className="h-5 w-5" />
+                          <span className="sr-only">{homeLink.name}</span>
+                        </NavLink>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="flex items-center gap-4">
+                      {homeLink.name}
+                    </TooltipContent>
+                  </Tooltip>
+            ) : (
+                  <NavLink
+                    key={homeLink.path}
+                    to={homeLink.path}
+                    className={({ isActive: navIsActive }) =>
+                      cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors w-full', // Added w-full
+                        navIsActive
+                          ? 'bg-muted text-primary'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      )
+                    }
+                  >
+                    <homeLink.icon className="h-5 w-5" />
+                    {homeLink.name}
+                  </NavLink>
+            )
+          }
+          {/* Render Other Groups */}
           {navigationGroups.map((group) => (
             <div key={group.name} className={cn("w-full", isCollapsed ? "" : "mb-2 last:mb-0")}>
               {!isCollapsed && group.items.length > 0 && (

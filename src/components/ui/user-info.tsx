@@ -23,6 +23,7 @@ import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel, AppRole } from '@/types/settings';
 import { ACCESS_LEVEL_ORDER } from '../../lib/permissions';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useNavigate } from 'react-router-dom';
 
 interface UserInfoData {
   email: string | null;
@@ -81,6 +82,9 @@ export default function UserInfo() {
   
   // Use a string state for the radio group value, mapping null to 'actual'
   const [radioValue, setRadioValue] = useState<string>(appliedRoleId || 'actual');
+
+  // Get navigate function
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Update radioValue if appliedRoleId changes externally
@@ -163,6 +167,8 @@ export default function UserInfo() {
       } else {
           setRoleOverride(value); // value is the role.id for overrides
       }
+      // Redirect to home page after changing override
+      navigate('/');
   };
 
   return (

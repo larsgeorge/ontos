@@ -78,7 +78,13 @@ async def startup_event():
     # 2. Initialize Managers (requires app instance)
     initialize_managers(app)
     # 3. Load Initial/Demo Data
-    load_initial_data()
+    # Get settings and settings_manager AFTER managers are initialized
+    settings = get_settings() 
+    settings_manager = app.state.settings_manager if hasattr(app.state, 'settings_manager') else None
+    if settings_manager:
+        load_initial_data(settings=settings, settings_manager=settings_manager)
+    else:
+        logger.error("Could not load initial data: SettingsManager not found in app.state.")
     logger.info("Application startup complete.")
 
 # Application Shutdown Event

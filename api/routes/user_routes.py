@@ -7,10 +7,14 @@ from databricks.sdk.errors import NotFound
 
 from api.models.users import UserInfo
 from api.models.users import UserPermissions
+from api.models.notifications import Notification, NotificationType
 from api.common.config import get_settings, Settings
 from api.common.logging import setup_logging, get_logger
 from api.controller.authorization_manager import AuthorizationManager
 from api.common.dependencies import get_auth_manager
+from api.common.dependencies import get_settings_manager, get_notifications_manager
+from api.controller.settings_manager import SettingsManager
+from api.controller.notifications_manager import NotificationsManager
 from api.common.features import FeatureAccessLevel
 from api.common.authorization import get_user_details_from_sdk
 
@@ -93,6 +97,72 @@ async def get_current_user_permissions(
             status_code=500,
             detail="Error calculating user permissions."
         )
+
+# --- Role Access Request Endpoint --- 
+@router.post("/user/request-role/{role_id}")
+async def request_role_access(
+    role_id: str,
+    request: Request,
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    settings_manager: SettingsManager = Depends(get_settings_manager),
+    notifications_manager: NotificationsManager = Depends(get_notifications_manager)
+): # Add return type hint? -> dict or status code
+    """Initiates a request for a user to be added to an application role."""
+    logger.info(f"User '{user_details.email}' requesting access to role ID: {role_id}")
+
+    # Validate user email
+    requester_email = user_details.email
+    if not requester_email:
+         logger.error("Cannot process role request: User email not found in details.")
+         raise HTTPException(status_code=400, detail="User email not found, cannot process request.")
+
+    # Get role name
+    try:
+        role = settings_manager.get_app_role(role_id)
+        if not role:
+            raise HTTPException(status_code=404, detail=f"Role with ID '{role_id}' not found.")
+        role_name = role.name
+    except Exception as e:
+        logger.error(f"Error retrieving role {role_id}: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving role details.")
+
+    try:
+        # 1. Create notification for the requester
+        user_notification = Notification(
+            type=NotificationType.INFO,
+            title="Role Access Request Submitted",
+            subtitle=f"Role: {role_name}",
+            description=f"Your request to access the role '{role_name}' has been submitted for review.",
+            recipient=requester_email, # Target specific user
+            can_delete=True
+        )
+        notifications_manager.create_notification(user_notification)
+        logger.info(f"Created notification for requester '{requester_email}'")
+
+        # 2. Create notification for Admins
+        admin_notification = Notification(
+            type=NotificationType.ACTION_REQUIRED,
+            title="Role Access Request Received",
+            subtitle=f"User: {requester_email}",
+            description=f"User '{requester_email}' has requested access to the role '{role_name}'.",
+            recipient="Admin", # Target the Admin role/group
+            can_delete=False, # Admins shouldn't delete this easily
+            # TODO: Add action payload later
+            # action_type="handle_role_request",
+            # action_payload={"requester_email": requester_email, "role_id": role_id, "role_name": role_name}
+            # Add action details
+            action_type="handle_role_request",
+            action_payload={"requester_email": requester_email, "role_id": role_id, "role_name": role_name}
+        )
+        notifications_manager.create_notification(admin_notification)
+        logger.info(f"Created notification for Admin role recipients")
+
+        return {"message": "Role access request submitted successfully."} # Or status 202 Accepted?
+
+    except Exception as e:
+        logger.error(f"Error creating notifications for role request (Role: {role_id}, User: {requester_email}): {e}", exc_info=True)
+        # Don't expose internal errors directly
+        raise HTTPException(status_code=500, detail="Failed to process role access request due to an internal error.")
 
 # Register routes function simply includes the module-level router
 def register_routes(app):

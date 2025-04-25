@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import SearchBar from '@/components/ui/search-bar';
 import { Card, CardContent, CardTitle, CardHeader, CardDescription } from '@/components/ui/card';
-import { Loader2, Database, Book, GitCompare, Shield, Gavel, FolderKanban, Settings, Info, TrendingUp, FileText as FileTextIcon, BookOpen, ArrowLeftRight, Scale, Globe, ArrowRight, BookOpenCheck } from 'lucide-react';
+import { Loader2, Database, Book, GitCompare, Shield, Gavel, FolderKanban, Settings, Info, TrendingUp, FileText as FileTextIcon, BookOpen, ArrowLeftRight, Scale, Globe, ArrowRight, BookOpenCheck, UserPlus, AlertCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { UnityCatalogLogo } from '@/components/unity-catalog-logo';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,9 @@ import { getLandingPageFeatures, FeatureConfig, FeatureMaturity } from '@/config
 import React from 'react';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/settings';
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Stats {
   dataContracts: { count: number; loading: boolean; error: string | null };
@@ -44,6 +47,7 @@ const quickActions: QuickAction[] = [
   { name: 'Create Data Product', path: '/data-products/new' },
   { name: 'Define Data Contract', path: '/data-contracts/new' },
   { name: 'Add Glossary Term', path: '/business-glossary/new' },
+  { name: 'Request Role Access', path: '/settings?tab=roles' },
 ];
 
 const recentActivity: RecentActivity[] = [
@@ -70,6 +74,8 @@ export default function Home() {
   const [complianceLoading, setComplianceLoading] = useState(true);
   const [complianceError, setComplianceError] = useState<string | null>(null);
   const allowedMaturities = useFeatureVisibilityStore((state) => state.allowedMaturities);
+  const { permissions, isLoading: permissionsLoading, hasPermission } = usePermissions();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetch('/api/data-products')
@@ -285,10 +291,24 @@ export default function Home() {
     },
   ];
 
+  const filteredSummaryTiles = useMemo(() => {
+      if (permissionsLoading) return [];
+      return baseSummaryTiles.filter(tile =>
+          allowedMaturities.includes(tile.maturity as FeatureMaturity) &&
+          hasPermission(tile.id, FeatureAccessLevel.READ_ONLY)
+      );
+  }, [baseSummaryTiles, allowedMaturities, permissionsLoading, hasPermission]);
+
   const summaryTiles = baseSummaryTiles.filter(tile => allowedMaturities.includes(tile.maturity as FeatureMaturity));
   const features = getLandingPageFeatures(allowedMaturities);
-  const isComplianceVisible = summaryTiles.some(tile => tile.id === 'compliance');
+  const isComplianceVisible = filteredSummaryTiles.some(tile => tile.id === 'compliance');
+  const canViewCompliance = useMemo(() => !permissionsLoading && hasPermission('compliance', FeatureAccessLevel.READ_ONLY), [permissionsLoading, hasPermission]);
 
+  // Check if user has any permissions at all (besides NONE)
+  const hasAnyAccess = useMemo(() => {
+      if (permissionsLoading || !permissions) return false;
+      return Object.values(permissions).some(level => level !== FeatureAccessLevel.NONE);
+  }, [permissions, permissionsLoading]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -312,9 +332,13 @@ export default function Home() {
 
       <div className="mb-8">
         <h2 className="text-2xl font-semibold mb-4">Overview</h2>
-         {summaryTiles.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-            {summaryTiles.map((tile) => (
+         {permissionsLoading ? (
+              <div className="flex justify-center items-center h-24 col-span-full">
+                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+         ) : filteredSummaryTiles.length > 0 ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {filteredSummaryTiles.map((tile) => (
                 <Link key={tile.title} to={tile.link} className="block group">
                 <Card className="transition-colors h-full group-hover:bg-accent/50">
                     <CardContent className="p-6 flex flex-col justify-between h-full">
@@ -348,7 +372,9 @@ export default function Home() {
             ))}
             </div>
         ) : (
-             <p className="text-muted-foreground text-center">No overview data available for the selected feature previews.</p>
+             <p className="text-muted-foreground text-center col-span-full">
+                 No overview data available for the selected feature previews or your permissions.
+             </p>
          )}
       </div>
 
@@ -421,6 +447,16 @@ export default function Home() {
          </div>
        )}
 
+      {/* Message for users with no access */}
+      {!permissionsLoading && !hasAnyAccess && (
+          <Alert variant="default" className="mb-8 bg-blue-50 border-blue-200 text-blue-800">
+            <AlertCircle className="h-4 w-4 !text-blue-600" /> {/* Use ! to force color */} 
+            <AlertDescription className="ml-2">
+                 You currently don't have a specific role assigned. 
+                 To access features, please <Link to="/settings?tab=roles" className="font-semibold underline hover:text-blue-900">request access to a role</Link>.
+            </AlertDescription>
+          </Alert>
+      )}
 
       <section className="mb-16">
         <h2 className="text-3xl font-semibold mb-8 text-center">Key Features</h2>

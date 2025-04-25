@@ -5,7 +5,7 @@ import { AppRole, FeatureConfig } from '@/types/settings'; // Assuming types are
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Pencil, Trash2, AlertCircle, MoreHorizontal, ChevronDown } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, AlertCircle, MoreHorizontal, ChevronDown, UserPlus } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import RoleFormDialog from './role-form-dialog'; // Uncomment and import
 
@@ -40,7 +40,7 @@ import {
 import { usePermissions } from '@/stores/permissions-store'; // Import the permissions hook
 
 export default function RolesSettings() {
-    const { get, delete: deleteApi } = useApi();
+    const { get, post, delete: deleteApi } = useApi();
     const { toast } = useToast();
     const [roles, setRoles] = useState<AppRole[]>([]);
     const [features, setFeatures] = useState<Record<string, FeatureConfig>>({});
@@ -97,6 +97,33 @@ export default function RolesSettings() {
         } catch (err: any) {
             console.error("Error refreshing permissions/roles:", err);
             toast({ title: 'Refresh Failed', description: `Could not refresh permissions/roles: ${err.message}`, variant: 'destructive' });
+        }
+    };
+
+    // --- New function to handle access request ---
+    const handleRequestAccess = async (role: AppRole) => {
+        if (!confirm(`Request access to the role "${role.name}"?`)) return;
+
+        toast({ title: 'Sending Request', description: `Requesting access to role ${role.name}...` });
+        try {
+            // TODO: Replace with actual API call
+            // const response = await post(`/api/user/request-role/${role.id}`, {});
+            // if (response.error) throw new Error(response.error);
+
+            // --- Mock success for now ---
+            // await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
+            // --- End Mock ---
+
+            // Actual API Call
+            const response = await post(`/api/user/request-role/${role.id}`, {}); // Empty body for POST
+            if (response.error) {
+                throw new Error(response.error);
+            }
+
+            toast({ title: 'Request Sent', description: `Your request for the role "${role.name}" has been submitted.` });
+        } catch (err: any) {
+            console.error("Error requesting role access:", err);
+            toast({ title: 'Request Failed', description: err.message || 'Failed to submit access request.', variant: 'destructive' });
         }
     };
 
@@ -169,6 +196,26 @@ export default function RolesSettings() {
                 );
             },
             enableSorting: false,
+        },
+        {
+            id: "request",
+            header: "", // No header text needed
+            cell: ({ row }) => {
+                 const role = row.original;
+                 // TODO: Add logic to potentially hide this button if user already has the role or equivalent access?
+                 return (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1"
+                        onClick={() => handleRequestAccess(role)}
+                    >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        Request
+                    </Button>
+                 );
+            },
+            enableHiding: true, // Allow hiding if needed
         },
         {
             id: "actions",

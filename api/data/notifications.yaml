@@ -42,4 +42,4 @@ notifications:
     description: "System maintenance scheduled for Saturday 20:00 UTC"
     created_at: "2024-03-14T12:00:00Z"
     read: true
-    can_delete: true 
+    can_delete: true
