@@ -1,4 +1,6 @@
 import logging
+import uuid # Import uuid
+from datetime import datetime # Import datetime
 from typing import Dict
 
 from fastapi import APIRouter, Request, Depends, HTTPException
@@ -11,12 +13,13 @@ from api.models.notifications import Notification, NotificationType
 from api.common.config import get_settings, Settings
 from api.common.logging import setup_logging, get_logger
 from api.controller.authorization_manager import AuthorizationManager
-from api.common.dependencies import get_auth_manager
+from api.common.dependencies import get_auth_manager, get_db # Import get_db
 from api.common.dependencies import get_settings_manager, get_notifications_manager
 from api.controller.settings_manager import SettingsManager
 from api.controller.notifications_manager import NotificationsManager
 from api.common.features import FeatureAccessLevel
 from api.common.authorization import get_user_details_from_sdk
+from sqlalchemy.orm import Session # Import Session
 
 setup_logging(level=logging.INFO)
 logger = get_logger(__name__)
@@ -103,20 +106,19 @@ async def get_current_user_permissions(
 async def request_role_access(
     role_id: str,
     request: Request,
+    db: Session = Depends(get_db), # Inject DB session
     user_details: UserInfo = Depends(get_user_details_from_sdk),
     settings_manager: SettingsManager = Depends(get_settings_manager),
     notifications_manager: NotificationsManager = Depends(get_notifications_manager)
-): # Add return type hint? -> dict or status code
+): 
     """Initiates a request for a user to be added to an application role."""
     logger.info(f"User '{user_details.email}' requesting access to role ID: {role_id}")
 
-    # Validate user email
     requester_email = user_details.email
     if not requester_email:
          logger.error("Cannot process role request: User email not found in details.")
          raise HTTPException(status_code=400, detail="User email not found, cannot process request.")
 
-    # Get role name
     try:
         role = settings_manager.get_app_role(role_id)
         if not role:
@@ -126,42 +128,49 @@ async def request_role_access(
         logger.error(f"Error retrieving role {role_id}: {e}")
         raise HTTPException(status_code=500, detail="Error retrieving role details.")
 
+    # Generate placeholder values for required fields
+    placeholder_id = str(uuid.uuid4()) # Generate a unique placeholder ID
+    now = datetime.utcnow()
+
     try:
         # 1. Create notification for the requester
         user_notification = Notification(
+            id=placeholder_id, # Provide placeholder
+            created_at=now, # Provide placeholder
             type=NotificationType.INFO,
             title="Role Access Request Submitted",
             subtitle=f"Role: {role_name}",
             description=f"Your request to access the role '{role_name}' has been submitted for review.",
-            recipient=requester_email, # Target specific user
+            recipient=requester_email, 
             can_delete=True
         )
-        notifications_manager.create_notification(user_notification)
+        # Pass db session to the manager
+        notifications_manager.create_notification(db=db, notification=user_notification)
         logger.info(f"Created notification for requester '{requester_email}'")
 
         # 2. Create notification for Admins
         admin_notification = Notification(
+            id=str(uuid.uuid4()), # Generate another placeholder ID
+            created_at=now, # Provide placeholder
             type=NotificationType.ACTION_REQUIRED,
             title="Role Access Request Received",
             subtitle=f"User: {requester_email}",
             description=f"User '{requester_email}' has requested access to the role '{role_name}'.",
-            recipient="Admin", # Target the Admin role/group
-            can_delete=False, # Admins shouldn't delete this easily
-            # TODO: Add action payload later
-            # action_type="handle_role_request",
-            # action_payload={"requester_email": requester_email, "role_id": role_id, "role_name": role_name}
-            # Add action details
+            recipient="Admin", 
+            can_delete=False, 
             action_type="handle_role_request",
             action_payload={"requester_email": requester_email, "role_id": role_id, "role_name": role_name}
         )
-        notifications_manager.create_notification(admin_notification)
+        # Pass db session to the manager
+        notifications_manager.create_notification(db=db, notification=admin_notification)
         logger.info(f"Created notification for Admin role recipients")
 
-        return {"message": "Role access request submitted successfully."} # Or status 202 Accepted?
+        db.commit() # Commit the transaction after both notifications are added
+        return {"message": "Role access request submitted successfully."} 
 
     except Exception as e:
         logger.error(f"Error creating notifications for role request (Role: {role_id}, User: {requester_email}): {e}", exc_info=True)
-        # Don't expose internal errors directly
+        db.rollback() # Rollback the transaction on error
         raise HTTPException(status_code=500, detail="Failed to process role access request due to an internal error.")
 
 # Register routes function simply includes the module-level router

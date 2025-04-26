@@ -20,22 +20,27 @@ class NotificationRepository(CRUDBase[NotificationDb, NotificationCreate, Notifi
     # and explicit Enum -> String conversion for the 'type' field.
     def create(self, db: Session, *, obj_in: NotificationCreate) -> NotificationDb:
         logger.debug(f"Creating Notification (DB layer)")
-        # Prepare data
         obj_in_data = obj_in.model_dump(exclude_unset=True) 
 
         # Convert action_payload dict to JSON string if present
         if 'action_payload' in obj_in_data and isinstance(obj_in_data['action_payload'], dict):
             obj_in_data['action_payload'] = json.dumps(obj_in_data['action_payload'])
             
-        # --- Explicitly convert Enum to its string value --- 
+        # Explicitly convert Enum to its string value
         if 'type' in obj_in_data and isinstance(obj_in_data['type'], NotificationType):
             obj_in_data['type'] = obj_in_data['type'].value
             
+        # Ensure 'read' field has a boolean value
+        if 'read' not in obj_in_data:
+            obj_in_data['read'] = False 
+        elif obj_in_data['read'] is None: 
+            obj_in_data['read'] = False
+            
         db_obj = self.model(**obj_in_data)
         db.add(db_obj)
-        # No commit/refresh here, handled by caller (like manager or demo loader)
-        # db.flush()
-        # db.refresh(db_obj)
+        # --- Flush and Refresh --- 
+        db.flush()  # Send pending changes to DB (assigns defaults like 'read')
+        db.refresh(db_obj) # Update the db_obj instance with DB state
         return db_obj
 
     def update(self, db: Session, *, db_obj: NotificationDb, obj_in: NotificationUpdate) -> NotificationDb:
@@ -49,9 +54,16 @@ class NotificationRepository(CRUDBase[NotificationDb, NotificationCreate, Notifi
         if 'action_payload' in update_data and isinstance(update_data['action_payload'], dict):
             update_data['action_payload'] = json.dumps(update_data['action_payload'])
             
-        # --- Explicitly convert Enum to its string value --- 
+        # Explicitly convert Enum to its string value
         if 'type' in update_data and isinstance(update_data['type'], NotificationType):
             update_data['type'] = update_data['type'].value
+            
+        # --- Ensure 'read' field is boolean if provided in update --- 
+        if 'read' in update_data and update_data['read'] is None:
+             # If an update explicitly tries to set read to None, either raise error or force False
+             logger.warning(f"Attempted to set 'read' to None during update for Notification {db_obj.id}. Setting to False instead.")
+             update_data['read'] = False 
+             # Alternatively: raise ValueError("'read' field cannot be set to None")
 
         return super().update(db, db_obj=db_obj, obj_in=update_data)
     

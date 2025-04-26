@@ -1,70 +1,38 @@
 import { useState, useEffect } from 'react';
-import { Bell, Info, AlertCircle, CheckCircle2, X, CheckSquare } from 'lucide-react';
+import { Bell, Info, AlertCircle, CheckCircle2, X, CheckSquare, Loader2 } from 'lucide-react';
 import { Button } from './button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './dropdown-menu';
 import { Badge } from './badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 import { ScrollArea } from './scroll-area';
 import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request-dialog';
-
-interface Notification {
-  id: string;
-  type: 'info' | 'success' | 'warning' | 'error';
-  title: string;
-  subtitle?: string;
-  description?: string;
-  created_at: string;
-  read: boolean;
-  can_delete: boolean;
-  action_type?: string;
-  action_payload?: Record<string, any>;
-}
+import { useNotificationsStore } from '@/stores/notifications-store';
+import { Notification, NotificationType } from '@/types/notification';
 
 export default function NotificationBell() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const {
+    notifications,
+    unreadCount,
+    isLoading,
+    error,
+    fetchNotifications,
+    markAsRead,
+    deleteNotification
+  } = useNotificationsStore();
+
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [selectedNotificationPayload, setSelectedNotificationPayload] = useState<Record<string, any> | null>(null);
 
   useEffect(() => {
     fetchNotifications();
-  }, []);
-
-  const fetchNotifications = async () => {
-    try {
-      const response = await fetch('/api/notifications');
-      if (!response.ok) throw new Error('Failed to fetch notifications');
-      const data = await response.json();
-      setNotifications(data);
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-    }
-  };
+  }, [fetchNotifications]);
 
   const handleDelete = async (id: string) => {
-    try {
-      const response = await fetch(`/api/notifications/${id}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) throw new Error('Failed to delete notification');
-      setNotifications(notifications.filter(n => n.id !== id));
-    } catch (error) {
-      console.error('Error deleting notification:', error);
-    }
+    await deleteNotification(id);
   };
 
   const handleMarkRead = async (id: string) => {
-    try {
-      const response = await fetch(`/api/notifications/${id}/read`, {
-        method: 'PUT',
-      });
-      if (!response.ok) throw new Error('Failed to mark notification as read');
-      const updatedNotification = await response.json();
-      setNotifications(notifications.map(n => 
-        n.id === id ? updatedNotification : n
-      ));
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-    }
+    await markAsRead(id);
   };
 
   const handleOpenConfirmDialog = (payload: Record<string, any> | undefined | null) => {
@@ -82,7 +50,7 @@ export default function NotificationBell() {
     setIsConfirmDialogOpen(false);
   };
 
-  const getIcon = (type: string) => {
+  const getIcon = (type: NotificationType) => {
     switch (type) {
       case 'info':
         return <Info className="h-4 w-4 text-blue-500" />;
@@ -92,22 +60,26 @@ export default function NotificationBell() {
         return <AlertCircle className="h-4 w-4 text-yellow-500" />;
       case 'error':
         return <AlertCircle className="h-4 w-4 text-red-500" />;
+      case 'action_required':
+        return <AlertCircle className="h-4 w-4 text-orange-500" />;
       default:
         return <Info className="h-4 w-4" />;
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
-
   return (
     <>
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => { if (open) fetchNotifications() }}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              {unreadCount > 0 && (
+              {isLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Bell className="h-5 w-5" />
+              )}
+              {unreadCount > 0 && !isLoading && (
                 <Badge 
                   variant="destructive" 
                   className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center p-0 text-[10px] leading-none"
@@ -122,7 +94,15 @@ export default function NotificationBell() {
       </Tooltip>
       <DropdownMenuContent align="end" className="w-80">
         <ScrollArea className="h-[400px]">
-          {notifications.length === 0 ? (
+          {isLoading ? (
+             <div className="p-4 text-center text-sm text-muted-foreground">
+                Loading notifications...
+             </div>
+          ) : error ? (
+             <div className="p-4 text-center text-sm text-red-600">
+                Error: {error}
+             </div>
+          ) : notifications.length === 0 ? (
             <div className="p-4 text-center text-sm text-muted-foreground">
               No notifications
             </div>
@@ -130,7 +110,7 @@ export default function NotificationBell() {
             notifications.map((notification) => (
               <DropdownMenuItem
                 key={notification.id}
-                className="flex items-start gap-2 p-2"
+                className="flex items-start gap-2 p-2 cursor-pointer"
                 onClick={() => !notification.read && handleMarkRead(notification.id)}
                 onSelect={(e) => {
                   if (notification.action_type) {
@@ -155,7 +135,7 @@ export default function NotificationBell() {
                   )}
                   {notification.action_type === 'handle_role_request' && notification.action_payload && (
                     <Button
-                      variant="default"
+                      variant={notification.read ? "outline" : "default"}
                       size="sm"
                       className="mt-2 h-7 px-2 text-xs gap-1"
                       onClick={(e) => {
@@ -164,7 +144,7 @@ export default function NotificationBell() {
                       }}
                     >
                       <CheckSquare className="h-3.5 w-3.5" />
-                      Approve/Deny
+                      {notification.read ? "View Details" : "Approve/Deny"}
                     </Button>
                   )}
                   <p className="text-xs text-muted-foreground mt-1">
@@ -175,7 +155,7 @@ export default function NotificationBell() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6"
+                    className="h-6 w-6 shrink-0"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDelete(notification.id);

@@ -1,8 +1,11 @@
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './components/theme';
 import Layout from './components/layout/layout';
 import { TooltipProvider } from './components/ui/tooltip';
 import { Toaster } from './components/ui/toaster';
+import { useUserStore } from './stores/user-store';
+import { usePermissions } from './stores/permissions-store';
 
 // Import views
 import Home from './views/home';
@@ -24,6 +27,16 @@ import DataAssetReviews from './views/data-asset-reviews';
 import DataAssetReviewDetails from './views/data-asset-review-details';
 
 export default function App() {
+  const fetchUserInfo = useUserStore((state: any) => state.fetchUserInfo);
+  const { fetchPermissions, fetchAvailableRoles } = usePermissions();
+
+  useEffect(() => {
+    console.log("App component mounted, fetching initial user info and permissions...");
+    fetchUserInfo();
+    fetchPermissions();
+    fetchAvailableRoles();
+  }, [fetchUserInfo, fetchPermissions, fetchAvailableRoles]);
+
   return (
     <ThemeProvider defaultTheme="system" storageKey="ucapp-theme">
       <TooltipProvider>

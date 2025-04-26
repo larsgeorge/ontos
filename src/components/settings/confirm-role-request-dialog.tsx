@@ -46,14 +46,14 @@ const ConfirmRoleRequestDialog: React.FC<ConfirmRoleRequestDialogProps> = ({
             approved: approved,
             message: decisionMessage,
         };
-        // TODO: Implement API call to backend endpoint
-        // const response = await post('/api/admin/handle-role-request', payload);
-        // if (response.error) throw new Error(response.error);
-        console.log("Submitting decision:", payload);
-        // await new Promise(resolve => setTimeout(resolve, 1500)); // Mock API call
+        
+        console.log("Submitting decision payload:", payload);
 
-        // Actual API call
-        const response = await post('/api/settings/roles/handle-request', payload);
+        // Wrap the payload under the key expected by the backend
+        const requestBody = { request_data: payload };
+
+        // Send the nested request body
+        const response = await post('/api/settings/roles/handle-request', requestBody);
         if (response.error) {
              throw new Error(response.error);
         }

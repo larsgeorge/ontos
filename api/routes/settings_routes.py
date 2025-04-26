@@ -1,5 +1,7 @@
 import logging
 from typing import List, Dict, Any, Optional
+import uuid
+from datetime import datetime
 
 from databricks.sdk import WorkspaceClient
 from fastapi import APIRouter, Depends, HTTPException, status, Body
@@ -170,7 +172,8 @@ async def delete_role(
 # --- Role Request Handling --- 
 @router.post("/settings/roles/handle-request", status_code=status.HTTP_200_OK)
 async def handle_role_request_decision(
-    request_data: HandleRoleRequest = Body(..., embed=False),
+    request_data: HandleRoleRequest = Body(...),
+    db: Session = Depends(get_db), # Inject DB Session
     settings_manager: SettingsManager = Depends(get_settings_manager),
     notifications_manager: NotificationsManager = Depends(get_notifications_manager)
 ):
@@ -179,9 +182,9 @@ async def handle_role_request_decision(
 
     # 1. Get Role Name (for notification)
     try:
+        # Pass db session if settings_manager methods require it (assuming get_app_role does)
         role = settings_manager.get_app_role(request_data.role_id)
         if not role:
-             # Should not happen if request was valid, but check anyway
              logger.error(f"Role ID '{request_data.role_id}' not found while handling decision.")
              raise HTTPException(status_code=404, detail=f"Role with ID '{request_data.role_id}' not found.")
         role_name = role.name
@@ -214,7 +217,13 @@ async def handle_role_request_decision(
         )
         notification_type = NotificationType.SUCCESS if request_data.approved else NotificationType.WARNING
 
+        # Provide placeholder ID and created_at for Pydantic validation
+        placeholder_id = str(uuid.uuid4())
+        now = datetime.utcnow()
+        
         requester_notification = Notification(
+            id=placeholder_id,
+            created_at=now,
             type=notification_type,
             title=decision_title,
             subtitle=decision_subtitle,
@@ -222,19 +231,18 @@ async def handle_role_request_decision(
             recipient=request_data.requester_email,
             can_delete=True
         )
-        notifications_manager.create_notification(requester_notification)
+        # Pass DB session to create_notification
+        notifications_manager.create_notification(db=db, notification=requester_notification)
         logger.info(f"Sent decision notification to requester '{request_data.requester_email}'")
 
-        # 4. TODO: Mark the original admin notification as handled/read/deleted?
-        #    This might require finding the original notification based on payload.
-        #    Needs a new method in NotificationsManager, e.g., find_and_update_notification.
-        # Mark the original admin notification as handled (read)
+        # 4. Mark the original admin notification as handled (read)
         handled_payload = {
             "requester_email": request_data.requester_email,
             "role_id": request_data.role_id
-            # Role name might differ if edited, so match on email/role_id
         }
+        # Pass DB session to handle_actionable_notification
         handled = notifications_manager.handle_actionable_notification(
+            db=db, # Pass the session
             action_type="handle_role_request",
             action_payload=handled_payload
         )
@@ -243,11 +251,13 @@ async def handle_role_request_decision(
         else:
              logger.warning("Could not find the original admin notification to mark as handled.")
 
+        # Commit happens within handle_actionable_notification now, no explicit commit needed here
+        # db.commit() # REMOVE this if commit is in handle_actionable_notification
         return {"message": f"Role request decision processed successfully for {request_data.requester_email}."}
 
     except Exception as e:
-        logger.error(f"Error sending decision notification for role request (Role: {request_data.role_id}, User: {request_data.requester_email}): {e}", exc_info=True)
-        # Don't expose internal errors directly
+        logger.error(f"Error during notification handling for role request (Role: {request_data.role_id}, User: {request_data.requester_email}): {e}", exc_info=True)
+        db.rollback() # Rollback on any exception during this block
         raise HTTPException(status_code=500, detail="Failed to send decision notification due to an internal error.")
 
 # --- Registration --- 
