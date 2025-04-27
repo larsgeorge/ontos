@@ -133,6 +133,24 @@ export default function NotificationBell() {
                       {notification.description}
                     </p>
                   )}
+                  {/* Render link button if present */}
+                  {notification.link && (
+                    <a 
+                      href={notification.link}
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()} // Prevent marking as read when clicking link
+                      className="mt-2 inline-block" // Added inline-block for button alignment
+                    >
+                      <Button 
+                        variant="outline" 
+                        size="sm" // Changed to small size
+                        className="h-7 px-2 text-xs" // Use text-xs for smaller font, adjust height/padding
+                      >
+                         Open
+                      </Button>
+                    </a>
+                  )}
                   {notification.action_type === 'handle_role_request' && notification.action_payload && (
                     <Button
                       variant={notification.read ? "outline" : "default"}

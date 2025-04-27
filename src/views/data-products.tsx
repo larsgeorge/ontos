@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, AlertCircle, Database, ChevronDown, Upload, X, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertCircle, Database, ChevronDown, Upload, X, Loader2, Sparkles } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Column,
@@ -17,6 +17,7 @@ import { DataTable } from "@/components/ui/data-table";
 import DataProductFormDialog from '@/components/data-products/data-product-form-dialog';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
+import { useNotificationsStore } from '@/stores/notifications-store';
 
 // --- Helper Function Type Definition --- 
 type CheckApiResponseFn = <T>(
@@ -61,6 +62,7 @@ export default function DataProducts() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
 
   // Get permissions
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
@@ -108,14 +110,17 @@ export default function DataProducts() {
         setLoading(false);
       }
     };
-    loadInitialData();
-  }, [get]); // Depend only on 'get' method from useApi
+    if (canRead) {
+        loadInitialData();
+    } else if (!permissionsLoading) {
+        setLoading(false);
+        setError("Permission Denied: Cannot view data products.");
+    }
+  }, [get, canRead, permissionsLoading]);
 
   // Function to refetch products list
   const fetchProducts = async () => {
-    // Keep setLoading(true) if you want a loading indicator during refresh
-    // setLoading(true);
-    // setError(null); // Clear previous errors before refetch
+    if (!canRead) return;
     try {
       const response = await get<DataProduct[]>('/api/data-products');
       const productsData = checkApiResponse(response, 'Products Refetch');
@@ -124,50 +129,94 @@ export default function DataProducts() {
       console.error('Error refetching products:', err);
       setError(err.message || 'Failed to refresh products list');
       toast({ title: 'Error', description: `Failed to refresh products: ${err.message}`, variant: 'destructive' });
-      // Don't necessarily clear products on refetch error, maybe show stale data + error
-      // setProducts([]);
-    } finally {
-      // setLoading(false);
-    }
+    } 
   };
 
   // --- Dialog Open Handler ---
   const handleOpenDialog = (product?: DataProduct) => {
-    setProductToEdit(product || null); // Set the product to edit (or null for create)
-    setIsDialogOpen(true); // Open the dialog
+      if (!canWrite) {
+          toast({ title: "Permission Denied", description: "You do not have permission to edit data products.", variant: "destructive" });
+          return;
+      }
+      setProductToEdit(product || null);
+      setIsDialogOpen(true);
   };
 
   // --- Dialog Submit Success Handler ---
   const handleDialogSubmitSuccess = (savedProduct: DataProduct) => {
     console.log('Dialog submitted successfully, refreshing list...', savedProduct);
-    fetchProducts(); // Refresh the list after successful save
-    // Optional: Navigate if a new product was created and you want to go to its details
-    // if (!productToEdit && savedProduct.id) {
-    //   navigate(`/data-products/${savedProduct.id}`);
-    // }
+    fetchProducts();
   };
 
   // --- CRUD Handlers (Keep Delete and Upload here) ---
   const handleDeleteProduct = async (id: string, skipConfirm = false) => {
-    if (!skipConfirm && !confirm('Are you sure you want to delete this data product?')) {
-      return;
-    }
-    try {
-      // Show loading state for delete maybe?
-      await deleteApi(`/api/data-products/${id}`);
-      toast({ title: 'Success', description: 'Data product deleted.' });
-      fetchProducts(); // Refresh list
-    } catch (err: any) {
-      const errorMsg = err.message || 'Failed to delete data product.';
-      toast({ title: 'Error', description: errorMsg, variant: 'destructive' });
-      setError(errorMsg); // Also set main error state if needed
-      // Re-throw if part of Promise.all in bulk delete
-      if (skipConfirm) throw err;
-    }
+      if (!canAdmin) {
+          toast({ title: "Permission Denied", description: "You do not have permission to delete data products.", variant: "destructive" });
+          return;
+      }
+      if (!skipConfirm && !confirm('Are you sure you want to delete this data product?')) {
+          return;
+      }
+      try {
+          await deleteApi(`/api/data-products/${id}`);
+          toast({ title: 'Success', description: 'Data product deleted.' });
+          fetchProducts();
+      } catch (err: any) {
+          const errorMsg = err.message || 'Failed to delete data product.';
+          toast({ title: 'Error', description: errorMsg, variant: 'destructive' });
+          setError(errorMsg);
+          if (skipConfirm) throw err;
+      }
+  };
+
+  // Bulk Delete Handler
+  const handleBulkDelete = async (selectedRows: DataProduct[]) => {
+      if (!canAdmin) {
+          toast({ title: "Permission Denied", description: "You do not have permission to bulk delete.", variant: "destructive" });
+          return;
+      }
+      const selectedIds = selectedRows.map(r => r.id).filter((id): id is string => !!id);
+      if (selectedIds.length === 0) return;
+      if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected product(s)?`)) return;
+
+      // Track individual delete statuses
+      const results = await Promise.allSettled(selectedIds.map(async (id) => {
+          try {
+              await deleteApi(`/api/data-products/${id}`);
+              // If deleteApi throws on error, we won't reach here on failure
+              // If it returns an object like { error: string } on failure, 
+              // we need to check that, but the current structure assumes throw.
+              return id; // Return ID on success
+          } catch (err: any) {
+              // Re-throw the error with the ID for better context in the main handler
+              throw new Error(`ID ${id}: ${err.message || 'Unknown delete error'}`);
+          }
+      }));
+
+      const successes = results.filter(r => r.status === 'fulfilled').length;
+      const failures = results.filter(r => r.status === 'rejected').length;
+
+      if (successes > 0) {
+          toast({ title: 'Bulk Delete Success', description: `${successes} product(s) deleted.` });
+      }
+      if (failures > 0) {
+          const firstError = (results.find(r => r.status === 'rejected') as PromiseRejectedResult)?.reason?.message || 'Unknown error';
+          toast({ 
+              title: 'Bulk Delete Error', 
+              description: `${failures} product(s) could not be deleted. First error: ${firstError}`, 
+              variant: 'destructive' 
+          });
+      }
+      fetchProducts();
   };
 
   // Keep File Upload Handlers
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canWrite) {
+      toast({ title: "Permission Denied", description: "You do not have permission to upload data products.", variant: "destructive" });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     const file = event.target.files?.[0];
     if (!file) return;
     setIsUploading(true);
@@ -175,20 +224,19 @@ export default function DataProducts() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      // Use the 'post' method from the api object
-      const response = await post<{ count: number }>('/api/data-products/upload', formData); // Assume backend returns count
+      const response = await post<{ count: number }>('/api/data-products/upload', formData);
 
       if (response.error) {
          throw new Error(response.error || 'Unknown upload error');
       }
 
-      const count = response.data?.count ?? 0; // Safely access count
+      const count = response.data?.count ?? 0;
       console.log(`Successfully uploaded ${count} products from file:`, file.name);
       toast({
         title: "Upload Successful",
         description: `Successfully processed ${file.name}. ${count} product(s) processed.`,
       });
-      await fetchProducts(); // Refresh list after upload
+      await fetchProducts();
 
     } catch (err: any) {
       console.error('Error uploading file:', err);
@@ -202,7 +250,7 @@ export default function DataProducts() {
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {
-        fileInputRef.current.value = ""; // Reset file input
+        fileInputRef.current.value = "";
       }
     }
   };
@@ -211,20 +259,51 @@ export default function DataProducts() {
     fileInputRef.current?.click();
   };
 
-  // --- Define these outside the columns definition --- 
-  const handleEditClick = (product: DataProduct) => {
+  // --- Genie Space Handler ---
+  const handleCreateGenieSpace = async (selectedRows: DataProduct[]) => {
       if (!canWrite) {
-          toast({ title: "Permission Denied", description: "You do not have permission to edit data products.", variant: "destructive" });
+          toast({ title: "Permission Denied", description: "You do not have permission to create Genie Spaces.", variant: "destructive" });
           return;
       }
+      const selectedIds = selectedRows.map(r => r.id).filter((id): id is string => !!id);
+      if (selectedIds.length === 0) {
+          toast({ title: "No Selection", description: "Please select at least one data product.", variant: "default" });
+          return;
+      }
+
+      if (!confirm(`Create a Genie Space for ${selectedIds.length} selected product(s)?`)) {
+          return;
+      }
+
+      toast({ title: 'Initiating Genie Space', description: `Requesting Genie Space creation for ${selectedIds.length} product(s)...` });
+
+      try {
+          const response = await post('/api/data-products/genie-space', { product_ids: selectedIds });
+          
+          if (response.error) {
+              throw new Error(response.error);
+          }
+          if (response.data && typeof response.data === 'object' && 'detail' in response.data) {
+              throw new Error(response.data.detail as string);
+          }
+
+          toast({ title: 'Request Submitted', description: `Genie Space creation initiated. You'll be notified.` });
+          refreshNotifications();
+
+      } catch (err: any) {
+          console.error('Error initiating Genie Space creation:', err);
+          const errorMsg = err.message || 'Failed to start Genie Space creation.';
+          toast({ title: 'Error', description: errorMsg, variant: 'destructive' });
+          setError(errorMsg);
+      }
+  };
+
+  // --- Define these outside the columns definition --- 
+  const handleEditClick = (product: DataProduct) => {
       handleOpenDialog(product);
   };
 
   const handleDeleteClick = (product: DataProduct) => {
-       if (!canAdmin) {
-          toast({ title: "Permission Denied", description: "You do not have permission to delete data products.", variant: "destructive" });
-          return;
-      }
        if (product.id) {
           handleDeleteProduct(product.id, false);
        }
@@ -271,8 +350,6 @@ export default function DataProducts() {
         row.original.info.archetype ?
         <Badge variant="outline">{row.original.info.archetype}</Badge> : 'N/A'
       ),
-      // Filtering might be handled by DataTable component now, configure there if needed
-      // filterFn: 'includesString',
     },
     {
       accessorKey: "info.status",
@@ -285,7 +362,6 @@ export default function DataProducts() {
         row.original.info.status ?
         <Badge variant={getStatusColor(row.original.info.status)}>{row.original.info.status}</Badge> : 'N/A'
       ),
-      // filterFn: 'equalsString',
     },
     {
       accessorKey: "tags",
@@ -327,25 +403,23 @@ export default function DataProducts() {
         const product = row.original;
         return (
           <div className="flex space-x-1 justify-end">
-            {/* Edit button now opens the dialog, conditionally enabled */}
             <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => handleEditClick(product)} // Use wrapper function
+                onClick={() => handleEditClick(product)}
                 disabled={!canWrite || permissionsLoading}
                 title={canWrite ? "Edit" : "Edit (Permission Denied)"}
             >
               <Pencil className="h-4 w-4" />
             </Button>
-            {/* Delete button conditionally enabled */}
             {product.id && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="text-destructive hover:text-destructive"
                 onClick={(e) => {
-                    e.stopPropagation(); // Prevent row click navigation
-                    handleDeleteClick(product); // Use wrapper function
+                    e.stopPropagation();
+                    handleDeleteClick(product);
                 }}
                 disabled={!canAdmin || permissionsLoading}
                 title={canAdmin ? "Delete" : "Delete (Permission Denied)"}
@@ -357,7 +431,7 @@ export default function DataProducts() {
         );
       },
     },
-  ], [handleOpenDialog, handleDeleteProduct, getStatusColor, canWrite, canAdmin, permissionsLoading]); // Add permission flags to dependency array
+  ], [handleOpenDialog, handleDeleteProduct, getStatusColor, canWrite, canAdmin, permissionsLoading]);
 
   // --- Render Logic ---
   return (
@@ -374,11 +448,11 @@ export default function DataProducts() {
         </Alert>
       )}
 
-      {loading || permissionsLoading ? ( // Show loading if product or permissions are loading
+      {loading || permissionsLoading ? (
         <div className="flex justify-center items-center h-64">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
         </div>
-      ) : !canRead ? ( // Show permission denied message if cannot read
+      ) : !canRead ? (
          <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>You do not have permission to view data products.</AlertDescription>
@@ -421,34 +495,30 @@ export default function DataProducts() {
             </>
           }
           bulkActions={(selectedRows) => (
-            <Button
-              variant="destructive"
-              size="sm"
-              className="h-9"
-              onClick={async () => {
-                if (!canAdmin) {
-                  toast({ title: "Permission Denied", description: "You do not have permission to bulk delete.", variant: "destructive" });
-                  return;
-                }
-                const selectedIds = selectedRows.map(r => r.id).filter((id): id is string => !!id);
-                if (selectedIds.length === 0) return;
-                if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected product(s)?`)) return;
-
-                try {
-                  await Promise.all(selectedIds.map(id => deleteApi(`/api/data-products/${id}`)));
-                  toast({ title: 'Bulk Delete Success', description: `${selectedIds.length} product(s) deleted.` });
-                  fetchProducts();
-                } catch (err: any) {
-                    console.error("Bulk delete failed:", err);
-                    toast({ title: 'Bulk Delete Error', description: `Some products could not be deleted. ${err.message}`, variant: 'destructive' });
-                    fetchProducts();
-                }
-              }}
-              disabled={selectedRows.length === 0}
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete Selected ({selectedRows.length})
-            </Button>
+            <>
+              <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1"
+                  onClick={() => handleCreateGenieSpace(selectedRows)}
+                  disabled={selectedRows.length === 0 || !canWrite}
+                  title={canWrite ? "Create Genie Space from selected" : "Create Genie Space (Permission Denied)"}
+              >
+                  <Sparkles className="w-4 h-4 mr-1" />
+                  Create Genie Space ({selectedRows.length})
+              </Button>
+              <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-9 gap-1"
+                  onClick={() => handleBulkDelete(selectedRows)}
+                  disabled={selectedRows.length === 0 || !canAdmin}
+                  title={canAdmin ? "Delete selected" : "Delete (Permission Denied)"}
+              >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Delete Selected ({selectedRows.length})
+              </Button>
+            </>
           )}
           onRowClick={(row) => {
             const productId = row.original.id;

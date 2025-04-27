@@ -146,17 +146,44 @@ class NotificationsManager:
 
         return filtered_notifications
 
-    def create_notification(self, db: Session, notification: Notification) -> Notification:
-        """Create a new notification using the repository."""
+    async def create_notification(
+        self,
+        db: Session,
+        user_id: Optional[str] = None, # Add user_id (recipient or broadcast)
+        title: str = "Notification",
+        subtitle: Optional[str] = None,
+        description: Optional[str] = None,
+        link: Optional[str] = None,
+        type: NotificationType = NotificationType.INFO,
+        action_type: Optional[str] = None,
+        action_payload: Optional[Dict] = None,
+        status: Optional[str] = "info", # Keep original status field too?
+        can_delete: bool = True
+    ) -> Notification:
+        """Creates and saves a new notification using keyword arguments."""
         try:
-            # Ensure ID is set if not provided (repo might handle this too)
-            if not notification.id:
-                notification.id = str(uuid.uuid4())
-            # Ensure created_at is set
-            if not notification.created_at:
-                notification.created_at = datetime.utcnow()
-                
-            created_db_obj = self._repo.create(db=db, obj_in=notification)
+            now = datetime.utcnow()
+            notification_id = str(uuid.uuid4())
+            
+            # Construct the Notification Pydantic model internally
+            notification_data = Notification(
+                id=notification_id,
+                recipient=user_id, # Use user_id as recipient (None for broadcast)
+                title=title,
+                subtitle=subtitle,
+                description=description,
+                link=link,
+                type=type,
+                action_type=action_type,
+                action_payload=action_payload,
+                status=status,
+                can_delete=can_delete,
+                created_at=now,
+                read=False
+            )
+
+            logger.debug(f"Creating notification: {notification_data.dict()}")
+            created_db_obj = self._repo.create(db=db, obj_in=notification_data)
             return Notification.from_orm(created_db_obj)
         except Exception as e:
              logger.error(f"Error creating notification in DB: {e}", exc_info=True)

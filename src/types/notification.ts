@@ -6,6 +6,7 @@ export interface Notification {
   title: string;
   subtitle?: string | null;
   description?: string | null;
+  link?: string | null;
   created_at: string; // ISO 8601 date string from backend
   read: boolean;
   can_delete: boolean;

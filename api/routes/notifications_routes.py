@@ -9,8 +9,7 @@ from sqlalchemy.orm import Session
 from api.models.users import UserInfo
 from api.controller.notifications_manager import NotificationNotFoundError, NotificationsManager
 from api.models.notifications import Notification
-from api.common.dependencies import get_notifications_manager, get_db
-from api.common.authorization import get_user_details_from_sdk
+from api.common.dependencies import NotificationsManagerDep, DBSessionDep, CurrentUserDep
 
 # Configure logging
 from api.common.logging import setup_logging, get_logger
@@ -21,9 +20,9 @@ router = APIRouter(prefix="/api", tags=["notifications"])
 
 @router.get('/notifications', response_model=List[Notification])
 async def get_notifications(
-    db: Session = Depends(get_db),
-    user_info: UserInfo = Depends(get_user_details_from_sdk),
-    manager: NotificationsManager = Depends(get_notifications_manager)
+    db: DBSessionDep,
+    user_info: CurrentUserDep,
+    manager: NotificationsManagerDep
 ):
     """Get notifications filtered for the current user."""
     try:
@@ -38,8 +37,8 @@ async def get_notifications(
 @router.post('/notifications', response_model=Notification)
 async def create_notification(
     notification: Notification,
-    db: Session = Depends(get_db),
-    manager: NotificationsManager = Depends(get_notifications_manager)
+    db: DBSessionDep,
+    manager: NotificationsManagerDep
 ):
     """Create a new notification."""
     try:
@@ -52,8 +51,8 @@ async def create_notification(
 @router.delete('/notifications/{notification_id}', status_code=204)
 async def delete_notification(
     notification_id: str,
-    db: Session = Depends(get_db),
-    manager: NotificationsManager = Depends(get_notifications_manager)
+    db: DBSessionDep,
+    manager: NotificationsManagerDep
 ):
     """Delete a notification by ID."""
     try:
@@ -70,8 +69,8 @@ async def delete_notification(
 @router.put('/notifications/{notification_id}/read', response_model=Notification)
 async def mark_notification_read(
     notification_id: str,
-    db: Session = Depends(get_db),
-    manager: NotificationsManager = Depends(get_notifications_manager)
+    db: DBSessionDep,
+    manager: NotificationsManagerDep
 ):
     """Mark a notification as read."""
     try:

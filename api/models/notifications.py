@@ -21,6 +21,7 @@ class Notification(BaseModel):
     title: str
     subtitle: Optional[str] = None
     description: Optional[str] = None
+    link: Optional[str] = None
     created_at: datetime
     read: bool = False
     can_delete: bool = True

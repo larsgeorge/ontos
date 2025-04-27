@@ -85,73 +85,66 @@ A modern web application for managing data catalogs, built with FastAPI and Reac
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10 - 3.12 (as defined in `pyproject.toml`)
 - Node.js 16 or higher
-- npm 7 or higher
+- Yarn package manager
 - Hatch (Python build tool)
 
 ## Installation
 
-1. Install Hatch:
+1. Install Hatch (if you haven't already):
 ```bash
 pip install hatch
 ```
 
-2. Install all dependencies:
+2. Install Frontend Dependencies:
+Navigate to the project root directory and run:
 ```bash
-npm run install:all
+yarn install
 ```
 
-This will:
-- Install frontend dependencies using npm
-- Create a Python virtual environment using Hatch
-- Install backend dependencies in the virtual environment
+3. Backend Dependencies:
+Python dependencies for the backend are managed by Hatch. They will be installed automatically when you run backend commands within the Hatch environment (e.g., `hatch run ...` or `hatch shell`).
+
+**Note on Dependencies:** Since this application is designed to run as a Databricks App, which utilizes a standard Python environment, the backend dependencies are listed in `requirements.txt`. The `pyproject.toml` file is configured (using the `hatch-requirements-txt` plugin) to dynamically read its dependencies from `requirements.txt`. This ensures that the dependencies used in local development with Hatch are consistent with those installed in the Databricks App environment.
 
 ## Development
 
 To run both frontend and backend servers in development mode:
 
+**1. Start the Frontend Development Server:**
+
+Open a terminal and run:
 ```bash
-npm run dev
+yarn install && yarn dev
 ```
+This will install frontend dependencies (if needed) and start the Vite development server, typically on port 3000.
 
-This will:
-- Start the Vite development server on port 3000
-- Start the FastAPI development server on port 8000
-- Enable hot reloading for both frontend and backend
+**2. Start the Backend Development Server:**
 
-To run servers separately:
-
+Open a separate terminal and run:
 ```bash
-# Frontend only
-npm run dev:frontend
-
-# Backend only
-npm run dev:backend
+hatch -e dev run dev-backend
 ```
+This command uses Hatch to run the FastAPI backend in the development environment (`-e dev`), usually starting it on port 8000.
+
+Both servers support hot reloading for a smoother development experience.
 
 ## Building for Production
 
-To build both frontend and backend:
+**1. Build the Frontend:**
 
 ```bash
-npm run build:all
+yarn build
 ```
+This command builds the React application using Vite. The output files will be placed in the `./static/` directory at the project root. It also performs a TypeScript type check (`tsc --noEmit`).
 
-This will:
-1. Build the React application with Vite
-2. Copy the built files to the FastAPI static directory
-3. Build the Python package
-
-To build separately:
+**2. Build the Backend:**
 
 ```bash
-# Frontend only
-npm run build:frontend
-
-# Backend only
-npm run build:backend
+hatch build
 ```
+This command uses Hatch to build the Python backend package (typically a wheel file) according to the configuration in `pyproject.toml`.
 
 ## Environment Variables
 
@@ -169,23 +162,41 @@ DATABRICKS_SCHEMA=your_schema
 ```
 ucapp/
 ├── api/                    # Backend FastAPI application
-│   ├── routes/            # API routes
-│   ├── models/            # Data models
-│   ├── controller/        # Business logic
-│   ├── static/           # Static files (frontend build)
-│   └── app.py            # Main application file
-├── src/                   # Frontend React application
-│   ├── components/       # Reusable UI components
-│   ├── views/            # Page components
-│   ├── hooks/            # Custom React hooks
-│   └── app.tsx           # Main app component
-├── public/               # Public assets
-├── vite.config.ts        # Vite configuration
-├── tailwind.config.js    # Tailwind CSS configuration
-├── components.json       # Shadcn UI configuration
-├── pyproject.toml        # Hatch configuration
-├── package.json          # Frontend dependencies
-└── README.md            # This file
+│   ├── common/
+│   ├── controller/
+│   ├── data/
+│   ├── db_models/
+│   ├── models/
+│   ├── repositories/
+│   ├── routes/
+│   ├── schemas/
+│   ├── utils/
+│   ├── workflows/
+│   ├── app.py            # Main application file
+│   └── app.yaml          # Databricks App config
+├── src/                    # Frontend React application
+│   ├── components/
+│   ├── config/
+│   ├── hooks/
+│   ├── lib/
+│   ├── stores/
+│   ├── types/
+│   ├── views/
+│   ├── App.tsx           # Main app component
+│   └── main.tsx          # Application entry point
+├── static/                 # Static files (frontend build output)
+├── public/                 # Public assets (served by Vite dev server)
+├── vite.config.ts          # Vite configuration
+├── tailwind.config.js      # Tailwind CSS configuration
+├── components.json         # Shadcn UI configuration
+├── tsconfig.json           # TypeScript config for src
+├── tsconfig.node.json      # TypeScript config for build/dev tooling
+├── pyproject.toml          # Hatch configuration & backend dependencies
+├── package.json            # Frontend dependencies & scripts (yarn)
+├── yarn.lock               # Yarn lock file
+├── README.md               # This file
+├── LICENSE                 # Apache 2.0 License
+└── .env.example            # Example environment variables
 ```
 
 ## Contributing
@@ -194,8 +205,8 @@ ucapp/
 2. Make your changes
 3. Run tests and linting:
 ```bash
-hatch run test
-hatch run lint
+hatch run test:cov
+hatch run lint:all
 ```
 4. Submit a pull request
 

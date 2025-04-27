@@ -20,3 +20,5 @@ env:
     value: "true"
   - name: "APP_ADMIN_DEFAULT_GROUPS"
     value: '["admins"]'
+  - name: "APP_AUDIT_LOG_DIR"
+    value: "/Volumes/${workspace.env.DATABRICKS_CATALOG}/${workspace.env.DATABRICKS_SCHEMA}/${workspace.env.DATABRICKS_VOLUME}/audit_logs"

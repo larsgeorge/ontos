@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 from datetime import datetime
@@ -19,7 +20,9 @@ from api.models.data_products import (
     DataProductType,
     DataSource,
     SchemaField,
+    GenieSpaceRequest,
 )
+from api.models.users import UserInfo
 
 # Import the specific repository
 from api.repositories.data_products_repository import data_product_repo
@@ -29,26 +32,36 @@ from api.common.search_interfaces import SearchableAsset, SearchIndexItem
 # Import the registry decorator
 from api.common.search_registry import searchable_asset
 
+# Import NotificationsManager (adjust path if necessary)
+from api.controller.notifications_manager import NotificationsManager
+
 from api.common.logging import setup_logging, get_logger
 setup_logging(level=logging.INFO)
 logger = get_logger(__name__)
 
+# Import necessary components for creating a session
+from api.common.database import get_session_factory
+
 # Inherit from SearchableAsset
 @searchable_asset
 class DataProductsManager(SearchableAsset):
-    def __init__(self, db: Session, ws_client: Optional[WorkspaceClient] = None):
+    def __init__(self, db: Session, ws_client: Optional[WorkspaceClient] = None, notifications_manager: Optional[NotificationsManager] = None):
         """
         Initializes the DataProductsManager.
 
         Args:
             db: SQLAlchemy Session for database operations.
             ws_client: Optional Databricks WorkspaceClient for SDK operations.
+            notifications_manager: Optional NotificationsManager instance.
         """
         self._db = db
         self._ws_client = ws_client
         self._repo = data_product_repo
+        self._notifications_manager = notifications_manager
         if not self._ws_client:
              logger.warning("WorkspaceClient was not provided to DataProductsManager. SDK operations might fail.")
+        if not self._notifications_manager:
+             logger.warning("NotificationsManager was not provided to DataProductsManager. Notifications will not be sent.")
 
     def get_types(self) -> List[str]:
         """Get all available data product types"""
@@ -196,6 +209,82 @@ class DataProductsManager(SearchableAsset):
         except Exception as e:
             logger.error(f"Unexpected error deleting product {product_id}: {e}")
             raise
+
+    async def initiate_genie_space_creation(self, request: GenieSpaceRequest, user_info: UserInfo, db: Session):
+        """
+        Simulates the initiation of a Genie Space creation process.
+
+        Args:
+            request: The request containing product IDs.
+            user_info: The UserInfo object for the initiating user.
+            db: The database session from the current request context.
+        """
+        if not self._notifications_manager:
+            logger.error("Cannot initiate Genie Space creation: NotificationsManager is not configured.")
+            raise RuntimeError("Notification system is not available.")
+
+        user_email = user_info.email # Use email for recipient
+        product_ids_str = ", ".join(request.product_ids)
+        logger.info(f"Initiating Genie Space creation for products: {product_ids_str} by user: {user_email}")
+
+        # 1. Send initial notification (pass the db session and use email)
+        try:
+            await self._notifications_manager.create_notification(
+                db=db, # Pass the database session
+                user_id=user_email, # Use email as recipient
+                title="Genie Space Creation Started",
+                description=f"Genie Space creation for Data Product(s) {product_ids_str} initiated. You will be notified when it's ready.",
+                status="info"
+            )
+        except Exception as e:
+            logger.error(f"Failed to send initial Genie Space creation notification: {e}", exc_info=True)
+            # Proceed with simulation even if notification fails, but log it.
+
+        # 2. Schedule background task, passing user email
+        asyncio.create_task(self._simulate_genie_space_completion(request.product_ids, user_email))
+
+        logger.info(f"Genie Space creation background simulation scheduled for products: {product_ids_str}")
+
+    async def _simulate_genie_space_completion(self, product_ids: List[str], user_email: str):
+        """Simulates the completion of Genie Space creation and sends notification."""
+        # Import necessary components for creating a session
+        from api.common.database import get_session_factory
+        
+        logger.info(f"Starting background simulation for Genie Space completion (products: {product_ids}). Waiting...")
+        await asyncio.sleep(15) # Simulate a 15-second delay
+        logger.info(f"Background simulation wait complete for products: {product_ids}.")
+
+        product_ids_str = ", ".join(product_ids)
+        mock_genie_space_url = f"https://<databricks-host>/genie-space/{uuid.uuid4()}"
+        logger.info(f"Simulated Genie Space creation completed for products: {product_ids_str}. Mock URL: {mock_genie_space_url}")
+
+        if not self._notifications_manager:
+            logger.error("Cannot send Genie Space completion notification: NotificationsManager is not configured.")
+            return
+
+        session_factory = get_session_factory()
+        if not session_factory:
+            logger.error("Cannot send Genie Space completion notification: Database session factory not available.")
+            return
+
+        db_session = None
+        try:
+            # Create a new session specifically for this background task
+            with session_factory() as db_session:
+                logger.info(f"Creating completion notification for user {user_email}...")
+                await self._notifications_manager.create_notification(
+                    db=db_session, # Pass the new database session
+                    user_id=user_email, # Use email as recipient
+                    title="Genie Space Ready",
+                    description=f"Your Genie Space for Data Product(s) {product_ids_str} is ready.",
+                    link=mock_genie_space_url,
+                    status="success"
+                )
+                logger.info(f"Completion notification created for user {user_email}.")
+                # The context manager handles commit/rollback/close for db_session
+        except Exception as e:
+            logger.error(f"Failed to send Genie Space completion notification: {e}", exc_info=True)
+            # No explicit rollback needed due to context manager
 
     def load_from_yaml(self, yaml_path: str) -> bool:
         """Load data products from YAML into the database via the repository."""

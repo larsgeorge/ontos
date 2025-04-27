@@ -29,6 +29,7 @@ from api.routes import (
     security_features_routes,
     settings_routes,
     user_routes,
+    audit_routes,
 )
 
 from api.common.logging import setup_logging, get_logger
@@ -139,10 +140,6 @@ app.add_middleware(ErrorHandlingMiddleware)
 # Mount static files for the React application
 app.mount("/static", StaticFiles(directory=STATIC_ASSETS_PATH, html=True), name="static")
 
-# Register data asset reviews FIRST for diagnostics
-data_asset_reviews_routes.register_routes(app)
-
-# Register routes from each module
 # Data Management features
 data_product_routes.register_routes(app)
 data_contract_routes.register_routes(app)
@@ -154,6 +151,7 @@ estate_manager_routes.register_routes(app)
 security_features_routes.register_routes(app)
 entitlements_routes.register_routes(app)
 entitlements_sync_routes.register_routes(app)
+data_asset_reviews_routes.register_routes(app)
 # Tools features
 catalog_commander_routes.register_routes(app)
 # Auxiliary services
@@ -162,6 +160,7 @@ notifications_routes.register_routes(app)
 search_routes.register_routes(app)
 settings_routes.register_routes(app)
 user_routes.register_routes(app)
+audit_routes.register_routes(app)
 
 # Define other specific API routes BEFORE the catch-all
 @app.get("/api/time")

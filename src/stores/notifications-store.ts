@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { useApi } from '@/hooks/use-api'; // Assuming useApi can be used outside component context (might need adjustment)
-import { Notification } from '@/types/notification'; // Assuming this type exists or needs creation
+// Removed useApi import as we use direct fetch below
+import { Notification } from '@/types/notification';
 
 interface NotificationsState {
   notifications: Notification[];
@@ -11,59 +11,62 @@ interface NotificationsState {
   refreshNotifications: () => void; // Simple alias to trigger fetch
   markAsRead: (notificationId: string) => Promise<void>;
   deleteNotification: (notificationId: string) => Promise<void>;
+  startPolling: () => void; // Action to start polling
+  stopPolling: () => void; // Action to stop polling
 }
 
-// Helper to get the API hook instance - this might be tricky outside React context
-// Option 1: Pass the api instance if possible (e.g., during app initialization)
-// Option 2: Re-create fetch logic here (less ideal)
-// Option 3: Assume useApi() works globally (unlikely without context/singleton setup)
-// For now, let's *assume* a way to get the api functions is available.
-// A more realistic approach might involve calling API methods directly.
+// --- API Helper Functions (using fetch directly) ---
+// Base URL - adjust if needed, or use environment variables
+const API_BASE_URL = ''; // Assuming API routes start from the root
 
-// Placeholder for API calls - Replace with actual implementation
 const apiGet = async <T>(endpoint: string): Promise<{ data?: T, error?: string }> => {
-    // Replace with actual fetch call, potentially using a shared API client instance
-    console.log(`[Store] Fetching ${endpoint}`);
-    // Example fetch
+    console.log(`[Store] Fetching ${API_BASE_URL}${endpoint}`);
     try {
-        const response = await fetch(endpoint);
+        const response = await fetch(`${API_BASE_URL}${endpoint}`);
         if (!response.ok) {
             throw new Error(`API Error: ${response.status} ${response.statusText}`);
         }
-        const data: T = await response.json();
+        // Handle potential empty response for GET (though list usually returns [])
+        const text = await response.text();
+        const data: T = text ? JSON.parse(text) : []; // Default to empty array for lists
         return { data };
     } catch (error: any) {
-         console.error(`[Store] API Error fetching ${endpoint}:`, error);
+         console.error(`[Store] API Error fetching ${API_BASE_URL}${endpoint}:`, error);
          return { error: error.message || 'Failed to fetch' };
     }
 };
+
 const apiPut = async (endpoint: string): Promise<{ error?: string }> => {
-    console.log(`[Store] PUT ${endpoint}`);
+    console.log(`[Store] PUT ${API_BASE_URL}${endpoint}`);
      try {
-        const response = await fetch(endpoint, { method: 'PUT' });
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, { method: 'PUT' });
         if (!response.ok) {
             throw new Error(`API Error: ${response.status} ${response.statusText}`);
         }
         return {}; // Success
     } catch (error: any) {
-         console.error(`[Store] API Error PUT ${endpoint}:`, error);
+         console.error(`[Store] API Error PUT ${API_BASE_URL}${endpoint}:`, error);
          return { error: error.message || 'Failed to update' };
     }
 };
+
 const apiDelete = async (endpoint: string): Promise<{ error?: string }> => {
-    console.log(`[Store] DELETE ${endpoint}`);
+    console.log(`[Store] DELETE ${API_BASE_URL}${endpoint}`);
      try {
-        const response = await fetch(endpoint, { method: 'DELETE' });
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, { method: 'DELETE' });
          if (!response.ok && response.status !== 204) { // Allow 204 No Content
             throw new Error(`API Error: ${response.status} ${response.statusText}`);
         }
         return {}; // Success
     } catch (error: any) {
-         console.error(`[Store] API Error DELETE ${endpoint}:`, error);
+         console.error(`[Store] API Error DELETE ${API_BASE_URL}${endpoint}:`, error);
          return { error: error.message || 'Failed to delete' };
     }
 };
 
+// Variable to hold the interval ID
+let pollingIntervalId: NodeJS.Timeout | null = null;
+const POLLING_INTERVAL = 60 * 1000; // 60 seconds
 
 export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   notifications: [],
@@ -72,10 +75,11 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   error: null,
 
   fetchNotifications: async () => {
-    if (get().isLoading) return; // Prevent concurrent fetches
-    set({ isLoading: true, error: null });
+    // Only set loading if not already loading (prevent visual flicker during polling)
+    if (!get().isLoading) {
+      set({ isLoading: true, error: null });
+    }
     try {
-      // Replace with actual useApi().get or fetch call
       const response = await apiGet<Notification[]>('/api/notifications');
 
       if (response.error || !response.data) {
@@ -85,15 +89,23 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
       const fetchedNotifications = response.data;
       const unread = fetchedNotifications.filter(n => !n.read).length;
 
-      set({
-        notifications: fetchedNotifications,
-        unreadCount: unread,
-        isLoading: false,
-        error: null,
-      });
+      // Only update state if data has changed to prevent unnecessary re-renders
+      if (JSON.stringify(fetchedNotifications) !== JSON.stringify(get().notifications) || unread !== get().unreadCount) {
+        set({
+            notifications: fetchedNotifications,
+            unreadCount: unread,
+            isLoading: false,
+            error: null,
+        });
+      } else {
+         // If no change, just ensure loading is false
+         set({ isLoading: false, error: null }); 
+      }
+
     } catch (error: any) {
       console.error("Error fetching notifications:", error);
-      set({ isLoading: false, error: error.message || 'An unknown error occurred', notifications: [], unreadCount: 0 });
+      // Don't clear notifications on a failed poll, keep stale data + error
+      set({ isLoading: false, error: error.message || 'An unknown error occurred' });
     }
   },
 
@@ -103,43 +115,43 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   },
 
   markAsRead: async (notificationId: string) => {
-    // Optimistic UI update (optional but good UX)
+    const originalNotifications = get().notifications;
+    const notificationToMark = originalNotifications.find(n => n.id === notificationId);
+    const originalUnreadCount = get().unreadCount;
+
+    // Optimistic UI update
     set(state => ({
         notifications: state.notifications.map(n =>
             n.id === notificationId ? { ...n, read: true } : n
         ),
-        // Decrement unread count optimistically if the notification was unread
-        unreadCount: state.notifications.find(n => n.id === notificationId && !n.read)
+        unreadCount: notificationToMark && !notificationToMark.read
                      ? Math.max(0, state.unreadCount - 1)
                      : state.unreadCount,
     }));
 
     try {
-       // Replace with actual useApi().put or fetch call
        const response = await apiPut(`/api/notifications/${notificationId}/read`);
        if (response.error) {
             throw new Error(response.error);
        }
-       // No need to refetch if optimistic update is correct, but can refetch for consistency
-       // get().fetchNotifications(); 
     } catch (error: any) {
        console.error(`Error marking notification ${notificationId} as read:`, error);
        // Revert optimistic update on error
-       set(state => ({
-            // Find the original state or refetch
-            // This requires storing original state or simply refetching fully
+       set({
+            notifications: originalNotifications,
+            unreadCount: originalUnreadCount,
             error: `Failed to mark as read: ${error.message}`
-       }));
-       get().fetchNotifications(); // Refetch to get actual state on error
+       });
+       // Optionally trigger a toast notification here
     }
   },
 
   deleteNotification: async (notificationId: string) => {
-    // Optimistic UI update
     const originalNotifications = get().notifications;
     const notificationToDelete = originalNotifications.find(n => n.id === notificationId);
     const originalUnreadCount = get().unreadCount;
 
+    // Optimistic UI update
     set(state => ({
         notifications: state.notifications.filter(n => n.id !== notificationId),
         unreadCount: notificationToDelete && !notificationToDelete.read
@@ -148,7 +160,6 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
     }));
 
     try {
-       // Replace with actual useApi().delete or fetch call
        const response = await apiDelete(`/api/notifications/${notificationId}`);
         if (response.error) {
             throw new Error(response.error);
@@ -162,10 +173,39 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
             unreadCount: originalUnreadCount,
             error: `Failed to delete: ${error.message}`
         });
+         // Optionally trigger a toast notification here
     }
+  },
+  
+  // --- Polling Actions --- 
+  startPolling: () => {
+      // Clear existing interval before starting a new one
+      get().stopPolling(); 
+      console.log(`[Store] Starting notification polling every ${POLLING_INTERVAL / 1000}s`);
+      pollingIntervalId = setInterval(() => {
+          console.log("[Store] Polling for notifications...");
+          get().fetchNotifications();
+      }, POLLING_INTERVAL);
+      // Fetch immediately when polling starts
+      get().fetchNotifications(); 
+  },
+
+  stopPolling: () => {
+      if (pollingIntervalId) {
+          console.log("[Store] Stopping notification polling.");
+          clearInterval(pollingIntervalId);
+          pollingIntervalId = null;
+      }
   },
 }));
 
+// --- Auto-start Polling (Optional) ---
+// This starts polling as soon as the store is initialized.
+// Alternatively, call startPolling() from a main component (e.g., App.tsx) after user logs in.
+// useNotificationsStore.getState().startPolling(); 
+
+
+// Previous notes kept for context:
 // Note: We need a type definition for Notification
 // Create src/types/notification.ts if it doesn't exist
 /* Example src/types/notification.ts
@@ -175,6 +215,7 @@ export interface Notification {
   title: string;
   subtitle?: string | null;
   description?: string | null;
+  link?: string | null; // Added optional link field
   created_at: string; // ISO date string
   read: boolean;
   can_delete: boolean;
@@ -182,7 +223,4 @@ export interface Notification {
   action_type?: string | null;
   action_payload?: Record<string, any> | null;
 }
-*/
-
-// Ensure useApi hook can be used here or replace apiGet/Put/Delete
-// with direct fetch calls or a shared API client instance. 
+*/ 

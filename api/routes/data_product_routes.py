@@ -11,7 +11,7 @@ import uuid
 # from sqlalchemy.orm import Session
 
 from api.controller.data_products_manager import DataProductsManager
-from api.models.data_products import DataProduct # Use the updated model
+from api.models.data_products import DataProduct, GenieSpaceRequest # Use the updated model
 from api.models.users import UserInfo # Needed for user context in auth
 # Remove WorkspaceClient dependency if get_workspace_client_dependency is no longer used directly here
 # from databricks.sdk import WorkspaceClient 
@@ -24,6 +24,9 @@ from databricks.sdk.errors import PermissionDenied # Import specific error
 # Import Permission Checker and Levels
 from api.common.authorization import PermissionChecker
 from api.common.features import FeatureAccessLevel
+
+# Import Annotated dependency types
+from api.common.dependencies import CurrentUserDep, DBSessionDep # Add DBSessionDep
 
 # Configure logging
 from api.common.logging import setup_logging, get_logger
@@ -327,6 +330,33 @@ async def delete_data_product(
         error_msg = f"Unexpected error deleting data product {product_id}: {e!s}"
         logger.exception(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
+
+# --- Genie Space Endpoint --- 
+@router.post("/data-products/genie-space", status_code=202)
+async def create_genie_space_from_products(
+    request_body: GenieSpaceRequest,
+    current_user: CurrentUserDep, # Moved up, no default value
+    db: DBSessionDep, # Inject the database session
+    manager: DataProductsManager = Depends(get_data_products_manager), # Has default
+    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_WRITE)) # Has default
+):
+    """
+    Initiates the (simulated) creation of a Databricks Genie Space 
+    based on selected Data Products.
+    """
+    if not request_body.product_ids:
+        raise HTTPException(status_code=400, detail="No product IDs provided.")
+
+    try:
+        # Call the manager method to start the process, passing the db session and user info
+        await manager.initiate_genie_space_creation(request_body, current_user, db=db) # Pass full current_user object
+        return {"message": "Genie Space creation process initiated. You will be notified upon completion."}
+    except RuntimeError as e:
+        logger.error(f"Runtime error initiating Genie Space creation: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error initiating Genie Space creation: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to initiate Genie Space creation.")
 
 # Function to register routes (if used elsewhere)
 def register_routes(app):

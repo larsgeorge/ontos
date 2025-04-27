@@ -5,13 +5,16 @@ import DataProductFormDialog from '@/components/data-products/data-product-form-
 import { useApi } from '@/hooks/use-api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Pencil, Trash2, AlertCircle } from 'lucide-react';
+import { Loader2, Pencil, Trash2, AlertCircle, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import useBreadcrumbStore from '@/stores/breadcrumb-store'; // Import Zustand store
+import { usePermissions } from '@/stores/permissions-store'; // Import permissions hook
+import { FeatureAccessLevel } from '@/types/settings'; // Import FeatureAccessLevel
+import { useNotificationsStore } from '@/stores/notifications-store'; // Import notification store
 
 // Helper Function Type Definition (copied from DataProducts view for checking API responses)
 type CheckApiResponseFn = <T>(
@@ -37,9 +40,11 @@ export default function DataProductDetails() {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
   const api = useApi();
-  const { get } = api; // Destructure get method here
+  const { get, post, delete: deleteApi } = api; // Destructure methods
   const { toast } = useToast();
   const setDynamicBreadcrumbTitle = useBreadcrumbStore((state) => state.setDynamicTitle); // Get setter action
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions(); // Use permissions hook
+  const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications); // Get refresh action
 
   const [product, setProduct] = useState<DataProduct | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,6 +55,12 @@ export default function DataProductDetails() {
   const [statuses, setStatuses] = useState<DataProductStatus[]>([]);
   const [archetypes, setArchetypes] = useState<DataProductArchetype[]>([]);
   const [owners, setOwners] = useState<DataProductOwner[]>([]);
+
+  // Permissions
+  const featureId = 'data-products';
+  const canRead = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_ONLY);
+  const canWrite = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_WRITE);
+  const canAdmin = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.ADMIN);
 
   // Helper to format dates safely
   const formatDate = (dateString: string | undefined): string => {
@@ -63,12 +74,12 @@ export default function DataProductDetails() {
 
   // Helper to get status badge variant
   const getStatusColor = (status: string | undefined): 'default' | 'secondary' | 'destructive' | 'outline' => {
-    switch (status?.toLowerCase()) {
-      case 'production': return 'default';
-      case 'development': return 'secondary';
-      case 'deprecated': return 'destructive';
-      default: return 'outline';
-    }
+    const lowerStatus = status?.toLowerCase() || '';
+    if (lowerStatus.includes('active')) return 'default';
+    if (lowerStatus.includes('development')) return 'secondary';
+    if (lowerStatus.includes('retired') || lowerStatus.includes('deprecated')) return 'outline';
+    if (lowerStatus.includes('deleted') || lowerStatus.includes('archived')) return 'destructive';
+    return 'default';
   };
 
   // Function to fetch product details and dropdown data
@@ -78,6 +89,12 @@ export default function DataProductDetails() {
       setDynamicBreadcrumbTitle(null); // Clear title if ID is missing
       setLoading(false);
       return;
+    }
+    if (!canRead && !permissionsLoading) {
+        setError('Permission Denied: Cannot view data product details.');
+        setDynamicBreadcrumbTitle('Permission Denied');
+        setLoading(false);
+        return;
     }
     setLoading(true);
     setError(null);
@@ -130,10 +147,14 @@ export default function DataProductDetails() {
         console.log("DataProductDetails unmounting, clearing breadcrumb title.");
         setDynamicBreadcrumbTitle(null);
     };
-    // We only want to fetch initially or if productId changes.
-  }, [productId, get, toast, setDynamicBreadcrumbTitle]); // Add setDynamicBreadcrumbTitle to deps
+    // Depend on permissions and canRead status as well
+  }, [productId, get, toast, setDynamicBreadcrumbTitle, canRead, permissionsLoading]);
 
   const handleEdit = () => {
+    if (!canWrite) {
+        toast({ title: 'Permission Denied', description: 'You do not have permission to edit this product.', variant: 'destructive' });
+        return;
+    }
     if (!product) {
         toast({ title: 'Error', description: 'Product data not loaded yet.', variant: 'destructive' });
         return;
@@ -149,12 +170,16 @@ export default function DataProductDetails() {
   };
 
   const handleDelete = async () => {
+    if (!canAdmin) {
+        toast({ title: 'Permission Denied', description: 'You do not have permission to delete this product.', variant: 'destructive' });
+        return;
+    }
     if (!productId || !product) return;
     // Use info.title for confirmation
     if (!confirm(`Are you sure you want to delete data product "${product.info.title}"?`)) return;
 
     try {
-      await api.delete(`/api/data-products/${productId}`);
+      await deleteApi(`/api/data-products/${productId}`);
       toast({ title: 'Success', description: 'Data product deleted successfully.' });
       navigate('/data-products'); // Navigate back to the list view
     } catch (err) {
@@ -163,8 +188,46 @@ export default function DataProductDetails() {
     }
   };
 
+  // --- Genie Space Handler --- 
+  const handleCreateGenieSpace = async () => {
+      if (!canWrite) { // Check for WRITE permission
+          toast({ title: "Permission Denied", description: "You do not have permission to create Genie Spaces.", variant: "destructive" });
+          return;
+      }
+      if (!productId || !product) {
+          toast({ title: "Error", description: "Product data not available.", variant: "destructive" });
+          return;
+      }
+
+      if (!confirm(`Create a Genie Space for the data product "${product.info.title}"?`)) {
+          return;
+      }
+
+      toast({ title: 'Initiating Genie Space', description: `Requesting Genie Space creation for ${product.info.title}...` });
+
+      try {
+          const response = await post('/api/data-products/genie-space', { product_ids: [productId] }); // Send single ID in list
+          
+          if (response.error) {
+              throw new Error(response.error);
+          }
+          if (response.data && typeof response.data === 'object' && 'detail' in response.data) {
+              throw new Error(response.data.detail as string);
+          }
+
+          toast({ title: 'Request Submitted', description: `Genie Space creation initiated. You'll be notified.` });
+          refreshNotifications();
+
+      } catch (err: any) {
+          console.error('Error initiating Genie Space creation:', err);
+          const errorMsg = err.message || 'Failed to start Genie Space creation.';
+          toast({ title: 'Error', description: errorMsg, variant: 'destructive' });
+          setError(errorMsg); // Can also show error in main area if desired
+      }
+  };
+
   // Loading state
-  if (loading) {
+  if (loading || permissionsLoading) { // Check permissionsLoading too
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -172,7 +235,7 @@ export default function DataProductDetails() {
     );
   }
 
-  // Error state
+  // Error state (includes permission denied)
   if (error) {
     return (
       <Alert variant="destructive">
@@ -182,7 +245,7 @@ export default function DataProductDetails() {
     );
   }
 
-  // Not found state
+  // Not found state (after loading and checking permissions)
   if (!product) {
     return (
       <Alert>
@@ -196,16 +259,19 @@ export default function DataProductDetails() {
       <div className="flex justify-between items-start">
         <h1 className="text-3xl font-bold mb-2">{product.info.title}</h1>
         <div className="flex space-x-2">
-          <Button variant="outline" onClick={handleEdit} disabled={!product}>
+          <Button variant="outline" onClick={handleCreateGenieSpace} disabled={!product || !canWrite} title={canWrite ? "Create Genie Space" : "Create Genie Space (Permission Denied)"}>
+              <Sparkles className="mr-2 h-4 w-4" /> Create Genie Space
+          </Button>
+          <Button variant="outline" onClick={handleEdit} disabled={!product || !canWrite} title={canWrite ? "Edit" : "Edit (Permission Denied)"}>
             <Pencil className="mr-2 h-4 w-4" /> Edit
           </Button>
-          <Button variant="destructive" onClick={handleDelete} disabled={!product}>
+          <Button variant="destructive" onClick={handleDelete} disabled={!product || !canAdmin} title={canAdmin ? "Delete" : "Delete (Permission Denied)"}>
             <Trash2 className="mr-2 h-4 w-4" /> Delete
           </Button>
         </div>
       </div>
 
-      {/* Info Card */}
+      {/* Info Card */} 
       <Card>
         <CardHeader>
           <CardTitle>Info</CardTitle>
@@ -239,7 +305,7 @@ export default function DataProductDetails() {
         </CardContent>
       </Card>
 
-      {/* Ports Card */}
+      {/* Ports Card */} 
       <Card>
         <CardHeader>
           <CardTitle>Ports</CardTitle>
@@ -281,7 +347,7 @@ export default function DataProductDetails() {
 
       {/* TODO: Add Cards for Links, Custom Properties, etc. */}
 
-      {/* Render the reusable Edit Dialog component */} 
+      {/* Render the reusable Edit Dialog component */}
       {isEditDialogOpen && product && (
         <DataProductFormDialog
             isOpen={isEditDialogOpen}

@@ -15,6 +15,7 @@ class NotificationDb(Base):
     title = Column(String, nullable=False)
     subtitle = Column(String, nullable=True)
     description = Column(Text, nullable=True)
+    link = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     read = Column(Boolean, default=False, nullable=False)
     can_delete = Column(Boolean, default=True, nullable=False)

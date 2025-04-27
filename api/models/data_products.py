@@ -175,3 +175,10 @@ class DataProduct(BaseModel):
         use_enum_values = True
         orm_mode = True
         from_attributes = True
+
+
+# --- Request Models ---
+
+class GenieSpaceRequest(BaseModel):
+    """Request model for initiating Genie Space creation."""
+    product_ids: List[str] = Field(..., description="List of Data Product IDs to include in the Genie Space.")

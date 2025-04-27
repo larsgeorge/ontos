@@ -6,6 +6,7 @@ import { TooltipProvider } from './components/ui/tooltip';
 import { Toaster } from './components/ui/toaster';
 import { useUserStore } from './stores/user-store';
 import { usePermissions } from './stores/permissions-store';
+import { useNotificationsStore } from './stores/notifications-store';
 
 // Import views
 import Home from './views/home';
@@ -29,13 +30,22 @@ import DataAssetReviewDetails from './views/data-asset-review-details';
 export default function App() {
   const fetchUserInfo = useUserStore((state: any) => state.fetchUserInfo);
   const { fetchPermissions, fetchAvailableRoles } = usePermissions();
+  const { startPolling: startNotificationPolling, stopPolling: stopNotificationPolling } = useNotificationsStore();
 
   useEffect(() => {
     console.log("App component mounted, fetching initial user info and permissions...");
     fetchUserInfo();
     fetchPermissions();
     fetchAvailableRoles();
-  }, [fetchUserInfo, fetchPermissions, fetchAvailableRoles]);
+
+    console.log("Starting notification polling...");
+    startNotificationPolling();
+
+    return () => {
+        console.log("App component unmounting, stopping notification polling...");
+        stopNotificationPolling();
+    };
+  }, [fetchUserInfo, fetchPermissions, fetchAvailableRoles, startNotificationPolling, stopNotificationPolling]);
 
   return (
     <ThemeProvider defaultTheme="system" storageKey="ucapp-theme">

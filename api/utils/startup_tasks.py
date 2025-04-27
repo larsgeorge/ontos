@@ -20,6 +20,7 @@ from api.controller.settings_manager import SettingsManager
 from api.controller.users_manager import UsersManager
 from api.controller.authorization_manager import AuthorizationManager
 from api.controller.notifications_manager import NotificationsManager
+from api.controller.audit_manager import AuditManager
 
 # Import Demo Data Loader
 from api.utils.demo_data_loader import load_demo_data
@@ -32,6 +33,8 @@ def initialize_database():
     """Initializes the database connection, creates catalog/schema, and tables."""
     logger.info("Initializing database...")
     try:
+        # Ensure AuditLog model is imported so its table gets created
+        from api.db_models.audit_log import AuditLog
         init_db()
         logger.info("Database initialization complete.")
     except ConnectionError as e:
@@ -81,8 +84,17 @@ def initialize_managers(app: FastAPI):
         app.state.auth_manager = auth_manager_instance
         logger.info("AuthorizationManager singleton stored in app.state.")
 
-        # Feature-specific managers
-        dp_manager = DataProductsManager(db=db_session, ws_client=ws_client)
+        # Initialize NotificationsManager (requires settings manager)
+        notifications_manager_instance = NotificationsManager(settings_manager=settings_manager_instance)
+        app.state.manager_instances['notifications'] = notifications_manager_instance
+        logger.info("NotificationsManager singleton stored in app.state.")
+
+        # Feature-specific managers (instantiate AFTER dependencies like NotificationsManager)
+        dp_manager = DataProductsManager(
+            db=db_session, 
+            ws_client=ws_client, 
+            notifications_manager=notifications_manager_instance # Pass the instance
+        )
         app.state.manager_instances['data_products'] = dp_manager
         logger.info("DataProductsManager singleton stored in app.state.")
 
@@ -96,10 +108,10 @@ def initialize_managers(app: FastAPI):
         app.state.manager_instances['business_glossaries'] = bg_manager
         logger.info("BusinessGlossariesManager singleton stored in app.state.")
 
-        # Initialize NotificationsManager (takes no arguments)
-        notifications_manager_instance = NotificationsManager(settings_manager=settings_manager_instance)
-        app.state.manager_instances['notifications'] = notifications_manager_instance
-        logger.info("NotificationsManager singleton stored in app.state.")
+        # Initialize AuditManager (needs settings and db session)
+        audit_manager_instance = AuditManager(settings=settings, db_session=db_session)
+        app.state.audit_manager = audit_manager_instance
+        logger.info("AuditManager singleton stored in app.state.")
 
         # Initialize DataAssetReviewManager with all dependencies
         dar_manager = DataAssetReviewManager(

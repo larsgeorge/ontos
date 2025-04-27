@@ -13,7 +13,7 @@ from databricks.sdk.errors import NotFound
 from api.controller.users_manager import UsersManager
 from api.common.config import get_settings, Settings
 # Import from the new dependencies file
-from api.common.dependencies import get_auth_manager, get_users_manager
+from api.common.manager_dependencies import get_auth_manager, get_users_manager
 
 logger = get_logger(__name__)
 

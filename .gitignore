@@ -30,3 +30,4 @@ __pycache__
 .env
 
 settings.json
+audit_logs/
