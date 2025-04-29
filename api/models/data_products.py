@@ -10,19 +10,11 @@ from pydantic import BaseModel, Field, HttpUrl, field_validator, computed_field
 logger = logging.getLogger(__name__)
 
 class DataProductType(str, Enum):
+    SOURCE = "source"
     SOURCE_ALIGNED = "source-aligned"
     AGGREGATE = "aggregate"
     CONSUMER_ALIGNED = "consumer-aligned"
-    TABLE = "table"
-    VIEW = "view"
-    STREAMING_TABLE = "streaming_table"
-    MATERIALIZED_VIEW = "materialized_view"
-    EXTERNAL_TABLE = "external_table"
-    FUNCTION = "function"
-    MODEL = "model"
-    DASHBOARD = "dashboard"
-    JOB = "job"
-    NOTEBOOK = "notebook"
+    SINK = "sink"
 
 class DataProductStatus(str, Enum):
     DRAFT = "draft"
@@ -102,6 +94,7 @@ class Port(BaseModel):
 
 class InputPort(Port):
     sourceSystemId: str = Field(..., description="Technical identifier for the source system", example="search-service")
+    sourceOutputPortId: Optional[str] = Field(None, description="The specific output port ID on the source system this input connects to")
 
     class Config:
         orm_mode = True
@@ -145,8 +138,10 @@ class DataProduct(BaseModel):
     dataProductSpecification: str = Field("0.0.1", description="Version of the Data Product Specification")
     id: str = Field(..., description="Organizational unique technical identifier", example="search-queries-all")
     info: Info = Field(..., description="Information about the data product")
-    inputPorts: List[InputPort] = Field(default_factory=list, description="List of input ports")
-    outputPorts: List[OutputPort] = Field(default_factory=list, description="List of output ports")
+    version: str = Field("v1.0", description="Version identifier for the data product", example="v1.0")
+    productType: DataProductType = Field(..., alias='product_type', description="Type indicating the stage in the data flow", example=DataProductType.CONSUMER_ALIGNED)
+    inputPorts: Optional[List[InputPort]] = Field(default_factory=list, description="List of input ports")
+    outputPorts: Optional[List[OutputPort]] = Field(default_factory=list, description="List of output ports")
     links: Optional[Dict[str, str]] = Field(default_factory=dict)
     custom: Optional[Dict[str, Any]] = Field(default_factory=dict)
     # Add tags as a regular field
@@ -173,6 +168,7 @@ class DataProduct(BaseModel):
 
     class Config:
         use_enum_values = True
+        populate_by_name = True
         orm_mode = True
         from_attributes = True
 
@@ -182,3 +178,10 @@ class DataProduct(BaseModel):
 class GenieSpaceRequest(BaseModel):
     """Request model for initiating Genie Space creation."""
     product_ids: List[str] = Field(..., description="List of Data Product IDs to include in the Genie Space.")
+
+class NewVersionRequest(BaseModel):
+    """Request model for creating a new version of a Data Product."""
+    new_version: str = Field(..., description="The new version string (e.g., v1.1, v2.0)", example="v1.1")
+    # Optional fields could be added later, e.g.:
+    # copy_tags: bool = Field(True, description="Copy tags from the original version.")
+    # reset_status_to_draft: bool = Field(True, description="Reset the status of the new version to 'draft'.")

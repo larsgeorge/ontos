@@ -9,7 +9,7 @@ import { Plus, AlertCircle, ChevronDown, X, Loader2, Check, ChevronsUpDown } fro
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { DataProduct, Info, InputPort, OutputPort, Server, DataProductStatus, DataProductArchetype, DataProductOwner, MetastoreTableInfo, Link as DataProductLink } from '@/types/data-product';
+import { DataProduct, Info, InputPort, OutputPort, Server, DataProductStatus, DataProductArchetype, DataProductOwner, MetastoreTableInfo, Link as DataProductLink, DataProductType } from '@/types/data-product';
 import { useForm, useFieldArray, Controller, SubmitHandler } from 'react-hook-form';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from "@/lib/utils"
@@ -41,8 +41,8 @@ interface DataProductFormDialogProps {
   onOpenChange: (open: boolean) => void;
   initialProduct: DataProduct | null; // Product to edit, or null for create
   statuses: DataProductStatus[];
-  archetypes: DataProductArchetype[];
   owners: DataProductOwner[]; // Added owners prop
+  productTypes: DataProductType[]; // Add product types prop
   api: ReturnType<typeof useApi>; // Pass the API hook instance
   onSubmitSuccess: (savedProduct: DataProduct) => void; // Callback on successful save
 }
@@ -175,6 +175,8 @@ const createDefaultProduct = (): DataProduct => {
     // id is generated on submit if needed
     info: { title: "", owner: "" },
     inputPorts: [],
+    version: "v1.0", // Default version
+    productType: "", // Default type (user should select)
     outputPorts: [],
     links: {}, 
     custom: {}, 
@@ -309,8 +311,8 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
     onOpenChange, 
     initialProduct, 
     statuses, 
-    archetypes, 
     owners, // Use owners prop
+    productTypes, // Add productTypes to destructuring
     api, 
     onSubmitSuccess 
 }) => {
@@ -864,9 +866,19 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                 />
                                 {errors.id && <p className="text-sm text-red-600 mt-1">{errors.id.message}</p>}
                               </div>
+                              {/* Version Field */}
+                              {/* Make Version editable only on create */}
                               <div>
-                                <Label>Specification Version</Label>
-                                <Input value="0.0.1" readOnly disabled className="bg-muted"/>
+                                <Label htmlFor="version">Version</Label>
+                                <Input 
+                                  id="version" 
+                                  {...register("version")} 
+                                  readOnly={isEditMode}
+                                  disabled={isEditMode || isSubmitting}
+                                  className={isEditMode ? "bg-muted cursor-not-allowed" : ""}
+                                  placeholder="e.g., v1.0"
+                                />
+                                {errors.version && <p className="text-sm text-red-600 mt-1">{errors.version.message}</p>}
                               </div>
                           </div>
                           
@@ -893,6 +905,28 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                     {errors.info?.owner && <p className="text-sm text-red-600 mt-1">{errors.info.owner.message}</p>}
                                   </div>
                               </div>
+                              {/* Product Type Field */} 
+                              <div>
+                                  <Label htmlFor="productType">Product Type *</Label>
+                                  <Controller
+                                      name="productType"
+                                      control={control}
+                                      rules={{ required: "Product Type is required" }}
+                                      render={({ field }) => (
+                                          <Select 
+                                              onValueChange={(value) => field.onChange(value === '' ? undefined : value)} 
+                                              value={field.value || ""}
+                                              disabled={isSubmitting}
+                                          >
+                                              <SelectTrigger><SelectValue placeholder="Select product type" /></SelectTrigger>
+                                              <SelectContent>
+                                                  {productTypes.map(pt => <SelectItem key={pt} value={pt}>{pt}</SelectItem>)}
+                                              </SelectContent>
+                                          </Select>
+                                      )}
+                                  />
+                                  {errors.productType && <p className="text-sm text-red-600 mt-1">{errors.productType.message}</p>}
+                              </div>
                               <div className="grid grid-cols-2 gap-4">
                                   <div>
                                     <Label htmlFor="info.domain">Domain</Label>
@@ -908,7 +942,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                         <Select onValueChange={(value) => field.onChange(value === '' ? undefined : value)} value={field.value || ""}>
                                           <SelectTrigger><SelectValue placeholder="Select archetype" /></SelectTrigger>
                                           <SelectContent>
-                                            {archetypes.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                                            {/* Removed archetypes prop from here */}
                                           </SelectContent>
                                         </Select>
                                       )}

@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 
 import yaml
-from pydantic import ValidationError, parse_obj_as
+from pydantic import ValidationError, parse_obj_as, BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -71,29 +71,46 @@ class DataProductsManager(SearchableAsset):
         """Get all available data product statuses"""
         return [s.value for s in DataProductStatus]
 
-    def create_product(self, product_data: DataProductApi) -> DataProductApi:
-        """Create a new data product using the repository."""
+    def create_product(self, product_data: Dict[str, Any]) -> DataProductApi:
+        """Validates input data and creates a new data product via the repository."""
+        logger.debug(f"Manager attempting to create product from data: {product_data}")
         try:
-            if not product_data.id:
-                 product_data.id = str(uuid.uuid4())
-                 
-            now = datetime.utcnow()
-            product_data.created_at = now
-            product_data.updated_at = now
+            # Validate the input dict into a Pydantic model first
+            try:
+                # Ensure ID exists before validation if needed
+                if not product_data.get('id'):
+                     product_data['id'] = str(uuid.uuid4())
+                     logger.info(f"Generated ID {product_data['id']} during create_product validation.")
+                
+                # Ensure timestamps are set if missing from input data
+                now = datetime.utcnow()
+                product_data.setdefault('created_at', now)
+                product_data.setdefault('updated_at', now)
+                
+                # Validate
+                product_api_model = DataProductApi(**product_data)
+                
+            except ValidationError as e:
+                 logger.error(f"Validation failed converting dict to DataProductApi model: {e}")
+                 # Raise a specific error or handle as needed
+                 raise ValueError(f"Invalid data provided for product creation: {e}") from e
 
-            created_db_obj = self._repo.create(db=self._db, obj_in=product_data)
-            
+            # Now pass the validated Pydantic model to the repository
+            # The repository's create method expects the Pydantic model (DataProductCreate alias)
+            created_db_obj = self._repo.create(db=self._db, obj_in=product_api_model)
+
+            # Return the validated API model from the ORM object
             return DataProductApi.from_orm(created_db_obj)
-            
+
         except SQLAlchemyError as e:
             logger.error(f"Database error creating data product: {e}")
             raise
+        except ValueError as e: # Catch validation errors from above or repo mapping
+            logger.error(f"Value error during product creation: {e}")
+            raise # Re-raise ValueError
         except ValidationError as e:
             logger.error(f"Validation error mapping DB object to API model: {e}")
             raise ValueError(f"Internal data mapping error: {e}")
-        except Exception as e:
-            logger.error(f"Unexpected error creating data product: {e}")
-            raise
 
     def get_product(self, product_id: str) -> Optional[DataProductApi]:
         """Get a data product by ID using the repository."""
@@ -210,6 +227,50 @@ class DataProductsManager(SearchableAsset):
             logger.error(f"Unexpected error deleting product {product_id}: {e}")
             raise
 
+    def create_new_version(self, original_product_id: str, new_version: str) -> DataProductApi:
+        """Creates a new version of a data product based on an existing one."""
+        logger.info(f"Creating new version '{new_version}' based on product ID: {original_product_id}")
+        original_product = self.get_product(original_product_id) # Fetches the API model
+        if not original_product:
+            raise ValueError(f"Original data product with ID {original_product_id} not found.")
+
+        # Create a new dictionary from the original product
+        # Use exclude to avoid copying fields that should be new/reset
+        new_product_data = original_product.model_dump(
+            exclude={'id', 'created_at', 'updated_at', 'version'}
+        )
+
+        # Generate a new ID and set the new version
+        new_product_data['id'] = str(uuid.uuid4())
+        new_product_data['version'] = new_version
+        
+        # Optionally reset status to DRAFT
+        if 'info' in new_product_data and isinstance(new_product_data['info'], dict):
+            new_product_data['info']['status'] = DataProductStatus.DRAFT.value
+            logger.info(f"Resetting status to DRAFT for new version {new_product_data['id']}")
+        else:
+             logger.warning(f"Could not reset status for new version of {original_product_id} - info block missing or not a dict.")
+
+        try:
+            # Validate the dictionary as a DataProduct API model before creation
+            new_product_api_model = DataProductApi(**new_product_data)
+            
+            # Create the new product in the database
+            created_db_obj = self._repo.create(db=self._db, obj_in=new_product_api_model)
+            
+            logger.info(f"Successfully created new version {new_version} (ID: {created_db_obj.id}) from {original_product_id}")
+            return DataProductApi.from_orm(created_db_obj)
+        
+        except ValidationError as e:
+            logger.error(f"Validation error creating new version data: {e}")
+            raise ValueError(f"Validation error creating new version: {e}")
+        except SQLAlchemyError as e:
+            logger.error(f"Database error creating new version: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error creating new version: {e}")
+            raise
+
     async def initiate_genie_space_creation(self, request: GenieSpaceRequest, user_info: UserInfo, db: Session):
         """
         Simulates the initiation of a Genie Space creation process.
@@ -309,9 +370,11 @@ class DataProductsManager(SearchableAsset):
                         logger.warning(f"Product ID {product_api.id} exists, updating from YAML.")
                         self.update_product(product_api.id, product_api)
                     else:
-                         self.create_product(product_api)
+                        # Correctly pass the dictionary to create_product
+                        self.create_product(product_dict)
                     loaded_count += 1
-                except (ValidationError, ValueError, SQLAlchemyError) as e:
+                except (ValidationError, ValueError, SQLAlchemyError) as e: # Catch errors during processing/db ops
+                    # This correctly uses product_dict.get() because product_dict IS a dict
                     logger.error(f"Error processing product from YAML (ID: {product_dict.get('id', 'N/A')}): {e}")
                     errors += 1
 
@@ -324,8 +387,10 @@ class DataProductsManager(SearchableAsset):
         except yaml.YAMLError as e:
             logger.error(f"Error parsing data product YAML file {yaml_path}: {e}")
             return False
-        except Exception as e:
-            logger.error(f"Unexpected error loading data products from YAML {yaml_path}: {e}")
+        except Exception as e: # Catch any other unexpected error
+            # Explicitly convert exception to string for logging
+            error_msg = str(e)
+            logger.error(f"Unexpected error during YAML load ({yaml_path}): {error_msg}", exc_info=True)
             return False
 
     def save_to_yaml(self, yaml_path: str) -> bool:
@@ -361,24 +426,9 @@ class DataProductsManager(SearchableAsset):
 
     def get_distinct_domains(self) -> List[str]:
         """Get distinct 'domain' values from the 'info' JSON column."""
-        # Note: get_distinct_domains was missing in the original, but the logic
-        # is the same as owners/archetypes. We need a repo method for it.
-        # Assuming we add get_distinct_domains to the repo similar to others:
-        # return self._repo.get_distinct_domains(db=self._db)
-        # For now, let's implement it using the generic helper if needed, or
-        # it needs to be added to the repo first.
-        logger.warning("get_distinct_domains called, but repository method not implemented yet.")
-        # Example using generic helper (if we were to expose it or call internal)
-        # return self._repo.get_distinct_json_values(self._db, self._repo.model.info, ['domain'])
-        return [] # Placeholder
-
-    def get_distinct_archetypes(self) -> List[str]:
-         """Get all distinct data product archetypes."""
-         try:
-             return self._repo.get_distinct_archetypes(db=self._db)
-         except Exception as e:
-             logger.error(f"Error getting distinct archetypes from repository: {e}", exc_info=True)
-             return []
+        # TODO: Add get_distinct_domains to repository if needed
+        logger.warning("get_distinct_domains called - not implemented in repository yet.")
+        return [] # Placeholder until implemented in repo
 
     def get_distinct_statuses(self) -> List[str]:
         """Get all distinct data product statuses from info and output ports."""
@@ -386,6 +436,15 @@ class DataProductsManager(SearchableAsset):
             return self._repo.get_distinct_statuses(db=self._db)
         except Exception as e:
             logger.error(f"Error getting distinct statuses from repository: {e}", exc_info=True)
+            return []
+
+    def get_distinct_product_types(self) -> List[str]:
+        """Get all distinct data product types."""
+        try:
+            # Call the new repository method
+            return self._repo.get_distinct_product_types(db=self._db)
+        except Exception as e:
+            logger.error(f"Error getting distinct product types from repository: {e}", exc_info=True)
             return []
 
     # --- Implementation of SearchableAsset --- 
@@ -406,6 +465,8 @@ class DataProductsManager(SearchableAsset):
                 items.append(
                     SearchIndexItem(
                         id=f"product::{product.id}",
+                        version=product.version, # Add version
+                        product_type=product.productType.value if product.productType else None, # Add type
                         type="data-product",
                         title=product.info.title,
                         description=product.info.description or "",

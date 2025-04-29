@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, AlertCircle, Database, ChevronDown, Upload, X, Loader2, Sparkles } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertCircle, Database, ChevronDown, Upload, X, Loader2, Sparkles, Table, Workflow } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Column,
@@ -18,6 +18,7 @@ import DataProductFormDialog from '@/components/data-products/data-product-form-
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { useNotificationsStore } from '@/stores/notifications-store';
+import DataProductGraphView from '@/components/data-products/data-product-graph-view';
 
 // --- Helper Function Type Definition --- 
 type CheckApiResponseFn = <T>(
@@ -54,8 +55,12 @@ export default function DataProducts() {
 
   // Use the imported types for state
   const [statuses, setStatuses] = useState<DataProductStatus[]>([]);
-  const [archetypes, setArchetypes] = useState<DataProductArchetype[]>([]);
   const [owners, setOwners] = useState<DataProductOwner[]>([]);
+
+  // Add state for product types
+  const [productTypes, setProductTypes] = useState<string[]>([]);
+
+  const [viewMode, setViewMode] = useState<'table' | 'graph'>('table');
 
   const api = useApi();
   const { get, post, delete: deleteApi } = api;
@@ -80,23 +85,23 @@ export default function DataProducts() {
       setError(null);
       try {
         // Fetch products and dropdown values concurrently
-        const [productsResp, statusesResp, archetypesResp, ownersResp] = await Promise.all([
+        const [productsResp, statusesResp, ownersResp, typesResp] = await Promise.all([
           get<DataProduct[]>('/api/data-products'),
           get<DataProductStatus[]>('/api/data-products/statuses'),
-          get<DataProductArchetype[]>('/api/data-products/archetypes'),
           get<DataProductOwner[]>('/api/data-products/owners'),
+          get<string[]>('/api/data-products/types'), // Fetch product types
         ]);
 
         // Check responses using the helper
         const productsData = checkApiResponse(productsResp, 'Products');
         const statusesData = checkApiResponse(statusesResp, 'Statuses');
-        const archetypesData = checkApiResponse(archetypesResp, 'Archetypes');
         const ownersData = checkApiResponse(ownersResp, 'Owners');
+        const typesData = checkApiResponse(typesResp, 'Product Types');
 
         setProducts(Array.isArray(productsData) ? productsData : []);
         setStatuses(Array.isArray(statusesData) ? statusesData : []);
-        setArchetypes(Array.isArray(archetypesData) ? archetypesData : []);
         setOwners(Array.isArray(ownersData) ? ownersData : []);
+        setProductTypes(Array.isArray(typesData) ? typesData : []); // Set product types
 
       } catch (err: any) {
         console.error('Error fetching initial data:', err);
@@ -104,7 +109,7 @@ export default function DataProducts() {
         // Reset state on error
         setProducts([]);
         setStatuses([]);
-        setArchetypes([]);
+        setProductTypes([]); // Reset types on error
         setOwners([]);
       } finally {
         setLoading(false);
@@ -144,7 +149,6 @@ export default function DataProducts() {
 
   // --- Dialog Submit Success Handler ---
   const handleDialogSubmitSuccess = (savedProduct: DataProduct) => {
-    console.log('Dialog submitted successfully, refreshing list...', savedProduct);
     fetchProducts();
   };
 
@@ -231,7 +235,6 @@ export default function DataProducts() {
       }
 
       const count = response.data?.count ?? 0;
-      console.log(`Successfully uploaded ${count} products from file:`, file.name);
       toast({
         title: "Upload Successful",
         description: `Successfully processed ${file.name}. ${count} product(s) processed.`,
@@ -340,15 +343,24 @@ export default function DataProducts() {
       cell: ({ row }) => <div>{row.original.info.owner}</div>,
     },
     {
-      accessorKey: "info.archetype",
+      accessorKey: "version",
       header: ({ column }: { column: Column<DataProduct, unknown> }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-          Archetype <ChevronDown className="ml-2 h-4 w-4" />
+          Version <ChevronDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => <Badge variant="secondary">{row.original.version}</Badge>,
+    },
+    {
+      accessorKey: "productType",
+      header: ({ column }: { column: Column<DataProduct, unknown> }) => (
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+          Type <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       ),
       cell: ({ row }) => (
-        row.original.info.archetype ?
-        <Badge variant="outline">{row.original.info.archetype}</Badge> : 'N/A'
+        row.original.productType ? 
+        <Badge variant="outline">{row.original.productType}</Badge> : 'N/A'
       ),
     },
     {
@@ -431,7 +443,11 @@ export default function DataProducts() {
         );
       },
     },
-  ], [handleOpenDialog, handleDeleteProduct, getStatusColor, canWrite, canAdmin, permissionsLoading]);
+  ], [handleOpenDialog, handleDeleteProduct, getStatusColor, canWrite, canAdmin, permissionsLoading, navigate]);
+
+  // --- Button Variant Logic (Moved outside) ---
+  const tableButtonVariant = viewMode === 'table' ? 'secondary' : 'ghost';
+  const graphButtonVariant = viewMode === 'graph' ? 'secondary' : 'ghost';
 
   // --- Render Logic ---
   return (
@@ -457,7 +473,7 @@ export default function DataProducts() {
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>You do not have permission to view data products.</AlertDescription>
           </Alert>
-      ) : (
+      ) : viewMode === 'table' ? (
         <DataTable
           columns={columns}
           data={products}
@@ -492,34 +508,58 @@ export default function DataProducts() {
                 accept=".json,.yaml,.yml"
                 style={{ display: 'none' }}
               />
+              {/* View Toggle Buttons - Moved Here */}
+              <div className="flex items-center gap-1 border rounded-md p-0.5 ml-auto">
+                  <Button
+                      variant={tableButtonVariant}
+                      size="sm"
+                      onClick={() => setViewMode('table')}
+                      className="h-8 px-2"
+                      title="Table View"
+                  >
+                      <Table className="h-4 w-4" />
+                  </Button>
+                  <Button
+                      variant={graphButtonVariant}
+                      size="sm"
+                      onClick={() => setViewMode('graph')}
+                      className="h-8 px-2"
+                      title="Graph View"
+                  >
+                      <Workflow className="h-4 w-4" />
+                  </Button>
+              </div>
             </>
           }
-          bulkActions={(selectedRows) => (
-            <>
-              <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 gap-1"
-                  onClick={() => handleCreateGenieSpace(selectedRows)}
-                  disabled={selectedRows.length === 0 || !canWrite}
-                  title={canWrite ? "Create Genie Space from selected" : "Create Genie Space (Permission Denied)"}
-              >
-                  <Sparkles className="w-4 h-4 mr-1" />
-                  Create Genie Space ({selectedRows.length})
-              </Button>
-              <Button
-                  variant="destructive"
-                  size="sm"
-                  className="h-9 gap-1"
-                  onClick={() => handleBulkDelete(selectedRows)}
-                  disabled={selectedRows.length === 0 || !canAdmin}
-                  title={canAdmin ? "Delete selected" : "Delete (Permission Denied)"}
-              >
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  Delete Selected ({selectedRows.length})
-              </Button>
-            </>
-          )}
+          bulkActions={(selectedRows) => {
+            // Remove view toggle logic from here
+            return (
+              <>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 gap-1"
+                    onClick={() => handleCreateGenieSpace(selectedRows)}
+                    disabled={selectedRows.length === 0 || !canWrite}
+                    title={canWrite ? "Create Genie Space from selected" : "Create Genie Space (Permission Denied)"}
+                >
+                    <Sparkles className="w-4 h-4 mr-1" />
+                    Create Genie Space ({selectedRows.length})
+                </Button>
+                <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-9 gap-1"
+                    onClick={() => handleBulkDelete(selectedRows)}
+                    disabled={selectedRows.length === 0 || !canAdmin}
+                    title={canAdmin ? "Delete selected" : "Delete (Permission Denied)"}
+                >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Delete Selected ({selectedRows.length})
+                </Button>
+              </>
+            );
+          }}
           onRowClick={(row) => {
             const productId = row.original.id;
             if (productId) {
@@ -530,6 +570,13 @@ export default function DataProducts() {
             }
           }}
         />
+      ) : (
+        <DataProductGraphView 
+            products={products} 
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            navigate={navigate}
+        />
       )}
 
       {/* Render the new Dialog Component */}
@@ -539,7 +586,7 @@ export default function DataProducts() {
             onOpenChange={setIsDialogOpen}
             initialProduct={productToEdit}
             statuses={statuses}
-            archetypes={archetypes}
+            productTypes={productTypes}
             owners={owners}
             api={api}
             onSubmitSuccess={handleDialogSubmitSuccess}

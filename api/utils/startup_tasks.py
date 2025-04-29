@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from api.common.config import get_settings, Settings
 from api.common.logging import get_logger
-from api.common.database import init_db, get_session_factory
+from api.common.database import init_db, get_session_factory, Base, engine
 from api.common.workspace_client import get_workspace_client
 
 # Import Managers needed for instantiation
@@ -29,17 +29,14 @@ from api.common.search_registry import SEARCHABLE_ASSET_MANAGERS
 
 logger = get_logger(__name__)
 
-def initialize_database():
-    """Initializes the database connection, creates catalog/schema, and tables."""
-    logger.info("Initializing database...")
+def initialize_database(settings: Settings): # Keep settings param for future use if needed
+    """Initializes the database by calling the main init_db function."""
+    logger.info("Triggering database initialization...")
     try:
-        # Ensure AuditLog model is imported so its table gets created
-        from api.db_models.audit_log import AuditLog
-        init_db()
-        logger.info("Database initialization complete.")
+        init_db() # Call the function from common.database
+        logger.info("Database initialization routine completed successfully.")
     except ConnectionError as e:
         logger.critical(f"Database connection/initialization failed: {e}", exc_info=True)
-        # Re-raise as a more specific startup error if needed, or let FastAPI handle termination
         raise RuntimeError("Application cannot start without database connection.") from e
     except Exception as e:
         logger.critical(f"An unexpected error occurred during database initialization: {e}", exc_info=True)

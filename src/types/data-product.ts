@@ -35,6 +35,7 @@ export interface Port {
 // Interface for InputPort
 export interface InputPort extends Port {
   sourceSystemId: string;
+  sourceOutputPortId?: string;
 }
 
 // Interface for OutputPort
@@ -75,12 +76,15 @@ export interface DataProduct {
   tags: string[];
   created_at?: string;
   updated_at: string;
+  version: string;
+  productType: string; // Use string for now, can refine to enum/union later
 }
 
 // Type for distinct values - can be simple strings or objects if needed
 export type DataProductStatus = string;
 export type DataProductArchetype = string;
 export type DataProductOwner = string;
+export type DataProductType = string; // Added for new product types
 
 // Type for metastore table info from the backend
 export interface MetastoreTableInfo {

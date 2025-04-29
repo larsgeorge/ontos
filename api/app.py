@@ -74,13 +74,14 @@ STATIC_ASSETS_PATH = BASE_DIR.parent / "static"
 # Application Startup Event
 async def startup_event():
     logger.info("Running application startup event...")
-    # 1. Initialize Database
-    initialize_database()
+    # Get settings AFTER init_config() has run (called at module level)
+    settings = get_settings()
+    # 1. Initialize Database (pass settings explicitly)
+    initialize_database(settings=settings)
     # 2. Initialize Managers (requires app instance)
     initialize_managers(app)
     # 3. Load Initial/Demo Data
     # Get settings and settings_manager AFTER managers are initialized
-    settings = get_settings() 
     settings_manager = app.state.settings_manager if hasattr(app.state, 'settings_manager') else None
     if settings_manager:
         load_initial_data(settings=settings, settings_manager=settings_manager)

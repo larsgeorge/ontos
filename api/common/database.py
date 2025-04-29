@@ -26,6 +26,8 @@ Base = declarative_base()
 # Singleton engine instance
 _engine = None
 _SessionLocal = None
+# Public engine instance (will be assigned after creation)
+engine = None
 
 @dataclass
 class InMemorySession:
@@ -263,14 +265,21 @@ def ensure_catalog_schema_exists(settings: Settings):
         raise ConnectionError(f"Failed during catalog/schema setup: {e}") from e
 
 def init_db(run_create_all: bool = True) -> None:
-    """Initializes the database engine and sessionmaker."""
+    """Initializes the database engine, sessionmaker, and optionally drops/creates tables."""
     global _engine, _SessionLocal
-    if _engine:
-        logger.warning("Database engine already initialized.")
+    settings = get_settings() # Get settings inside init_db
+
+    # Check if already initialized (idempotency)
+    if _engine is not None and _SessionLocal is not None:
+        logger.info("Database engine and session factory already initialized. Ensuring tables are checked/created...")
+        # Ensure public engine is also set if skipped
+        global engine
+        engine = _engine
+        # Still run table check/creation logic if requested
+        if run_create_all:
+            _ensure_tables_exist(settings)
         return
 
-    settings = get_settings()
-    
     if not all([settings.DATABRICKS_HOST, settings.DATABRICKS_HTTP_PATH, settings.DATABRICKS_CATALOG, settings.DATABRICKS_SCHEMA]):
          logger.error("Cannot initialize database: Missing required Databricks settings.")
          raise ConnectionError("Missing required Databricks connection settings.")
@@ -314,59 +323,14 @@ def init_db(run_create_all: bool = True) -> None:
             pool_pre_ping=True,
             pool_recycle=3600
         )
+        # Assign to public variable after creation
+        engine = _engine
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
         logger.info(f"Database engine initialized for: {settings.DATABRICKS_HOST}")
 
+        # Moved table creation logic here, after engine is initialized
         if run_create_all:
-            # Import all models here so Base knows about them
-            from api.db_models import data_products
-            # Import the new settings models
-            from api.db_models import settings as settings_db
-            logger.info("Checking/creating database tables (conditional indexes)...")
-            
-            # --- Conditionally Modify Metadata BEFORE DDL Generation ---
-            is_databricks = _engine.dialect.name == 'databricks'
-            if is_databricks:
-                logger.info("Databricks dialect detected. Removing Index objects from metadata before DDL generation.")
-                # Iterate through tables and remove associated Index objects
-                # This prevents create_all from attempting to create them
-                indexes_to_remove = []
-                for table in Base.metadata.tables.values():
-                    # Find indexes associated directly with this table via Column(index=True)
-                    # We check the column's index attribute, not just table.indexes 
-                    # as table.indexes might include functional indexes etc.
-                    for col in table.columns:
-                         if col.index:
-                             # Find the actual Index object SQLAlchemy created for this column
-                             # This is a bit involved as Index name isn't guaranteed
-                             # Let's try removing ALL indexes associated with the table for simplicity
-                             # as UC doesn't support any CREATE INDEX.
-                             logger.debug(f"Preparing to remove indexes associated with table: {table.name}")
-                             # Collect indexes associated with the table to avoid modifying while iterating
-                             for idx in list(table.indexes): # Iterate over a copy
-                                  if idx not in indexes_to_remove:
-                                       indexes_to_remove.append(idx)
-                                       logger.debug(f"Marked index {idx.name} for removal from metadata.")
-                
-                # Actually remove them from the metadata's central index collection if necessary
-                # In newer SQLAlchemy, removing from table.indexes might be sufficient
-                for idx in indexes_to_remove:
-                     try:
-                         # Attempt removal from the table's collection first
-                         if hasattr(idx, 'table') and idx in idx.table.indexes:
-                              idx.table.indexes.remove(idx)
-                         # Attempt removal from metadata collection (less common needed)
-                         # if idx in Base.metadata.indexes:
-                         #     Base.metadata.indexes.remove(idx)
-                         logger.info(f"Successfully removed index {idx.name} from metadata for DDL generation.")
-                     except Exception as remove_err:
-                         logger.warning(f"Could not fully remove index {idx.name} from metadata: {remove_err}")
-            # --- End Conditional Metadata Modification --- 
-
-            # Now, call create_all. It will operate on the potentially modified metadata.
-            logger.info("Executing Base.metadata.create_all()...")
-            Base.metadata.create_all(bind=_engine)
-            logger.info("Database tables checked/created by create_all.")
+            _ensure_tables_exist(settings)
 
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}", exc_info=True)
@@ -374,6 +338,62 @@ def init_db(run_create_all: bool = True) -> None:
         _SessionLocal = None
         # Simplify error propagation
         raise ConnectionError(f"Failed to initialize database connection: {e}") from e
+
+    logger.info("Database initialization routine complete.")
+
+# --- Helper function for table creation/dropping --- 
+def _ensure_tables_exist(settings: Settings):
+    """Drops tables if in DEMO mode, then creates all tables."""
+    global _engine # Use the initialized engine
+    if not _engine:
+        logger.error("Cannot ensure tables exist: Database engine is not initialized.")
+        return
+
+    # Check the specific flag for dropping tables
+    if settings.APP_DB_DROP_ON_START:
+        logger.warning("APP_DB_DROP_ON_START is TRUE: Dropping all database tables before creation...")
+        try:
+            Base.metadata.drop_all(bind=_engine)
+            logger.info("Database tables dropped successfully.")
+        except Exception as e:
+            logger.error(f"Error dropping tables: {e}", exc_info=True)
+            # Decide if we should proceed or raise an error
+
+    logger.info("Checking/creating database tables (conditional indexes)...")
+    try:
+        # Import all models here so Base knows about them before create_all
+        # Make sure all your db_models are imported directly or indirectly here
+        from api.db_models import data_products, settings as settings_db, audit_log, data_asset_reviews
+        # Add other model imports as needed...
+
+        # --- Conditionally Modify Metadata BEFORE DDL Generation ---
+        # (Existing logic for removing indexes on Databricks)
+        is_databricks = _engine.dialect.name == 'databricks'
+        if is_databricks:
+            logger.info("Databricks dialect detected. Removing Index objects from metadata before DDL generation.")
+            indexes_to_remove = []
+            for table in Base.metadata.tables.values():
+                for col in table.columns:
+                    if col.index:
+                        for idx in list(table.indexes):
+                            if idx not in indexes_to_remove:
+                                indexes_to_remove.append(idx)
+                                logger.debug(f"Marked index {idx.name} for removal from metadata.")
+            for idx in indexes_to_remove:
+                try:
+                    if hasattr(idx, 'table') and idx in idx.table.indexes:
+                        idx.table.indexes.remove(idx)
+                    logger.info(f"Successfully removed index {idx.name} from metadata for DDL generation.")
+                except Exception as remove_err:
+                    logger.warning(f"Could not fully remove index {idx.name} from metadata: {remove_err}")
+        # --- End Conditional Metadata Modification ---
+
+        logger.info("Executing Base.metadata.create_all()...")
+        Base.metadata.create_all(bind=_engine)
+        logger.info("Database tables checked/created by create_all.")
+    except Exception as e:
+        logger.error(f"Error during table creation: {e}", exc_info=True)
+        # Depending on requirements, you might want to raise an error here
 
 def get_db():
     global _SessionLocal

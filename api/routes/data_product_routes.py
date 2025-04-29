@@ -7,11 +7,10 @@ import yaml
 from fastapi import APIRouter, HTTPException, UploadFile, File, Body, Depends, Request
 from pydantic import ValidationError
 import uuid
-# Remove Session dependency if get_db is no longer used directly here
-# from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session
 
 from api.controller.data_products_manager import DataProductsManager
-from api.models.data_products import DataProduct, GenieSpaceRequest # Use the updated model
+from api.models.data_products import DataProduct, GenieSpaceRequest, NewVersionRequest # Import NewVersionRequest
 from api.models.users import UserInfo # Needed for user context in auth
 # Remove WorkspaceClient dependency if get_workspace_client_dependency is no longer used directly here
 # from databricks.sdk import WorkspaceClient 
@@ -70,18 +69,18 @@ async def get_data_product_statuses(
         logger.error(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
 
-@router.get('/data-products/archetypes', response_model=List[str])
-async def get_data_product_archetypes(
+@router.get('/data-products/types', response_model=List[str])
+async def get_data_product_types(
     manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY))
 ):
-    """Get all distinct data product archetypes."""
+    """Get all distinct data product types."""
     try:
-        archetypes = manager.get_distinct_archetypes()
-        logger.info(f"Retrieved {len(archetypes)} distinct data product archetypes")
-        return archetypes
+        types = manager.get_distinct_product_types()
+        logger.info(f"Retrieved {len(types)} distinct data product types")
+        return types
     except Exception as e:
-        error_msg = f"Error retrieving data product archetypes: {e!s}"
+        error_msg = f"Error retrieving data product types: {e!s}"
         logger.error(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
 
@@ -252,6 +251,30 @@ async def create_data_product(
     # It would result in a 500 error unless specifically caught.
     except Exception as e:
         error_msg = f"Unexpected error creating data product: {e!s}"
+        logger.exception(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+
+# --- Endpoint to Create a New Version --- 
+@router.post("/data-products/{product_id}/versions", response_model=DataProduct, status_code=201)
+async def create_data_product_version(
+    product_id: str,
+    version_request: NewVersionRequest, # Use the helper model
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_WRITE))
+):
+    """Creates a new version of an existing data product."""
+    try:
+        logger.info(f"Received request to create version '{version_request.new_version}' from product ID: {product_id}")
+        new_product = manager.create_new_version(product_id, version_request.new_version)
+        return new_product
+    except ValueError as e:
+        # Catch specific errors like 'not found' or validation errors from manager
+        logger.error(f"Value error creating version for {product_id}: {e!s}")
+        # Determine status code based on error (404 if original not found, 400/422 for validation)
+        status_code = 404 if "not found" in str(e).lower() else 400
+        raise HTTPException(status_code=status_code, detail=str(e))
+    except Exception as e:
+        error_msg = f"Unexpected error creating version for data product {product_id}: {e!s}"
         logger.exception(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
 

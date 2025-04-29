@@ -54,7 +54,6 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
             }
             const data: UserPermissions = await response.json();
             set({ permissions: data, error: null });
-            console.log("User permissions loaded:", data);
         } catch (error: any) {
             console.error("Failed to fetch user permissions:", error);
             set({ permissions: {}, error: error.message || 'Failed to load permissions.' });
@@ -75,7 +74,6 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
             }
             const data: AppRole[] = await response.json();
             set({ availableRoles: data, error: null });
-            console.log("Available roles loaded:", data);
         } catch (error: any) {
              console.error("Failed to fetch available roles:", error);
              set({ availableRoles: [], error: error.message || 'Failed to load roles.' });
@@ -84,11 +82,8 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
     },
 
     initializeStore: async () => {
-        console.log("Attempting to initialize permissions store..."); // Log entry
-
         // --- Guard 1: Already actively initializing? ---
         if (get()._isInitializing) {
-            console.log("Initialization already in progress (_isInitializing=true). Skipping.");
             return;
         }
 
@@ -97,32 +92,26 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
         const { isLoading, permissions, availableRoles } = get();
         const alreadyLoaded = !isLoading && (Object.keys(permissions).length > 0 || availableRoles.length > 0);
         if (alreadyLoaded) {
-            console.log("Permissions store already initialized (previously loaded). Skipping.");
             return;
         }
 
-        console.log("Proceeding with store initialization...");
         // Set flags IMMEDIATELY before any async work
         set({ isLoading: true, _isInitializing: true, error: null });
 
         try {
-            console.log("Calling fetchPermissions and fetchAvailableRoles...");
             // Use the instance methods from get() to ensure the latest state is used
             await Promise.all([get().fetchPermissions(), get().fetchAvailableRoles()]);
-            console.log("Permissions store initialized successfully.");
             // NOTE: isLoading and _isInitializing are reset in finally block
         } catch (error: any) {
             console.error("Error caught during permissions store initialization Promise.all:", error);
             set({ error: error.message || "Initialization failed." }); // Set error state
             // NOTE: isLoading and _isInitializing are reset in finally block
         } finally {
-            console.log("Setting isLoading and _isInitializing to false in finally block.");
             set({ isLoading: false, _isInitializing: false }); // Reset flags regardless of outcome
         }
     },
 
     setRoleOverride: (roleId: string | null) => {
-        console.log(`Setting role override to: ${roleId}`);
         set({ appliedRoleId: roleId });
     },
 
@@ -153,9 +142,7 @@ export const usePermissions = () => {
     const state = usePermissionsStore();
     
     // --- Refined useEffect for Initialization ---
-    useEffect(() => {
-        console.log("[Permissions Store] useEffect triggered. Checking initialization state.");
-        
+    useEffect(() => {        
         // Determine if data is needed
         const hasPermissionsData = Object.keys(state.permissions).length > 0;
         const hasRolesData = state.availableRoles.length > 0;
@@ -164,17 +151,8 @@ export const usePermissions = () => {
         // Determine if initialization can start
         const canInitialize = !state.isLoading && !state._isInitializing;
 
-        console.log(`[Permissions Store] State Check: needsData=${needsData}, canInitialize=${canInitialize}, isLoading=${state.isLoading}, isInitializing=${state._isInitializing}`);
-
         if (needsData && canInitialize) {
-            console.log("[Permissions Store] Conditions met: Needs data and can initialize. Calling initializeStore...");
             state.initializeStore();
-        } else if (!needsData) {
-            console.log("[Permissions Store] Initialization skipped: Store already has permissions or roles data.");
-        } else if (state.isLoading) {
-            console.log("[Permissions Store] Initialization skipped: Store is currently loading (isLoading=true).");
-        } else if (state._isInitializing) {
-            console.log("[Permissions Store] Initialization skipped: Initialization already in progress (_isInitializing=true).");
         }
 
     }, [

@@ -10,12 +10,10 @@ export const useApi = () => {
 
   // Use useCallback to ensure function identity is preserved across renders
   const get = useCallback(async <T>(url: string): Promise<ApiResponse<T>> => {
-    console.log(`[useApi] GET request to ${url}`);
     setLoading(true);
     try {
       const response = await fetch(url);
       const data = await response.json();
-      console.log(`[useApi] GET response from ${url}:`, data);
       return { data };
     } catch (error) {
       console.error(`[useApi] GET error from ${url}:`, error);
@@ -26,7 +24,6 @@ export const useApi = () => {
   }, []);
 
   const post = useCallback(async <T>(url: string, body: any): Promise<ApiResponse<T>> => {
-    console.log(`[useApi] POST request to ${url}`, body);
     setLoading(true);
     try {
       let headers: Record<string, string> = {};

@@ -1,106 +1,288 @@
+# Retail Sales Optimization Example Chain (v1.0)
+# --- 1. Source Product: POS Transactions ---
 - dataProductSpecification: "0.0.1"
-  id: "customer-360"
+  id: "retail-pos-source-v1"
+  version: "v1.0"
+  productType: "source"
   info:
-    title: "Customer 360"
-    owner: "Customer Analytics Team"
-    domain: "customer"
-    description: "Comprehensive view of customer data across all touchpoints"
+    title: "POS Transaction Stream v1"
+    owner: "Retail Systems"
+    domain: "retail_operations"
+    description: "Raw point-of-sale transaction stream from store systems."
     status: "active"
-    archetype: "consumer-aligned"
-  inputPorts:
-    - id: "crm-system"
-      name: "CRM System"
-      sourceSystemId: "crm-prod"
-      type: "application"
-      location: "jdbc:postgresql://crm-db:5432/customers"
-      tags: ["crm"]
-    - id: "web-analytics"
-      name: "Web Analytics"
-      sourceSystemId: "web-tracker"
-      type: "streaming"
-      location: "kafka://analytics-cluster:9092/web-events"
-      tags: ["kafka", "web"]
+  inputPorts: [] # Source product has no inputs defined within this system
   outputPorts:
-    - id: "customer-profile-table"
-      name: "customer_profile_table"
-      description: "Aggregated customer profile table"
+    - id: "pos-kafka-stream-v1"
+      name: "POS Kafka Stream"
+      description: "Real-time feed of raw POS transaction events."
+      type: "kafka"
+      status: "active"
+      server:
+        host: "kafka.example.com"
+        topic: "pos-transactions-raw-v1"
+      tags: ["kafka", "realtime", "pos", "raw"]
+  tags: ["source", "pos", "transactions", "v1"]
+  links:
+    sourceSystemDocs: "https://wiki.example.com/systems/pos-system"
+
+# --- 2. Source-Aligned Product: Prepared Sales Transactions ---
+- dataProductSpecification: "0.0.1"
+  id: "retail-sales-prepared-v1"
+  version: "v1.0"
+  productType: "source-aligned"
+  info:
+    title: "Prepared Sales Transactions v1"
+    owner: "Data Engineering"
+    domain: "retail_analytics"
+    description: "Cleaned, validated, and standardized sales transaction data, ready for analytics."
+    status: "active"
+  inputPorts:
+    - id: "pos-source-input-v1"
+      name: "Raw POS Stream"
+      description: "Input from the raw POS transaction stream."
+      sourceSystemId: "data-product:retail-pos-source-v1" # Correct: Links to source product
+      sourceOutputPortId: "pos-kafka-stream-v1"
+      type: "data-product"
+      tags: ["pos", "raw"]
+  outputPorts:
+    - id: "prepared-sales-delta-v1"
+      name: "prepared_sales_delta"
+      description: "Delta table containing cleaned sales transactions."
       type: "table"
       status: "active"
       server:
-        location: "s3://data-products/customer/profile"
+        location: "s3://data-lake/prepared/retail/sales/v1"
         format: "delta"
-      containsPii: true
-      tags: ["s3", "delta", "profile"]
-  tags: ["customer", "analytics", "master data"]
+        # Potential table/schema/catalog details if needed
+        # database: "prepared_db"
+        # table: "sales_transactions_v1"
+      containsPii: true # Example flag
+      tags: ["delta", "s3", "prepared", "sales", "pii"]
+  tags: ["prepared", "sales", "transactions", "analytics-ready", "v1"]
   links:
-    catalog: "https://catalog.example.com/customer/customer-360"
+    etlJob: "https://jobs.example.com/jobs/prepare-sales-v1"
+    qualityDashboard: "https://dq.example.com/dash/prepared-sales-v1"
 
+# --- 3. Aggregate Product: Demand Forecasting ---
 - dataProductSpecification: "0.0.1"
-  id: "sales-analytics"
+  id: "retail-demand-forecast-v1"
+  version: "v1.0"
+  productType: "aggregate"
   info:
-    title: "Sales Analytics"
-    owner: "Sales Operations"
-    domain: "sales"
-    description: "Sales performance metrics and forecasting"
+    title: "Demand Forecast Model Output v1"
+    owner: "Analytics Team"
+    domain: "retail_analytics"
+    description: "Predicted demand for products at various locations based on historical sales and external factors."
     status: "active"
-    archetype: "aggregate"
   inputPorts:
-    - id: "oms-orders"
-      name: "Order Management System"
-      sourceSystemId: "oms-prod"
-      type: "application"
-      location: "jdbc:postgresql://sales-db:5432/orders"
-    - id: "crm-opportunities"
-      name: "CRM System Opportunities"
-      sourceSystemId: "crm-prod"
-      type: "application"
-      location: "jdbc:postgresql://crm-db:5432/opportunities"
+    - id: "prepared-sales-input-v1"
+      name: "Prepared Sales Data"
+      description: "Input from the prepared sales transactions data product."
+      sourceSystemId: "data-product:retail-sales-prepared-v1" # Correct: Links to prepared product
+      sourceOutputPortId: "prepared-sales-delta-v1"
+      type: "data-product"
+      tags: ["sales", "prepared"]
+    # Example of another input - could be another data product or an external source
+    # - id: "weather-data-input-v1"
+    #   name: "Historical Weather Data"
+    #   sourceSystemId: "external:weather-api"
+    #   type: "api"
   outputPorts:
-    - id: "sales-performance-view"
-      name: "sales_performance_view"
-      description: "View for sales performance reporting"
-      type: "view"
+    - id: "forecast-table-v1"
+      name: "demand_forecast_table"
+      description: "Delta table containing product demand forecasts."
+      type: "table"
       status: "active"
       server:
-        location: "databricks://workspace/sales_db/performance_view"
-        database: "sales_db"
-        view: "performance_view"
-      containsPii: false
-      tags: ["databricks", "view", "reporting"]
-  tags: ["sales", "analytics", "forecasting"]
+        location: "s3://data-analytics/retail/forecast/v1"
+        format: "delta"
+        # database: "analytics_db"
+        # table: "demand_forecast_v1"
+      tags: ["delta", "s3", "forecast", "predictive"]
+  tags: ["forecasting", "demand", "analytics", "ml", "v1"]
   links:
-    dashboard: "https://dashboards.example.com/sales-perf"
+    modelTrainingNotebook: "https://notebooks.example.com/models/demand-forecast-v1"
+    modelCard: "https://models.example.com/cards/demand-forecast-v1"
 
+# --- 4. Consumer-Aligned Product: Inventory Optimization ---
 - dataProductSpecification: "0.0.1"
-  id: "product-recommendations-model"
+  id: "retail-inventory-optim-v1"
+  version: "v1.0"
+  productType: "consumer-aligned"
   info:
-    title: "Product Recommendations Model"
-    owner: "Data Science Team"
-    domain: "product"
-    description: "ML-based product recommendations for customers"
-    status: "in development"
-    archetype: "model"
+    title: "Inventory Optimization Recommendations v1"
+    owner: "Supply Chain Team"
+    domain: "retail_operations"
+    description: "Recommendations for inventory reordering based on demand forecasts and stock levels."
+    status: "active"
   inputPorts:
-    - id: "customer-360-input"
-      name: "Customer 360 Data Product"
-      sourceSystemId: "data-product:customer-360"
+    - id: "forecast-input-v1"
+      name: "Demand Forecast Data"
+      description: "Input from the demand forecast data product."
+      sourceSystemId: "data-product:retail-demand-forecast-v1" # Correct: Links to forecast product
+      sourceOutputPortId: "forecast-table-v1"
       type: "data-product"
-    - id: "product-catalog-db"
-      name: "Product Catalog DB"
-      sourceSystemId: "product-db-prod"
-      type: "application"
-      location: "jdbc:postgresql://product-db:5432/catalog"
+      tags: ["forecast"]
+    # Example: Could also take current inventory snapshot as input
+    # - id: "current-inventory-input-v1"
+    #   name: "Current Inventory Levels"
+    #   sourceSystemId: "inventory_db:stock_levels"
+    #   type: "database"
   outputPorts:
-    - id: "product-recs-api"
-      name: "Product Recommendations API"
-      description: "API endpoint for getting recommendations"
+    - id: "inventory-reorder-api-v1"
+      name: "Inventory Reorder API"
+      description: "API endpoint consumed by the inventory management system to trigger reorders."
       type: "api"
-      status: "proposed"
+      status: "active"
       server:
-        location: "https://api.example.com/recommendations/v1"
-      containsPii: false
-      tags: ["api", "ml", "realtime"]
-  tags: ["recommendations", "machine learning", "product"]
-  custom:
-    model_framework: "tensorflow"
-    training_schedule: "daily" 
+        location: "https://api.example.com/inventory/reorder/v1" # URL of the API
+      tags: ["api", "inventory", "reorder", "action"]
+    # Could also have a table output showing current recommendations
+    # - id: "inventory-recommendations-table-v1"
+    #   name: "inventory_recommendations_table"
+    #   type: "table"
+    #   ...
+  tags: ["inventory", "optimization", "supply-chain", "recommendations", "v1"]
+
+# --- 5. Aggregate Product: Price Optimization ---
+- dataProductSpecification: "0.0.1"
+  id: "retail-price-optim-v1"
+  version: "v1.0"
+  productType: "aggregate" # Or consumer-aligned depending on primary consumer
+  info:
+    title: "Price Optimization Model Output v1"
+    owner: "Pricing Team"
+    domain: "retail_analytics"
+    description: "Recommended pricing strategies based on demand, competition, and customer behavior."
+    status: "active"
+  inputPorts:
+    - id: "forecast-input-price-v1" # Unique ID for this input instance
+      name: "Demand Forecast Data"
+      description: "Input from the demand forecast data product."
+      sourceSystemId: "data-product:retail-demand-forecast-v1" # Correct: Links to forecast product
+      sourceOutputPortId: "forecast-table-v1"
+      type: "data-product"
+    - id: "competitor-pricing-input-v1"
+      name: "Competitor Pricing Feed"
+      description: "External feed of competitor pricing data."
+      sourceSystemId: "external:competitor-scraper" # Identifier for the external source
+      type: "feed" # Example type for an external feed
+      location: "sftp://datafeeds.example.com/incoming/competitor_prices.csv"
+      tags: ["external", "competitor", "pricing"]
+  outputPorts:
+    - id: "price-recommendations-table-v1"
+      name: "price_recommendations_table"
+      description: "Delta table containing optimal price recommendations."
+      type: "table"
+      status: "active"
+      server:
+        location: "s3://data-analytics/retail/pricing/v1"
+        format: "delta"
+      tags: ["delta", "s3", "pricing", "recommendations"]
+  tags: ["pricing", "optimization", "analytics", "ml", "v1"]
+
+# --- 6. Consumer-Aligned Product: Personalized Marketing ---
+- dataProductSpecification: "0.0.1"
+  id: "retail-customer-recs-v1"
+  version: "v1.0"
+  productType: "consumer-aligned"
+  info:
+    title: "Customer Marketing Recommendations v1"
+    owner: "Marketing Team"
+    domain: "marketing"
+    description: "Targeted customer lists and product recommendations for marketing campaigns."
+    status: "active"
+  inputPorts:
+    - id: "prepared-sales-input-marketing-v1" # Unique ID
+      name: "Prepared Sales Data"
+      description: "Input from prepared sales transactions."
+      sourceSystemId: "data-product:retail-sales-prepared-v1" # Correct: Links to prepared product
+      sourceOutputPortId: "prepared-sales-delta-v1"
+      type: "data-product"
+    - id: "customer-profile-input-v1"
+      name: "Customer Profile Data"
+      description: "Input from the main customer profile database."
+      sourceSystemId: "crm_db:customer_profiles" # Identifier for the CRM source
+      type: "database"
+      location: "jdbc:postgresql://crm-db:5432/profiles"
+      tags: ["crm", "customer"]
+  outputPorts:
+    - id: "marketing-campaign-target-v1"
+      name: "marketing_campaign_list"
+      description: "CSV file containing customer IDs and recommended campaign details."
+      type: "file" # Example: output is a file
+      status: "active"
+      server:
+        location: "s3://data-marketing/retail/campaigns/v1/targets.csv"
+        format: "csv"
+      tags: ["csv", "s3", "marketing", "campaign", "target-list"]
+  tags: ["marketing", "recommendations", "personalization", "customer", "v1"]
+
+# --- 7. Consumer-Aligned Product: BI Dashboard Data ---
+- dataProductSpecification: "0.0.1"
+  id: "retail-performance-dashboard-v1"
+  version: "v1.0"
+  productType: "consumer-aligned"
+  info:
+    title: "Retail Performance Dashboard Data v1"
+    owner: "BI Team"
+    domain: "retail_analytics"
+    description: "Aggregated data optimized for the main retail performance BI dashboard."
+    status: "active"
+  inputPorts:
+    - id: "prepared-sales-input-bi-v1" # Unique ID
+      name: "Prepared Sales Data"
+      sourceSystemId: "data-product:retail-sales-prepared-v1" # Correct: Links to prepared product
+      sourceOutputPortId: "prepared-sales-delta-v1"
+      type: "data-product"
+    - id: "forecast-input-bi-v1" # Unique ID
+      name: "Demand Forecast Data"
+      sourceSystemId: "data-product:retail-demand-forecast-v1" # Correct: Links to forecast product
+      sourceOutputPortId: "forecast-table-v1"
+      type: "data-product"
+    # Example: Assuming inventory optim product outputs a status table
+    - id: "inventory-snapshot-input-bi-v1"
+      name: "Inventory Snapshot"
+      sourceSystemId: "inventory_db:daily_stock_snapshot" # Sourced directly
+      type: "table"
+      location: "delta.`/mnt/inventory/snapshots/daily_v1`"
+  outputPorts:
+    - id: "bi-dashboard-connection-v1"
+      name: "BI Tool Connection"
+      description: "Direct connection details or endpoint for the BI dashboard consumption."
+      type: "dashboard" # Example type for a dashboard output
+      status: "active"
+      server:
+        # Could be connection details or just the dashboard URL
+        location: "https://bi.example.com/dashboards/retail-perf-v1"
+        # database: "bi_reporting_db"
+        # table: "retail_summary_v1"
+      tags: ["dashboard", "tableau", "powerbi", "reporting"]
+  tags: ["bi", "reporting", "dashboard", "kpi", "v1"]
+  links:
+    dashboardUrl: "https://bi.example.com/dashboards/retail-perf-v1"
+
+# --- Example Sink Product: Archival ---
+# - dataProductSpecification: "0.0.1"
+#   id: "retail-data-archival-v1"
+#   version: "v1.0"
+#   productType: "sink"
+#   info:
+#     title: "Retail Data Archival Sink v1"
+#     owner: "Data Governance"
+#     domain: "compliance"
+#     description: "Sink product responsible for archiving various retail data products."
+#     status: "active"
+#   inputPorts:
+#     - id: "prepared-sales-archive-input-v1"
+#       name: "Prepared Sales Data (for archive)"
+#       sourceSystemId: "data-product:retail-sales-prepared-v1"
+#       type: "data-product"
+#     - id: "forecast-archive-input-v1"
+#       name: "Demand Forecast Data (for archive)"
+#       sourceSystemId: "data-product:retail-demand-forecast-v1"
+#       type: "data-product"
+#   outputPorts: [] # Sink has no outputs defined within this system
+#   tags: ["sink", "archival", "compliance", "v1"]
+#   custom:
+#     retentionPolicy: "7 years" 

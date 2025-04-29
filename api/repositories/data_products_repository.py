@@ -42,17 +42,21 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         # db.flush()
         return tags
 
-    def create(self, db: Session, *, obj_in: DataProductCreate) -> DataProductDb:
+    # Repository create method now expects the validated Pydantic model
+    def create(self, db: Session, *, obj_in: DataProductApi) -> DataProductDb:
         logger.debug(f"Creating DataProduct (DB layer - normalized)")
         
         # 1. Prepare core DataProduct data (excluding relationships initially)
-        db_obj_data = {
-            "id": obj_in.id,
-            "dataProductSpecification": obj_in.dataProductSpecification,
-            "links": json.dumps(obj_in.links) if obj_in.links is not None else '{}',
-            "custom": json.dumps(obj_in.custom) if obj_in.custom is not None else '{}'
-        }
-        db_obj = self.model(**db_obj_data)
+        # Directly use attributes from the Pydantic model obj_in
+        db_obj = self.model(
+            id=obj_in.id,
+            dataProductSpecification=obj_in.dataProductSpecification,
+            links=json.dumps(obj_in.links) if obj_in.links is not None else '{}',
+            custom=json.dumps(obj_in.custom) if obj_in.custom is not None else '{}',
+            version=obj_in.version, # Assume validated model has it
+            # Handle productType being either enum or string after validation
+            product_type=obj_in.productType.value if hasattr(obj_in.productType, 'value') else obj_in.productType
+        )
 
         # 2. Create InfoDb object (Exclude deprecated fields)
         if obj_in.info:
@@ -62,28 +66,37 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
             db_obj.info = info_obj
 
         # 3. Create InputPortDb objects
-        for port_in in obj_in.inputPorts:
-            port_data = port_in.dict()
-            port_data['port_type'] = port_data.pop('type', None) # Rename 'type' key
-            # Handle JSON fields for ports
-            port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
-            port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
-            port_data['tags'] = json.dumps(port_data.get('tags')) if port_data.get('tags') else '[]'
-            port_obj = InputPortDb(**port_data)
-            db_obj.inputPorts.append(port_obj) # Append relationship
+        if obj_in.inputPorts: # Check if the list exists
+            for port_in in obj_in.inputPorts: # port_in is an InputPort Pydantic model
+                # Convert Pydantic model to dict, keep sourceOutputPortId
+                port_data = port_in.dict(exclude_none=True) # exclude_none might be useful
+                
+                # Rename 'type' key if present
+                if 'type' in port_data:
+                    port_data['port_type'] = port_data.pop('type')
+                
+                # Ensure JSON fields are strings
+                port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
+                port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
+                port_data['tags'] = json.dumps(port_data.get('tags')) if port_data.get('tags') else '[]'
+
+                # sourceOutputPortId is already correctly named from Pydantic model
+
+                port_obj = InputPortDb(**port_data)
+                db_obj.inputPorts.append(port_obj)
             
         # 4. Create OutputPortDb objects
-        for port_in in obj_in.outputPorts:
-            port_data = port_in.dict()
-            port_data['port_type'] = port_data.pop('type', None) # Rename 'type' key
-            # Handle Server JSON field
-            port_data['server'] = json.dumps(port_data.get('server')) if port_data.get('server') else '{}'
-            # Handle JSON fields for ports
-            port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
-            port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
-            port_data['tags'] = json.dumps(port_data.get('tags')) if port_data.get('tags') else '[]'
-            port_obj = OutputPortDb(**port_data)
-            db_obj.outputPorts.append(port_obj) # Append relationship
+        if obj_in.outputPorts: # Check if the list exists
+            for port_in in obj_in.outputPorts: # port_in is an OutputPort Pydantic model
+                port_data = port_in.dict(exclude_none=True)
+                if 'type' in port_data:
+                    port_data['port_type'] = port_data.pop('type')
+                port_data['server'] = json.dumps(port_data.get('server')) if port_data.get('server') else '{}'
+                port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
+                port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
+                port_data['tags'] = json.dumps(port_data.get('tags')) if port_data.get('tags') else '[]'
+                port_obj = OutputPortDb(**port_data)
+                db_obj.outputPorts.append(port_obj)
             
         # 5. Handle Tags (Many-to-Many)
         if obj_in.tags:
@@ -114,11 +127,20 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
             db_obj.dataProductSpecification = update_data.get('dataProductSpecification', db_obj.dataProductSpecification)
             if 'links' in update_data: db_obj.links = json.dumps(update_data['links'])
             if 'custom' in update_data: db_obj.custom = json.dumps(update_data['custom'])
+            # Update new fields
+            db_obj.version = update_data.get('version', db_obj.version)
+            if 'productType' in update_data: # Check for Pydantic field name
+                 # The value from .dict() or .model_dump() should already be the string value
+                 db_obj.product_type = update_data['productType']
 
             # Update Info (One-to-One)
             if 'info' in update_data and db_obj.info:
                 info_update = update_data['info']
                 for key, value in info_update.items():
+                    # Handle deprecated maturity field if present in input
+                    if key == 'maturity' and 'maturity' not in InfoDb.__table__.columns:
+                         logger.warning("Ignoring deprecated 'maturity' field during Info update.")
+                         continue
                     setattr(db_obj.info, key, value)
             elif 'info' in update_data and not db_obj.info:
                  # Create new Info if it didn't exist
@@ -132,10 +154,14 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 db_obj.inputPorts.clear() # Clear existing
                 for port_in_dict in update_data['inputPorts']:
                      port_data = port_in_dict.copy()
-                     port_data['port_type'] = port_data.pop('type', None)
+                     # Rename type if present
+                     if 'type' in port_data:
+                         port_data['port_type'] = port_data.pop('type')
+                     # Stringify JSON fields
                      port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
                      port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
                      port_data['tags'] = json.dumps(port_data.get('tags')) if port_data.get('tags') else '[]'
+                     # sourceOutputPortId is already correct in port_in_dict
                      port_obj = InputPortDb(**port_data)
                      db_obj.inputPorts.append(port_obj)
                      
@@ -143,7 +169,8 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                  db_obj.outputPorts.clear() # Clear existing
                  for port_in_dict in update_data['outputPorts']:
                      port_data = port_in_dict.copy()
-                     port_data['port_type'] = port_data.pop('type', None)
+                     if 'type' in port_data:
+                         port_data['port_type'] = port_data.pop('type')
                      port_data['server'] = json.dumps(port_data.get('server')) if port_data.get('server') else '{}'
                      port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
                      port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
@@ -198,14 +225,14 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
             raise
             
     # --- Distinct Value Queries (Update for Normalized Schema) --- 
-    def get_distinct_archetypes(self, db: Session) -> List[str]:
-        logger.debug("Querying distinct archetypes from DB (normalized)...")
+    def get_distinct_product_types(self, db: Session) -> List[str]:
+        logger.debug("Querying distinct product_types from DB (normalized)...")
         try:
-             # Query the InfoDb table directly
-             result = db.execute(select(distinct(InfoDb.archetype)).where(InfoDb.archetype.isnot(None))).scalars().all()
+             # Query the DataProductDb table directly for product_type
+             result = db.execute(select(distinct(self.model.product_type)).where(self.model.product_type.isnot(None))).scalars().all()
              return sorted(list(result))
         except Exception as e:
-             logger.error(f"Error querying distinct archetypes (normalized): {e}", exc_info=True)
+             logger.error(f"Error querying distinct product_types (normalized): {e}", exc_info=True)
              return []
 
     def get_distinct_owners(self, db: Session) -> List[str]:

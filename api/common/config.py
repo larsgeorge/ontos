@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     # Demo Mode Flag
     APP_DEMO_MODE: bool = Field(False, env='APP_DEMO_MODE')
 
+    # Database Reset Flag
+    APP_DB_DROP_ON_START: bool = Field(False, env='APP_DB_DROP_ON_START')
+
     class Config:
         env_file = DOTENV_FILE
         case_sensitive = True

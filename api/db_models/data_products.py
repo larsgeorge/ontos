@@ -35,6 +35,8 @@ class DataProductDb(Base):
     dataProductSpecification = Column(String, nullable=False, default="0.0.1")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    version = Column(String, nullable=False, default="v1.0", index=True)
+    product_type = Column(String, nullable=True, index=True)
 
     # Relationships (Corrected names)
     info = relationship("InfoDb", back_populates="data_product", uselist=False, cascade="all, delete-orphan")
@@ -77,6 +79,7 @@ class InputPortDb(Base):
     location = Column(String, nullable=True)
     
     sourceSystemId = Column(String, nullable=False)
+    sourceOutputPortId = Column(String, nullable=True) # Nullable for external sources or if link not specified
     links = Column(String, nullable=True, default='{}') # JSON String
     custom = Column(String, nullable=True, default='{}') # JSON String
     tags = Column(String, nullable=True, default='[]') # JSON String

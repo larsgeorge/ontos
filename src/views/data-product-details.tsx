@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { DataProduct, InputPort, OutputPort, DataProductStatus, DataProductArchetype, DataProductOwner } from '@/types/data-product'; // Import Port types
+import { DataProduct, InputPort, OutputPort, DataProductStatus, DataProductArchetype, DataProductOwner, DataProductType } from '@/types/data-product'; // Import Port types
 import DataProductFormDialog from '@/components/data-products/data-product-form-dialog';
 import { useApi } from '@/hooks/use-api';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Pencil, Trash2, AlertCircle, Sparkles } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Loader2, Pencil, Trash2, AlertCircle, Sparkles, CopyPlus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Toaster } from '@/components/ui/toaster';
@@ -15,6 +15,7 @@ import useBreadcrumbStore from '@/stores/breadcrumb-store'; // Import Zustand st
 import { usePermissions } from '@/stores/permissions-store'; // Import permissions hook
 import { FeatureAccessLevel } from '@/types/settings'; // Import FeatureAccessLevel
 import { useNotificationsStore } from '@/stores/notifications-store'; // Import notification store
+import CreateVersionDialog from '@/components/data-products/create-version-dialog';
 
 // Helper Function Type Definition (copied from DataProducts view for checking API responses)
 type CheckApiResponseFn = <T>(
@@ -50,10 +51,11 @@ export default function DataProductDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false); // State for edit dialog
+  const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false); // State for version dialog
 
   // State for dropdown values needed by the dialog
   const [statuses, setStatuses] = useState<DataProductStatus[]>([]);
-  const [archetypes, setArchetypes] = useState<DataProductArchetype[]>([]);
+  const [productTypes, setProductTypes] = useState<DataProductType[]>([]);
   const [owners, setOwners] = useState<DataProductOwner[]>([]);
 
   // Permissions
@@ -101,23 +103,23 @@ export default function DataProductDetails() {
     setDynamicBreadcrumbTitle('Loading...'); // Set loading state
     try {
       // Fetch product details and dropdown values concurrently
-      const [productResp, statusesResp, archetypesResp, ownersResp] = await Promise.all([
+      const [productResp, statusesResp, ownersResp, typesResp] = await Promise.all([
         get<DataProduct>(`/api/data-products/${productId}`),
         get<DataProductStatus[]>('/api/data-products/statuses'),
-        get<DataProductArchetype[]>('/api/data-products/archetypes'),
         get<DataProductOwner[]>('/api/data-products/owners'),
+        get<DataProductType[]>('/api/data-products/types'),
       ]);
 
       // Check responses using the helper
       const productData = checkApiResponse(productResp, 'Product Details');
       const statusesData = checkApiResponse(statusesResp, 'Statuses');
-      const archetypesData = checkApiResponse(archetypesResp, 'Archetypes');
       const ownersData = checkApiResponse(ownersResp, 'Owners');
+      const typesData = checkApiResponse(typesResp, 'Product Types');
 
       // Set state
       setProduct(productData);
       setStatuses(Array.isArray(statusesData) ? statusesData : []);
-      setArchetypes(Array.isArray(archetypesData) ? archetypesData : []);
+      setProductTypes(Array.isArray(typesData) ? typesData : []);
       setOwners(Array.isArray(ownersData) ? ownersData : []);
 
       // Update breadcrumb store with the actual title
@@ -129,7 +131,7 @@ export default function DataProductDetails() {
       setProduct(null); // Clear product on error
       // Clear dropdowns on error too?
       setStatuses([]);
-      setArchetypes([]);
+      setProductTypes([]);
       setOwners([]);
       setDynamicBreadcrumbTitle('Error'); // Set error state or null
       toast({ title: 'Error', description: `Failed to load data: ${errorMessage}`, variant: 'destructive' });
@@ -226,6 +228,43 @@ export default function DataProductDetails() {
       }
   };
 
+  // --- Open Create New Version Dialog Handler --- 
+  const handleCreateNewVersion = async () => {
+      if (!canWrite || !productId || !product) { // Check permissions and data
+          toast({ title: "Permission Denied or Data Missing", description: "Cannot create new version.", variant: "destructive" });
+          return;
+      }
+      setIsVersionDialogOpen(true); // Open the dialog
+  };
+
+  // --- Submit New Version Handler (called by dialog) --- 
+  const submitNewVersion = async (newVersionString: string) => {
+      if (!productId) return; // Should not happen if button is enabled
+      
+      toast({ title: 'Creating New Version', description: `Creating version ${newVersionString}...` });
+
+      try {
+          // Use the trimmed version string from the dialog callback
+          const response = await post<DataProduct>(`/api/data-products/${productId}/versions`, { new_version: newVersionString.trim() });
+
+          // checkApiResponse will throw if response.error or response.data.detail exists
+          const newProduct = response.data;
+          if (!newProduct || !newProduct.id) {
+             throw new Error('Invalid response when creating version.');
+          }
+
+          toast({ title: 'Success', description: `Version ${newVersionString} created successfully!` });
+          // Navigate to the new product's detail page
+          navigate(`/data-products/${newProduct.id}`);
+
+      } catch (err: any) {
+          console.error('Error creating new version:', err);
+          const errorMsg = err.message || 'Failed to create new version.';
+          toast({ title: 'Error', description: errorMsg, variant: 'destructive' });
+          setError(errorMsg); // Optionally show error in main area
+      }
+  };
+
   // Loading state
   if (loading || permissionsLoading) { // Check permissionsLoading too
     return (
@@ -262,6 +301,9 @@ export default function DataProductDetails() {
           <Button variant="outline" onClick={handleCreateGenieSpace} disabled={!product || !canWrite} title={canWrite ? "Create Genie Space" : "Create Genie Space (Permission Denied)"}>
               <Sparkles className="mr-2 h-4 w-4" /> Create Genie Space
           </Button>
+          <Button variant="outline" onClick={handleCreateNewVersion} disabled={!product || !canWrite} title={canWrite ? "Create New Version" : "Create New Version (Permission Denied)"}>
+              <CopyPlus className="mr-2 h-4 w-4" /> Create New Version
+          </Button>
           <Button variant="outline" onClick={handleEdit} disabled={!product || !canWrite} title={canWrite ? "Edit" : "Edit (Permission Denied)"}>
             <Pencil className="mr-2 h-4 w-4" /> Edit
           </Button>
@@ -275,19 +317,28 @@ export default function DataProductDetails() {
       <Card>
         <CardHeader>
           <CardTitle>Info</CardTitle>
+          <CardDescription>Core metadata about the data product.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid md:grid-cols-3 gap-4">
+          <div className="grid md:grid-cols-4 gap-4">
             <div className="space-y-1"><Label>Owner:</Label> <span className="text-sm block">{product.info.owner}</span></div>
             <div className="space-y-1"><Label>Domain:</Label> <span className="text-sm block">{product.info.domain || 'N/A'}</span></div>
             <div className="space-y-1">
               <Label>Status:</Label>
               <Badge variant={getStatusColor(product.info.status)} className="ml-1">{product.info.status || 'N/A'}</Badge>
             </div>
-             <div className="space-y-1"><Label>Archetype:</Label> <span className="text-sm block">{product.info.archetype || 'N/A'}</span></div>
-             <div className="space-y-1"><Label>Created:</Label> <span className="text-sm block">{formatDate(product.created_at)}</span></div>
-             <div className="space-y-1"><Label>Updated:</Label> <span className="text-sm block">{formatDate(product.updated_at)}</span></div>
-             <div className="space-y-1"><Label>Spec Version:</Label> <span className="text-sm block">{product.dataProductSpecification}</span></div>
+            <div className="space-y-1">
+              <Label>Version:</Label>
+              <Badge variant="secondary" className="ml-1">{product.version}</Badge>
+            </div>
+            <div className="space-y-1">
+              <Label>Type:</Label>
+              <Badge variant="outline" className="ml-1">{product.productType || 'N/A'}</Badge>
+            </div>
+            <div className="space-y-1"><Label>Archetype:</Label> <span className="text-sm block">{product.info.archetype || 'N/A'}</span></div>
+            <div className="space-y-1"><Label>Created:</Label> <span className="text-sm block">{formatDate(product.created_at)}</span></div>
+            <div className="space-y-1"><Label>Updated:</Label> <span className="text-sm block">{formatDate(product.updated_at)}</span></div>
+            <div className="space-y-1"><Label>Spec Version:</Label> <span className="text-sm block">{product.dataProductSpecification}</span></div>
           </div>
           <div className="space-y-1"><Label>Description:</Label> <p className="text-sm mt-1">{product.info.description || 'N/A'}</p></div>
           <div className="space-y-1">
@@ -354,11 +405,22 @@ export default function DataProductDetails() {
             onOpenChange={setIsEditDialogOpen} // Let dialog control closing via state
             initialProduct={product} // Pass the current product data
             statuses={statuses}
-            archetypes={archetypes}
             owners={owners}
+            productTypes={productTypes}
             api={api} // Pass the full api object
             onSubmitSuccess={handleDialogSubmitSuccess} // Pass the success handler
         />
+      )}
+
+      {/* Render the new version dialog */} 
+      {product && (
+          <CreateVersionDialog
+              isOpen={isVersionDialogOpen}
+              onOpenChange={setIsVersionDialogOpen}
+              currentVersion={product.version}
+              productTitle={product.info.title}
+              onSubmit={submitNewVersion} // Pass the submit handler
+          />
       )}
 
       <Toaster />
