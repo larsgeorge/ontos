@@ -12,7 +12,7 @@ import { useApi } from '@/hooks/use-api';
 import { useToast } from "@/hooks/use-toast";
 import { TreeView } from '@/components/ui/tree-view';
 import { CatalogItem, DataAssetReviewRequest, DataAssetReviewRequestCreate, AssetType } from '@/types/data-asset-review';
-import { Loader2, AlertCircle, Folder, FolderOpen, Table, Layout, FolderKanban, FunctionSquare } from 'lucide-react';
+import { Loader2, AlertCircle, Folder, FolderOpen, Table, Layout, FunctionSquare } from 'lucide-react';
 
 // Define user info type based on backend response
 interface UserInfo {
