@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, TypeVar
 
 from .logging import get_logger
-from sqlalchemy import create_engine, Index # Need Index for type checking
+from sqlalchemy import create_engine, Index  # Need Index for type checking
 from sqlalchemy.orm import sessionmaker, Session as SQLAlchemySession
 from sqlalchemy.ext.declarative import declarative_base
 import os
@@ -22,7 +22,7 @@ from .config import get_settings, Settings
 from .logging import get_logger
 # Import SDK components
 from api.common.workspace_client import get_workspace_client
-from databricks.sdk.errors import NotFound, DatabricksError 
+from databricks.sdk.errors import NotFound, DatabricksError
 from databricks.sdk.core import Config, oauth_service_principal
 
 logger = get_logger(__name__)
@@ -45,7 +45,8 @@ try:
     # Add imports for any other future model modules here
     logger.debug("DB model modules imported successfully.")
 except ImportError as e:
-    logger.critical(f"Failed to import a DB model module during initial registration: {e}", exc_info=True)
+    logger.critical(
+        f"Failed to import a DB model module during initial registration: {e}", exc_info=True)
     # This is likely a fatal error, consider raising or exiting
     raise
 # ------------------------------------------------------------------------- #
@@ -55,6 +56,7 @@ _engine = None
 _SessionLocal = None
 # Public engine instance (will be assigned after creation)
 engine = None
+
 
 @dataclass
 class InMemorySession:
@@ -71,6 +73,7 @@ class InMemorySession:
         """Discard changes."""
         self.changes = []
 
+
 class InMemoryStore:
     """In-memory storage system."""
 
@@ -81,7 +84,7 @@ class InMemoryStore:
 
     def create_table(self, table_name: str, metadata: Dict[str, Any] = None) -> None:
         """Create a new table in the store.
-        
+
         Args:
             table_name: Name of the table
             metadata: Optional metadata for the table
@@ -93,7 +96,7 @@ class InMemoryStore:
 
     def insert(self, table_name: str, data: Dict[str, Any]) -> None:
         """Insert a record into a table.
-        
+
         Args:
             table_name: Name of the table
             data: Record to insert
@@ -113,11 +116,11 @@ class InMemoryStore:
 
     def get(self, table_name: str, id: str) -> Optional[Dict[str, Any]]:
         """Get a record by ID.
-        
+
         Args:
             table_name: Name of the table
             id: Record ID
-            
+
         Returns:
             Record if found, None otherwise
         """
@@ -127,10 +130,10 @@ class InMemoryStore:
 
     def get_all(self, table_name: str) -> List[Dict[str, Any]]:
         """Get all records from a table.
-        
+
         Args:
             table_name: Name of the table
-            
+
         Returns:
             List of records
         """
@@ -138,12 +141,12 @@ class InMemoryStore:
 
     def update(self, table_name: str, id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update a record.
-        
+
         Args:
             table_name: Name of the table
             id: Record ID
             data: Updated data
-            
+
         Returns:
             Updated record if found, None otherwise
         """
@@ -159,11 +162,11 @@ class InMemoryStore:
 
     def delete(self, table_name: str, id: str) -> bool:
         """Delete a record.
-        
+
         Args:
             table_name: Name of the table
             id: Record ID
-            
+
         Returns:
             True if deleted, False otherwise
         """
@@ -171,17 +174,19 @@ class InMemoryStore:
             return False
 
         initial_length = len(self._data[table_name])
-        self._data[table_name] = [item for item in self._data[table_name] if item['id'] != id]
+        self._data[table_name] = [
+            item for item in self._data[table_name] if item['id'] != id]
         return len(self._data[table_name]) < initial_length
 
     def clear(self, table_name: str) -> None:
         """Clear all records from a table.
-        
+
         Args:
             table_name: Name of the table
         """
         if table_name in self._data:
             self._data[table_name] = []
+
 
 class DatabaseManager:
     """Manages in-memory database operations."""
@@ -193,10 +198,10 @@ class DatabaseManager:
     @contextmanager
     def get_session(self) -> InMemorySession:
         """Get a database session.
-        
+
         Yields:
             In-memory session
-            
+
         Raises:
             Exception: If session operations fail
         """
@@ -213,18 +218,22 @@ class DatabaseManager:
         """Clear all data from the store."""
         self.store = InMemoryStore()
 
+
 # Global database manager instance
 db_manager: Optional[DatabaseManager] = None
 
+
 def get_db_url(settings: Settings) -> str:
     """Constructs the Databricks SQLAlchemy URL."""
-    token = os.getenv("DATABRICKS_TOKEN") # Prefer token from env for security
+    token = os.getenv("DATABRICKS_TOKEN")  # Prefer token from env for security
     if not token:
-        logger.warning("DATABRICKS_TOKEN environment variable not set. Relying on SDK default credential provider.")
+        logger.warning(
+            "DATABRICKS_TOKEN environment variable not set. Relying on SDK default credential provider.")
         # databricks-sqlalchemy uses default creds if token is None
-    
+
     if not settings.DATABRICKS_HOST or not settings.DATABRICKS_HTTP_PATH:
-         raise ValueError("DATABRICKS_HOST and DATABRICKS_HTTP_PATH must be configured in settings.")
+         raise ValueError(
+             "DATABRICKS_HOST and DATABRICKS_HTTP_PATH must be configured in settings.")
 
     # Ensure host doesn't have https:// prefix
     host = settings.DATABRICKS_HOST.replace("https://", "")
@@ -241,14 +250,15 @@ def get_db_url(settings: Settings) -> str:
     logger.debug(f"Constructed Databricks SQLAlchemy URL (token redacted)")
     return url
 
+
 def ensure_catalog_schema_exists(settings: Settings):
     """Checks if the configured catalog and schema exist, creates them if not."""
     logger.info("Ensuring required catalog and schema exist...")
     try:
         # Get a workspace client instance (use the underlying client to bypass caching)
         caching_ws_client = get_workspace_client(settings)
-        ws_client = caching_ws_client._client # Access raw client
-        
+        ws_client = caching_ws_client._client  # Access raw client
+
         catalog_name = settings.DATABRICKS_CATALOG
         schema_name = settings.DATABRICKS_SCHEMA
         full_schema_name = f"{catalog_name}.{schema_name}"
@@ -259,16 +269,21 @@ def ensure_catalog_schema_exists(settings: Settings):
             ws_client.catalogs.get(catalog_name)
             logger.info(f"Catalog '{catalog_name}' already exists.")
         except NotFound:
-            logger.warning(f"Catalog '{catalog_name}' not found. Attempting to create...")
+            logger.warning(
+                f"Catalog '{catalog_name}' not found. Attempting to create...")
             try:
                 ws_client.catalogs.create(name=catalog_name)
                 logger.info(f"Successfully created catalog: {catalog_name}")
             except DatabricksError as e:
-                logger.critical(f"Failed to create catalog '{catalog_name}': {e}. Check permissions.", exc_info=True)
-                raise ConnectionError(f"Failed to create required catalog '{catalog_name}': {e}") from e
+                logger.critical(
+                    f"Failed to create catalog '{catalog_name}': {e}. Check permissions.", exc_info=True)
+                raise ConnectionError(
+                    f"Failed to create required catalog '{catalog_name}': {e}") from e
         except DatabricksError as e:
-            logger.error(f"Error checking catalog '{catalog_name}': {e}", exc_info=True)
-            raise ConnectionError(f"Failed to check catalog '{catalog_name}': {e}") from e
+            logger.error(
+                f"Error checking catalog '{catalog_name}': {e}", exc_info=True)
+            raise ConnectionError(
+                f"Failed to check catalog '{catalog_name}': {e}") from e
 
         # 2. Check/Create Schema
         try:
@@ -276,25 +291,35 @@ def ensure_catalog_schema_exists(settings: Settings):
             ws_client.schemas.get(full_schema_name)
             logger.info(f"Schema '{full_schema_name}' already exists.")
         except NotFound:
-            logger.warning(f"Schema '{full_schema_name}' not found. Attempting to create...")
+            logger.warning(
+                f"Schema '{full_schema_name}' not found. Attempting to create...")
             try:
-                ws_client.schemas.create(name=schema_name, catalog_name=catalog_name)
+                ws_client.schemas.create(
+                    name=schema_name, catalog_name=catalog_name)
                 logger.info(f"Successfully created schema: {full_schema_name}")
             except DatabricksError as e:
-                logger.critical(f"Failed to create schema '{full_schema_name}': {e}. Check permissions.", exc_info=True)
-                raise ConnectionError(f"Failed to create required schema '{full_schema_name}': {e}") from e
+                logger.critical(
+                    f"Failed to create schema '{full_schema_name}': {e}. Check permissions.", exc_info=True)
+                raise ConnectionError(
+                    f"Failed to create required schema '{full_schema_name}': {e}") from e
         except DatabricksError as e:
-            logger.error(f"Error checking schema '{full_schema_name}': {e}", exc_info=True)
-            raise ConnectionError(f"Failed to check schema '{full_schema_name}': {e}") from e
-            
+            logger.error(
+                f"Error checking schema '{full_schema_name}': {e}", exc_info=True)
+            raise ConnectionError(
+                f"Failed to check schema '{full_schema_name}': {e}") from e
+
     except Exception as e:
-        logger.critical(f"An unexpected error occurred during catalog/schema check/creation: {e}", exc_info=True)
-        raise ConnectionError(f"Failed during catalog/schema setup: {e}") from e
+        logger.critical(
+            f"An unexpected error occurred during catalog/schema check/creation: {e}", exc_info=True)
+        raise ConnectionError(
+            f"Failed during catalog/schema setup: {e}") from e
+
 
 def get_current_db_revision(engine_connection: Connection, alembic_cfg: AlembicConfig) -> str | None:
     """Gets the current revision of the database."""
     context = MigrationContext.configure(engine_connection)
     return context.get_current_revision()
+
 
 def init_db() -> None:
     """Initializes the database connection, checks/creates catalog/schema, and runs migrations."""
@@ -311,9 +336,32 @@ def init_db() -> None:
         # Ensure target catalog and schema exist before connecting engine
         ensure_catalog_schema_exists(settings)
 
+        logger.info(f"Environment for DB connection: {settings.ENV}")
+        if settings.ENV.startswith('LOCAL'):
+             connect_args = {
+                 "server_hostname": settings.DATABRICKS_HOST,
+                 "http_path": settings.DATABRICKS_HTTP_PATH,
+                 "access_token": settings.DATABRICKS_TOKEN,
+             }
+        else:
+             cfg = Config() # Hands in SQL host and OAuth function when run in Databricks
+             connect_args = {
+                 "server_hostname": cfg.host,
+                 "http_path": settings.DATABRICKS_HTTP_PATH,
+                 "credentials_provider": lambda: cfg.authenticate,
+                 "auth_type": "databricks-oauth",
+             }
+             
         db_url = get_db_url(settings)
         logger.info("Connecting to database...")
-        _engine = create_engine(db_url, echo=settings.DB_ECHO, poolclass=pool.QueuePool, pool_size=5, max_overflow=10)
+        logger.info(f"- Database URL: {db_url}")
+        logger.info(f"- Connect args: {connect_args}")
+        _engine = create_engine(db_url,
+                                connect_args=connect_args, 
+                                echo=settings.DB_ECHO, 
+                                poolclass=pool.QueuePool, 
+                                pool_size=5, 
+                                max_overflow=10)
         engine = _engine # Assign to public variable
 
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
@@ -334,76 +382,82 @@ def init_db() -> None:
             db_revision = get_current_db_revision(connection, alembic_cfg)
             logger.info(f"Current Database Revision: {db_revision}")
 
-            if db_revision != head_revision:
-                logger.warning(f"Database revision '{db_revision}' differs from head revision '{head_revision}'.")
-                if settings.APP_DEMO_MODE:
-                    # WARNING: This wipes data in managed tables!
-                    border = "=" * 50
-                    logger.warning(border)
-                    logger.warning("APP_DEMO_MODE: Database revision differs from head revision.")
-                    logger.warning(f"DB: {db_revision}, Head: {head_revision}")
-                    logger.warning("Performing Alembic downgrade to base and upgrade to head...")
-                    logger.warning("THIS WILL WIPE ALL DATA IN MANAGED TABLES!")
-                    logger.warning(border)
-                    try:
-                        # Remove logging around downgrade/upgrade
-                        command.downgrade(alembic_cfg, "base")
-                        command.upgrade(alembic_cfg, "head")
-                        logger.info("Alembic downgrade/upgrade completed successfully.") # Keep completion message
-                    except Exception as alembic_err:
-                        logger.critical("Alembic downgrade/upgrade failed during demo mode reset!", exc_info=True)
-                        raise RuntimeError("Failed to reset database schema for demo mode.") from alembic_err
-                else:
-                    logger.info("Attempting Alembic upgrade to head...")
-                    try:
-                        command.upgrade(alembic_cfg, "head")
-                        logger.info("Alembic upgrade to head COMPLETED.")
-                    except Exception as alembic_err:
-                        logger.critical("Alembic upgrade failed! Manual intervention may be required.", exc_info=True)
-                        raise RuntimeError("Failed to upgrade database schema.") from alembic_err
-            else:
-                logger.info("Database schema is up to date according to Alembic.")
+            # if db_revision != head_revision:
+            #     logger.warning(f"Database revision '{db_revision}' differs from head revision '{head_revision}'.")
+            #     if settings.APP_DEMO_MODE:
+            #         # WARNING: This wipes data in managed tables!
+            #         border = "=" * 50
+            #         logger.warning(border)
+            #         logger.warning("APP_DEMO_MODE: Database revision differs from head revision.")
+            #         logger.warning(f"DB: {db_revision}, Head: {head_revision}")
+            #         logger.warning("Performing Alembic downgrade to base and upgrade to head...")
+            #         logger.warning("THIS WILL WIPE ALL DATA IN MANAGED TABLES!")
+            #         logger.warning(border)
+            #         try:
+            #             # Remove logging around downgrade/upgrade
+            #             logger.info("Downgrading database to base version...")
+            #             command.downgrade(alembic_cfg, "base")
+            #             logger.info("Upgrading database to head version...")
+            #             command.upgrade(alembic_cfg, "head")
+            #             logger.info("Alembic downgrade/upgrade completed successfully.") # Keep completion message
+            #         except Exception as alembic_err:
+            #             logger.critical("Alembic downgrade/upgrade failed during demo mode reset!", exc_info=True)
+            #             raise RuntimeError("Failed to reset database schema for demo mode.") from alembic_err
+            #     else:
+            #         logger.info("Attempting Alembic upgrade to head...")
+            #         try:
+            #             command.upgrade(alembic_cfg, "head")
+            #             logger.info("Alembic upgrade to head COMPLETED.")
+            #         except Exception as alembic_err:
+            #             logger.critical("Alembic upgrade failed! Manual intervention may be required.", exc_info=True)
+            #             raise RuntimeError("Failed to upgrade database schema.") from alembic_err
+            # else:
+            #     logger.info("Database schema is up to date according to Alembic.")
 
         # Ensure all tables defined in Base metadata exist
         logger.info("Verifying/creating tables based on SQLAlchemy models...")
-        try:
-            dialect_name = engine.dialect.name
-            logger.info(f"Detected database dialect: {dialect_name}")
+        is_databricks = _engine.dialect.name == 'databricks'
+        if is_databricks:
+            logger.info("Databricks dialect detected. Removing Index objects from metadata before DDL generation.")
+            # Iterate through tables and remove associated Index objects
+            # This prevents create_all from attempting to create them
+            indexes_to_remove = []
+            for table in Base.metadata.tables.values():
+                # Find indexes associated directly with this table via Column(index=True)
+                # We check the column's index attribute, not just table.indexes 
+                # as table.indexes might include functional indexes etc.
+                for col in table.columns:
+                    if col.index:
+                        # Find the actual Index object SQLAlchemy created for this column
+                        # This is a bit involved as Index name isn't guaranteed
+                        # Let's try removing ALL indexes associated with the table for simplicity
+                        # as UC doesn't support any CREATE INDEX.
+                        logger.debug(f"Preparing to remove indexes associated with table: {table.name}")
+                        # Collect indexes associated with the table to avoid modifying while iterating
+                        for idx in list(table.indexes): # Iterate over a copy
+                            if idx not in indexes_to_remove:
+                                indexes_to_remove.append(idx)
+                                logger.debug(f"Marked index {idx.name} for removal from metadata.")
 
-            # Use a connection and explicit transaction for DDL
-            with engine.connect() as connection:
-                with connection.begin(): # Start a transaction
-                    # Log all tables found in metadata
-                    table_names = [t.name for t in Base.metadata.sorted_tables]
-                    logger.info(f"Tables found in Base.metadata.sorted_tables: {table_names}")
-                    all_meta_tables = list(Base.metadata.tables.values())
-                    logger.info(f"Tables found directly in Base.metadata.tables: {[t.name for t in all_meta_tables]}")
+            # Actually remove them from the metadata's central index collection if necessary
+            # In newer SQLAlchemy, removing from table.indexes might be sufficient
+            for idx in indexes_to_remove:
+                try:
+                    # Attempt removal from the table's collection first
+                    if hasattr(idx, 'table') and idx in idx.table.indexes:
+                        idx.table.indexes.remove(idx)
+                    # Attempt removal from metadata collection (less common needed)
+                    # if idx in Base.metadata.indexes:
+                    #     Base.metadata.indexes.remove(idx)
+                    logger.info(f"Successfully removed index {idx.name} from metadata for DDL generation.")
+                except Exception as remove_err:
+                    logger.warning(f"Could not fully remove index {idx.name} from metadata: {remove_err}")
+        # --- End Conditional Metadata Modification --- 
 
-                    if dialect_name == 'databricks':
-                        logger.warning("Databricks dialect detected. Creating tables individually.")
-                        logger.info("Processing remaining tables from sorted_tables...")
-                        for table in Base.metadata.sorted_tables:
-                            logger.info(f"Processing table object: {table}")
-                            try:
-                                logger.debug(f"Attempting to create table (if not exists): {table.name}")
-                                table.create(bind=connection, checkfirst=True)
-                                logger.info(f"Finished attempting create for table: {table.name}")
-                            except Exception as table_create_err:
-                                logger.error(f"Failed to create table '{table.name}' for Databricks: {table_create_err}", exc_info=True)
-                                raise RuntimeError(f"Failed to create table '{table.name}'") from table_create_err
-                    else:
-                        # Non-databricks: Keep using create_all
-                        logger.info(f"Dialect is not Databricks ({dialect_name}). Creating all tables and indexes.")
-                        Base.metadata.create_all(bind=connection)
-
-                # Transaction is committed automatically upon exiting the 'with connection.begin()' block
-                logger.info("Table creation transaction committed (if any DDL was executed).")
-
-            logger.info("Table existence check/creation completed.")
-        except Exception as create_err:
-            logger.critical(f"Error during table creation/check phase: {create_err}", exc_info=True)
-            raise RuntimeError("Failed to ensure database tables exist.") from create_err
-
+        # Now, call create_all. It will operate on the potentially modified metadata.
+        logger.info("Executing Base.metadata.create_all()...")
+        Base.metadata.create_all(bind=_engine)
+        logger.info("Database tables checked/created by create_all.")
     except Exception as e:
         logger.critical(f"Database initialization failed: {e}", exc_info=True)
         _engine = None

@@ -44,8 +44,10 @@ from api.db_models.data_products import DataProductDb
 
 # Import Demo Data Loader
 from api.utils.demo_data_loader import load_demo_data
-# Import the search registry
-from api.common.search_registry import SEARCHABLE_ASSET_MANAGERS
+# Import the search registry (decorator is still useful for intent)
+# from api.common.search_registry import SEARCHABLE_ASSET_MANAGERS # Not strictly needed for this approach
+# Import the CORRECT base class for type checking
+from api.common.search_interfaces import SearchableAsset
 
 logger = get_logger(__name__)
 
@@ -128,18 +130,32 @@ def initialize_managers(app: FastAPI):
         app.state.business_glossaries_manager = BusinessGlossariesManager(data_dir=data_dir)
         # Add other managers: Compliance, Estate, MDM, Security, Entitlements, Catalog Commander...
 
-        # Search Manager (depends on other managers being in app.state)
-        # Collect managers that are searchable (implement SearchableAsset interface)
-        # For now, assume these two - enhance later based on actual interface implementation
-        searchable_managers_list = []
-        if getattr(app.state, 'data_products_manager', None):
-             searchable_managers_list.append(app.state.data_products_manager)
-        if getattr(app.state, 'data_asset_review_manager', None):
-             searchable_managers_list.append(app.state.data_asset_review_manager)
-        # Add other searchable managers here (e.g., glossary, contracts) 
+        # --- Instantiate Search Manager --- 
+        # Dynamically collect manager instances that inherit from SearchableAsset
+        # Iterate directly over the values stored in app.state._state dictionary
+        searchable_managers_instances = []
+        logger.debug("--- Scanning app.state._state.values() for SearchableAsset instances ---")
+        
+        if hasattr(app.state, '_state') and isinstance(app.state._state, dict):
+            for manager_instance in app.state._state.values():
+                # Log the type of each instance found in _state
+                manager_type = type(manager_instance)
+                logger.debug(f"Checking instance in app.state._state: Type={manager_type.__name__}")
 
-        logger.info(f"Found {len(searchable_managers_list)} managers for SearchManager.")
-        app.state.search_manager = SearchManager(searchable_managers=searchable_managers_list)
+                # Check if it's an instance of the SearchableAsset base class
+                if isinstance(manager_instance, SearchableAsset):
+                    # Check if it implements the required method (good practice)
+                    if hasattr(manager_instance, 'get_search_index_items') and callable(getattr(manager_instance, 'get_search_index_items')):
+                        searchable_managers_instances.append(manager_instance)
+                        logger.debug(f"   Added searchable manager instance: Type={manager_type.__name__}")
+                    else:
+                        logger.warning(f"Manager instance of type {manager_type.__name__} inherits from SearchableAsset but does not implement 'get_search_index_items' method.")
+        else:
+            logger.error("Could not find or access app.state._state dictionary to scan for managers.")
+
+        logger.info(f"Found {len(searchable_managers_instances)} managers inheriting from SearchableAsset by checking app.state._state.values().")
+        app.state.search_manager = SearchManager(searchable_managers=searchable_managers_instances)
+        logger.info("SearchManager initialized.")
 
         logger.info("All managers instantiated and stored in app.state.")
         
