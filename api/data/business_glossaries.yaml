@@ -5,7 +5,7 @@ glossaries:
     description: "Company-wide standard business terminology"
     scope: "company"
     org_unit: "enterprise"
-    domain: "core"
+    domain: "Core"
     tags: ["enterprise", "standard"]
     owner: "data.governance@company.com"
     status: "active"
@@ -15,7 +15,7 @@ glossaries:
       - id: "term-001"
         name: "Customer"
         definition: "An individual or organization that purchases or uses our products/services"
-        domain: "customer"
+        domain: "Customer"
         tags: ["core", "customer"]
         owner: "customer.data@company.com"
         status: "active"
@@ -38,7 +38,7 @@ glossaries:
       - id: "term-002"
         name: "Product"
         definition: "Any good or service offered by the company"
-        domain: "core"
+        domain: "Product"
         tags: ["core", "product"]
         owner: "product.team@company.com"
         status: "active"
@@ -48,7 +48,7 @@ glossaries:
       - id: "term-003"
         name: "Employee"
         definition: "Individual employed by the company"
-        domain: "core"
+        domain: "HR"
         tags: ["core", "hr"]
         owner: "hr.data@company.com"
         status: "active"
@@ -58,7 +58,7 @@ glossaries:
       - id: "term-004"
         name: "Department"
         definition: "Organizational unit within the company"
-        domain: "core"
+        domain: "Core"
         tags: ["core", "organization"]
         owner: "org.data@company.com"
         status: "active"
@@ -68,7 +68,7 @@ glossaries:
       - id: "term-005"
         name: "Region"
         definition: "Geographical area of business operations"
-        domain: "core"
+        domain: "Core"
         tags: ["core", "geography"]
         owner: "operations@company.com"
         status: "active"
@@ -78,7 +78,7 @@ glossaries:
       - id: "term-006"
         name: "Business Unit"
         definition: "Major functional division of the company"
-        domain: "core"
+        domain: "Core"
         tags: ["core", "organization"]
         owner: "org.data@company.com"
         status: "active"
@@ -88,7 +88,7 @@ glossaries:
       - id: "term-007"
         name: "Partner"
         definition: "External organization with formal business relationship"
-        domain: "core"
+        domain: "Core"
         tags: ["core", "partnership"]
         owner: "partnerships@company.com"
         status: "active"
@@ -98,7 +98,7 @@ glossaries:
       - id: "term-008"
         name: "Vendor"
         definition: "External supplier of goods or services"
-        domain: "core"
+        domain: "Core"
         tags: ["core", "procurement"]
         owner: "procurement@company.com"
         status: "active"
@@ -112,7 +112,7 @@ glossaries:
     description: "Financial terms and metrics"
     scope: "division"
     org_unit: "finance"
-    domain: "finance"
+    domain: "Finance"
     parent_glossary_ids: ["1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p"]
     tags: ["finance", "metrics"]
     owner: "finance.team@company.com"
@@ -123,7 +123,7 @@ glossaries:
       - id: "term-101"
         name: "Revenue"
         definition: "Income generated from normal business operations"
-        domain: "finance"
+        domain: "Finance"
         abbreviation: "Rev"
         tags: ["finance", "metrics"]
         owner: "finance.team@company.com"
@@ -134,7 +134,7 @@ glossaries:
       - id: "term-102"
         name: "Operating Expenses"
         definition: "Day-to-day costs of running the business"
-        domain: "finance"
+        domain: "Finance"
         abbreviation: "OpEx"
         tags: ["finance", "costs"]
         owner: "finance.team@company.com"
@@ -145,7 +145,7 @@ glossaries:
       - id: "term-103"
         name: "Gross Margin"
         definition: "Revenue minus cost of goods sold"
-        domain: "finance"
+        domain: "Finance"
         tags: ["finance", "profitability"]
         owner: "finance.team@company.com"
         status: "active"
@@ -155,7 +155,7 @@ glossaries:
       - id: "term-104"
         name: "EBITDA"
         definition: "Earnings Before Interest, Taxes, Depreciation, and Amortization"
-        domain: "finance"
+        domain: "Finance"
         tags: ["finance", "earnings"]
         owner: "finance.team@company.com"
         status: "active"
@@ -165,7 +165,7 @@ glossaries:
       - id: "term-105"
         name: "Working Capital"
         definition: "Current assets minus current liabilities"
-        domain: "finance"
+        domain: "Finance"
         tags: ["finance", "liquidity"]
         owner: "finance.team@company.com"
         status: "active"
@@ -175,7 +175,7 @@ glossaries:
       - id: "term-106"
         name: "Accounts Receivable"
         definition: "Money owed by customers for goods/services delivered"
-        domain: "finance"
+        domain: "Finance"
         abbreviation: "AR"
         tags: ["finance", "receivables"]
         owner: "finance.team@company.com"
@@ -186,7 +186,7 @@ glossaries:
       - id: "term-107"
         name: "Accounts Payable"
         definition: "Money owed to suppliers for goods/services received"
-        domain: "finance"
+        domain: "Finance"
         abbreviation: "AP"
         tags: ["finance", "payables"]
         owner: "finance.team@company.com"
@@ -197,7 +197,7 @@ glossaries:
       - id: "term-108"
         name: "Cash Flow"
         definition: "Net movement of cash and cash equivalents"
-        domain: "finance"
+        domain: "Finance"
         tags: ["finance", "cash"]
         owner: "finance.team@company.com"
         status: "active"
@@ -211,7 +211,7 @@ glossaries:
     description: "Sales-specific terminology and metrics"
     scope: "department"
     org_unit: "sales"
-    domain: "sales"
+    domain: "Sales"
     parent_glossary_ids: ["1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p"]
     tags: ["sales", "metrics"]
     owner: "sales.ops@company.com"
@@ -222,7 +222,7 @@ glossaries:
       - id: "term-201"
         name: "Opportunity"
         definition: "A potential sale or deal in the pipeline"
-        domain: "sales"
+        domain: "Sales"
         tags: ["sales", "pipeline"]
         owner: "sales.ops@company.com"
         status: "active"
@@ -232,7 +232,7 @@ glossaries:
       - id: "term-202"
         name: "Pipeline Value"
         definition: "Total value of all active opportunities"
-        domain: "sales"
+        domain: "Sales"
         tags: ["sales", "metrics"]
         owner: "sales.ops@company.com"
         status: "active"
@@ -242,7 +242,7 @@ glossaries:
       - id: "term-203"
         name: "Lead"
         definition: "Potential customer showing interest"
-        domain: "sales"
+        domain: "Sales"
         tags: ["sales", "pipeline"]
         owner: "sales.ops@company.com"
         status: "active"
@@ -252,7 +252,7 @@ glossaries:
       - id: "term-204"
         name: "Win Rate"
         definition: "Percentage of opportunities won vs. total closed"
-        domain: "sales"
+        domain: "Sales"
         tags: ["sales", "metrics"]
         owner: "sales.ops@company.com"
         status: "active"
@@ -262,7 +262,7 @@ glossaries:
       - id: "term-205"
         name: "Sales Cycle"
         definition: "Average time to close a deal"
-        domain: "sales"
+        domain: "Sales"
         tags: ["sales", "metrics"]
         owner: "sales.ops@company.com"
         status: "active"
@@ -272,7 +272,7 @@ glossaries:
       - id: "term-206"
         name: "Deal Size"
         definition: "Total value of a single sales opportunity"
-        domain: "sales"
+        domain: "Sales"
         tags: ["sales", "metrics"]
         owner: "sales.ops@company.com"
         status: "active"
@@ -282,7 +282,7 @@ glossaries:
       - id: "term-207"
         name: "Sales Territory"
         definition: "Geographic or account-based area of responsibility"
-        domain: "sales"
+        domain: "Sales"
         tags: ["sales", "organization"]
         owner: "sales.ops@company.com"
         status: "active"
@@ -292,7 +292,7 @@ glossaries:
       - id: "term-208"
         name: "Quota"
         definition: "Sales target assigned to a salesperson or team"
-        domain: "sales"
+        domain: "Sales"
         tags: ["sales", "targets"]
         owner: "sales.ops@company.com"
         status: "active"
@@ -306,13 +306,13 @@ glossaries:
     description: "Terms related to marketing activities"
     scope: "department"
     org_unit: "marketing"
-    domain: "marketing"
+    domain: "Marketing"
     terms:
       "term1-id":
         id: "term1-id"
         name: "CAC"
         definition: "Customer Acquisition Cost"
-        domain: "marketing"
+        domain: "Marketing"
         abbreviation: "CAC"
         synonyms: []
         examples: []
@@ -326,26 +326,5 @@ glossaries:
     status: "active"
     created_at: "2024-01-01T00:00:00Z"
     updated_at: "2024-01-01T00:00:00Z"
-
-domains:
-  - id: "core"
-    name: "Core"
-    description: "Core business concepts and terminology"
-  
-  - id: "finance"
-    name: "Finance"
-    description: "Financial terms and concepts related to business operations"
-  
-  - id: "sales"
-    name: "Sales"
-    description: "Terms related to sales processes and customer acquisition"
-  
-  - id: "marketing"
-    name: "Marketing"
-    description: "Terms related to marketing activities and campaigns"
-  
-  - id: "customer"
-    name: "Customer"
-    description: "Customer-related terminology and concepts"
 
 

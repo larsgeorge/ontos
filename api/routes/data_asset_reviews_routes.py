@@ -86,7 +86,7 @@ def list_review_requests(
     """Retrieve a list of data asset review requests."""
     logger.info(f"Listing data asset review requests (skip={skip}, limit={limit})")
     try:
-        requests = manager.list_review_requests(db=db, skip=skip, limit=limit)
+        requests = manager.list_review_requests(skip=skip, limit=limit)
         if not requests:
             return JSONResponse(content={"items": []})
         else:

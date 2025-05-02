@@ -492,6 +492,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                     SearchIndexItem(
                         id=f"review::{review.id}",
                         type="data-asset-review",
+                        feature_id="data-asset-reviews",
                         title=title,
                         description=review.notes or f"Review request {review.id}",
                         link=f"/data-asset-reviews/{review.id}",

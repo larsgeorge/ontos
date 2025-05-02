@@ -20,6 +20,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/feature-access-levels';
 
 interface CatalogItem {
   id: string;
@@ -75,6 +77,9 @@ const CatalogCommander: React.FC = () => {
   const [estates, setEstates] = useState<Estate[]>([]);
   const [selectedSourceEstate, setSelectedSourceEstate] = useState<string>('');
   const [selectedTargetEstate, setSelectedTargetEstate] = useState<string>('');
+
+  const { hasPermission } = usePermissions();
+  const canPerformWriteActions = hasPermission('catalog-commander', FeatureAccessLevel.FULL);
 
   const handleViewDataset = async (path: string) => {
     setSelectedDataset(path);
@@ -311,18 +316,22 @@ const CatalogCommander: React.FC = () => {
             <Eye className="h-4 w-4 mr-2" />
             View
           </Button>
-          <Button onClick={() => handleOperation('move')}>
-            <ArrowRight className="h-4 w-4 mr-2" />
-            Move
-          </Button>
-          <Button onClick={() => handleOperation('delete')} variant="destructive">
-            <Trash2 className="h-4 w-4 mr-2" />
-            Delete
-          </Button>
-          <Button onClick={() => handleOperation('rename')}>
-            <Pencil className="h-4 w-4 mr-2" />
-            Rename
-          </Button>
+          {canPerformWriteActions && (
+            <>
+              <Button onClick={() => handleOperation('move')}>
+                <ArrowRight className="h-4 w-4 mr-2" />
+                Move
+              </Button>
+              <Button onClick={() => handleOperation('delete')} variant="destructive">
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+              <Button onClick={() => handleOperation('rename')}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Rename
+              </Button>
+            </>
+          )}
           <Button onClick={() => handleOperation('info')}>
             <Info className="h-4 w-4 mr-2" />
             Info
@@ -369,14 +378,16 @@ const CatalogCommander: React.FC = () => {
           </CardContent>
         </Card>
 
-        <div className="flex flex-col justify-center gap-4">
-          <Button onClick={() => handleOperation('copy')}>
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-          <Button onClick={() => handleOperation('move')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </div>
+        {canPerformWriteActions && (
+          <div className="flex flex-col justify-center gap-4">
+            <Button onClick={() => handleOperation('copy')}>
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+            <Button onClick={() => handleOperation('move')}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
         <Card className="flex-1 flex flex-col h-full min-w-0">
           <CardHeader className="flex-none">
@@ -417,7 +428,6 @@ const CatalogCommander: React.FC = () => {
         </Card>
       </div>
 
-      {/* Info Panel */}
       <Card className="mt-6">
         <CardHeader>
           <CardTitle>Object Information</CardTitle>
@@ -451,7 +461,6 @@ const CatalogCommander: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* View Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
         <DialogContent className="max-w-[90vw] max-h-[90vh] flex flex-col">
           <DialogHeader>
@@ -462,16 +471,13 @@ const CatalogCommander: React.FC = () => {
               <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
             </div>
           ) : datasetContent ? (
-            <div className="mt-4 flex-1 overflow-auto">
+            <div className="mt-4 flex-1 overflow-auto h-full">
               <DataTable
                 data={datasetContent.data}
                 columns={datasetContent.schema.map(col => ({
                   accessorKey: col.name,
                   header: `${col.name} (${col.type})`,
                 }))}
-                pagination
-                pageSize={25}
-                className="h-full"
               />
             </div>
           ) : (
@@ -480,7 +486,6 @@ const CatalogCommander: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Operation Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>

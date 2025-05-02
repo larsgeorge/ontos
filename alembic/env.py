@@ -5,6 +5,17 @@ from sqlalchemy import pool
 
 from alembic import context
 
+# --- Import application-specific components ---
+import os
+import sys
+from api.common.database import Base, get_db_url # Import Base and helper
+from api.common.config import get_settings, Settings, init_config # Import settings loader, model, AND initializer
+# Add the project root to the Python path to allow imports from api.*
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
+# ---------------------------------------------
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -14,11 +25,48 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
+# --- Alembic configuration for the application --- 
+# Import the Base from your application
+# from api.common.database import Base # Already imported above
+# Import all model modules to ensure they are registered with Base.metadata
+# import api.db_models.data_products
+# import api.db_models.notification
+# import api.db_models.audit_log
+# import api.db_models.settings
+# import api.db_models.data_asset_reviews
+# Instead of individual imports, import the package to run __init__.py
+import api.db_models
+# Ensure all models defined in api.db_models.__all__ are now known to Base.metadata
+
+# Set the target metadata for autogenerate
+target_metadata = Base.metadata
+
+# --- Load settings and DB URL --- 
+# Use a function to handle potential errors during settings loading
+def load_app_settings() -> Settings:
+    try:
+        # Ensure settings are initialized before getting them
+        init_config() 
+        return get_settings()
+    except Exception as e:
+        print(f"ERROR: Failed to load application settings for Alembic: {e}")
+        # Optionally re-raise or exit if settings are critical
+        # sys.exit(1)
+        raise # Re-raise for now
+
+settings = load_app_settings()
+DB_URL = get_db_url(settings) # Use your helper to construct the URL
+# --------------------------------
+
+# --- Include Object Hook (To ignore indexes for Databricks SQL) ---
+def include_object(object, name, type_, reflected, compare_to):
+    """Exclude indexes from Alembic's consideration."""
+    if type_ == "index":
+        # print(f"Ignoring index: {name}") # Optional: for debugging
+        return False
+    else:
+        return True
+# -----------------------------------------------------------------
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -38,12 +86,13 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    # url = config.get_main_option("sqlalchemy.url") # <-- Don't get from config
     context.configure(
-        url=url,
+        url=DB_URL, # <--- Use the URL from settings
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object # Add hook here too if generating offline
     )
 
     with context.begin_transaction():
@@ -57,15 +106,21 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    # Use a dictionary to pass the URL directly
+    configuration = config.get_section(config.config_ini_section, {})
+    configuration["sqlalchemy.url"] = DB_URL # <--- Set the URL here
+
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        configuration, # Pass the modified configuration
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection, 
+            target_metadata=target_metadata,
+            include_object=include_object # Pass the hook function
         )
 
         with context.begin_transaction():

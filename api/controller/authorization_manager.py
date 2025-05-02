@@ -27,29 +27,42 @@ class AuthorizationManager:
         """
         if not user_groups:
             user_groups = []
+            logger.warning("Received empty or None user_groups for permission calculation.") # Log if groups are empty
+        else:
+            logger.info(f"Calculating effective permissions for user groups: {user_groups}") # Log received groups
 
         user_group_set = set(user_groups)
         effective_permissions: Dict[str, FeatureAccessLevel] = defaultdict(lambda: FeatureAccessLevel.NONE)
+        
+        # Log before fetching roles
+        logger.info("Fetching all application roles from SettingsManager...")
         all_roles = self._settings_manager.list_app_roles() # Fetches roles from DB via SettingsManager
+        logger.info(f"Fetched {len(all_roles)} roles total.")
+        # Log details of fetched roles (optional, can be verbose)
+        # for role in all_roles:
+        #     logger.debug(f"  Role '{role.name}' (ID: {role.id}) - Assigned Groups: {role.assigned_groups}, Permissions: {role.feature_permissions}")
+            
         feature_config = get_feature_config()
 
-        logger.debug(f"Calculating effective permissions for groups: {user_groups}")
-        logger.debug(f"Found {len(all_roles)} roles in total.")
-
         matching_roles = []
+        logger.info("Identifying matching roles based on group intersection...")
         for role in all_roles:
-            # Check for intersection between user groups and role's assigned groups
-            if user_group_set.intersection(role.assigned_groups):
+            role_assigned_groups_set = set(role.assigned_groups or []) # Ensure it's a set, handle None
+            # Check for intersection
+            if user_group_set.intersection(role_assigned_groups_set):
                 matching_roles.append(role)
-                logger.debug(f"User groups match role: '{role.name}' (ID: {role.id}) assigned groups: {role.assigned_groups}")
+                logger.info(f"  MATCH FOUND: User group(s) {list(user_group_set.intersection(role_assigned_groups_set))} match role: '{role.name}' (Assigned: {role.assigned_groups})")
+            # else: 
+            #    logger.debug(f"  NO MATCH: User groups {list(user_group_set)} vs Role '{role.name}' groups {list(role_assigned_groups_set)}")
 
         if not matching_roles:
-            logger.debug("No matching roles found for user groups.")
-            # Return default NONE permissions for all features if no roles match
+            logger.warning(f"No matching roles found for user groups: {user_groups}. Returning NONE access for all features.")
             return {feat_id: FeatureAccessLevel.NONE for feat_id in feature_config}
 
+        logger.info(f"Merging permissions from {len(matching_roles)} matching roles...")
         # Merge permissions from matching roles
         for role in matching_roles:
+            logger.debug(f"Processing permissions from role: '{role.name}'")
             for feature_id, assigned_level in role.feature_permissions.items():
                 if feature_id not in feature_config:
                     logger.warning(f"Role '{role.name}' contains permission for unknown feature ID '{feature_id}'. Skipping.")
@@ -59,14 +72,18 @@ class AuthorizationManager:
                 # Compare levels using the defined order
                 if ACCESS_LEVEL_ORDER[assigned_level] > ACCESS_LEVEL_ORDER[current_effective_level]:
                     effective_permissions[feature_id] = assigned_level
-                    logger.debug(f"Updated effective permission for '{feature_id}' to '{assigned_level.value}' from role '{role.name}'")
+                    logger.debug(f"  Updated effective permission for '{feature_id}' to '{assigned_level.value}' (was '{current_effective_level.value}') from role '{role.name}'")
+                # else:
+                #    logger.debug(f"  Keeping existing permission for '{feature_id}' ('{current_effective_level.value}') - Role '{role.name}' level ('{assigned_level.value}') is not higher.")
 
         # Ensure all features have at least NONE permission defined
         for feature_id in feature_config:
             if feature_id not in effective_permissions:
                 effective_permissions[feature_id] = FeatureAccessLevel.NONE
 
-        logger.info(f"Calculated effective permissions for groups {user_groups}: { {k: v.value for k,v in effective_permissions.items()} }")
+        # Log the final permissions
+        final_perms_str = {k: v.value for k, v in effective_permissions.items()}
+        logger.info(f"Final calculated effective permissions: {final_perms_str}")
         return dict(effective_permissions)
 
     def has_permission(self, effective_permissions: Dict[str, FeatureAccessLevel], feature_id: str, required_level: FeatureAccessLevel) -> bool:

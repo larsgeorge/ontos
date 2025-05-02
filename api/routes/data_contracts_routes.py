@@ -15,13 +15,15 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["data-contracts"])
 
-# Add dependency function to get the singleton
-async def get_data_contracts_manager(request: Request) -> DataContractsManager:
+def get_data_contracts_manager(request: Request) -> DataContractsManager:
     """Retrieves the DataContractsManager singleton from app.state."""
-    manager = request.app.state.manager_instances.get('data_contracts')
+    manager = getattr(request.app.state, 'data_contracts_manager', None)
     if manager is None:
-         logger.critical("DataContractsManager instance not found in app.state!")
-         raise HTTPException(status_code=500, detail="Data Contracts service is not available.")
+        logger.critical("DataContractsManager instance not found in app.state!")
+        raise HTTPException(status_code=500, detail="Data Contracts service is not available.")
+    if not isinstance(manager, DataContractsManager):
+        logger.critical(f"Object found at app.state.data_contracts_manager is not a DataContractsManager instance (Type: {type(manager)})!")
+        raise HTTPException(status_code=500, detail="Data Contracts service configuration error.")
     return manager
 
 @router.get('/data-contracts')

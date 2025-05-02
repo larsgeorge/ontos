@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import model_validator
 
 from .logging import get_logger
@@ -62,9 +62,15 @@ class Settings(BaseSettings):
     # Database Reset Flag
     APP_DB_DROP_ON_START: bool = Field(False, env='APP_DB_DROP_ON_START')
 
-    class Config:
-        env_file = DOTENV_FILE
-        case_sensitive = True
+    # SQLAlchemy Echo Flag (controls SQL query logging)
+    DB_ECHO: bool = Field(False, env='APP_DB_ECHO')
+
+    # Replace nested Config class with model_config dictionary
+    model_config = SettingsConfigDict(
+        env_file=str(DOTENV_FILE), 
+        case_sensitive=True, 
+        extra='ignore' # Explicitly ignore extra env vars
+    )
 
     @model_validator(mode='after')
     def compute_databricks_http_path(self) -> 'Settings':

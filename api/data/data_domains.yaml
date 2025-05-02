@@ -1,0 +1,60 @@
+domains:
+  - name: Core
+    description: "General, cross-company business concepts."
+    owner: ["data.governance@company.com"]
+    tags: ["enterprise", "standard"]
+
+  - name: Finance
+    description: "Financial accounting, reporting, and metrics."
+    owner: ["finance.team@company.com", "data.governance@company.com"]
+    tags: ["finance", "reporting", "metrics"]
+
+  - name: Sales
+    description: "Sales processes, opportunities, leads, and performance."
+    owner: ["sales.ops@company.com"]
+    tags: ["sales", "crm", "pipeline"]
+
+  - name: Marketing
+    description: "Customer acquisition, campaigns, engagement, and branding."
+    owner: ["marketing.analytics@company.com", "marketing.lead@company.com"]
+    tags: ["marketing", "campaigns", "customer"]
+
+  - name: Retail Operations
+    description: "Store operations, point-of-sale (POS), inventory, and logistics (source systems focus)."
+    owner: ["retail.systems@company.com"]
+    tags: ["retail", "operations", "pos", "inventory", "source"]
+
+  - name: Retail Analytics
+    description: "Analytics derived from retail operations data, including sales, demand, pricing."
+    owner: ["analytics.team@company.com", "retail.analysts@company.com"]
+    tags: ["retail", "analytics", "sales", "forecasting", "pricing"]
+
+  - name: Supply Chain
+    description: "Logistics, inventory management, reordering, and supplier relations."
+    owner: ["supply.chain.team@company.com"]
+    tags: ["logistics", "inventory", "supplier"]
+
+  - name: Customer
+    description: "Direct customer information, profiles, segmentation, and interactions (often overlaps Marketing/Sales)."
+    owner: ["crm.team@company.com", "customer.success@company.com"]
+    tags: ["customer", "crm", "profile", "segmentation"]
+
+  - name: Product
+    description: "Product catalog, features, lifecycle, and development."
+    owner: ["product.management@company.com"]
+    tags: ["product", "catalog", "development"]
+
+  - name: HR
+    description: "Human resources, employee data, payroll, and recruitment."
+    owner: ["hr.data@company.com"]
+    tags: ["hr", "employee", "payroll"]
+
+  - name: IoT
+    description: "Data from Internet of Things devices, sensors, and telemetry."
+    owner: ["iot.platform.team@company.com"]
+    tags: ["iot", "sensor", "telemetry"]
+
+  - name: Compliance
+    description: "Data related to legal, regulatory, and internal compliance requirements."
+    owner: ["compliance.office@company.com", "legal.team@company.com"]
+    tags: ["compliance", "legal", "governance", "audit"] 

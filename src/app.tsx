@@ -10,22 +10,23 @@ import { useNotificationsStore } from './stores/notifications-store';
 
 // Import views
 import Home from './views/home';
+import DataDomainsView from './views/data-domains';
 import DataProducts from './views/data-products';
 import DataProductDetails from './views/data-product-details';
 import DataContracts from './views/data-contracts';
 import BusinessGlossary from './views/business-glossary';
-import MasterDataManagement from './views/master-data-management';
-import Entitlements from './views/entitlements';
-import SecurityFeatures from './views/security-features';
 import Compliance from './views/compliance';
+import EstateManager from './views/estate-manager';
+import MasterDataManagement from './views/master-data-management';
+import SecurityFeatures from './views/security-features';
+import Entitlements from './views/entitlements';
+import EntitlementsSync from './views/entitlements-sync';
+import DataAssetReviews from './views/data-asset-reviews';
+import DataAssetReviewDetails from './views/data-asset-review-details';
 import CatalogCommander from './views/catalog-commander';
 import Settings from './views/settings';
 import About from './views/about';
 import NotFound from './views/not-found';
-import EntitlementsSync from './views/entitlements-sync';
-import EstateManager from './views/estate-manager';
-import DataAssetReviews from './views/data-asset-reviews';
-import DataAssetReviewDetails from './views/data-asset-review-details';
 
 export default function App() {
   const fetchUserInfo = useUserStore((state: any) => state.fetchUserInfo);
@@ -57,6 +58,7 @@ export default function App() {
           <Layout>
             <Routes>
               <Route path="/" element={<Home />} />
+              <Route path="/data-domains" element={<DataDomainsView />} />
               <Route path="/data-products" element={<DataProducts />} />
               <Route path="/data-products/:productId" element={<DataProductDetails />} />
               <Route path="/data-contracts" element={<DataContracts />} />

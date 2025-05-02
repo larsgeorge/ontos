@@ -11,7 +11,12 @@ from api.controller.users_manager import UsersManager # Needed for CurrentUserDe
 from api.controller.data_asset_reviews_manager import DataAssetReviewManager
 from api.controller.notifications_manager import NotificationsManager # Added
 from api.controller.data_products_manager import DataProductsManager # Added for DataProductsManagerDep
+from api.controller.data_domains_manager import DataDomainManager # Add import
 from databricks.sdk import WorkspaceClient # Added for WorkspaceClientDep
+# Import other managers
+from api.controller.data_contracts_manager import DataContractsManager
+from api.controller.business_glossaries_manager import BusinessGlossariesManager
+from api.controller.search_manager import SearchManager
 
 # Import base dependencies
 from api.common.database import get_session_factory # Import the factory function
@@ -31,6 +36,11 @@ from api.common.manager_dependencies import (
     get_data_asset_review_manager,
     get_notifications_manager, # Added
     get_data_products_manager, # Added
+    get_data_domain_manager, # Add import
+    # Add imports for new getters
+    get_data_contracts_manager,
+    get_business_glossaries_manager,
+    get_search_manager,
 )
 # Import workspace client getter separately as it might be structured differently
 from api.common.workspace_client import get_workspace_client # Added
@@ -99,6 +109,14 @@ NotificationsManagerDep = Annotated[NotificationsManager, Depends(get_notificati
 
 # Add DataProductsManagerDep
 DataProductsManagerDep = Annotated[DataProductsManager, Depends(get_data_products_manager)]
+
+# Add DataDomainManagerDep
+DataDomainManagerDep = Annotated[DataDomainManager, Depends(get_data_domain_manager)]
+
+# Add other Manager Annotated Types
+DataContractsManagerDep = Annotated[DataContractsManager, Depends(get_data_contracts_manager)]
+BusinessGlossariesManagerDep = Annotated[BusinessGlossariesManager, Depends(get_business_glossaries_manager)]
+SearchManagerDep = Annotated[SearchManager, Depends(get_search_manager)]
 
 # Permission Checker Dependency (Relies on AuthorizationManager)
 # This Dep provides the AuthorizationManager needed by PermissionChecker('feature', level)

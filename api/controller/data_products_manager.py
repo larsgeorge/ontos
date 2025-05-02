@@ -42,6 +42,10 @@ logger = get_logger(__name__)
 # Import necessary components for creating a session
 from api.common.database import get_session_factory
 
+# Import config to get data path - Removed get_settings as it's not needed for path
+# from api.common.config import get_settings 
+from pathlib import Path
+
 # Inherit from SearchableAsset
 @searchable_asset
 class DataProductsManager(SearchableAsset):
@@ -347,50 +351,119 @@ class DataProductsManager(SearchableAsset):
             logger.error(f"Failed to send Genie Space completion notification: {e}", exc_info=True)
             # No explicit rollback needed due to context manager
 
-    def load_from_yaml(self, yaml_path: str) -> bool:
-        """Load data products from YAML into the database via the repository."""
+    def load_initial_data(self, db: Session) -> bool:
+        """Load data products from the default YAML file into the database if empty."""
+        # Check if products already exist
         try:
-            with open(yaml_path) as file:
+            existing_products = self._repo.get_multi(db=db, limit=1)
+            if existing_products:
+                 logger.info("DataProductsManager: Data products table is not empty. Skipping initial data loading.")
+                 return False # Indicate that loading was skipped
+        except SQLAlchemyError as e:
+             logger.error(f"DataProductsManager: Error checking for existing data products: {e}", exc_info=True)
+             raise # Propagate error, startup might need to handle this
+
+        # Construct the default YAML path relative to the project structure
+        # settings = get_settings() # No longer needed for path
+        # yaml_path = Path(settings.APP_DATA_DIR) / "data_products.yaml" # Incorrect
+        
+        # Corrected path construction relative to this file's location
+        base_dir = Path(__file__).parent.parent # Navigate up from controller/ to api/
+        yaml_path = base_dir / "data" / "data_products.yaml"
+        
+        logger.info(f"DataProductsManager: Attempting to load initial data from {yaml_path}...")
+
+        try:
+            if not yaml_path.is_file():
+                 logger.warning(f"DataProductsManager: Data product YAML file not found at {yaml_path}. No products loaded.")
+                 return False
+
+            with yaml_path.open() as file:
                 data = yaml.safe_load(file)
             
             if not isinstance(data, list):
-                 logger.error(f"YAML file {yaml_path} should contain a list of products.")
+                 logger.error(f"DataProductsManager: YAML file {yaml_path} should contain a list of products.")
                  return False
 
             loaded_count = 0
             errors = 0
             for product_dict in data:
                 if not isinstance(product_dict, dict):
-                    logger.warning("Skipping non-dictionary item in YAML data.")
+                    logger.warning("DataProductsManager: Skipping non-dictionary item in YAML data.")
                     continue
                 try:
+                    # Generate ID if missing
+                    if not product_dict.get('id'):
+                         product_dict['id'] = str(uuid.uuid4())
+                         
+                    # Set timestamps if missing
+                    now = datetime.utcnow()
+                    product_dict.setdefault('created_at', now)
+                    product_dict.setdefault('updated_at', now)
+
+                    # Validate data using the API model
                     product_api = DataProductApi(**product_dict)
-                    existing = self.get_product(product_api.id)
-                    if existing:
-                        logger.warning(f"Product ID {product_api.id} exists, updating from YAML.")
-                        self.update_product(product_api.id, product_api)
+                    
+                    # Check if product exists using the current session 'db'
+                    # We need a get method that uses the repo and the passed db session
+                    # Let's assume get_product should accept the session
+                    # NOTE: We need to modify get_product/update_product/create_product or the repo methods 
+                    # to accept the 'db' session parameter. 
+                    # For now, we will directly use the repo with the passed db session.
+                    
+                    existing_db = self._repo.get(db=db, id=product_api.id) # Use passed db session
+
+                    if existing_db:
+                        logger.warning(f"DataProductsManager: Product ID {product_api.id} exists, attempting update from YAML using current session.")
+                        # We need an update method that uses the repo and the passed db session.
+                        # Pass the validated API model 'product_api' to the repo's update.
+                        self._repo.update(db=db, db_obj=existing_db, obj_in=product_api) # Use passed db session
                     else:
-                        # Correctly pass the dictionary to create_product
-                        self.create_product(product_dict)
+                        logger.info(f"DataProductsManager: Creating product ID {product_api.id} from YAML using current session.")
+                        # Pass the validated API model 'product_api' to the repo's create.
+                        self._repo.create(db=db, obj_in=product_api) # Use passed db session
+                        
                     loaded_count += 1
-                except (ValidationError, ValueError, SQLAlchemyError) as e: # Catch errors during processing/db ops
-                    # This correctly uses product_dict.get() because product_dict IS a dict
-                    logger.error(f"Error processing product from YAML (ID: {product_dict.get('id', 'N/A')}): {e}")
+                except (ValidationError, ValueError, SQLAlchemyError) as e: 
+                    logger.error(f"DataProductsManager: Error processing product from YAML (ID: {product_dict.get('id', 'N/A')}): {e}")
+                    db.rollback() # Rollback this specific product's transaction part
                     errors += 1
+                except Exception as inner_e: # Catch unexpected errors per product
+                     logger.error(f"DataProductsManager: Unexpected error processing product from YAML (ID: {product_dict.get('id', 'N/A')}): {inner_e}", exc_info=True)
+                     db.rollback() # Rollback this specific product's transaction part
+                     errors += 1
 
-            logger.info(f"Processed {loaded_count} data products from {yaml_path}. Encountered {errors} processing errors.")
-            return loaded_count > 0
 
-        except FileNotFoundError:
-            logger.warning(f"Data product YAML file not found at {yaml_path}. No products loaded.")
+            if errors == 0 and loaded_count > 0:
+                 db.commit() # Commit only if all products loaded successfully
+                 logger.info(f"DataProductsManager: Successfully loaded and committed {loaded_count} data products from {yaml_path}.")
+            elif loaded_count > 0 and errors > 0:
+                 logger.warning(f"DataProductsManager: Processed {loaded_count + errors} products from {yaml_path}, but encountered {errors} errors. Changes for successful products were rolled back.")
+                 # Rollback is handled per error, no final commit needed
+            elif errors > 0:
+                 logger.error(f"DataProductsManager: Encountered {errors} errors processing products from {yaml_path}. No products loaded.")
+                 # Rollback is handled per error, no final commit needed
+            else:
+                 logger.info(f"DataProductsManager: No new data products found to load from {yaml_path}.")
+                 # No commit needed if nothing was loaded
+
+            return loaded_count > 0 and errors == 0 # Return True only if some were loaded without errors
+
+        except FileNotFoundError: # Catching outside the loop
+            logger.warning(f"DataProductsManager: Data product YAML file not found at {yaml_path}. No products loaded.")
             return False
         except yaml.YAMLError as e:
-            logger.error(f"Error parsing data product YAML file {yaml_path}: {e}")
+            logger.error(f"DataProductsManager: Error parsing data product YAML file {yaml_path}: {e}")
+            db.rollback() # Rollback if YAML parsing failed
             return False
-        except Exception as e: # Catch any other unexpected error
-            # Explicitly convert exception to string for logging
+        except SQLAlchemyError as e: # Catch DB errors outside the loop (e.g., during initial check)
+             logger.error(f"DataProductsManager: Database error during initial data load from {yaml_path}: {e}", exc_info=True)
+             db.rollback()
+             return False
+        except Exception as e: # Catch any other unexpected error during file handling/setup
             error_msg = str(e)
-            logger.error(f"Unexpected error during YAML load ({yaml_path}): {error_msg}", exc_info=True)
+            logger.error(f"DataProductsManager: Unexpected error during YAML load setup ({yaml_path}): {error_msg}", exc_info=True)
+            db.rollback()
             return False
 
     def save_to_yaml(self, yaml_path: str) -> bool:
@@ -466,8 +539,9 @@ class DataProductsManager(SearchableAsset):
                     SearchIndexItem(
                         id=f"product::{product.id}",
                         version=product.version, # Add version
-                        product_type=product.productType.value if product.productType else None, # Add type
-                        type="data-product",
+                        product_type=product.productType if product.productType else None, 
+                        type="data-product", # Keep type for frontend icon/rendering
+                        feature_id="data-products", # <-- Add this
                         title=product.info.title,
                         description=product.info.description or "",
                         link=f"/data-products/{product.id}",

@@ -13,13 +13,15 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["business-glossaries"])
 
-# Add dependency function to get the singleton
-async def get_business_glossaries_manager(request: Request) -> BusinessGlossariesManager:
+def get_business_glossaries_manager(request: Request) -> BusinessGlossariesManager:
     """Retrieves the BusinessGlossariesManager singleton from app.state."""
-    manager = request.app.state.manager_instances.get('business_glossaries')
+    manager = getattr(request.app.state, 'business_glossaries_manager', None)
     if manager is None:
-         logger.critical("BusinessGlossariesManager instance not found in app.state!")
-         raise HTTPException(status_code=500, detail="Business Glossaries service is not available.")
+        logger.critical("BusinessGlossariesManager instance not found in app.state!")
+        raise HTTPException(status_code=500, detail="Business Glossary service is not available.")
+    if not isinstance(manager, BusinessGlossariesManager):
+        logger.critical(f"Object found at app.state.business_glossaries_manager is not a BusinessGlossariesManager instance (Type: {type(manager)})!")
+        raise HTTPException(status_code=500, detail="Business Glossary service configuration error.")
     return manager
 
 @router.get('/business-glossaries')

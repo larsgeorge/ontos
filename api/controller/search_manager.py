@@ -1,8 +1,16 @@
+from __future__ import annotations # Ensure forward references work
 import logging
-from typing import Any, Dict, List, Optional, Iterable
+from typing import Any, Dict, List, Optional, Iterable, TYPE_CHECKING
 
 # Import Search Interfaces
 from api.common.search_interfaces import SearchableAsset, SearchIndexItem
+# Import Permission Checker and Feature Access Level
+if TYPE_CHECKING:
+    from api.common.authorization import PermissionChecker
+# Import AuthorizationManager and UserInfo
+from api.controller.authorization_manager import AuthorizationManager
+from api.models.users import UserInfo
+from api.common.features import FeatureAccessLevel
 
 from api.common.logging import setup_logging, get_logger
 setup_logging(level=logging.INFO)
@@ -29,8 +37,13 @@ class SearchManager:
         for manager in self.searchable_managers:
             manager_name = manager.__class__.__name__
             try:
+                # Ensure managers populate the new feature_id field
                 items = manager.get_search_index_items()
-                new_index.extend(items)
+                for item in items:
+                    if not hasattr(item, 'feature_id') or not item.feature_id:
+                         logger.warning(f"Search item {item.id} from {manager_name} is missing feature_id. Skipping.")
+                         continue
+                    new_index.append(item)
             except Exception as e:
                 logger.error(f"Failed to get search items from {manager_name}: {e}", exc_info=True)
         
@@ -38,13 +51,16 @@ class SearchManager:
         self.index = new_index
         logger.info(f"Search index build complete. Total items: {len(self.index)}")
 
-    def search(self, query: str) -> List[SearchIndexItem]: # Return type is now List[SearchIndexItem]
-        """Performs a case-insensitive prefix search on title, description, tags."""
+    def search(self, query: str, auth_manager: AuthorizationManager, user: UserInfo) -> List[SearchIndexItem]:
+        """
+        Performs a case-insensitive prefix search on title, description, tags,
+        filtered by user permissions for the associated feature using AuthorizationManager.
+        """
         if not query:
             return []
 
         query_lower = query.lower()
-        results = []
+        potential_results = []
         for item in self.index:
             match = False
             # Check title
@@ -61,11 +77,23 @@ class SearchManager:
                          break # Found a matching tag
             
             if match:
-                # Return the SearchIndexItem directly
-                results.append(item)
+                potential_results.append(item)
 
-        logger.info(f"Prefix search for '{query}' returned {len(results)} results.")
-        # Ensure the return type matches the route's expectation (List[Dict] vs List[SearchIndexItem])
-        # If the route expects List[Dict], convert items: [r.model_dump() for r in results]
-        # For now, assume route can handle List[SearchIndexItem] or will be updated
-        return results 
+        # Filter based on permissions using AuthorizationManager
+        if not user.groups:
+             logger.warning(f"User {user.username} has no groups, returning empty search results.")
+             return []
+             
+        filtered_results = []
+        try:
+             effective_permissions = auth_manager.get_user_effective_permissions(user.groups)
+             for item in potential_results:
+                 if auth_manager.has_permission(effective_permissions, item.feature_id, FeatureAccessLevel.READ_ONLY):
+                     filtered_results.append(item)
+        except Exception as e:
+            logger.error(f"Error checking permissions during search for user {user.username}: {e}", exc_info=True)
+            # Return empty list or raise? Returning empty for now.
+            return []
+
+        logger.info(f"Prefix search for '{query}' returned {len(filtered_results)} results after permission filtering for user {user.username}.")
+        return filtered_results 

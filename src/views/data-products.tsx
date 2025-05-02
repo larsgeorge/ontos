@@ -22,7 +22,7 @@ import DataProductGraphView from '@/components/data-products/data-product-graph-
 
 // --- Helper Function Type Definition --- 
 type CheckApiResponseFn = <T>(
-    response: { data?: T | { detail?: string }, error?: string },
+    response: { data?: T | { detail?: string }, error?: string | null | undefined },
     name: string
 ) => T;
 
@@ -115,11 +115,13 @@ export default function DataProducts() {
         setLoading(false);
       }
     };
-    if (canRead) {
+    // Only load initial data if the user has permission and permissions are loaded
+    if (!permissionsLoading && canRead) {
         loadInitialData();
-    } else if (!permissionsLoading) {
+    } else if (!permissionsLoading && !canRead) {
+        // Ensure loading is stopped if permissions are loaded but access denied.
+        // The permission denied message is handled by the render logic.
         setLoading(false);
-        setError("Permission Denied: Cannot view data products.");
     }
   }, [get, canRead, permissionsLoading]);
 
@@ -457,126 +459,135 @@ export default function DataProducts() {
         Data Products
       </h1>
 
-      {error && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {loading || permissionsLoading ? (
+      {/* 1. Check Permissions Loading */}
+      {permissionsLoading ? (
         <div className="flex justify-center items-center h-64">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
         </div>
       ) : !canRead ? (
-         <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>You do not have permission to view data products.</AlertDescription>
-          </Alert>
-      ) : viewMode === 'table' ? (
-        <DataTable
-          columns={columns}
-          data={products}
-          searchColumn="info.title"
-          toolbarActions={
-            <>
-              {/* Create Button - Conditionally enabled */}
-              <Button
-                  onClick={() => handleOpenDialog()}
-                  className="gap-2 h-9"
-                  disabled={!canWrite || permissionsLoading}
-                  title={canWrite ? "Create Data Product" : "Create (Permission Denied)"}
-              >
-                <Plus className="h-4 w-4" />
-                Create Product
-              </Button>
-              {/* Upload Button - Conditionally enabled */}
-              <Button
-                  onClick={triggerFileUpload}
-                  className="gap-2 h-9"
-                  variant="outline"
-                  disabled={isUploading || !canWrite || permissionsLoading}
-                  title={canWrite ? "Upload Data Product File" : "Upload (Permission Denied)"}
-              >
-                <Upload className="h-4 w-4" />
-                {isUploading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</>) : 'Upload File'}
-              </Button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept=".json,.yaml,.yml"
-                style={{ display: 'none' }}
-              />
-              {/* View Toggle Buttons - Moved Here */}
-              <div className="flex items-center gap-1 border rounded-md p-0.5 ml-auto">
-                  <Button
-                      variant={tableButtonVariant}
-                      size="sm"
-                      onClick={() => setViewMode('table')}
-                      className="h-8 px-2"
-                      title="Table View"
-                  >
-                      <Table className="h-4 w-4" />
-                  </Button>
-                  <Button
-                      variant={graphButtonVariant}
-                      size="sm"
-                      onClick={() => setViewMode('graph')}
-                      className="h-8 px-2"
-                      title="Graph View"
-                  >
-                      <Workflow className="h-4 w-4" />
-                  </Button>
-              </div>
-            </>
-          }
-          bulkActions={(selectedRows) => {
-            // Remove view toggle logic from here
-            return (
-              <>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 gap-1"
-                    onClick={() => handleCreateGenieSpace(selectedRows)}
-                    disabled={selectedRows.length === 0 || !canWrite}
-                    title={canWrite ? "Create Genie Space from selected" : "Create Genie Space (Permission Denied)"}
-                >
-                    <Sparkles className="w-4 h-4 mr-1" />
-                    Create Genie Space ({selectedRows.length})
-                </Button>
-                <Button
-                    variant="destructive"
-                    size="sm"
-                    className="h-9 gap-1"
-                    onClick={() => handleBulkDelete(selectedRows)}
-                    disabled={selectedRows.length === 0 || !canAdmin}
-                    title={canAdmin ? "Delete selected" : "Delete (Permission Denied)"}
-                >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    Delete Selected ({selectedRows.length})
-                </Button>
-              </>
-            );
-          }}
-          onRowClick={(row) => {
-            const productId = row.original.id;
-            if (productId) {
-              navigate(`/data-products/${productId}`);
-            } else {
-              console.warn("Cannot navigate: Product ID is missing.", row.original);
-              toast({ title: 'Navigation Error', description: 'Could not navigate to details, product ID is missing.', variant: "default" });
-            }
-          }}
-        />
+        // 2. Check Read Permission (if permissions loaded)
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>You do not have permission to view data products.</AlertDescription>
+        </Alert>
+      ) : loading ? (
+        // 3. Check Data Loading (if permissions OK)
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
+      ) : error ? (
+         // 4. Check Data Loading Error (if permissions OK and data loading finished)
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription> {/* Display the actual data loading error */}
+        </Alert>
       ) : (
-        <DataProductGraphView 
-            products={products} 
-            viewMode={viewMode}
-            setViewMode={setViewMode}
-            navigate={navigate}
-        />
+        // 5. Render Content (if permissions OK and data loaded without error)
+        viewMode === 'table' ? (
+          <DataTable
+            columns={columns}
+            data={products}
+            searchColumn="info.title"
+            toolbarActions={
+              <>
+                {/* Create Button - Conditionally enabled */}
+                <Button
+                    onClick={() => handleOpenDialog()}
+                    className="gap-2 h-9"
+                    disabled={!canWrite || permissionsLoading}
+                    title={canWrite ? "Create Data Product" : "Create (Permission Denied)"}
+                >
+                  <Plus className="h-4 w-4" />
+                  Create Product
+                </Button>
+                {/* Upload Button - Conditionally enabled */}
+                <Button
+                    onClick={triggerFileUpload}
+                    className="gap-2 h-9"
+                    variant="outline"
+                    disabled={isUploading || !canWrite || permissionsLoading}
+                    title={canWrite ? "Upload Data Product File" : "Upload (Permission Denied)"}
+                >
+                  <Upload className="h-4 w-4" />
+                  {isUploading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</>) : 'Upload File'}
+                </Button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept=".json,.yaml,.yml"
+                  style={{ display: 'none' }}
+                />
+                {/* View Toggle Buttons - Moved Here */}
+                <div className="flex items-center gap-1 border rounded-md p-0.5 ml-auto">
+                    <Button
+                        variant={tableButtonVariant}
+                        size="sm"
+                        onClick={() => setViewMode('table')}
+                        className="h-8 px-2"
+                        title="Table View"
+                    >
+                        <Table className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant={graphButtonVariant}
+                        size="sm"
+                        onClick={() => setViewMode('graph')}
+                        className="h-8 px-2"
+                        title="Graph View"
+                    >
+                        <Workflow className="h-4 w-4" />
+                    </Button>
+                </div>
+              </>
+            }
+            bulkActions={(selectedRows) => {
+              // Remove view toggle logic from here
+              return (
+                <>
+                  <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 gap-1"
+                      onClick={() => handleCreateGenieSpace(selectedRows)}
+                      disabled={selectedRows.length === 0 || !canWrite}
+                      title={canWrite ? "Create Genie Space from selected" : "Create Genie Space (Permission Denied)"}
+                  >
+                      <Sparkles className="w-4 h-4 mr-1" />
+                      Create Genie Space ({selectedRows.length})
+                  </Button>
+                  <Button
+                      variant="destructive"
+                      size="sm"
+                      className="h-9 gap-1"
+                      onClick={() => handleBulkDelete(selectedRows)}
+                      disabled={selectedRows.length === 0 || !canAdmin}
+                      title={canAdmin ? "Delete selected" : "Delete (Permission Denied)"}
+                  >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete Selected ({selectedRows.length})
+                  </Button>
+                </>
+              );
+            }}
+            onRowClick={(row) => {
+              const productId = row.original.id;
+              if (productId) {
+                navigate(`/data-products/${productId}`);
+              } else {
+                console.warn("Cannot navigate: Product ID is missing.", row.original);
+                toast({ title: 'Navigation Error', description: 'Could not navigate to details, product ID is missing.', variant: "default" });
+              }
+            }}
+          />
+        ) : (
+          <DataProductGraphView 
+              products={products} 
+              viewMode={viewMode}
+              setViewMode={setViewMode}
+              navigate={navigate}
+          />
+        )
       )}
 
       {/* Render the new Dialog Component */}

@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 
 interface ApiResponse<T> {
   data: T;
-  error?: string;
+  error?: string | null;
 }
 
 export const useApi = () => {
@@ -119,17 +119,44 @@ export const useApi = () => {
     }
   }, []);
 
-  const delete_ = useCallback(async (url: string): Promise<void> => {
+  const delete_ = useCallback(async (url: string): Promise<ApiResponse<unknown>> => {
     console.log(`[useApi] DELETE request to ${url}`);
     setLoading(true);
+    let responseData: unknown = null;
+    let errorMsg: string | null = null;
     try {
-      await fetch(url, { method: 'DELETE' });
-      console.log(`[useApi] DELETE completed for ${url}`);
+      const response = await fetch(url, { method: 'DELETE' });
+
+      // Check status and potentially parse error body
+      if (!response.ok) {
+          let errorBody: any;
+          const contentType = response.headers.get('Content-Type');
+          try {
+              if (contentType?.includes('application/json')) {
+                  errorBody = await response.json();
+              } else {
+                  errorBody = await response.text();
+              }
+          } catch (parseError) {
+              errorBody = response.statusText; // Fallback
+          }
+          errorMsg = errorBody?.detail || (typeof errorBody === 'string' ? errorBody : JSON.stringify(errorBody)) || `HTTP error! status: ${response.status}`;
+          console.error(`[useApi] DELETE error response from ${url} (${response.status}):`, errorBody);
+      } else {
+          // Success (usually 204 No Content for DELETE)
+          console.log(`[useApi] DELETE successful for ${url} (status: ${response.status})`);
+          // No data expected for successful delete, but structure requires data field
+          responseData = {}; 
+      }
+
     } catch (error) {
-      console.error(`[useApi] DELETE error from ${url}:`, error);
+      // Network errors
+      errorMsg = (error as Error).message;
+      console.error(`[useApi] Network or other error during DELETE to ${url}:`, error);
     } finally {
       setLoading(false);
     }
+    return { data: responseData, error: errorMsg };
   }, []);
 
   return { get, post, put, delete: delete_, loading };

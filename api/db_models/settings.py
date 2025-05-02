@@ -1,6 +1,6 @@
 import json
 import uuid
-from sqlalchemy import Column, String, Text, func, UniqueConstraint
+from sqlalchemy import Column, String, Text, func, UniqueConstraint, TIMESTAMP
 from sqlalchemy.dialects.postgresql import JSONB # Use JSONB if available, falls back for others
 
 from api.common.database import Base
@@ -16,6 +16,10 @@ class AppRoleDb(Base):
     # Using Text for broader compatibility, can switch to JSONB if needed
     assigned_groups = Column(Text, nullable=False, default='[]')
     feature_permissions = Column(Text, nullable=False, default='{}')
+
+    # Add timestamp columns - Make them nullable
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=True)
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=True)
 
     # Define uniqueness constraint on 'name' if desired
     __table_args__ = (UniqueConstraint('name', name='uq_app_roles_name'),)

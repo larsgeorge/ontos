@@ -17,10 +17,16 @@ from api.controller.search_manager import SearchManager
 
 # Import the search interfaces
 from api.common.search_interfaces import SearchableAsset, SearchIndexItem
-
-# Import dependencies for db and ws_client
-from api.common.database import get_db
-from api.common.workspace_client import get_workspace_client_dependency
+# Import dependencies for db and ws_client (Not needed directly here anymore)
+# from api.common.database import get_db
+# from api.common.workspace_client import get_workspace_client_dependency
+# Import Permission Checker class (not the non-existent getter)
+from api.common.authorization import PermissionChecker # Keep PermissionChecker class import if needed elsewhere, but remove getter
+# Import correct dependencies using Annotated types from dependencies.py
+from api.common.dependencies import (
+    CurrentUserDep, 
+    AuthorizationManagerDep
+)
 
 # Configure logging
 from api.common.logging import setup_logging, get_logger
@@ -30,12 +36,10 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["search"])
 
 # --- Manager Dependency ---
-_search_manager_instance: Optional[SearchManager] = None # This global variable is now unused
+# Remove unused global variable
+# _search_manager_instance: Optional[SearchManager] = None
 
 async def get_search_manager(
-    # Remove db and ws_client dependencies
-    # db: Session = Depends(get_db),
-    # ws_client: Optional[WorkspaceClient] = Depends(get_workspace_client_dependency()) 
     request: Request # Inject Request object
 ) -> SearchManager:
     """Dependency to retrieve the SearchManager singleton instance from app.state."""
@@ -50,13 +54,17 @@ async def get_search_manager(
 @router.get("/search", response_model=List[SearchIndexItem])
 async def search_items(
     search_term: str,
-    manager: SearchManager = Depends(get_search_manager)
+    # Reorder parameters: non-defaults first
+    auth_manager: AuthorizationManagerDep,
+    current_user: CurrentUserDep,
+    manager: SearchManager = Depends(get_search_manager) 
 ) -> List[SearchIndexItem]:
-    """Search across indexed items."""
+    """Search across indexed items, filtered by user permissions."""
     if not search_term:
         raise HTTPException(status_code=400, detail="Query parameter (search_term) is required")
     try:
-        results = manager.search(search_term)
+        # Pass auth_manager and current_user to the search method
+        results = manager.search(search_term, auth_manager, current_user)
         return results
     except Exception as e:
         logger.exception(f"Error during search for query '{search_term}': {e}")
@@ -75,7 +83,8 @@ async def rebuild_search_index(
         logger.exception(f"Error during index rebuild: {e}")
         raise HTTPException(status_code=500, detail="Index rebuild failed")
 
-# --- Register Function --- 
+# --- Register Function ---
+# Removed unused function argument `app` as it's not needed for `register_routes`
 def register_routes(app):
     app.include_router(router)
     logger.info("Search routes registered")

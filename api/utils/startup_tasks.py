@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, List
+import json # Import json for parsing
 
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
@@ -9,6 +10,10 @@ from api.common.config import get_settings, Settings
 from api.common.logging import get_logger
 from api.common.database import init_db, get_session_factory, Base, engine
 from api.common.workspace_client import get_workspace_client
+from api.common.features import FeatureAccessLevel, APP_FEATURES, get_feature_config
+from api.models.settings import AppRoleCreate, AppRole as AppRoleApi
+from api.common.config import Settings
+from api.controller.settings_manager import SettingsManager
 
 # Import Managers needed for instantiation
 from api.controller.data_products_manager import DataProductsManager
@@ -16,11 +21,26 @@ from api.controller.data_asset_reviews_manager import DataAssetReviewManager
 from api.controller.data_contracts_manager import DataContractsManager
 from api.controller.business_glossaries_manager import BusinessGlossariesManager
 from api.controller.search_manager import SearchManager
-from api.controller.settings_manager import SettingsManager
 from api.controller.users_manager import UsersManager
 from api.controller.authorization_manager import AuthorizationManager
 from api.controller.notifications_manager import NotificationsManager
 from api.controller.audit_manager import AuditManager
+from api.controller.data_domains_manager import DataDomainManager # Import new manager
+
+# Import repositories (needed for manager instantiation)
+from api.repositories.settings_repository import AppRoleRepository
+from api.repositories.audit_log_repository import AuditLogRepository
+from api.repositories.data_asset_reviews_repository import DataAssetReviewRepository
+from api.repositories.data_products_repository import DataProductRepository
+from api.repositories.data_domain_repository import DataDomainRepository # Import new repo
+# Import the required DB model
+from api.db_models.settings import AppRoleDb
+# Import the AuditLog DB model
+from api.db_models.audit_log import AuditLog
+# Import the DataAssetReviewRequestDb DB model
+from api.db_models.data_asset_reviews import DataAssetReviewRequestDb
+# Import the DataProductDb DB model
+from api.db_models.data_products import DataProductDb
 
 # Import Demo Data Loader
 from api.utils.demo_data_loader import load_demo_data
@@ -43,149 +63,150 @@ def initialize_database(settings: Settings): # Keep settings param for future us
         raise RuntimeError("Application cannot start due to database initialization error.") from e
 
 def initialize_managers(app: FastAPI):
-    """Initializes and stores manager instances in app.state."""
+    """Initializes and stores manager instances directly in app.state."""
     logger.info("Initializing manager singletons...")
     settings = get_settings()
     session_factory = get_session_factory() # Assumes DB is initialized
     db_session = None
-
-    # Initialize Workspace Client first
     ws_client = None
+
     try:
+        # --- Initialize Workspace Client --- 
+        logger.info("Attempting to initialize WorkspaceClient...")
         ws_client = get_workspace_client(settings=settings)
-        if ws_client:
-            logger.info("WorkspaceClient initialized successfully for managers.")
-        else:
-            logger.warning("WorkspaceClient could not be initialized for managers (likely missing config). Dependent features may fail.")
-    except Exception as e:
-        logger.error(f"Error initializing WorkspaceClient for managers: {e}", exc_info=True)
+        if not ws_client:
+            raise RuntimeError("Failed to initialize Databricks WorkspaceClient (returned None).")
+        logger.info("WorkspaceClient initialized successfully.")
 
-    try:
+        # --- Initialize DB Session --- 
         db_session = session_factory()
-        app.state.manager_instances = {}
-        app.state.auth_manager = None
-        app.state.settings_manager = None
-        app.state.users_manager = None
 
-        # Instantiate managers requiring dependencies
-        # Core managers first
-        settings_manager_instance = SettingsManager(db=db_session, workspace_client=ws_client)
-        app.state.settings_manager = settings_manager_instance
-        logger.info("SettingsManager singleton stored in app.state.")
-
-        users_manager_instance = UsersManager(ws_client=ws_client)
-        app.state.users_manager = users_manager_instance
-        logger.info("UsersManager singleton stored in app.state.")
-
-        auth_manager_instance = AuthorizationManager(settings_manager=settings_manager_instance)
-        app.state.auth_manager = auth_manager_instance
-        logger.info("AuthorizationManager singleton stored in app.state.")
-
-        # Initialize NotificationsManager (requires settings manager)
-        notifications_manager_instance = NotificationsManager(settings_manager=settings_manager_instance)
-        app.state.manager_instances['notifications'] = notifications_manager_instance
-        logger.info("NotificationsManager singleton stored in app.state.")
-
-        # Feature-specific managers (instantiate AFTER dependencies like NotificationsManager)
-        dp_manager = DataProductsManager(
-            db=db_session, 
-            ws_client=ws_client, 
-            notifications_manager=notifications_manager_instance # Pass the instance
-        )
-        app.state.manager_instances['data_products'] = dp_manager
-        logger.info("DataProductsManager singleton stored in app.state.")
-
-        # Example: Assuming DATA_DIR is needed and defined appropriately
+        # --- Define Data Directory --- 
         data_dir = Path(__file__).parent.parent / "data"
-        dc_manager = DataContractsManager(data_dir=data_dir)
-        app.state.manager_instances['data_contracts'] = dc_manager
-        logger.info("DataContractsManager singleton stored in app.state.")
+        if not data_dir.is_dir():
+            logger.warning(f"Data directory not found: {data_dir}. Some managers might fail.")
 
-        bg_manager = BusinessGlossariesManager(data_dir=data_dir)
-        app.state.manager_instances['business_glossaries'] = bg_manager
-        logger.info("BusinessGlossariesManager singleton stored in app.state.")
+        # --- Initialize Repositories --- 
+        logger.debug("Initializing repositories...")
+        app_role_repo = AppRoleRepository(model=AppRoleDb)
+        # Pass the DB model to the repository constructor
+        audit_repo = AuditLogRepository(model=AuditLog)
+        data_asset_review_repo = DataAssetReviewRepository(model=DataAssetReviewRequestDb)
+        data_product_repo = DataProductRepository(model=DataProductDb)
+        data_domain_repo = DataDomainRepository()
+        # Add other repos if needed
+        logger.debug("Repositories initialized.")
 
-        # Initialize AuditManager (needs settings and db session)
-        audit_manager_instance = AuditManager(settings=settings, db_session=db_session)
-        app.state.audit_manager = audit_manager_instance
-        logger.info("AuditManager singleton stored in app.state.")
+        # --- Instantiate and Store Managers Directly on app.state --- 
+        logger.debug("Instantiating managers...")
+        
+        # Instantiate SettingsManager first, passing settings
+        app.state.settings_manager = SettingsManager(db=db_session, settings=settings, workspace_client=ws_client)
 
-        # Initialize DataAssetReviewManager with all dependencies
-        dar_manager = DataAssetReviewManager(
+        # Instantiate other managers, passing the settings_manager instance if needed
+        audit_manager = AuditManager(settings=settings, db_session=db_session)
+        app.state.users_manager = UsersManager(ws_client=ws_client)
+        app.state.audit_manager = audit_manager
+        app.state.authorization_manager = AuthorizationManager(
+            settings_manager=app.state.settings_manager 
+        )
+        app.state.notifications_manager = NotificationsManager(settings_manager=app.state.settings_manager)
+
+        # Feature Managers
+        app.state.data_asset_review_manager = DataAssetReviewManager(
             db=db_session, 
-            ws_client=ws_client, 
-            notifications_manager=notifications_manager_instance
+            ws_client=ws_client,
+            notifications_manager=app.state.notifications_manager 
         )
-        app.state.manager_instances['data_asset_reviews'] = dar_manager
-        logger.info("DataAssetReviewManager singleton stored in app.state.")
-
-        # --- Initialize Search Manager --- #
-        # Filter managers based on the registry
-        registered_searchable_managers = [
-             manager for manager in app.state.manager_instances.values()
-             if manager.__class__ in SEARCHABLE_ASSET_MANAGERS
-        ]
-        logger.info(f"Found {len(registered_searchable_managers)} managers registered via @searchable_asset for SearchManager.")
-
-        search_manager_instance = SearchManager(
-            searchable_managers=registered_searchable_managers
+        app.state.data_products_manager = DataProductsManager(
+            db=db_session,
+            ws_client=ws_client,
+            notifications_manager=app.state.notifications_manager
         )
-        app.state.search_manager = search_manager_instance
-        logger.info("SearchManager singleton stored in app.state.")
+        app.state.data_domain_manager = DataDomainManager(repository=data_domain_repo)
+        app.state.data_contracts_manager = DataContractsManager(data_dir=data_dir)
+        app.state.business_glossaries_manager = BusinessGlossariesManager(data_dir=data_dir)
+        # Add other managers: Compliance, Estate, MDM, Security, Entitlements, Catalog Commander...
 
-        # Commit session used for manager init (e.g., if default roles were created)
+        # Search Manager (depends on other managers being in app.state)
+        # Collect managers that are searchable (implement SearchableAsset interface)
+        # For now, assume these two - enhance later based on actual interface implementation
+        searchable_managers_list = []
+        if getattr(app.state, 'data_products_manager', None):
+             searchable_managers_list.append(app.state.data_products_manager)
+        if getattr(app.state, 'data_asset_review_manager', None):
+             searchable_managers_list.append(app.state.data_asset_review_manager)
+        # Add other searchable managers here (e.g., glossary, contracts) 
+
+        logger.info(f"Found {len(searchable_managers_list)} managers for SearchManager.")
+        app.state.search_manager = SearchManager(searchable_managers=searchable_managers_list)
+
+        logger.info("All managers instantiated and stored in app.state.")
+        
+        # --- Ensure default roles exist using the manager method --- 
+        app.state.settings_manager.ensure_default_roles_exist()
+
+        # --- Commit session potentially used for default role creation --- 
+        # This commit is crucial AFTER all managers are initialized AND 
+        # default roles are potentially created by the SettingsManager
         db_session.commit()
-        logger.info("Manager singletons created and stored successfully.")
+        logger.info("Manager initialization and default role creation transaction committed.")
 
     except Exception as e:
-        logger.critical(f"Failed to create manager singletons during startup: {e}", exc_info=True)
-        if db_session: db_session.rollback()
-        # Depending on severity, you might want to raise an error here
-        # raise RuntimeError("Failed to initialize application managers.") from e
+        logger.critical(f"Failed during application startup (manager init or default roles): {e}", exc_info=True)
+        if db_session: db_session.rollback() # Rollback if any part fails
+        raise RuntimeError("Failed to initialize application managers or default roles.") from e
     finally:
         if db_session:
             db_session.close()
             logger.info("DB session for manager instantiation closed.")
 
-def load_initial_data(
-    settings: Settings, # Keep settings for APP_DEMO_MODE check
-    settings_manager: SettingsManager # Add settings_manager parameter
-):
-    """Loads demo data if configured."""
-    # No longer need to get settings here if passed from startup
-    # if settings is None:
-    #     settings = get_settings()
-
+def load_initial_data(app: FastAPI) -> None:
+    """Loads initial demo data if configured."""
+    settings: Settings = get_settings()
     if not settings.APP_DEMO_MODE:
-        logger.info("Demo mode is disabled. Skipping demo data loading.")
+        logger.info("APP_DEMO_MODE is disabled. Skipping initial data loading.")
         return
 
-    logger.info("Attempting demo data load...")
-    session_factory = get_session_factory()
-    db_session = None
+    logger.info("APP_DEMO_MODE is enabled. Loading initial data...")
+    db_session_factory = get_session_factory()
+    if not db_session_factory:
+        logger.error("Cannot load initial data: Database session factory not available.")
+        return
+    
+    db: Session = db_session_factory()
     try:
-        db_session = session_factory()
-        # --- Remove lines getting settings_manager from app.state ---
-        # from fastapi import FastAPI # Assuming 'app' instance is the global one
-        # settings_manager_instance = app.state.settings_manager if hasattr(app.state, 'settings_manager') else None
-        # if not settings_manager_instance:
-        #      logger.error("Cannot load demo data: SettingsManager not found in app.state.")
-        #      return # Or raise an error
+        # Get managers directly from app.state
+        settings_manager = getattr(app.state, 'settings_manager', None)
+        auth_manager = getattr(app.state, 'authorization_manager', None)
+        data_asset_review_manager = getattr(app.state, 'data_asset_review_manager', None)
+        data_product_manager = getattr(app.state, 'data_products_manager', None) # Corrected name
+        data_domain_manager = getattr(app.state, 'data_domain_manager', None)
+        data_contracts_manager = getattr(app.state, 'data_contracts_manager', None) # Add
+        business_glossaries_manager = getattr(app.state, 'business_glossaries_manager', None) # Add
+        # Add other managers as needed
 
-        # Call load_demo_data with the passed-in manager
-        load_demo_data(
-            db_session=db_session,
-            settings=settings,
-            settings_manager=settings_manager # Use the passed-in manager
-        )
-        logger.info("Completed call to load_demo_data.")
-        db_session.commit()
-    except RuntimeError as e:
-        logger.error(f"Cannot load demo data: {e}")
+        # Call load_initial_data for each manager that has it
+        if settings_manager and hasattr(settings_manager, 'load_initial_data'):
+            settings_manager.load_initial_data(db)
+        if auth_manager and hasattr(auth_manager, 'load_initial_data'):
+            auth_manager.load_initial_data(db)
+        if data_asset_review_manager and hasattr(data_asset_review_manager, 'load_initial_data'):
+            data_asset_review_manager.load_initial_data(db)
+        if data_product_manager and hasattr(data_product_manager, 'load_initial_data'):
+            data_product_manager.load_initial_data(db)
+        if data_domain_manager and hasattr(data_domain_manager, 'load_initial_data'):
+            data_domain_manager.load_initial_data(db)
+        if data_contracts_manager and hasattr(data_contracts_manager, 'load_initial_data'):
+            data_contracts_manager.load_initial_data(db)
+        if business_glossaries_manager and hasattr(business_glossaries_manager, 'load_initial_data'):
+            business_glossaries_manager.load_initial_data(db)
+        
+        # No final commit needed here if managers commit internally or role creation already committed
+        logger.info("Initial data loading process completed for all managers.")
+
     except Exception as e:
-        logger.error(f"Error during demo data loading execution: {e}", exc_info=True)
-        if db_session: db_session.rollback()
+        logger.exception(f"Error during initial data loading: {e}")
+        db.rollback()
     finally:
-        if db_session:
-            db_session.close()
-            logger.info("Demo data DB session closed.") 
+        db.close() 

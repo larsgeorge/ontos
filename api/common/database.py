@@ -8,7 +8,15 @@ from sqlalchemy import create_engine, Index # Need Index for type checking
 from sqlalchemy.orm import sessionmaker, Session as SQLAlchemySession
 from sqlalchemy.ext.declarative import declarative_base
 import os
-from sqlalchemy.schema import CreateTable, CreateIndex # Import DDL elements
+from sqlalchemy.schema import CreateTable
+from sqlalchemy import pool
+
+from alembic import command
+# Rename the Alembic Config import to avoid collision
+from alembic.config import Config as AlembicConfig
+from alembic.script import ScriptDirectory
+from alembic.runtime.migration import MigrationContext
+from sqlalchemy.engine import Connection
 
 from .config import get_settings, Settings
 from .logging import get_logger
@@ -16,12 +24,31 @@ from .logging import get_logger
 from api.common.workspace_client import get_workspace_client
 from databricks.sdk.errors import NotFound, DatabricksError 
 from databricks.sdk.core import Config, oauth_service_principal
+
 logger = get_logger(__name__)
 
 T = TypeVar('T')
 
 # Define the base class for SQLAlchemy models
 Base = declarative_base()
+
+# --- Explicitly import all model modules HERE to register them with Base --- #
+# This ensures Base.metadata is populated before init_db needs it.
+logger.debug("Importing all DB model modules to register with Base...")
+try:
+    from api.db_models import settings as settings_db
+    from api.db_models import audit_log
+    from api.db_models import data_asset_reviews
+    from api.db_models import data_products
+    from api.db_models import notifications
+    from api.db_models import data_domains
+    # Add imports for any other future model modules here
+    logger.debug("DB model modules imported successfully.")
+except ImportError as e:
+    logger.critical(f"Failed to import a DB model module during initial registration: {e}", exc_info=True)
+    # This is likely a fatal error, consider raising or exiting
+    raise
+# ------------------------------------------------------------------------- #
 
 # Singleton engine instance
 _engine = None
@@ -251,7 +278,7 @@ def ensure_catalog_schema_exists(settings: Settings):
         except NotFound:
             logger.warning(f"Schema '{full_schema_name}' not found. Attempting to create...")
             try:
-                ws_client.schemas.create(catalog_name=catalog_name, name=schema_name)
+                ws_client.schemas.create(name=schema_name, catalog_name=catalog_name)
                 logger.info(f"Successfully created schema: {full_schema_name}")
             except DatabricksError as e:
                 logger.critical(f"Failed to create schema '{full_schema_name}': {e}. Check permissions.", exc_info=True)
@@ -264,167 +291,146 @@ def ensure_catalog_schema_exists(settings: Settings):
         logger.critical(f"An unexpected error occurred during catalog/schema check/creation: {e}", exc_info=True)
         raise ConnectionError(f"Failed during catalog/schema setup: {e}") from e
 
-def init_db(run_create_all: bool = True) -> None:
-    """Initializes the database engine, sessionmaker, and optionally drops/creates tables."""
-    global _engine, _SessionLocal
-    settings = get_settings() # Get settings inside init_db
+def get_current_db_revision(engine_connection: Connection, alembic_cfg: AlembicConfig) -> str | None:
+    """Gets the current revision of the database."""
+    context = MigrationContext.configure(engine_connection)
+    return context.get_current_revision()
 
-    # Check if already initialized (idempotency)
-    if _engine is not None and _SessionLocal is not None:
-        logger.info("Database engine and session factory already initialized. Ensuring tables are checked/created...")
-        # Ensure public engine is also set if skipped
-        global engine
-        engine = _engine
-        # Still run table check/creation logic if requested
-        if run_create_all:
-            _ensure_tables_exist(settings)
+def init_db() -> None:
+    """Initializes the database connection, checks/creates catalog/schema, and runs migrations."""
+    global _engine, _SessionLocal, engine
+    settings = get_settings()
+
+    if _engine is not None:
+        logger.debug("Database engine already initialized.")
         return
 
-    if not all([settings.DATABRICKS_HOST, settings.DATABRICKS_HTTP_PATH, settings.DATABRICKS_CATALOG, settings.DATABRICKS_SCHEMA]):
-         logger.error("Cannot initialize database: Missing required Databricks settings.")
-         raise ConnectionError("Missing required Databricks connection settings.")
+    logger.info("Initializing database engine and session factory...")
 
     try:
-        # Ensure Catalog and Schema exist
+        # Ensure target catalog and schema exist before connecting engine
         ensure_catalog_schema_exists(settings)
 
-        def get_credentials():
-            config = Config(
-                host=os.getenv("DATABRICKS_HOST"),
-                client_id=os.getenv("DATABRICKS_CLIENT_ID"),
-                client_secret=os.getenv("DATABRICKS_CLIENT_SECRET")
-            )
-            return oauth_service_principal(config)
-        
-        logger.info(f"Environment for DB connection: {settings.ENV}")
-        if settings.ENV.startswith('LOCAL'):
-            connect_args = {
-                "server_hostname": settings.DATABRICKS_HOST,
-                "http_path": settings.DATABRICKS_HTTP_PATH,
-                "access_token": settings.DATABRICKS_TOKEN,
-            }
-        else:
-            cfg = Config() # Hands in SQL host and OAuth function when run in Databricks
-            connect_args = {
-                "server_hostname": cfg.host,
-                "http_path": settings.DATABRICKS_HTTP_PATH,
-                "credentials_provider": lambda: cfg.authenticate,
-                "auth_type": "databricks-oauth",
-            }
-
-        # Create SQLAlchemy engine
         db_url = get_db_url(settings)
-        logger.info(f"Database URL: {db_url}")
-        # logger.info(f"Connect args: {connect_args}")
-        _engine = create_engine(
-            db_url, 
-            connect_args=connect_args,
-            echo=settings.DEBUG,
-            pool_pre_ping=True,
-            pool_recycle=3600
-        )
-        # Assign to public variable after creation
-        engine = _engine
-        _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
-        logger.info(f"Database engine initialized for: {settings.DATABRICKS_HOST}")
+        logger.info("Connecting to database...")
+        _engine = create_engine(db_url, echo=settings.DB_ECHO, poolclass=pool.QueuePool, pool_size=5, max_overflow=10)
+        engine = _engine # Assign to public variable
 
-        # Moved table creation logic here, after engine is initialized
-        if run_create_all:
-            _ensure_tables_exist(settings)
+        _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+        logger.info("Database engine and session factory initialized.")
+
+        # --- Alembic Migration Logic --- #
+        alembic_cfg_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..' , 'alembic.ini'))
+        logger.info(f"Loading Alembic configuration from: {alembic_cfg_path}")
+        alembic_cfg = AlembicConfig(alembic_cfg_path)
+        alembic_cfg.set_main_option("sqlalchemy.url", db_url) # Ensure Alembic uses the same URL
+        script = ScriptDirectory.from_config(alembic_cfg)
+        head_revision = script.get_current_head()
+        logger.info(f"Alembic Head Revision: {head_revision}")
+
+        # Create a connection for Alembic context
+        with engine.connect() as connection:
+            logger.info("Getting current database revision...")
+            db_revision = get_current_db_revision(connection, alembic_cfg)
+            logger.info(f"Current Database Revision: {db_revision}")
+
+            if db_revision != head_revision:
+                logger.warning(f"Database revision '{db_revision}' differs from head revision '{head_revision}'.")
+                if settings.APP_DEMO_MODE:
+                    # WARNING: This wipes data in managed tables!
+                    border = "=" * 50
+                    logger.warning(border)
+                    logger.warning("APP_DEMO_MODE: Database revision differs from head revision.")
+                    logger.warning(f"DB: {db_revision}, Head: {head_revision}")
+                    logger.warning("Performing Alembic downgrade to base and upgrade to head...")
+                    logger.warning("THIS WILL WIPE ALL DATA IN MANAGED TABLES!")
+                    logger.warning(border)
+                    try:
+                        # Remove logging around downgrade/upgrade
+                        command.downgrade(alembic_cfg, "base")
+                        command.upgrade(alembic_cfg, "head")
+                        logger.info("Alembic downgrade/upgrade completed successfully.") # Keep completion message
+                    except Exception as alembic_err:
+                        logger.critical("Alembic downgrade/upgrade failed during demo mode reset!", exc_info=True)
+                        raise RuntimeError("Failed to reset database schema for demo mode.") from alembic_err
+                else:
+                    logger.info("Attempting Alembic upgrade to head...")
+                    try:
+                        command.upgrade(alembic_cfg, "head")
+                        logger.info("Alembic upgrade to head COMPLETED.")
+                    except Exception as alembic_err:
+                        logger.critical("Alembic upgrade failed! Manual intervention may be required.", exc_info=True)
+                        raise RuntimeError("Failed to upgrade database schema.") from alembic_err
+            else:
+                logger.info("Database schema is up to date according to Alembic.")
+
+        # Ensure all tables defined in Base metadata exist
+        logger.info("Verifying/creating tables based on SQLAlchemy models...")
+        try:
+            dialect_name = engine.dialect.name
+            logger.info(f"Detected database dialect: {dialect_name}")
+
+            # Use a connection and explicit transaction for DDL
+            with engine.connect() as connection:
+                with connection.begin(): # Start a transaction
+                    # Log all tables found in metadata
+                    table_names = [t.name for t in Base.metadata.sorted_tables]
+                    logger.info(f"Tables found in Base.metadata.sorted_tables: {table_names}")
+                    all_meta_tables = list(Base.metadata.tables.values())
+                    logger.info(f"Tables found directly in Base.metadata.tables: {[t.name for t in all_meta_tables]}")
+
+                    if dialect_name == 'databricks':
+                        logger.warning("Databricks dialect detected. Creating tables individually.")
+                        logger.info("Processing remaining tables from sorted_tables...")
+                        for table in Base.metadata.sorted_tables:
+                            logger.info(f"Processing table object: {table}")
+                            try:
+                                logger.debug(f"Attempting to create table (if not exists): {table.name}")
+                                table.create(bind=connection, checkfirst=True)
+                                logger.info(f"Finished attempting create for table: {table.name}")
+                            except Exception as table_create_err:
+                                logger.error(f"Failed to create table '{table.name}' for Databricks: {table_create_err}", exc_info=True)
+                                raise RuntimeError(f"Failed to create table '{table.name}'") from table_create_err
+                    else:
+                        # Non-databricks: Keep using create_all
+                        logger.info(f"Dialect is not Databricks ({dialect_name}). Creating all tables and indexes.")
+                        Base.metadata.create_all(bind=connection)
+
+                # Transaction is committed automatically upon exiting the 'with connection.begin()' block
+                logger.info("Table creation transaction committed (if any DDL was executed).")
+
+            logger.info("Table existence check/creation completed.")
+        except Exception as create_err:
+            logger.critical(f"Error during table creation/check phase: {create_err}", exc_info=True)
+            raise RuntimeError("Failed to ensure database tables exist.") from create_err
 
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}", exc_info=True)
+        logger.critical(f"Database initialization failed: {e}", exc_info=True)
         _engine = None
         _SessionLocal = None
-        # Simplify error propagation
-        raise ConnectionError(f"Failed to initialize database connection: {e}") from e
-
-    logger.info("Database initialization routine complete.")
-
-# --- Helper function for table creation/dropping --- 
-def _ensure_tables_exist(settings: Settings):
-    """Drops tables if in DEMO mode, then creates all tables."""
-    global _engine # Use the initialized engine
-    if not _engine:
-        logger.error("Cannot ensure tables exist: Database engine is not initialized.")
-        return
-
-    # Check the specific flag for dropping tables
-    if settings.APP_DB_DROP_ON_START:
-        logger.warning("APP_DB_DROP_ON_START is TRUE: Dropping all database tables before creation...")
-        try:
-            Base.metadata.drop_all(bind=_engine)
-            logger.info("Database tables dropped successfully.")
-        except Exception as e:
-            logger.error(f"Error dropping tables: {e}", exc_info=True)
-            # Decide if we should proceed or raise an error
-
-    logger.info("Checking/creating database tables (conditional indexes)...")
-    try:
-        # Import all models here so Base knows about them before create_all
-        # Make sure all your db_models are imported directly or indirectly here
-        from api.db_models import data_products, settings as settings_db, audit_log, data_asset_reviews
-        # Add other model imports as needed...
-
-        # --- Conditionally Modify Metadata BEFORE DDL Generation ---
-        # (Existing logic for removing indexes on Databricks)
-        is_databricks = _engine.dialect.name == 'databricks'
-        if is_databricks:
-            logger.info("Databricks dialect detected. Removing Index objects from metadata before DDL generation.")
-            indexes_to_remove = []
-            for table in Base.metadata.tables.values():
-                for col in table.columns:
-                    if col.index:
-                        for idx in list(table.indexes):
-                            if idx not in indexes_to_remove:
-                                indexes_to_remove.append(idx)
-                                logger.debug(f"Marked index {idx.name} for removal from metadata.")
-            for idx in indexes_to_remove:
-                try:
-                    if hasattr(idx, 'table') and idx in idx.table.indexes:
-                        idx.table.indexes.remove(idx)
-                    logger.info(f"Successfully removed index {idx.name} from metadata for DDL generation.")
-                except Exception as remove_err:
-                    logger.warning(f"Could not fully remove index {idx.name} from metadata: {remove_err}")
-        # --- End Conditional Metadata Modification ---
-
-        logger.info("Executing Base.metadata.create_all()...")
-        Base.metadata.create_all(bind=_engine)
-        logger.info("Database tables checked/created by create_all.")
-    except Exception as e:
-        logger.error(f"Error during table creation: {e}", exc_info=True)
-        # Depending on requirements, you might want to raise an error here
+        engine = None # Reset public engine on failure
+        raise ConnectionError("Failed to initialize database connection or run migrations.") from e
 
 def get_db():
     global _SessionLocal
     if _SessionLocal is None:
-        logger.error("Database session factory not initialized! Call init_db() first.")
-        raise RuntimeError("Database session factory not available.")
-
+        logger.error("Database not initialized. Cannot get session.")
+        raise RuntimeError("Database session factory is not available.")
+    
     db = _SessionLocal()
     try:
         yield db
-        db.commit() # Commit transaction if no exceptions occurred
-        logger.debug("Database transaction committed.")
-    except Exception as e:
-        logger.error(f"Database transaction failed, rolling back: {e}", exc_info=False) # Avoid logging full trace unless needed
-        db.rollback()
-        raise # Re-raise the exception to be handled by FastAPI error handlers
     finally:
         db.close()
-        logger.debug("Database session closed.")
 
 def get_engine():
-    """Returns the SQLAlchemy engine instance."""
-    if not _engine:
-         raise RuntimeError("Database engine not initialized.")
+    global _engine
+    if _engine is None:
+        raise RuntimeError("Database engine not initialized.")
     return _engine
 
 def get_session_factory():
-    """Returns the initialized SQLAlchemy session factory (_SessionLocal)."""
-    if not _SessionLocal:
-        # This case should ideally not be hit if init_db was called successfully
-        # But added as a safeguard.
-        logger.error("get_session_factory called before database initialization or after failure.")
-        raise RuntimeError("Database session factory not available.")
+    global _SessionLocal
+    if _SessionLocal is None:
+        raise RuntimeError("Database session factory not initialized.")
     return _SessionLocal

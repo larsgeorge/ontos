@@ -12,6 +12,7 @@ import {
     Settings,
     Info,
     ClipboardCheck, // Added icon for Data Asset Review
+    BoxSelect, // Added icon for Data Domain
     type LucideIcon, // Import LucideIcon type
   } from 'lucide-react';
   
@@ -31,6 +32,16 @@ import {
   
   export const features: FeatureConfig[] = [
     // Data Management
+    {
+      id: 'data-domains',
+      name: 'Data Domains',
+      path: '/data-domains',
+      description: 'Organize data products and assets into logical domains.',
+      icon: BoxSelect,
+      group: 'Data Management',
+      maturity: 'ga',
+      showInLanding: true,
+    },
     {
       id: 'data-products',
       name: 'Data Products',

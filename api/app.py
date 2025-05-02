@@ -17,7 +17,8 @@ from api.routes import (
     catalog_commander_routes,
     compliance_routes,
     data_asset_reviews_routes,
-    data_contract_routes,
+    data_contracts_routes,
+    data_domains_routes,
     data_product_routes,
     entitlements_routes,
     entitlements_sync_routes,
@@ -74,19 +75,16 @@ STATIC_ASSETS_PATH = BASE_DIR.parent / "static"
 # Application Startup Event
 async def startup_event():
     logger.info("Running application startup event...")
-    # Get settings AFTER init_config() has run (called at module level)
     settings = get_settings()
-    # 1. Initialize Database (pass settings explicitly)
+    
     initialize_database(settings=settings)
-    # 2. Initialize Managers (requires app instance)
     initialize_managers(app)
-    # 3. Load Initial/Demo Data
-    # Get settings and settings_manager AFTER managers are initialized
-    settings_manager = app.state.settings_manager if hasattr(app.state, 'settings_manager') else None
-    if settings_manager:
-        load_initial_data(settings=settings, settings_manager=settings_manager)
-    else:
-        logger.error("Could not load initial data: SettingsManager not found in app.state.")
+    
+    # Load Initial/Demo Data - Pass the app instance
+    # The function now gets settings/managers from app.state
+    logger.info("Attempting to load initial data...")
+    load_initial_data(app=app)
+    
     logger.info("Application startup complete.")
 
 # Application Shutdown Event
@@ -143,7 +141,7 @@ app.mount("/static", StaticFiles(directory=STATIC_ASSETS_PATH, html=True), name=
 
 # Data Management features
 data_product_routes.register_routes(app)
-data_contract_routes.register_routes(app)
+data_contracts_routes.register_routes(app)
 business_glossary_routes.register_routes(app)
 master_data_management_routes.register_routes(app)
 compliance_routes.register_routes(app)
@@ -162,6 +160,10 @@ search_routes.register_routes(app)
 settings_routes.register_routes(app)
 user_routes.register_routes(app)
 audit_routes.register_routes(app)
+
+# Add Data Domain routes registration
+app.include_router(data_domains_routes.router)
+logger.info(f"Registered Data Domain routes under {data_domains_routes.router.prefix}")
 
 # Define other specific API routes BEFORE the catch-all
 @app.get("/api/time")

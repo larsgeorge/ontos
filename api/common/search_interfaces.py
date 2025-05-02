@@ -10,6 +10,7 @@ class SearchIndexItem(BaseModel):
     description: Optional[str] = Field(None, description="Short description or snippet for context")
     link: str = Field(..., description="URL path to navigate to the item's details page")
     tags: List[str] = Field(default_factory=list, description="Associated tags for filtering/searching")
+    feature_id: str = Field(..., description="Identifier of the feature this item belongs to (e.g., 'data-products', 'glossary')")
     # Add other relevant fields if needed, e.g., owner, status, domain
     # owner: Optional[str] = None
     # status: Optional[str] = None

@@ -434,10 +434,10 @@ class DataContractsManager(SearchableAsset):
                     SearchIndexItem(
                         id=f"contract::{contract.id}",
                         type="data-contract",
-                        title=contract.name, # Use direct .name
-                        description=contract.description or "", # Use direct .description
-                        # Adjust link format based on frontend routing
-                        link=f"/data-contracts/{contract.id}", 
+                        feature_id="data-contracts",
+                        title=contract.name,
+                        description=contract.description or "",
+                        link=f"/data-contracts/{contract.id}",
                         tags=tags
                     )
                 )

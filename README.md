@@ -69,15 +69,32 @@ Your app is ready to be deployed!
 
 ## Environment Configuration
 
-The application requires a `.env` file in the root directory for configuration. Create a file named `.env` with the following variables:
+The application requires a `.env` file in the root directory for configuration. Create a file named `.env` with the following variables (or set them as environment variables):
 
-| Variable | Description | Example Value |
-|----------|-------------|---------------|
-| DATABRICKS_HOST | Your Databricks workspace URL | https://your-workspace.cloud.databricks.com |
-| DATABRICKS_TOKEN | Personal access token for authentication | dapi1234567890abcdef |
-| DATABRICKS_HTTP_PATH | SQL warehouse HTTP path | /sql/1.0/warehouses/abc123 |
-| DATABRICKS_CATALOG | Default catalog to use | main |
-| DATABRICKS_SCHEMA | Default schema to use | default |
+| Variable                   | Description                                                                                                   | Example Value                                | Required |
+|----------------------------|---------------------------------------------------------------------------------------------------------------|----------------------------------------------|----------|
+| `DATABRICKS_HOST`          | Your Databricks workspace URL                                                                                 | `https://your-workspace.cloud.databricks.com`| Yes      |
+| `DATABRICKS_WAREHOUSE_ID`  | The ID of the Databricks SQL Warehouse to use for connections                                                   | `1234567890abcdef`                           | Yes      |
+| `DATABRICKS_CATALOG`       | Default Unity Catalog catalog to use within the app                                                            | `main`                                       | Yes      |
+| `DATABRICKS_SCHEMA`        | Default Unity Catalog schema to use within the app                                                             | `default`                                    | Yes      |
+| `DATABRICKS_VOLUME`        | Default Unity Catalog volume for storing app-related files (e.g., data contract outputs)                      | `app_volume`                                 | Yes      |
+| `APP_AUDIT_LOG_DIR`        | Directory path within the `DATABRICKS_VOLUME` for storing audit logs                                          | `audit_logs`                                 | Yes      |
+| `DATABRICKS_TOKEN`         | Personal access token for authentication (Optional - SDK can use other methods)                              | `dapi1234567890abcdef`                       | No       |
+| `DATABASE_URL`             | Connection string for the application's metadata database (e.g., PostgreSQL)                                  | `postgresql+psycopg2://user:pass@host/db`  | No       |
+| `ENV`                      | Deployment environment (`LOCAL`, `DEV`, `PROD`)                                                               | `LOCAL`                                      | No       |
+| `DEBUG`                    | Enable debug mode for FastAPI                                                                                 | `True`                                       | No       |
+| `LOG_LEVEL`                | Log level for the application (`DEBUG`, `INFO`, `WARNING`, `ERROR`)                                         | `INFO`                                       | No       |
+| `LOG_FILE`                 | Path to a log file (if logging to file is desired)                                                            | `/path/to/app.log`                           | No       |
+| `APP_ADMIN_DEFAULT_GROUPS` | JSON string array of Databricks group names to assign the default 'Admin' role upon first startup.            | `["admins", "superusers"]`                   | No       |
+| `GIT_REPO_URL`             | URL of the Git repository for optional YAML configuration backup/sync                                         | `https://github.com/user/repo.git`         | No       |
+| `GIT_BRANCH`               | Git branch to use for configuration backup/sync                                                               | `main`                                       | No       |
+| `GIT_USERNAME`             | Username for Git authentication                                                                               | `git_user`                                   | No       |
+| `GIT_PASSWORD`             | Password or Personal Access Token for Git authentication                                                      | `git_token_or_password`                      | No       |
+| `APP_DEMO_MODE`            | Enable demo mode (loads sample data on startup)                                                               | `False`                                      | No       |
+| `APP_DB_DROP_ON_START`     | **DANGER:** Drop and recreate the application database on startup (for development)                           | `False`                                      | No       |
+| `APP_DB_ECHO`              | Log SQLAlchemy generated SQL statements to the console (for debugging)                                        | `False`                                      | No       |
+
+**Note:** `DATABRICKS_HTTP_PATH` is derived automatically from `DATABRICKS_WAREHOUSE_ID` and does not need to be set manually.
 
 # Unified Catalog Application
 
@@ -145,6 +162,19 @@ This command builds the React application using Vite. The output files will be p
 hatch build
 ```
 This command uses Hatch to build the Python backend package (typically a wheel file) according to the configuration in `pyproject.toml`.
+
+## Default Application Roles
+
+On first startup, if no roles exist in the database, the application creates a set of default roles with predefined permissions:
+
+- **Admin:** Full administrative access to all features. Assigned to groups specified by the `APP_ADMIN_DEFAULT_GROUPS` environment variable.
+- **Data Governance Officer:** Broad administrative access, typically excluding low-level system settings.
+- **Data Steward:** Read/Write access to specific data governance features (Data Products, Contracts, Glossary).
+- **Data Consumer:** Read-only access to data discovery features.
+- **Data Producer:** Read-only access generally, with write access to create/manage Data Products and Contracts.
+- **Security Officer:** Administrative access to security and entitlements features.
+
+These roles and their permissions can be viewed and modified in the application's Settings -> RBAC section after initial startup.
 
 ## Environment Variables
 

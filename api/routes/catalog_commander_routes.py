@@ -3,8 +3,11 @@ import logging
 from databricks.sdk import WorkspaceClient
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..common.workspace_client import get_workspace_client
-from ..controller.catalog_commander_manager import CatalogCommanderManager
+from api.common.workspace_client import get_workspace_client
+from api.controller.catalog_commander_manager import CatalogCommanderManager
+# Import permission checker and feature level
+from api.common.authorization import PermissionChecker
+from api.common.features import FeatureAccessLevel
 
 # Configure logging
 from api.common.logging import setup_logging, get_logger
@@ -13,6 +16,10 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["catalog-commander"])
 
+# Define the feature ID for permission checks
+CATALOG_COMMANDER_FEATURE_ID = 'catalog-commander'
+
+# Modify dependency injector to return manager (no auth check needed here)
 def get_catalog_manager(client: WorkspaceClient = Depends(get_workspace_client)) -> CatalogCommanderManager:
     """Get a configured catalog commander manager instance.
     
@@ -24,7 +31,9 @@ def get_catalog_manager(client: WorkspaceClient = Depends(get_workspace_client))
     """
     return CatalogCommanderManager(client)
 
-@router.get('/catalogs')
+# --- Read-Only Routes (Require READ_ONLY or higher) ---
+
+@router.get('/catalogs', dependencies=[Depends(PermissionChecker(CATALOG_COMMANDER_FEATURE_ID, FeatureAccessLevel.READ_ONLY))])
 async def list_catalogs(catalog_manager: CatalogCommanderManager = Depends(get_catalog_manager)):
     """List all catalogs in the Databricks workspace."""
     try:
@@ -37,7 +46,7 @@ async def list_catalogs(catalog_manager: CatalogCommanderManager = Depends(get_c
         logger.error(error_msg, exc_info=True)
         raise HTTPException(status_code=500, detail=error_msg)
 
-@router.get('/catalogs/{catalog_name}/schemas')
+@router.get('/catalogs/{catalog_name}/schemas', dependencies=[Depends(PermissionChecker(CATALOG_COMMANDER_FEATURE_ID, FeatureAccessLevel.READ_ONLY))])
 async def list_schemas(
     catalog_name: str,
     catalog_manager: CatalogCommanderManager = Depends(get_catalog_manager)
@@ -53,7 +62,7 @@ async def list_schemas(
         logger.error(error_msg, exc_info=True)
         raise HTTPException(status_code=500, detail=error_msg)
 
-@router.get('/catalogs/{catalog_name}/schemas/{schema_name}/tables')
+@router.get('/catalogs/{catalog_name}/schemas/{schema_name}/tables', dependencies=[Depends(PermissionChecker(CATALOG_COMMANDER_FEATURE_ID, FeatureAccessLevel.READ_ONLY))])
 async def list_tables(
     catalog_name: str,
     schema_name: str,
@@ -70,7 +79,7 @@ async def list_tables(
         logger.error(error_msg, exc_info=True)
         raise HTTPException(status_code=500, detail=error_msg)
 
-@router.get('/catalogs/{catalog_name}/schemas/{schema_name}/views')
+@router.get('/catalogs/{catalog_name}/schemas/{schema_name}/views', dependencies=[Depends(PermissionChecker(CATALOG_COMMANDER_FEATURE_ID, FeatureAccessLevel.READ_ONLY))])
 async def list_views(
     catalog_name: str,
     schema_name: str,
@@ -87,7 +96,7 @@ async def list_views(
         logger.error(error_msg, exc_info=True)
         raise HTTPException(status_code=500, detail=error_msg)
 
-@router.get('/catalogs/{catalog_name}/schemas/{schema_name}/functions')
+@router.get('/catalogs/{catalog_name}/schemas/{schema_name}/functions', dependencies=[Depends(PermissionChecker(CATALOG_COMMANDER_FEATURE_ID, FeatureAccessLevel.READ_ONLY))])
 async def list_functions(
     catalog_name: str,
     schema_name: str,
@@ -104,7 +113,7 @@ async def list_functions(
         logger.error(error_msg, exc_info=True)
         raise HTTPException(status_code=500, detail=error_msg)
 
-@router.get('/catalogs/dataset/{dataset_path:path}')
+@router.get('/catalogs/dataset/{dataset_path:path}', dependencies=[Depends(PermissionChecker(CATALOG_COMMANDER_FEATURE_ID, FeatureAccessLevel.READ_ONLY))])
 async def get_dataset(
     dataset_path: str,
     catalog_manager: CatalogCommanderManager = Depends(get_catalog_manager)
@@ -120,7 +129,8 @@ async def get_dataset(
         logger.error(error_msg, exc_info=True)
         raise HTTPException(status_code=500, detail=error_msg)
 
-@router.get('/catalogs/health')
+# --- Health Check (Usually doesn't require auth, but let's add READ_ONLY for consistency) ---
+@router.get('/catalogs/health', dependencies=[Depends(PermissionChecker(CATALOG_COMMANDER_FEATURE_ID, FeatureAccessLevel.READ_ONLY))])
 async def health_check(catalog_manager: CatalogCommanderManager = Depends(get_catalog_manager)):
     """Check if the catalog API is healthy."""
     try:
@@ -132,6 +142,13 @@ async def health_check(catalog_manager: CatalogCommanderManager = Depends(get_ca
         error_msg = f"Health check failed: {e!s}"
         logger.error(error_msg, exc_info=True)
         raise HTTPException(status_code=500, detail=error_msg)
+
+# --- TODO: Add Write Routes (Require FULL or higher) ---
+# Placeholder for future routes like move, create, delete, rename
+# Example:
+# @router.post('/catalogs/move', dependencies=[Depends(PermissionChecker(CATALOG_COMMANDER_FEATURE_ID, FeatureAccessLevel.FULL))])
+# async def move_asset(...):
+#    ...
 
 def register_routes(app):
     """Register routes with the app"""

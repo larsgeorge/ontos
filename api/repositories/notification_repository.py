@@ -1,10 +1,11 @@
 from sqlalchemy.orm import Session
 from typing import Any, Dict, Union, Optional, List
 import json # For handling JSON strings
+from sqlalchemy import func
 
 from api.common.repository import CRUDBase
-from api.models.notifications import Notification as NotificationApi, NotificationType # Pydantic model and Enum
-from api.db_models.notification import NotificationDb # SQLAlchemy model
+from api.db_models.notifications import NotificationDb # SQLAlchemy model
+from api.models.notifications import Notification as NotificationApi # API model
 from api.common.logging import get_logger
 
 logger = get_logger(__name__)

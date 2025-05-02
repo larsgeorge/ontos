@@ -43,6 +43,10 @@ ADMIN_ONLY_LEVELS = [
 # Key: Feature ID, Value: Dict with 'name' and 'allowed_levels'
 APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
     # Data Management
+    'data-domains': {
+        'name': 'Data Domains',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS # Standard CRUD + Admin delete
+    },
     'data-products': {
         'name': 'Data Products',
         'allowed_levels': READ_WRITE_ADMIN_LEVELS + [FeatureAccessLevel.FILTERED] # Allow filtering
@@ -87,7 +91,7 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
     # Tools
     'catalog-commander': {
         'name': 'Catalog Commander',
-        'allowed_levels': [FeatureAccessLevel.NONE, FeatureAccessLevel.FULL, FeatureAccessLevel.ADMIN]
+        'allowed_levels': [FeatureAccessLevel.NONE, FeatureAccessLevel.READ_ONLY, FeatureAccessLevel.FULL, FeatureAccessLevel.ADMIN]
     },
     # System (Settings is special, About is always visible)
     'settings': {
@@ -95,6 +99,7 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'allowed_levels': ADMIN_ONLY_LEVELS # Only Admins change settings
     },
     # 'about': { ... } # About page doesn't need explicit permissions here
+
 }
 
 def get_feature_config() -> Dict[str, Dict[str, str | List[FeatureAccessLevel]]]:

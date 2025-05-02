@@ -38,16 +38,23 @@ router = APIRouter(prefix="/api", tags=["data-products"])
 def get_data_products_manager(
     # Remove old dependencies
     # db: Session = Depends(get_db),
-    # ws_client: WorkspaceClient = Depends(get_workspace_client_dependency()) 
+    # ws_client: WorkspaceClient = Depends(get_workspace_client_dependency())
     request: Request # Inject Request
 ) -> DataProductsManager:
     """Retrieves the DataProductsManager singleton from app.state."""
     # Pass both db and ws_client to the manager
-    # return DataProductsManager(db=db, ws_client=ws_client) 
-    manager = request.app.state.manager_instances.get('data_products')
+    # return DataProductsManager(db=db, ws_client=ws_client)
+
+    # Corrected access: Use direct attribute access on app.state
+    # manager = request.app.state.manager_instances.get('data_products') # INCORRECT
+    manager = getattr(request.app.state, 'data_products_manager', None)
+
     if manager is None:
          logger.critical("DataProductsManager instance not found in app.state!")
          raise HTTPException(status_code=500, detail="Data Products service is not available.")
+    if not isinstance(manager, DataProductsManager):
+        logger.critical(f"Object found at app.state.data_products_manager is not a DataProductsManager instance (Type: {type(manager)})!")
+        raise HTTPException(status_code=500, detail="Data Products service configuration error.")
     return manager
 
 # --- ORDERING CRITICAL: Define ALL static paths before ANY dynamic paths --- 

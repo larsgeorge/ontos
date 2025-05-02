@@ -433,6 +433,7 @@ class BusinessGlossariesManager(SearchableAsset):
                     SearchIndexItem(
                         id=f"term::{term.id}",
                         type="glossary-term",
+                        feature_id="business-glossary",
                         title=term.name,
                         description=term.definition or "",
                         # Adjust link format based on frontend routing

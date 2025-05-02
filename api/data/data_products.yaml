@@ -7,7 +7,7 @@
   info:
     title: "POS Transaction Stream v1"
     owner: "Retail Systems"
-    domain: "retail_operations"
+    domain: "Retail Operations"
     description: "Raw point-of-sale transaction stream from store systems."
     status: "active"
   inputPorts: [] # Source product has no inputs defined within this system
@@ -33,7 +33,7 @@
   info:
     title: "Prepared Sales Transactions v1"
     owner: "Data Engineering"
-    domain: "retail_analytics"
+    domain: "Retail Analytics"
     description: "Cleaned, validated, and standardized sales transaction data, ready for analytics."
     status: "active"
   inputPorts:
@@ -71,7 +71,7 @@
   info:
     title: "Demand Forecast Model Output v1"
     owner: "Analytics Team"
-    domain: "retail_analytics"
+    domain: "Retail Analytics"
     description: "Predicted demand for products at various locations based on historical sales and external factors."
     status: "active"
   inputPorts:
@@ -112,7 +112,7 @@
   info:
     title: "Inventory Optimization Recommendations v1"
     owner: "Supply Chain Team"
-    domain: "retail_operations"
+    domain: "Supply Chain"
     description: "Recommendations for inventory reordering based on demand forecasts and stock levels."
     status: "active"
   inputPorts:
@@ -152,7 +152,7 @@
   info:
     title: "Price Optimization Model Output v1"
     owner: "Pricing Team"
-    domain: "retail_analytics"
+    domain: "Retail Analytics"
     description: "Recommended pricing strategies based on demand, competition, and customer behavior."
     status: "active"
   inputPorts:
@@ -189,7 +189,7 @@
   info:
     title: "Customer Marketing Recommendations v1"
     owner: "Marketing Team"
-    domain: "marketing"
+    domain: "Marketing"
     description: "Targeted customer lists and product recommendations for marketing campaigns."
     status: "active"
   inputPorts:
@@ -226,7 +226,7 @@
   info:
     title: "Retail Performance Dashboard Data v1"
     owner: "BI Team"
-    domain: "retail_analytics"
+    domain: "Retail Analytics"
     description: "Aggregated data optimized for the main retail performance BI dashboard."
     status: "active"
   inputPorts:
@@ -270,7 +270,7 @@
 #   info:
 #     title: "Retail Data Archival Sink v1"
 #     owner: "Data Governance"
-#     domain: "compliance"
+#     domain: "Compliance"
 #     description: "Sink product responsible for archiving various retail data products."
 #     status: "active"
 #   inputPorts:
