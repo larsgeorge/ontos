@@ -1,27 +1,27 @@
+import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, TypeVar
 
-from .logging import get_logger
 from sqlalchemy import create_engine, Index  # Need Index for type checking
 from sqlalchemy.orm import sessionmaker, Session as SQLAlchemySession
 from sqlalchemy.ext.declarative import declarative_base
-import os
 from sqlalchemy.schema import CreateTable
 from sqlalchemy import pool
+from sqlalchemy.engine import Connection
+from sqlalchemy import event
 
 from alembic import command
 # Rename the Alembic Config import to avoid collision
 from alembic.config import Config as AlembicConfig
 from alembic.script import ScriptDirectory
 from alembic.runtime.migration import MigrationContext
-from sqlalchemy.engine import Connection
 
 from .config import get_settings, Settings
 from .logging import get_logger
-# Import SDK components
 from api.common.workspace_client import get_workspace_client
+# Import SDK components
 from databricks.sdk.errors import NotFound, DatabricksError
 from databricks.sdk.core import Config, oauth_service_principal
 
@@ -361,8 +361,16 @@ def init_db() -> None:
                                 echo=settings.DB_ECHO, 
                                 poolclass=pool.QueuePool, 
                                 pool_size=5, 
-                                max_overflow=10)
+                                max_overflow=10,
+                                pool_recycle=840,
+                                pool_pre_ping=True)
         engine = _engine # Assign to public variable
+
+        # def refresh_connection(dbapi_connection, connection_record):
+        #     if dbapi_connection.is_closed() or not dbapi_connection.is_valid():
+        #         connection_record.invalidate()
+
+        # event.listen(engine, "engine_connect", refresh_connection)
 
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
         logger.info("Database engine and session factory initialized.")
