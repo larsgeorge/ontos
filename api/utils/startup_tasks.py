@@ -43,7 +43,7 @@ from api.db_models.data_asset_reviews import DataAssetReviewRequestDb
 from api.db_models.data_products import DataProductDb
 
 # Import Demo Data Loader
-from api.utils.demo_data_loader import load_demo_data
+# from api.utils.demo_data_loader import load_demo_data # Removed unused import
 # Import the search registry (decorator is still useful for intent)
 # from api.common.search_registry import SEARCHABLE_ASSET_MANAGERS # Not strictly needed for this approach
 # Import the CORRECT base class for type checking
@@ -128,6 +128,7 @@ def initialize_managers(app: FastAPI):
         app.state.data_domain_manager = DataDomainManager(repository=data_domain_repo)
         app.state.data_contracts_manager = DataContractsManager(data_dir=data_dir)
         app.state.business_glossaries_manager = BusinessGlossariesManager(data_dir=data_dir)
+        notifications_manager = getattr(app.state, 'notifications_manager', None)
         # Add other managers: Compliance, Estate, MDM, Security, Entitlements, Catalog Commander...
 
         # --- Instantiate Search Manager --- 
@@ -200,6 +201,7 @@ def load_initial_data(app: FastAPI) -> None:
         data_domain_manager = getattr(app.state, 'data_domain_manager', None)
         data_contracts_manager = getattr(app.state, 'data_contracts_manager', None) # Add
         business_glossaries_manager = getattr(app.state, 'business_glossaries_manager', None) # Add
+        notifications_manager = getattr(app.state, 'notifications_manager', None) # Add this line
         # Add other managers as needed
 
         # Call load_initial_data for each manager that has it
@@ -217,6 +219,8 @@ def load_initial_data(app: FastAPI) -> None:
             data_contracts_manager.load_initial_data(db)
         if business_glossaries_manager and hasattr(business_glossaries_manager, 'load_initial_data'):
             business_glossaries_manager.load_initial_data(db)
+        if notifications_manager and hasattr(notifications_manager, 'load_initial_data'):
+            notifications_manager.load_initial_data(db)
         
         # No final commit needed here if managers commit internally or role creation already committed
         logger.info("Initial data loading process completed for all managers.")

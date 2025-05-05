@@ -80,6 +80,8 @@ class Port(BaseModel):
     name: str = Field(..., description="The display name for this port", example="kafka_search_topic")
     description: Optional[str] = Field(None, description="The description for this port")
     type: Optional[str] = Field(None, description="The technical type of the port (e.g., 'Kafka', 'snowflake')")
+    assetType: Optional[str] = Field(None, alias="asset_type", description="Type of linked Databricks asset (e.g., 'table', 'notebook', 'job')", example="table")
+    assetIdentifier: Optional[str] = Field(None, alias="asset_identifier", description="Unique identifier for the linked asset (e.g., catalog.schema.table, /path/to/notebook, job_id)", example="main.data.raw_sales")
     location: Optional[str] = Field(None, description="Location details (e.g., topic name, table name)")
     links: Optional[Dict[str, str]] = Field(default_factory=dict, description="Links to external resources like schemas or catalogs")
     custom: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Custom fields")
@@ -91,6 +93,7 @@ class Port(BaseModel):
     class Config:
         orm_mode = True
         from_attributes=True
+        populate_by_name = True # Allow using DB column names
 
 class InputPort(Port):
     sourceSystemId: str = Field(..., description="Technical identifier for the source system", example="search-service")
@@ -99,6 +102,7 @@ class InputPort(Port):
     class Config:
         orm_mode = True
         from_attributes=True
+        populate_by_name = True
 
 class Server(BaseModel):
     project: Optional[str] = Field(None, description="The project name (bigquery)", example="dp-search")
@@ -119,6 +123,7 @@ class Server(BaseModel):
     class Config:
         from_attributes = True
         orm_mode = True # Add ORM mode
+        populate_by_name = True
 
 class OutputPort(Port):
     status: Optional[str] = Field(None, description="Status of the output port implementation", example="active")
@@ -133,6 +138,7 @@ class OutputPort(Port):
     class Config:
         orm_mode = True
         from_attributes=True
+        populate_by_name = True
 
 class DataProduct(BaseModel):
     dataProductSpecification: str = Field("0.0.1", description="Version of the Data Product Specification")

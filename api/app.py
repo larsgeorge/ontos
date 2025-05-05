@@ -31,6 +31,7 @@ from api.routes import (
     settings_routes,
     user_routes,
     audit_routes,
+    workspace_routes,
 )
 
 from api.common.logging import setup_logging, get_logger
@@ -41,7 +42,6 @@ from api.controller.data_contracts_manager import DataContractsManager
 from api.controller.business_glossaries_manager import BusinessGlossariesManager
 from api.controller.search_manager import SearchManager
 from api.common.workspace_client import get_workspace_client
-from api.utils.demo_data_loader import load_demo_data
 from api.controller.settings_manager import SettingsManager
 from api.controller.users_manager import UsersManager
 from api.controller.authorization_manager import AuthorizationManager
@@ -160,10 +160,8 @@ search_routes.register_routes(app)
 settings_routes.register_routes(app)
 user_routes.register_routes(app)
 audit_routes.register_routes(app)
-
-# Add Data Domain routes registration
-app.include_router(data_domains_routes.router)
-logger.info(f"Registered Data Domain routes under {data_domains_routes.router.prefix}")
+data_domains_routes.register_routes(app)
+workspace_routes.register_routes(app)
 
 # Define other specific API routes BEFORE the catch-all
 @app.get("/api/time")

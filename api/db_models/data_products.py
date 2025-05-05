@@ -76,6 +76,8 @@ class InputPortDb(Base):
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     port_type = Column('type', String, nullable=True) # Renamed to avoid keyword conflict
+    asset_type = Column(String, nullable=True, index=True) # New: Asset Type
+    asset_identifier = Column(String, nullable=True, index=True) # New: Asset Identifier
     location = Column(String, nullable=True)
     
     sourceSystemId = Column(String, nullable=False)
@@ -95,6 +97,8 @@ class OutputPortDb(Base):
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     port_type = Column('type', String, nullable=True) # Renamed to avoid keyword conflict
+    asset_type = Column(String, nullable=True, index=True) # New: Asset Type
+    asset_identifier = Column(String, nullable=True, index=True) # New: Asset Identifier
     location = Column(String, nullable=True)
     
     status = Column(String, nullable=True, index=True)

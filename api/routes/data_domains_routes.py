@@ -155,7 +155,6 @@ def delete_data_domain(
         logger.exception(f"Failed to delete data domain {domain_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete data domain: {e!s}")
 
-# Register function (optional, depends on app structure)
-# def register_routes(app):
-#     app.include_router(router)
-#     logger.info("Data Domain routes registered with prefix /api/data-domains") 
+def register_routes(app):
+    app.include_router(router)
+    logger.info("Data Domain routes registered with prefix /api/data-domains") 

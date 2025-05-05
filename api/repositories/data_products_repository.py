@@ -75,6 +75,10 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 if 'type' in port_data:
                     port_data['port_type'] = port_data.pop('type')
                 
+                # Map assetType and assetIdentifier
+                port_data['asset_type'] = port_in.assetType
+                port_data['asset_identifier'] = port_in.assetIdentifier
+                
                 # Ensure JSON fields are strings
                 port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
                 port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
@@ -91,6 +95,11 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 port_data = port_in.dict(exclude_none=True)
                 if 'type' in port_data:
                     port_data['port_type'] = port_data.pop('type')
+                
+                # Map assetType and assetIdentifier
+                port_data['asset_type'] = port_in.assetType
+                port_data['asset_identifier'] = port_in.assetIdentifier
+
                 port_data['server'] = json.dumps(port_data.get('server')) if port_data.get('server') else '{}'
                 port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
                 port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
@@ -157,6 +166,11 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                      # Rename type if present
                      if 'type' in port_data:
                          port_data['port_type'] = port_data.pop('type')
+                     
+                     # Handle assetType/assetIdentifier from update_data
+                     port_data['asset_type'] = port_in_dict.get('assetType') # Use Pydantic name from input dict
+                     port_data['asset_identifier'] = port_in_dict.get('assetIdentifier')
+                     
                      # Stringify JSON fields
                      port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
                      port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
@@ -171,6 +185,11 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                      port_data = port_in_dict.copy()
                      if 'type' in port_data:
                          port_data['port_type'] = port_data.pop('type')
+                     
+                     # Handle assetType/assetIdentifier from update_data
+                     port_data['asset_type'] = port_in_dict.get('assetType') # Use Pydantic name from input dict
+                     port_data['asset_identifier'] = port_in_dict.get('assetIdentifier')
+                     
                      port_data['server'] = json.dumps(port_data.get('server')) if port_data.get('server') else '{}'
                      port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
                      port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'

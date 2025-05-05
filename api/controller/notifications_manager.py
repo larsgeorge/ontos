@@ -36,61 +36,99 @@ class NotificationsManager:
         self._repo = notification_repo # Use the repository instance
         self._settings_manager = settings_manager # Store the manager
 
-    def load_from_yaml(self, yaml_path: str, db: Session) -> bool:
-        """Load example notifications from YAML file into the database."""
-        # Note: The check for empty DB should be done *before* calling this method
-        # (e.g., in the demo_data_loader)
+    def load_initial_data(self, db: Session) -> bool:
+        """Load example notifications from YAML file into the database if empty."""
+        # Check if the table is empty first using the passed session
         try:
-            file_path = Path(yaml_path)
-            if not file_path.is_file():
+            # Assuming repository has is_empty method
+            if not self._repo.is_empty(db=db):
+                logger.info("Notifications table is not empty. Skipping initial data loading.")
+                return False
+        except AttributeError:
+            logger.error("NotificationsManager repository does not have 'is_empty', cannot check if empty. Skipping load.")
+            return False # Cannot proceed safely without the check
+        except Exception as e:
+            logger.error(f"Error checking if notifications table is empty: {e}", exc_info=True)
+            return False # Error during check, skip loading
+            
+        # Construct the default YAML path relative to the project structure
+        base_dir = Path(__file__).parent.parent # Navigate up from controller/ to api/
+        yaml_path = base_dir / "data" / "notifications.yaml" # Standard location
+        
+        logger.info(f"Notifications table is empty. Attempting to load initial data from {yaml_path}...")
+        try:
+            if not yaml_path.is_file():
                 logger.error(f"Notifications YAML file not found at {yaml_path}")
                 return False
 
-            with open(file_path) as file:
+            with open(yaml_path) as file:
                 data = yaml.safe_load(file)
             
-            if not isinstance(data, dict) or 'notifications' not in data or not isinstance(data['notifications'], list):
-                logger.error(f"Invalid format in {yaml_path}. Expected a dict with a 'notifications' list.")
+            # YAML structure expected: a list of notification objects
+            if not isinstance(data, list):
+                logger.error(f"Invalid format in {yaml_path}. Expected a list of notifications.")
                 return False
 
             loaded_count = 0
             errors = 0
-            for notification_data in data.get('notifications', []):
-                 try:
+            for notification_data in data:
+                if not isinstance(notification_data, dict):
+                    logger.warning("Skipping non-dictionary item in YAML notifications data.")
+                    continue
+                try:
                     # Ensure ID exists or generate one
                     if 'id' not in notification_data or not notification_data['id']:
                         notification_data['id'] = str(uuid.uuid4())
                         
                     # Parse created_at string
                     if isinstance(notification_data.get('created_at'), str):
-                         notification_data['created_at'] = datetime.fromisoformat(notification_data['created_at'].replace('Z', '+00:00')) # Handle Z timezone
-                    else:
-                         notification_data['created_at'] = datetime.utcnow() # Fallback
-                         
+                        # Handle ISO format with potential Z for UTC
+                        dt_str = notification_data['created_at'].replace('Z', '+00:00')
+                        try:
+                            notification_data['created_at'] = datetime.fromisoformat(dt_str)
+                        except ValueError:
+                            logger.warning(f"Could not parse created_at string '{notification_data['created_at']}', using current time.")
+                            notification_data['created_at'] = datetime.utcnow()
+                    elif not isinstance(notification_data.get('created_at'), datetime):
+                        notification_data['created_at'] = datetime.utcnow() # Fallback if missing or wrong type
+                        
                     # Validate with Pydantic model
                     notification_model = Notification(**notification_data)
                     
-                    # Create in DB via repository
+                    # Create in DB via repository using the passed db session
                     self._repo.create(db=db, obj_in=notification_model)
                     loaded_count += 1
-                 except (ValidationError, ValueError) as e:
-                     logger.error(f"Error validating/processing notification data from YAML: {e}. Data: {notification_data}", exc_info=True)
-                     errors += 1
-                 except Exception as e:
-                     logger.error(f"Database or unexpected error loading notification from YAML: {e}. Data: {notification_data}", exc_info=True)
-                     errors += 1
-                     # Consider rolling back the session here or letting the caller handle it
-                     # db.rollback() # Potential rollback
+                except (ValidationError, ValueError) as e:
+                    logger.error(f"Error validating/processing notification data from YAML (ID: {notification_data.get('id', 'N/A')}): {e}.")
+                    db.rollback() # Rollback this item
+                    errors += 1
+                except Exception as e:
+                    logger.error(f"Database or unexpected error loading notification from YAML (ID: {notification_data.get('id', 'N/A')}): {e}.", exc_info=True)
+                    db.rollback() # Rollback this item
+                    errors += 1
 
-            logger.info(f"Processed {loaded_count} notifications from {yaml_path}. Encountered {errors} errors.")
-            # Commit should happen outside this function (e.g., in load_initial_data)
-            return errors == 0 # Return True only if no errors occurred
+            if errors == 0 and loaded_count > 0:
+                db.commit() # Commit only if all loaded successfully
+                logger.info(f"Successfully loaded and committed {loaded_count} notifications from {yaml_path}.")
+            elif loaded_count > 0 and errors > 0:
+                logger.warning(f"Processed {loaded_count + errors} notifications from {yaml_path}, but encountered {errors} errors. Changes for successful notifications were rolled back.")
+            elif errors > 0:
+                logger.error(f"Encountered {errors} errors processing notifications from {yaml_path}. No notifications loaded.")
+            else:
+                logger.info(f"No new notifications found to load from {yaml_path}.")
 
+            return loaded_count > 0 and errors == 0 # Return True only if loaded without errors
+
+        except FileNotFoundError: # Catch outside loop
+            logger.error(f"Notifications YAML file not found at {yaml_path}")
+            return False
         except yaml.YAMLError as e:
             logger.error(f"Error parsing notifications YAML file {yaml_path}: {e}")
+            db.rollback() # Rollback if YAML parsing failed
             return False
         except Exception as e:
             logger.error(f"Unexpected error loading notifications from YAML {yaml_path}: {e}", exc_info=True)
+            db.rollback() # Rollback on other errors
             return False
 
     def get_notifications(self, db: Session, user_info: Optional[UserInfo] = None) -> List[Notification]:

@@ -1,41 +1,40 @@
-notifications:
-  - id: 7f8e1d0c-9b2a-4f6e-8d5c-1a0b9c8d7e6f
-    type: "success"
-    title: "Data Contract Approved"
-    subtitle: "Contract: Customer360"
-    description: "The data contract for Customer360 has been approved by all stakeholders"
-    created_at: "2024-03-15T10:30:00Z"
-    read: false
-    can_delete: true
-  - id: 3e2f1c0b-8d7c-4a6b-9e5f-0a9b8c7d6e5f
-    type: "warning"
-    title: "Compliance Policy Alert"
-    subtitle: "PII Data Encryption"
-    description: "Some datasets containing PII are not properly encrypted. Check Compliance dashboard for details."
-    created_at: "2024-03-15T09:15:00Z"
-    read: false
-    can_delete: true
-  - id: d6c5b4a3-1e0f-4d9c-a8b7-9e6f5d4c3b2a
-    type: "info"
-    title: "New Business Term Added"
-    subtitle: "Customer Lifetime Value"
-    description: "A new business term has been added to the Finance glossary"
-    created_at: "2024-03-14T16:45:00Z"
-    read: true
-    can_delete: true
-  - id: b9a8c7d6-5e4f-4c3b-a2d1-0f9e8d7c6b5a
-    type: "error"
-    title: "Security Feature Disabled"
-    subtitle: "Column Encryption"
-    description: "Column encryption for customer_data.pii_table has been disabled unexpectedly"
-    created_at: "2024-03-14T14:20:00Z"
-    read: false
-    can_delete: false
-  - id: 4f3e2d1c-0b9a-4e8d-a7c6-5f4e3d2c1b0a
-    type: "info"
-    title: "System Maintenance"
-    subtitle: "Scheduled Downtime"
-    description: "System maintenance scheduled for Saturday 20:00 UTC"
-    created_at: "2024-03-14T12:00:00Z"
-    read: true
-    can_delete: true
+- id: 7f8e1d0c-9b2a-4f6e-8d5c-1a0b9c8d7e6f
+  type: "success"
+  title: "Data Contract Approved"
+  subtitle: "Contract: Customer360"
+  description: "The data contract for Customer360 has been approved by all stakeholders"
+  created_at: "2024-03-15T10:30:00Z"
+  read: false
+  can_delete: true
+- id: 3e2f1c0b-8d7c-4a6b-9e5f-0a9b8c7d6e5f
+  type: "warning"
+  title: "Compliance Policy Alert"
+  subtitle: "PII Data Encryption"
+  description: "Some datasets containing PII are not properly encrypted. Check Compliance dashboard for details."
+  created_at: "2024-03-15T09:15:00Z"
+  read: false
+  can_delete: true
+- id: d6c5b4a3-1e0f-4d9c-a8b7-9e6f5d4c3b2a
+  type: "info"
+  title: "New Business Term Added"
+  subtitle: "Customer Lifetime Value"
+  description: "A new business term has been added to the Finance glossary"
+  created_at: "2024-03-14T16:45:00Z"
+  read: true
+  can_delete: true
+- id: b9a8c7d6-5e4f-4c3b-a2d1-0f9e8d7c6b5a
+  type: "error"
+  title: "Security Feature Disabled"
+  subtitle: "Column Encryption"
+  description: "Column encryption for customer_data.pii_table has been disabled unexpectedly"
+  created_at: "2024-03-14T14:20:00Z"
+  read: false
+  can_delete: false
+- id: 4f3e2d1c-0b9a-4e8d-a7c6-5f4e3d2c1b0a
+  type: "info"
+  title: "System Maintenance"
+  subtitle: "Scheduled Downtime"
+  description: "System maintenance scheduled for Saturday 20:00 UTC"
+  created_at: "2024-03-14T12:00:00Z"
+  read: true
+  can_delete: true

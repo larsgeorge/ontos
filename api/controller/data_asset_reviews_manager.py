@@ -411,21 +411,28 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
     # This would involve defining check types, potentially creating/running Databricks jobs
     # and updating the asset status based on results. 
 
-    def load_from_yaml(self, yaml_path: str) -> bool:
+    def load_initial_data(self, db: Session) -> bool:
         """Loads data asset reviews from a YAML file if the table is empty."""
-        # Check if the table is empty first
-        if not self._repo.is_empty(db=self._db):
-            logger.info("Data Asset Reviews table is not empty. Skipping demo data loading.")
-            return False
+        # Check if the table is empty first using the passed session
+        try:
+            if not self._repo.is_empty(db=db): # Use passed db session
+                logger.info("Data Asset Reviews table is not empty. Skipping initial data loading.")
+                return False
+        except SQLAlchemyError as e:
+             logger.error(f"DataAssetReviewManager: Error checking for existing reviews: {e}", exc_info=True)
+             raise # Propagate error
+
+        # Construct the default YAML path relative to the project structure
+        base_dir = Path(__file__).parent.parent # Navigate up from controller/ to api/
+        yaml_path = base_dir / "data" / "data_asset_reviews.yaml" # Standard location
 
         logger.info(f"Data Asset Reviews table is empty. Attempting to load from {yaml_path}...")
         try:
-            yaml_file = Path(yaml_path)
-            if not yaml_file.exists():
+            if not yaml_path.is_file():
                  logger.warning(f"Data asset review YAML file not found at {yaml_path}. No reviews loaded.")
                  return False
                  
-            with open(yaml_file, 'r') as file:
+            with open(yaml_path, 'r') as file:
                 data = yaml.safe_load(file)
 
             if not isinstance(data, list):
@@ -440,25 +447,55 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                     continue
                 try:
                     # Parse using the API model for validation
+                    # Ensure timestamps are set if missing
+                    now = datetime.utcnow()
+                    request_dict.setdefault('created_at', now)
+                    request_dict.setdefault('updated_at', now)
+                    # Ensure assets have timestamps if missing
+                    if 'assets' in request_dict and isinstance(request_dict['assets'], list):
+                        for asset in request_dict['assets']:
+                            if isinstance(asset, dict):
+                                asset.setdefault('updated_at', now)
+
                     request_api = DataAssetReviewRequestApi(**request_dict)
-                    # Use the repository's create_with_assets method
-                    self._repo.create_with_assets(db=self._db, obj_in=request_api)
+                    # Use the repository's create_with_assets method with the passed db session
+                    self._repo.create_with_assets(db=db, obj_in=request_api) # Use passed db session
                     loaded_count += 1
                 except (ValidationError, ValueError, SQLAlchemyError) as e:
                     logger.error(f"Error processing review request from YAML (ID: {request_dict.get('id', 'N/A')}): {e}")
+                    db.rollback() # Rollback this specific item
                     errors += 1
                 except Exception as e:
                      logger.error(f"Unexpected error processing review request from YAML (ID: {request_dict.get('id', 'N/A')}): {e}", exc_info=True)
+                     db.rollback() # Rollback this specific item
                      errors += 1
 
-            logger.info(f"Processed {loaded_count} data asset reviews from {yaml_path}. Encountered {errors} processing errors.")
-            return loaded_count > 0
+            if errors == 0 and loaded_count > 0:
+                 db.commit() # Commit only if all loaded successfully
+                 logger.info(f"Successfully loaded and committed {loaded_count} data asset reviews from {yaml_path}.")
+            elif loaded_count > 0 and errors > 0:
+                 logger.warning(f"Processed {loaded_count + errors} reviews from {yaml_path}, but encountered {errors} errors. Changes for successful reviews were rolled back.")
+            elif errors > 0:
+                 logger.error(f"Encountered {errors} errors processing reviews from {yaml_path}. No reviews loaded.")
+            else:
+                 logger.info(f"No new data asset reviews found to load from {yaml_path}.")
 
+            return loaded_count > 0 and errors == 0 # Return True only if loaded without errors
+
+        except FileNotFoundError:
+            logger.warning(f"Data asset review YAML file not found at {yaml_path}. No reviews loaded.")
+            return False
         except yaml.YAMLError as e:
             logger.error(f"Error parsing data asset review YAML file {yaml_path}: {e}")
+            db.rollback() # Rollback if YAML parsing failed
             return False
+        except SQLAlchemyError as e: # Catch DB errors outside the loop (e.g., during initial check)
+             logger.error(f"Database error during initial review data load from {yaml_path}: {e}", exc_info=True)
+             db.rollback()
+             return False
         except Exception as e:
             logger.error(f"Unexpected error loading data asset reviews from YAML {yaml_path}: {e}", exc_info=True)
+            db.rollback() # Rollback on other errors
             return False
 
     # --- Implementation of SearchableAsset ---
