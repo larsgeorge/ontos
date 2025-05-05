@@ -109,28 +109,6 @@ export default function Compliance() {
     }
   };
 
-  const handleCreatePolicy = async () => {
-    try {
-      if (!selectedPolicy) return;
-      
-      await api.post('/api/compliance/policies', selectedPolicy);
-      
-      toast({
-        title: "Success",
-        description: "Policy created successfully"
-      });
-      
-      setIsDialogOpen(false);
-      loadPolicies();
-    } catch (err) {
-      toast({
-        title: "Error",
-        description: "Failed to create policy",
-        variant: "destructive"
-      });
-    }
-  };
-
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
     try {

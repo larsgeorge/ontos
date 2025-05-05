@@ -1,13 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import SearchBar from '@/components/ui/search-bar';
 import { Card, CardContent, CardTitle, CardHeader, CardDescription } from '@/components/ui/card';
-import { Loader2, Database, Book, GitCompare, Shield, Gavel, FolderKanban, Settings, Info, TrendingUp, FileText as FileTextIcon, BookOpen, ArrowLeftRight, Scale, Globe, ArrowRight, BookOpenCheck, UserPlus, AlertCircle } from 'lucide-react';
+import { Loader2, Database, TrendingUp, FileText as FileTextIcon, BookOpen, Scale, Globe, ArrowRight, AlertCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { UnityCatalogLogo } from '@/components/unity-catalog-logo';
 import { Button } from '@/components/ui/button';
 import { getLandingPageFeatures, FeatureConfig, FeatureMaturity } from '@/config/features';
-import React from 'react';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/stores/permissions-store';
@@ -75,7 +74,6 @@ export default function Home() {
   const [complianceError, setComplianceError] = useState<string | null>(null);
   const allowedMaturities = useFeatureVisibilityStore((state) => state.allowedMaturities);
   const { permissions, isLoading: permissionsLoading, hasPermission } = usePermissions();
-  const navigate = useNavigate();
 
   useEffect(() => {
     fetch('/api/data-products')

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { Navigation } from './navigation';
 import { UnityCatalogLogo } from '@/components/unity-catalog-logo';

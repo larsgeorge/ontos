@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { AppRole, FeatureConfig, FeatureAccessLevel } from '@/types/settings'; // Import FeatureAccessLevel
@@ -14,21 +14,8 @@ import { useUserStore } from '@/stores/user-store'; // Import user store
 // --- DataTable Imports ---
 import {
     ColumnDef,
-    flexRender,
-    getCoreRowModel,
-    getSortedRowModel,
-    SortingState,
-    useReactTable,
     Column, // Import Column type for header context
 } from "@tanstack/react-table";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table"; // Keep for DataTable structure
 import { DataTable } from "@/components/ui/data-table"; // Import DataTable
 import {
     DropdownMenu,
@@ -56,7 +43,6 @@ export default function RolesSettings() {
     const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications); // Get refresh action
     
     const featureId = 'settings'; // Feature ID for permissions
-    const canRead = hasPermission(featureId, FeatureAccessLevel.READ_ONLY);
     const canWrite = hasPermission(featureId, FeatureAccessLevel.READ_WRITE);
     const canAdmin = hasPermission(featureId, FeatureAccessLevel.ADMIN);
 

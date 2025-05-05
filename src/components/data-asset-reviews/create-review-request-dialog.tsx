@@ -35,7 +35,7 @@ interface CreateReviewRequestDialogProps {
     onSubmitSuccess: (newRequest: DataAssetReviewRequest) => void;
 }
 
-const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string }, name: string): T => {
+const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
     if (response.error) throw new Error(`${name} creation failed: ${response.error}`);
     if (response.data && typeof response.data === 'object' && 'detail' in response.data && typeof response.data.detail === 'string') {
         throw new Error(`${name} creation failed: ${response.data.detail}`);
@@ -50,7 +50,7 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
     const { post, get } = api;
     const { toast } = useToast();
     const [requesterEmail, setRequesterEmail] = useState<string | null>(null);
-    const [isFetchingUser, setIsFetchingUser] = useState(false);
+    const [_, setIsFetchingUser] = useState(false);
     const [reviewerEmail, setReviewerEmail] = useState('');
     const [notes, setNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);

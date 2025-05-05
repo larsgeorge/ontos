@@ -77,7 +77,6 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         handleSubmit,
         control,
         reset,
-        watch,
         formState: { errors, isSubmitting, isDirty },
     } = useForm<AppRole>({ defaultValues });
 

@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { MoreHorizontal, PlusCircle, Loader2, AlertCircle, BoxSelect } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
-import { DataDomain, DataDomainCreate, DataDomainUpdate } from '@/types/data-domain';
+import { DataDomain } from '@/types/data-domain';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from "@/hooks/use-toast";
 import { DataDomainFormDialog } from '@/components/data-domains/data-domain-form-dialog';

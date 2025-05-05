@@ -5,7 +5,7 @@ from sqlalchemy import func
 
 from api.common.repository import CRUDBase
 from api.db_models.notifications import NotificationDb # SQLAlchemy model
-from api.models.notifications import Notification as NotificationApi # API model
+from api.models.notifications import Notification as NotificationApi, NotificationType # API model and NotificationType enum
 from api.common.logging import get_logger
 
 logger = get_logger(__name__)

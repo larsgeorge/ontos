@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 import { ScrollArea } from './scroll-area';
 import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request-dialog';
 import { useNotificationsStore } from '@/stores/notifications-store';
-import { Notification, NotificationType } from '@/types/notification';
+import { NotificationType } from '@/types/notification';
 
 export default function NotificationBell() {
   const {

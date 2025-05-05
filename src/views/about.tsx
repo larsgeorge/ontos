@@ -1,8 +1,7 @@
-import { Info, Github, Shield, BookOpen, FileText, Users, Lock, CheckCircle, Settings, Database, GitBranch, RefreshCw, BookOpenCheck } from 'lucide-react';
+import { Github, BookOpenCheck } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
-import { getLandingPageFeatures, FeatureConfig, FeatureMaturity } from '@/config/features';
-import React from 'react';
+import { getLandingPageFeatures, FeatureConfig } from '@/config/features';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { cn } from '@/lib/utils';
 

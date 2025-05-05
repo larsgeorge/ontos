@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertCircle, Eye, Code } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from "@/hooks/use-toast";
 import { ReviewedAsset, ReviewedAssetStatus, AssetType, AssetDefinition, TablePreview, ReviewedAssetUpdate } from '@/types/data-asset-review';
@@ -22,7 +22,7 @@ interface AssetReviewEditorProps {
 }
 
 // Helper function to check API response
-const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string }, name: string): T => {
+const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
     if (response.error) throw new Error(`${name} fetch failed: ${response.error}`);
     if (response.data && typeof response.data === 'object' && 'detail' in response.data && typeof response.data.detail === 'string') {
         throw new Error(`${name} fetch failed: ${response.data.detail}`);
