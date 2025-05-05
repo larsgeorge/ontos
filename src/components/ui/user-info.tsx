@@ -7,15 +7,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuCheckboxItem,
   DropdownMenuGroup,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuSub,
 } from '@/components/ui/dropdown-menu';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { LogOut, User as UserIcon, FlaskConical, Beaker, Users as UsersIcon } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
@@ -214,13 +210,16 @@ export default function UserInfo() {
                 <ScrollArea className="max-h-[150px] overflow-y-auto">
                     <DropdownMenuRadioGroup value={radioValue} onValueChange={handleRoleChange}>
                         <DropdownMenuRadioItem value="actual">
+                            <UserIcon className="mr-1.5 h-3.5 w-3.5" />
                             {highestActualLevelName} (Actual)
                         </DropdownMenuRadioItem>
                         {filteredRolesForOverride.map((role: AppRole) => (
                             <DropdownMenuRadioItem
                                 key={role.id}
                                 value={role.id}
+                                className="flex items-center"
                             >
+                                <UsersIcon className="mr-1.5 h-3.5 w-3.5" />
                                 {role.name}
                             </DropdownMenuRadioItem>
                         ))}
