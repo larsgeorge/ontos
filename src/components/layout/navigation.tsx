@@ -7,7 +7,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { getNavigationGroups, FeatureConfig, FeatureMaturity } from '@/config/features';
+import { getNavigationGroups, FeatureConfig } from '@/config/features';
 import React from 'react';
 // Import the Zustand store hook
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 // Add Home icon
-import { Home as HomeIcon } from 'lucide-react';
+import { Home as HomeIcon, Loader2 } from 'lucide-react';
 
 interface NavigationProps {
   isCollapsed: boolean;
@@ -55,10 +55,10 @@ export function Navigation({ isCollapsed }: NavigationProps) {
 
   // Handle loading state for permissions
   if (permissionsLoading) {
-     // Optional: Show a loading indicator instead of an empty sidebar
+     // Show a loading indicator instead of an empty sidebar
      return (
-         <div className="p-4 text-sm text-muted-foreground">
-             Loading navigation...
+         <div className="flex justify-center items-center h-full p-4">
+             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
          </div>
      );
   }
