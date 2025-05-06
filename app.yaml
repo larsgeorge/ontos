@@ -16,7 +16,7 @@ env:
   - name: "POSTGRES_PORT"
     value: "5432"
   - name: "POSTGRES_USER"
-    value: "1b9c0e8e-add5-4276-93fd-e0ca7d22cdc6"
+    value: "rucsak_app_user"
   - name: "POSTGRES_PASSWORD"
     valueFrom: "db_password"
   - name: "POSTGRES_DB"

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useForm, useFieldArray, Controller, FieldValues, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -20,6 +20,25 @@ import { DataProduct, Link as DataProductLink, OutputPort as OutputPortType } fr
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, Trash2 } from 'lucide-react'; // Removed unused X icon
+import ReactFlow, {
+    Node,
+    Edge,
+    Background,
+    Controls,
+    MarkerType,
+    Position,
+    Handle, // Added Handle
+    NodeProps, // Added NodeProps
+} from 'reactflow';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Card, CardContent } from '@/components/ui/card'; // Added Card for node styling
+
+import 'reactflow/dist/style.css'; // Added ReactFlow styles
 
 // --- Zod Schema Definition ---
 // Define enums/literals for validation
@@ -109,6 +128,53 @@ interface DataProductWizardDialogProps {
   onSubmitSuccess: (product: DataProduct) => void;
 }
 
+// --- Product Type Details for ReactFlow ---
+const productTypeDetails = [
+  { id: 'source', label: 'Source', description: 'Raw data directly from origin systems. Represents the entry point of data into your ecosystem.' },
+  { id: 'source-aligned', label: 'Source-Aligned', description: 'Cleaned, standardized, and validated source data. Ready for initial consumption or further processing.' },
+  { id: 'aggregate', label: 'Aggregate', description: 'Derived or transformed data, often combining multiple sources. Provides new insights or summarized views.' },
+  { id: 'consumer-aligned', label: 'Consumer-Aligned', description: 'Data specifically tailored for a particular business use case or consumer group. Often highly processed.' },
+  { id: 'sink', label: 'Sink', description: 'An endpoint for data, typically feeding into external systems or applications. Marks an exit point from this data product ecosystem.' },
+] as const;
+
+// --- Custom Node for Product Type Selection ---
+interface ProductTypeNodeData {
+  label: string;
+  // description: string; // Description is no longer needed in node data if displayed externally
+  isSelected: boolean;
+  onClick: () => void;
+}
+
+// --- Define nodeTypes outside the component for memoization ---
+const ProductTypeNode: React.FC<NodeProps<ProductTypeNodeData>> = ({ data }) => {
+  return (
+    <>
+      <Handle type="target" position={Position.Left} id="in" style={{ background: 'transparent', width: '1px', height: '1px', border: 'none' }} />
+      {/* Tooltip components are fully removed */}
+      <Card
+        onClick={data.onClick}
+        className={`w-36 h-20 flex items-center justify-center text-center cursor-pointer shadow-md hover:shadow-lg transition-shadow rounded-md
+                        ${data.isSelected ? 'border-2 border-primary bg-primary/10' : 'bg-card border'}`}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            data.onClick();
+          }
+        }}
+      >
+        <CardContent className="p-1">
+          <p className="text-xs font-semibold">{data.label}</p>
+        </CardContent>
+      </Card>
+      <Handle type="source" position={Position.Right} id="out" style={{ background: 'transparent', width: '1px', height: '1px', border: 'none' }} />
+    </>
+  );
+};
+
+// Define nodeTypes outside the component for memoization
+const nodeTypes = { productType: ProductTypeNode };
+
 // --- Wizard Component ---
 export default function DataProductWizardDialog({
   isOpen,
@@ -127,9 +193,27 @@ export default function DataProductWizardDialog({
   const isEditing = !!initialProduct;
   const totalSteps = 5;
 
+  const reactFlowWrapperRef = useRef<HTMLDivElement>(null); // Ref for ReactFlow container
+
   // Transform links/custom from Record<string, T> to Array<{key: string, value: T}> for form
-  const transformInitialData = (product: DataProduct | null): Partial<z.infer<typeof dataProductSchema>> | undefined => {
-      if (!product) return undefined;
+  const transformInitialData = (product: DataProduct | null): z.infer<typeof dataProductSchema> => {
+      const base = {
+        dataProductSpecification: "0.0.1",
+        info: { title: '', owner: '', status: statuses?.[0] || '' },
+        version: 'v1.0',
+        inputPorts: [],
+        outputPorts: [],
+        links: [],
+        custom: [],
+        tags: [],
+        productType: productTypes[0],
+        id: undefined,
+        created_at: undefined,
+        updated_at: undefined,
+      };
+
+      if (!product) return base;
+
       // Helper to safely transform tags
       const transformTags = (tags: any): string[] | undefined => {
          if (Array.isArray(tags)) {
@@ -139,7 +223,9 @@ export default function DataProductWizardDialog({
       };
 
       return {
+          ...base, // Start with a complete base to satisfy the schema
           ...product,
+          dataProductSpecification: product.dataProductSpecification || "0.0.1",
           // Transform links: Handle cases where product.links might be null/undefined
           links: product.links ? Object.entries(product.links).map(([key, value]) => ({
                url: value?.url || '', // Provide default for url
@@ -158,30 +244,20 @@ export default function DataProductWizardDialog({
           })),
           // Ensure info object and its fields exist
           info: {
-            title: product.info?.title || '',
-            owner: product.info?.owner || '',
-            domain: product.info?.domain || '',
-            description: product.info?.description || '',
-            status: product.info?.status || '',
+            ...base.info,
+            ...product.info,
+            status: product.info?.status || statuses?.[0] || '',
           },
           version: product.version || 'v1.0', // Use existing version or default
-          productType: product.productType as z.infer<typeof dataProductSchema>['productType'] || undefined, // Cast if necessary
+          productType: product.productType as z.infer<typeof dataProductSchema>['productType'] || base.productType,
+          id: product.id || undefined,
       };
   };
 
 
   const form = useForm<z.infer<typeof dataProductSchema>>({
     resolver: zodResolver(dataProductSchema),
-    defaultValues: transformInitialData(initialProduct) || {
-      info: { title: '', owner: '', status: statuses?.[0] || '' },
-      version: 'v1.0', // Default for new products
-      inputPorts: [],
-      outputPorts: [],
-      links: [],
-      custom: [],
-      tags: [],
-      productType: undefined, // Ensure it's initially undefined
-    },
+    defaultValues: transformInitialData(initialProduct), // transformInitialData now always returns a valid default
   });
 
    const { fields: inputPortFields, append: appendInputPort, remove: removeInputPort } = useFieldArray({
@@ -206,19 +282,10 @@ export default function DataProductWizardDialog({
 
   // Reset form when initialProduct changes (e.g., opening dialog for edit)
   useEffect(() => {
-    const defaultValues = transformInitialData(initialProduct) || {
-        info: { title: '', owner: '', status: statuses?.[0] || '' },
-        version: 'v1.0',
-        inputPorts: [],
-        outputPorts: [],
-        links: [],
-        custom: [],
-        tags: [],
-        productType: undefined,
-      };
+    const defaultValues = transformInitialData(initialProduct);
     form.reset(defaultValues);
     setStep(1); // Always start at step 1
-  }, [initialProduct, form.reset, statuses]);
+  }, [initialProduct, form.reset]);
 
 
   const watchedProductType = form.watch('productType');
@@ -257,7 +324,7 @@ export default function DataProductWizardDialog({
     }
   };
 
-  const onSubmit = async (data: z.infer<typeof dataProductSchema>) => {
+  const onSubmit: SubmitHandler<z.infer<typeof dataProductSchema>> = async (data) => {
     setIsLoading(true);
     setError(null);
 
@@ -353,10 +420,45 @@ export default function DataProductWizardDialog({
 
   const [error, setError] = useState<string | null>(null);
 
+  // --- ReactFlow Nodes and Edges ---
+  const { nodes: flowNodes, edges: flowEdges } = useMemo(() => {
+    const nodesList: Node<ProductTypeNodeData>[] = productTypeDetails.map((pt, index) => ({
+      id: pt.id,
+      type: 'productType',
+      position: { x: index * 170 + 20, y: 40 },
+      data: {
+        label: pt.label,
+        isSelected: watchedProductType === pt.id,
+        onClick: () => {
+          form.setValue('productType', pt.id as z.infer<typeof dataProductSchema>['productType'], { shouldValidate: true, shouldDirty: true, shouldTouch: true });
+        },
+      },
+      draggable: false,
+      selectable: false,
+      connectable: false, // Nodes themselves are not connectable
+      focusable: true, // Let's make them focusable to see if it helps with keyboard nav for click
+    }));
+
+    const edgesList: Edge[] = productTypeDetails.slice(0, -1).map((pt, index) => ({
+      id: `e-${pt.id}-to-${productTypeDetails[index + 1].id}`,
+      source: pt.id,
+      target: productTypeDetails[index + 1].id,
+      sourceHandle: 'out',
+      targetHandle: 'in',
+      type: 'smoothstep',
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#6b7280', width: 15, height: 15 },
+      style: { stroke: '#6b7280', strokeWidth: 1.5 },
+      animated: false, // Keep it static unless active
+      selectable: false,
+    }));
+    return { nodes: nodesList, edges: edgesList };
+  }, [watchedProductType, form.setValue, form.getValues]); // Add dependencies for useMemo
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] md:max-w-[800px] lg:max-w-[1000px] max-h-[90vh] flex flex-col">
+      <DialogContent 
+        className="sm:max-w-[600px] md:max-w-[800px] lg:max-w-[1000px] max-h-[90vh] flex flex-col"
+      >
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit Data Product' : 'Create New Data Product'} (Step {step} of {totalSteps})</DialogTitle>
           <DialogDescription>
@@ -372,9 +474,66 @@ export default function DataProductWizardDialog({
         <div className="flex-grow overflow-y-auto pr-6 pl-1 space-y-4 py-4">
           {/* Wrap content in form, but submit button is external */}
           {/* Step 1: Product Type */}
-            <div className={`${step === 1 ? 'block' : 'hidden'}`}>
-                <Label htmlFor="productType" className="text-base font-medium mb-2 block">Product Type *</Label>
-                <Controller
+            <div className={`${step === 1 ? 'block' : 'hidden'} space-y-6`}>
+                {/* ReactFlow Diagram */}
+                <style>{`
+                  .reactflow-custom-cursor .react-flow__pane {
+                    cursor: default !important;
+                  }
+                  /* Dashed edges can be removed if arrows are showing */
+                  /* .reactflow-custom-cursor .react-flow__edge path {
+                    stroke-dasharray: 5, 5; 
+                  } */
+                `}</style>
+                <div 
+                  ref={reactFlowWrapperRef} // Attach ref here
+                  className="h-40 w-full border rounded-lg relative bg-muted/30 reactflow-custom-cursor" 
+                  style={{ minHeight: '160px' }} 
+                >
+                  <ReactFlow
+                    nodes={flowNodes}
+                    edges={flowEdges}
+                    nodeTypes={nodeTypes}
+                    fitView
+                    attributionPosition="top-right"
+                    nodesDraggable={false}
+                    nodesConnectable={false}
+                    elementsSelectable={false}
+                    zoomOnScroll={false}
+                    panOnScroll={false}
+                    preventScrolling={false}
+                    panOnDrag={false}
+                    zoomOnPinch={false}
+                    zoomOnDoubleClick={false}
+                    nodesFocusable={true}
+                    fitViewOptions={{ padding: 0.05 }}
+                    onNodeClick={(_, node) => { // Cleaned up onNodeClick
+                        if (node.data && typeof node.data.onClick === 'function') {
+                            node.data.onClick();
+                        }
+                    }}
+                  >
+                    <Background gap={16} />
+                    <Controls showInteractive={false} showFitView={false} showZoom={false} />
+                  </ReactFlow>
+                </div>
+
+                {/* Display selected product type description */}
+                {watchedProductType && (
+                  <div className="mt-4 p-3 border rounded-md bg-muted/50 min-h-[60px]">
+                    <p className="text-sm font-semibold mb-1">
+                      {productTypeDetails.find(pt => pt.id === watchedProductType)?.label} Description:
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {productTypeDetails.find(pt => pt.id === watchedProductType)?.description}
+                    </p>
+                  </div>
+                )}
+
+                {/* Existing Select Dropdown */}
+                <div>
+                  <Label htmlFor="productType" className="text-base font-medium mb-2 block">Or select Product Type from list *</Label>
+                  <Controller
                     control={form.control}
                     name="productType"
                     render={({ field }) => (
@@ -400,6 +559,7 @@ export default function DataProductWizardDialog({
                     )}
                 />
                 {form.formState.errors.productType && <p className="text-sm text-destructive mt-1">{form.formState.errors.productType.message}</p>}
+                </div>
             </div>
 
             {/* Step 2: Info */}
@@ -603,9 +763,8 @@ export default function DataProductWizardDialog({
                             <Label htmlFor={`custom.${index}.value`}>Value</Label>
                             {/* Consider type dropdown or flexible input later */}
                             <Input {...form.register(`custom.${index}.value`)} />
-                              {/* Ensure only string is rendered */}
-                              {form.formState.errors.custom?.[index]?.value?.message &&
-                               <p className="text-sm text-destructive mt-1">{form.formState.errors.custom[index]?.value?.message}</p>}
+                              {form.formState.errors.custom?.[index]?.value?.message && typeof form.formState.errors.custom?.[index]?.value?.message === 'string' &&
+                               <p className="text-sm text-destructive mt-1">{form.formState.errors.custom[index]?.value?.message as string}</p>}
                             </div>
                             <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 mb-1 h-8 w-8" onClick={() => removeCustom(index)}>
                                 <Trash2 className="h-4 w-4" />
