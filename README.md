@@ -31,40 +31,43 @@ Key features:
 
 The backend API is built with FastAPI, providing RESTful endpoints for all data operations.
 
-#### API Endpoints
+#### API Documentation (Swagger UI)
 
-##### Data Products
+FastAPI automatically generates interactive API documentation using Swagger UI.
+Once the backend server is running (e.g., via `hatch -e dev run dev-backend`), you can access the API documentation in your browser.
+
+- **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **ReDoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+This interface allows you to explore all available API endpoints, view their request/response models, and even try them out directly from your browser.
 
 # Getting Started
 
-This project uses Vite for the frontend build system and Hatch for the Python backend.
+This project uses Yarn for frontend package management, Vite for the frontend build system, and Hatch for the Python backend.
 
 ## Available Scripts
 
 In the project directory, you can run:
 
-### `npm run dev`
+### `yarn dev:frontend`
 
-Runs the app in development mode with Vite.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+Runs the frontend app in development mode using Vite.
+Open [http://localhost:3000](http://localhost:3000) (or the port Vite chooses) to view it in the browser.
 
-The page will reload if you make edits.\
+The page will reload if you make edits.
 You will also see any lint errors in the console.
 
-### `npm run dev:backend`
+### `yarn dev:backend`
 
-Runs the Python-based FastAPI server in development mode.
+Runs the Python-based FastAPI server in development mode using Hatch.
+(Corresponds to the `dev:backend` script in `package.json` which executes `hatch -e dev run dev-backend`)
 
-### `npm run test`
+### `yarn build`
 
-Launches the test runner in the interactive watch mode.
+Builds the frontend app for production to the `static` folder.
+It performs a TypeScript type check, then correctly bundles React in production mode and optimizes the build for the best performance using Vite.
 
-### `npm run build`
-
-Builds the app for production to the `static` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
+The build is minified and the filenames include the hashes.
 Your app is ready to be deployed!
 
 ## Environment Configuration
@@ -74,13 +77,19 @@ The application requires a `.env` file in the root directory for configuration. 
 | Variable                   | Description                                                                                                   | Example Value                                | Required |
 |----------------------------|---------------------------------------------------------------------------------------------------------------|----------------------------------------------|----------|
 | `DATABRICKS_HOST`          | Your Databricks workspace URL                                                                                 | `https://your-workspace.cloud.databricks.com`| Yes      |
-| `DATABRICKS_WAREHOUSE_ID`  | The ID of the Databricks SQL Warehouse to use for connections                                                   | `1234567890abcdef`                           | Yes      |
-| `DATABRICKS_CATALOG`       | Default Unity Catalog catalog to use within the app                                                            | `main`                                       | Yes      |
-| `DATABRICKS_SCHEMA`        | Default Unity Catalog schema to use within the app                                                             | `default`                                    | Yes      |
+| `DATABRICKS_WAREHOUSE_ID`  | The ID of the Databricks SQL Warehouse to use (required if `DATABASE_TYPE` is `databricks`)                   | `1234567890abcdef`                           | Cond.    |
+| `DATABRICKS_CATALOG`       | Default Unity Catalog catalog to use (required if `DATABASE_TYPE` is `databricks`)                            | `main`                                       | Cond.    |
+| `DATABRICKS_SCHEMA`        | Default Unity Catalog schema to use (required if `DATABASE_TYPE` is `databricks`)                             | `default`                                    | Cond.    |
 | `DATABRICKS_VOLUME`        | Default Unity Catalog volume for storing app-related files (e.g., data contract outputs)                      | `app_volume`                                 | Yes      |
 | `APP_AUDIT_LOG_DIR`        | Directory path within the `DATABRICKS_VOLUME` for storing audit logs                                          | `audit_logs`                                 | Yes      |
-| `DATABRICKS_TOKEN`         | Personal access token for authentication (Optional - SDK can use other methods)                              | `dapi1234567890abcdef`                       | No       |
-| `DATABASE_URL`             | Connection string for the application's metadata database (e.g., PostgreSQL)                                  | `postgresql+psycopg2://user:pass@host/db`  | No       |
+| `DATABRICKS_TOKEN`         | Personal access token for Databricks authentication (Optional - SDK can use other methods)                    | `dapi1234567890abcdef`                       | No       |
+| `DATABASE_TYPE`            | Specifies the type of database to use for application metadata. Options: `databricks`, `postgres`.              | `postgres`                                   | Yes      |
+| `POSTGRES_HOST`            | Hostname or IP address of the PostgreSQL server (required if `DATABASE_TYPE` is `postgres`)                   | `localhost` or `your.pg.server.com`          | Cond.    |
+| `POSTGRES_PORT`            | Port number for the PostgreSQL server (required if `DATABASE_TYPE` is `postgres`)                             | `5432`                                       | Cond.    |
+| `POSTGRES_USER`            | Username for connecting to PostgreSQL (required if `DATABASE_TYPE` is `postgres`)                             | `app_user`                                   | Cond.    |
+| `POSTGRES_PASSWORD`        | Password for the PostgreSQL user (required if `DATABASE_TYPE` is `postgres`)                                  | `your_secure_password`                     | Cond.    |
+| `POSTGRES_DB`              | Name of the PostgreSQL database to use (required if `DATABASE_TYPE` is `postgres`)                            | `app_ucsak_db`                               | Cond.    |
+| `DB_SCHEMA`                | Database schema to use for application tables (Optional, defaults to `public` for PostgreSQL)                 | `myapp_schema`                               | No       |
 | `ENV`                      | Deployment environment (`LOCAL`, `DEV`, `PROD`)                                                               | `LOCAL`                                      | No       |
 | `DEBUG`                    | Enable debug mode for FastAPI                                                                                 | `True`                                       | No       |
 | `LOG_LEVEL`                | Log level for the application (`DEBUG`, `INFO`, `WARNING`, `ERROR`)                                         | `INFO`                                       | No       |
@@ -94,17 +103,43 @@ The application requires a `.env` file in the root directory for configuration. 
 | `APP_DB_DROP_ON_START`     | **DANGER:** Drop and recreate the application database on startup (for development)                           | `False`                                      | No       |
 | `APP_DB_ECHO`              | Log SQLAlchemy generated SQL statements to the console (for debugging)                                        | `False`                                      | No       |
 
-**Note:** `DATABRICKS_HTTP_PATH` is derived automatically from `DATABRICKS_WAREHOUSE_ID` and does not need to be set manually.
+**Note:** `DATABRICKS_HTTP_PATH` is derived automatically from `DATABRICKS_WAREHOUSE_ID` for Databricks connections and does not need to be set manually.
 
-# Unified Catalog Application
+### Database Configuration
 
-A modern web application for managing data catalogs, built with FastAPI and React with Tailwind CSS and Shadcn UI.
+The application stores its metadata (settings, roles, reviews, etc.) in a database. You can configure the application to use either Databricks SQL or a PostgreSQL instance.
+
+Set the `DATABASE_TYPE` environment variable to choose the database backend:
+
+*   **`DATABASE_TYPE=databricks`**:
+    *   Uses a Databricks SQL endpoint (warehouse) to store application tables within Unity Catalog.
+    *   **Required Databricks Variables:**
+        *   `DATABRICKS_HOST`: Your workspace URL.
+        *   `DATABRICKS_WAREHOUSE_ID`: The ID of the SQL Warehouse.
+        *   `DATABRICKS_CATALOG`: The UC catalog where app tables will be created.
+        *   `DATABRICKS_SCHEMA`: The UC schema within the catalog for app tables.
+        *   `DATABRICKS_TOKEN` (Optional): For authentication if not using other SDK methods.
+    *   The tables will be created under `<DATABRICKS_CATALOG>.<DATABRICKS_SCHEMA>`.
+
+*   **`DATABASE_TYPE=postgres`**:
+    *   Uses an external PostgreSQL database server.
+    *   **Required PostgreSQL Variables:**
+        *   `POSTGRES_HOST`: Hostname of your PostgreSQL server.
+        *   `POSTGRES_PORT`: Port of your PostgreSQL server (default `5432`).
+        *   `POSTGRES_USER`: Username for PostgreSQL connection.
+        *   `POSTGRES_PASSWORD`: Password for the PostgreSQL user.
+        *   `POSTGRES_DB`: Database name on the PostgreSQL server.
+    *   **Optional PostgreSQL Variable:**
+        *   `DB_SCHEMA`: The schema within the PostgreSQL database where tables will be created (defaults to `public`).
 
 ## Prerequisites
 
 - Python 3.10 - 3.12 (as defined in `pyproject.toml`)
-- Node.js 16 or higher
-- Yarn package manager
+- Node.js 16 or higher (which includes npm for installing Yarn)
+- Yarn package manager (Version 1.x - Classic). Install via npm if you don't have it:
+  ```bash
+  npm install --global yarn
+  ```
 - Hatch (Python build tool)
 
 ## Installation
@@ -125,7 +160,7 @@ Python dependencies for the backend are managed by Hatch. They will be installed
 
 **Note on Dependencies:** Since this application is designed to run as a Databricks App, which utilizes a standard Python environment, the backend dependencies are listed in `requirements.txt`. The `pyproject.toml` file is configured (using the `hatch-requirements-txt` plugin) to dynamically read its dependencies from `requirements.txt`. This ensures that the dependencies used in local development with Hatch are consistent with those installed in the Databricks App environment.
 
-## Development
+# Development
 
 To run both frontend and backend servers in development mode:
 
@@ -133,7 +168,7 @@ To run both frontend and backend servers in development mode:
 
 Open a terminal and run:
 ```bash
-yarn install && yarn dev
+yarn install && yarn dev:frontend
 ```
 This will install frontend dependencies (if needed) and start the Vite development server, typically on port 3000.
 
@@ -141,9 +176,9 @@ This will install frontend dependencies (if needed) and start the Vite developme
 
 Open a separate terminal and run:
 ```bash
-hatch -e dev run dev-backend
+yarn dev:backend
 ```
-This command uses Hatch to run the FastAPI backend in the development environment (`-e dev`), usually starting it on port 8000.
+This command uses Yarn to execute the `dev:backend` script from `package.json`, which in turn uses Hatch to run the FastAPI backend in the development environment (`-e dev`), usually starting it on port 8000.
 
 Both servers support hot reloading for a smoother development experience.
 
@@ -178,14 +213,9 @@ These roles and their permissions can be viewed and modified in the application'
 
 ## Environment Variables
 
-Create a `.env` file in the root directory with the following variables:
+For a comprehensive list and explanation of required and optional environment variables, please refer to the **[Environment Configuration](#environment-configuration)** section earlier in this document.
 
-```
-DATABRICKS_WAREHOUSE_ID=your_warehouse_id
-DATABRICKS_HTTP_PATH=your_http_path
-DATABRICKS_CATALOG=your_catalog
-DATABRICKS_SCHEMA=your_schema
-```
+A complete template can also be found in the `.env.example` file in the project root.
 
 ## Project Structure
 
@@ -240,6 +270,6 @@ hatch run lint:all
 ```
 4. Submit a pull request
 
-## License
+# License
 
 This project is licensed under the Apache License, Version 2.0 - see the LICENSE file for details.

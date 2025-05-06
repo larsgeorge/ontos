@@ -225,30 +225,35 @@ db_manager: Optional[DatabaseManager] = None
 
 def get_db_url(settings: Settings) -> str:
     """Constructs the Databricks SQLAlchemy URL."""
-    token = os.getenv("DATABRICKS_TOKEN")  # Prefer token from env for security
-    if not token:
-        logger.warning(
-            "DATABRICKS_TOKEN environment variable not set. Relying on SDK default credential provider.")
-        # databricks-sqlalchemy uses default creds if token is None
-
-    if not settings.DATABRICKS_HOST or not settings.DATABRICKS_HTTP_PATH:
-         raise ValueError(
-             "DATABRICKS_HOST and DATABRICKS_HTTP_PATH must be configured in settings.")
-
-    # Ensure host doesn't have https:// prefix
-    host = settings.DATABRICKS_HOST.replace("https://", "")
-
-    # Construct the URL for databricks-sqlalchemy dialect
-    # See: https://github.com/databricks/databricks-sqlalchemy
-    # Example: databricks://token:{token}@{host}?http_path={http_path}&catalog={catalog}&schema={schema}
-    url = (
-        f"databricks://token:{token}@{host}"
-        f"?http_path={settings.DATABRICKS_HTTP_PATH}"
-        f"&catalog={settings.DATABRICKS_CATALOG}"
-        f"&schema={settings.DATABRICKS_SCHEMA}"
-    )
-    logger.debug(f"Constructed Databricks SQLAlchemy URL (token redacted)")
-    return url
+    logger.info(f"Configuring database connection for type: {settings.DATABASE_TYPE}")
+    if settings.DATABASE_TYPE == "postgres":
+        if not all([settings.POSTGRES_HOST, settings.POSTGRES_USER, settings.POSTGRES_PASSWORD, settings.POSTGRES_DB]):
+            raise ValueError("PostgreSQL connection details (Host, User, Password, DB) are missing in settings.")
+        # Using psycopg2 driver
+        url = (
+            f"postgresql+psycopg2://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@"
+            f"{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
+            f"?sslmode=require"
+        )
+        logger.debug(f"Constructed PostgreSQL SQLAlchemy URL (credentials redacted, sslmode=require)")
+        return url
+    elif settings.DATABASE_TYPE == "databricks":
+        token = os.getenv("DATABRICKS_TOKEN")
+        if not settings.DATABRICKS_HOST or not settings.DATABRICKS_HTTP_PATH:
+            raise ValueError("DATABRICKS_HOST and DATABRICKS_HTTP_PATH must be configured.")
+        host = settings.DATABRICKS_HOST.replace("https://", "")
+        schema = settings.DATABRICKS_SCHEMA or "default"
+        catalog = settings.DATABRICKS_CATALOG or "main"
+        url = (
+            f"databricks://token:{token}@{host}"
+            f"?http_path={settings.DATABRICKS_HTTP_PATH}"
+            f"&catalog={catalog}"
+            f"&schema={schema}"
+        )
+        logger.debug(f"Constructed Databricks SQLAlchemy URL (token redacted)")
+        return url
+    else:
+        raise ValueError(f"Unsupported DATABASE_TYPE: {settings.DATABASE_TYPE}")
 
 
 def ensure_catalog_schema_exists(settings: Settings):
@@ -333,26 +338,34 @@ def init_db() -> None:
     logger.info("Initializing database engine and session factory...")
 
     try:
-        # Ensure target catalog and schema exist before connecting engine
-        ensure_catalog_schema_exists(settings)
-
-        logger.info(f"Environment for DB connection: {settings.ENV}")
-        if settings.ENV.startswith('LOCAL'):
-             connect_args = {
-                 "server_hostname": settings.DATABRICKS_HOST,
-                 "http_path": settings.DATABRICKS_HTTP_PATH,
-                 "access_token": settings.DATABRICKS_TOKEN,
-             }
-        else:
-             cfg = Config() # Hands in SQL host and OAuth function when run in Databricks
-             connect_args = {
-                 "server_hostname": cfg.host,
-                 "http_path": settings.DATABRICKS_HTTP_PATH,
-                 "credentials_provider": lambda: cfg.authenticate,
-                 "auth_type": "databricks-oauth",
-             }
-             
         db_url = get_db_url(settings)
+
+        if settings.DATABASE_TYPE == "databricks":
+            # Ensure target catalog and schema exist before connecting engine (uses API)
+            ensure_catalog_schema_exists(settings)
+            # Databricks specific connect_args
+            logger.info(f"Environment for DB connection: {settings.ENV}")
+            if settings.ENV.startswith('LOCAL'):
+                connect_args = {
+                    "server_hostname": settings.DATABRICKS_HOST,
+                    "http_path": settings.DATABRICKS_HTTP_PATH,
+                    "access_token": settings.DATABRICKS_TOKEN,
+                }
+            else:
+                cfg = Config() # Hands in SQL host and OAuth function when run in Databricks
+                connect_args = {
+                    "server_hostname": cfg.host,
+                    "http_path": settings.DATABRICKS_HTTP_PATH,
+                    "credentials_provider": lambda: cfg.authenticate,
+                    "auth_type": "databricks-oauth",
+                }
+        elif settings.DATABASE_TYPE == "postgres":
+            # No special pre-checks needed for standard PG catalog/schema
+            # Standard connect_args for PG are usually empty or handled by the URL
+            connect_args = {}
+        else:
+            raise NotImplementedError(f"Database type {settings.DATABASE_TYPE} not fully implemented in init_db.")
+
         logger.info("Connecting to database...")
         logger.info(f"- Database URL: {db_url}")
         logger.info(f"- Connect args: {connect_args}")
@@ -424,11 +437,9 @@ def init_db() -> None:
 
         # Ensure all tables defined in Base metadata exist
         logger.info("Verifying/creating tables based on SQLAlchemy models...")
-        is_databricks = _engine.dialect.name == 'databricks'
+        is_databricks = settings.DATABASE_TYPE == 'databricks'
         if is_databricks:
-            logger.info("Databricks dialect detected. Removing Index objects from metadata before DDL generation.")
-            # Iterate through tables and remove associated Index objects
-            # This prevents create_all from attempting to create them
+            logger.info("Databricks dialect detected. Modifying metadata for DDL generation.")
             indexes_to_remove = []
             for table in Base.metadata.tables.values():
                 # Find indexes associated directly with this table via Column(index=True)

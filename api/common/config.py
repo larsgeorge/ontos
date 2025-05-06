@@ -21,6 +21,15 @@ class Settings(BaseSettings):
 
     # Database settings
     DATABASE_URL: Optional[str] = Field(None, env='DATABASE_URL')
+    DATABASE_TYPE: str = "postgres"
+
+    # Postgres connection settings
+    POSTGRES_HOST: Optional[str] = None
+    POSTGRES_PORT: int = 5432
+    POSTGRES_USER: Optional[str] = None
+    POSTGRES_PASSWORD: Optional[str] = None
+    POSTGRES_DB: Optional[str] = None
+    POSTGRES_DB_SCHEMA: Optional[str] = "public" # Default schema for Postgres
 
     # Databricks connection settings
     DATABRICKS_HOST: str

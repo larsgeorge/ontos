@@ -8,6 +8,20 @@ command: [
 ]
 
 env:
+# postgresql://lars.george%40databricks.com:${PGPASSWORD}@instance-7bdc4a72-528d-43bb-855e-5212001a675d.database.cloud.databricks.com:5432/databricks_postgres?sslmode=require
+  - name: "DATABASE_TYPE"
+    value: "postgres"
+  - name: "POSTGRES_HOST"
+    value: "instance-7bdc4a72-528d-43bb-855e-5212001a675d.database.cloud.databricks.com"
+  - name: "POSTGRES_PORT"
+    value: "5432"
+  - name: "POSTGRES_USER"
+    value: "1b9c0e8e-add5-4276-93fd-e0ca7d22cdc6"
+  - name: "POSTGRES_PASSWORD"
+    valueFrom: "db_password"
+  - name: "POSTGRES_DB"
+    value: "app_ucsak"
+
   - name: "DATABRICKS_WAREHOUSE_ID"
     valueFrom: "sql_warehouse"
   - name: "DATABRICKS_CATALOG"
@@ -16,9 +30,12 @@ env:
     value: "app_ucsak"
   - name: "DATABRICKS_VOLUME"
     value: "app_files"
+
   - name: "APP_DEMO_MODE"
     value: "true"
+
   - name: "APP_ADMIN_DEFAULT_GROUPS"
     value: '["admins"]'
   - name: "APP_AUDIT_LOG_DIR"
     value: "/Volumes/${workspace.env.DATABRICKS_CATALOG}/${workspace.env.DATABRICKS_SCHEMA}/${workspace.env.DATABRICKS_VOLUME}/audit_logs"
+  
