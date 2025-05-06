@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DataProduct, InputPort, OutputPort, DataProductStatus, DataProductArchetype, DataProductOwner, DataProductType } from '@/types/data-product'; // Import Port types
-import DataProductFormDialog from '@/components/data-products/data-product-form-dialog';
+import DataProductWizardDialog from '@/components/data-products/data-product-wizard-dialog';
 import { useApi } from '@/hooks/use-api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -19,7 +19,7 @@ import CreateVersionDialog from '@/components/data-products/create-version-dialo
 
 // Helper Function Type Definition (copied from DataProducts view for checking API responses)
 type CheckApiResponseFn = <T>(
-    response: { data?: T | { detail?: string }, error?: string },
+    response: { data?: T | { detail?: string }, error?: string | null | undefined },
     name: string
 ) => T;
 
@@ -50,8 +50,8 @@ export default function DataProductDetails() {
   const [product, setProduct] = useState<DataProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false); // State for edit dialog
-  const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false); // State for version dialog
+  const [isEditWizardOpen, setIsEditWizardOpen] = useState(false);
+  const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false);
 
   // State for dropdown values needed by the dialog
   const [statuses, setStatuses] = useState<DataProductStatus[]>([]);
@@ -161,13 +161,13 @@ export default function DataProductDetails() {
         toast({ title: 'Error', description: 'Product data not loaded yet.', variant: 'destructive' });
         return;
     }
-    setIsEditDialogOpen(true); // Open the dialog
+    setIsEditWizardOpen(true);
   };
 
-  // Handler for successful dialog submission
-  const handleDialogSubmitSuccess = (savedProduct: DataProduct) => {
-    console.log('Edit dialog submitted successfully, refreshing details...', savedProduct);
-    setIsEditDialogOpen(false); // Close the dialog
+  // Handler for successful wizard submission (shared logic with list view)
+  const handleWizardSubmitSuccess = (savedProduct: DataProduct) => {
+    console.log('Edit wizard submitted successfully, refreshing details...', savedProduct);
+    setIsEditWizardOpen(false); // Close the wizard
     fetchDetailsAndDropdowns(); // Refetch details to show updates
   };
 
@@ -398,17 +398,18 @@ export default function DataProductDetails() {
 
       {/* TODO: Add Cards for Links, Custom Properties, etc. */}
 
-      {/* Render the reusable Edit Dialog component */}
-      {isEditDialogOpen && product && (
-        <DataProductFormDialog
-            isOpen={isEditDialogOpen}
-            onOpenChange={setIsEditDialogOpen} // Let dialog control closing via state
-            initialProduct={product} // Pass the current product data
+      {/* Render the reusable Edit Wizard component */}
+      {isEditWizardOpen && product && (
+        <DataProductWizardDialog
+            isOpen={isEditWizardOpen}
+            onOpenChange={setIsEditWizardOpen} // Let dialog control closing
+            initialProduct={product} // Pass the current product data for editing
+            // Pass dropdown data needed by the wizard
             statuses={statuses}
+            // productTypes={productTypes} // Remove - wizard uses internal const
             owners={owners}
-            productTypes={productTypes}
             api={api} // Pass the full api object
-            onSubmitSuccess={handleDialogSubmitSuccess} // Pass the success handler
+            onSubmitSuccess={handleWizardSubmitSuccess} // Pass the success handler
         />
       )}
 

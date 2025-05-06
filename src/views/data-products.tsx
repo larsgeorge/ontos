@@ -14,7 +14,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { RelativeDate } from '@/components/common/relative-date';
 import { useNavigate } from 'react-router-dom';
 import { DataTable } from "@/components/ui/data-table";
-import DataProductFormDialog from '@/components/data-products/data-product-form-dialog';
+import DataProductWizardDialog from '@/components/data-products/data-product-wizard-dialog';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { useNotificationsStore } from '@/stores/notifications-store';
@@ -47,7 +47,7 @@ const checkApiResponse: CheckApiResponseFn = (response, name) => {
 
 export default function DataProducts() {
   const [products, setProducts] = useState<DataProduct[]>([]);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<DataProduct | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -139,18 +139,22 @@ export default function DataProducts() {
     } 
   };
 
-  // --- Dialog Open Handler ---
-  const handleOpenDialog = (product?: DataProduct) => {
-      if (!canWrite) {
+  // --- Wizard Open Handler ---
+  const handleOpenWizard = (product?: DataProduct) => {
+      if (!canWrite && !product) { // Need write permission to create
+          toast({ title: "Permission Denied", description: "You do not have permission to create data products.", variant: "destructive" });
+          return;
+      }
+       if (!canWrite && product) { // Need write permission to edit
           toast({ title: "Permission Denied", description: "You do not have permission to edit data products.", variant: "destructive" });
           return;
       }
       setProductToEdit(product || null);
-      setIsDialogOpen(true);
+      setIsWizardOpen(true); // Use the new state variable
   };
 
-  // --- Dialog Submit Success Handler ---
-  const handleDialogSubmitSuccess = (savedProduct: DataProduct) => {
+  // --- Wizard Submit Success Handler ---
+  const handleWizardSubmitSuccess = (savedProduct: DataProduct) => {
     fetchProducts();
   };
 
@@ -305,7 +309,7 @@ export default function DataProducts() {
 
   // --- Define these outside the columns definition --- 
   const handleEditClick = (product: DataProduct) => {
-      handleOpenDialog(product);
+      handleOpenWizard(product);
   };
 
   const handleDeleteClick = (product: DataProduct) => {
@@ -445,7 +449,7 @@ export default function DataProducts() {
         );
       },
     },
-  ], [handleOpenDialog, handleDeleteProduct, getStatusColor, canWrite, canAdmin, permissionsLoading, navigate]);
+  ], [handleOpenWizard, handleDeleteProduct, getStatusColor, canWrite, canAdmin, permissionsLoading, navigate]);
 
   // --- Button Variant Logic (Moved outside) ---
   const tableButtonVariant = viewMode === 'table' ? 'secondary' : 'ghost';
@@ -492,7 +496,7 @@ export default function DataProducts() {
               <>
                 {/* Create Button - Conditionally enabled */}
                 <Button
-                    onClick={() => handleOpenDialog()}
+                    onClick={() => handleOpenWizard()}
                     className="gap-2 h-9"
                     disabled={!canWrite || permissionsLoading}
                     title={canWrite ? "Create Data Product" : "Create (Permission Denied)"}
@@ -590,17 +594,16 @@ export default function DataProducts() {
         )
       )}
 
-      {/* Render the new Dialog Component */}
-      {isDialogOpen && (
-          <DataProductFormDialog
-            isOpen={isDialogOpen}
-            onOpenChange={setIsDialogOpen}
+      {/* Render the new Wizard Dialog Component */}
+      {isWizardOpen && (
+          <DataProductWizardDialog
+            isOpen={isWizardOpen}
+            onOpenChange={setIsWizardOpen}
             initialProduct={productToEdit}
             statuses={statuses}
-            productTypes={productTypes}
             owners={owners}
             api={api}
-            onSubmitSuccess={handleDialogSubmitSuccess}
+            onSubmitSuccess={handleWizardSubmitSuccess}
           />
        )}
 
