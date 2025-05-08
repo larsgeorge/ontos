@@ -38,9 +38,9 @@ class ReviewedAsset(BaseModel):
     comments: Optional[str] = Field(None, description="Reviewer comments specific to this asset")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of the last update for this asset review")
 
-    class Config:
-        orm_mode = True
-        from_attributes = True
+    model_config = {
+        "from_attributes": True
+    }
 
 # Model for creating a new review request (might have fewer fields initially)
 class DataAssetReviewRequestCreate(BaseModel):
@@ -61,9 +61,9 @@ class DataAssetReviewRequest(BaseModel):
     updated_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
     assets: List[ReviewedAsset] = Field(default_factory=list, description="List of assets included in this review request")
 
-    class Config:
-        orm_mode = True
-        from_attributes = True
+    model_config = {
+        "from_attributes": True
+    }
 
 # Model for updating the status of a review request (typically done by reviewer)
 class DataAssetReviewRequestUpdateStatus(BaseModel):
@@ -73,4 +73,4 @@ class DataAssetReviewRequestUpdateStatus(BaseModel):
 # Model for updating the status of a specific asset within a review (by reviewer)
 class ReviewedAssetUpdate(BaseModel):
     status: ReviewedAssetStatus
-    comments: Optional[str] = None 
+    comments: Optional[str] = None

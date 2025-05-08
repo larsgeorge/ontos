@@ -74,5 +74,6 @@ class DataDomainRead(DataDomainBase):
         # Handle unexpected types
         raise ValueError(f"Unexpected type for list field: {type(value)}")
 
-    class Config:
-        from_attributes = True # Pydantic v2 config for ORM mode 
+    model_config = {
+        "from_attributes": True # Pydantic v2 config for ORM mode 
+    } 

@@ -51,18 +51,18 @@ class Info(BaseModel):
     archetype: Optional[str] = Field(None, description="The domain data archetype, e.g., 'consumer-aligned', 'aggregate', 'source-aligned'", example="consumer-aligned")
     maturity: Optional[str] = Field(None, description="Deprecated maturity level", example="managed", deprecated=True)
 
-    class Config:
-        orm_mode = True
-        from_attributes=True # Pydantic v2 alias for orm_mode
+    model_config = {
+        "from_attributes": True # Pydantic v2 alias for orm_mode
+    }
 
 class Link(BaseModel):
     href: HttpUrl
     rel: Optional[str] = None
     type: Optional[str] = None
 
-    class Config:
-        orm_mode = True
-        from_attributes=True
+    model_config = {
+        "from_attributes": True
+    }
 
 # --- Shared Validator --- 
 def parse_json_if_string(v: Any) -> Any:
@@ -90,19 +90,19 @@ class Port(BaseModel):
     # Validator for fields stored as JSON string in DB Port models
     _parse_port_json_fields = field_validator('links', 'custom', 'tags', mode='before')(parse_json_if_string)
 
-    class Config:
-        orm_mode = True
-        from_attributes=True
-        populate_by_name = True # Allow using DB column names
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True # Allow using DB column names
+    }
 
 class InputPort(Port):
     sourceSystemId: str = Field(..., description="Technical identifier for the source system", example="search-service")
     sourceOutputPortId: Optional[str] = Field(None, description="The specific output port ID on the source system this input connects to")
 
-    class Config:
-        orm_mode = True
-        from_attributes=True
-        populate_by_name = True
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True
+    }
 
 class Server(BaseModel):
     project: Optional[str] = Field(None, description="The project name (bigquery)", example="dp-search")
@@ -120,10 +120,10 @@ class Server(BaseModel):
     share: Optional[str] = Field(None, description="The share name (databricks)")
     additionalProperties: Optional[str] = Field(None, description="Field for additional server properties, expected as a single string by the schema.")
 
-    class Config:
-        from_attributes = True
-        orm_mode = True # Add ORM mode
-        populate_by_name = True
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True
+    }
 
 class OutputPort(Port):
     status: Optional[str] = Field(None, description="Status of the output port implementation", example="active")
@@ -135,10 +135,10 @@ class OutputPort(Port):
     # Validator for the 'server' field stored as JSON string in OutputPortDb
     _parse_server_json = field_validator('server', mode='before')(parse_json_if_string)
 
-    class Config:
-        orm_mode = True
-        from_attributes=True
-        populate_by_name = True
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True
+    }
 
 class DataProduct(BaseModel):
     dataProductSpecification: str = Field("0.0.1", description="Version of the Data Product Specification")
@@ -172,11 +172,11 @@ class DataProduct(BaseModel):
         logger.warning(f"Unexpected type for tags validation: {type(v)}. Value: {v}. Returning empty list.")
         return [] # Default to empty list if conversion fails
 
-    class Config:
-        use_enum_values = True
-        populate_by_name = True
-        orm_mode = True
-        from_attributes = True
+    model_config = {
+        "use_enum_values": True,
+        "populate_by_name": True,
+        "from_attributes": True
+    }
 
 
 # --- Request Models ---
