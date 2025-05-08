@@ -40,7 +40,7 @@ class DataOutput(BaseModel):
     name: str
     type: str
     location: str
-    schema: List[SchemaField]
+    data_fields: List[SchemaField] = Field(..., alias="schema")
 
 class Info(BaseModel):
     title: str = Field(..., description="The display name of this data product", example="Search Queries all")

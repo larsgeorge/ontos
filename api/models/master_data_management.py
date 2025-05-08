@@ -13,7 +13,7 @@ class MasterDataManagementDataset(BaseModel):
     id: str
     name: str
     catalog: str
-    schema: str
+    db_schema: str = Field(..., alias="schema")
     table: str
     entity_column: str = Field(alias="entityColumn")
     type: str = Field(..., description="Type of entity: customer, product, supplier, or location")
