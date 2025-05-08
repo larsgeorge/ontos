@@ -11,8 +11,8 @@ from api.controller.security_features_manager import SecurityFeaturesManager
 from api.models.security_features import SecurityFeature, SecurityFeatureType
 
 # Configure logging
-from api.common.logging import setup_logging, get_logger
-setup_logging(level=logging.INFO)
+from api.common.logging import get_logger
+
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["security-features"])

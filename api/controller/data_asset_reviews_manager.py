@@ -36,8 +36,8 @@ from api.common.search_interfaces import SearchableAsset, SearchIndexItem
 # Import the registry decorator
 from api.common.search_registry import searchable_asset
 
-from api.common.logging import setup_logging, get_logger
-setup_logging(level=logging.INFO)
+from api.common.logging import get_logger
+
 logger = get_logger(__name__)
 
 @searchable_asset # Register this manager with the search system
@@ -302,6 +302,23 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             raise
         except Exception as e:
             logger.error(f"Unexpected error deleting review request {request_id}: {e}")
+            raise
+    
+    def get_reviewed_asset(self, request_id: str, asset_id: str) -> Optional[ReviewedAssetApi]:
+        """Gets a specific reviewed asset by its ID and its parent request ID."""
+        try:
+            asset_db = self._repo.get_asset(db=self._db, request_id=request_id, asset_id=asset_id)
+            if asset_db:
+                return ReviewedAssetApi.from_orm(asset_db)
+            return None
+        except SQLAlchemyError as e:
+            logger.error(f"Database error getting reviewed asset {asset_id} for request {request_id}: {e}")
+            raise
+        except ValidationError as e:
+            logger.error(f"Validation error mapping DB object for asset {asset_id}: {e}")
+            raise ValueError(f"Internal data mapping error for asset {asset_id}: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error getting reviewed asset {asset_id}: {e}")
             raise
     
     # Add methods for getting asset content (text/data preview) using ws_client

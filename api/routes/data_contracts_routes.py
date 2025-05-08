@@ -9,8 +9,8 @@ from fastapi.responses import JSONResponse
 from api.controller.data_contracts_manager import DataContractsManager
 
 # Configure logging
-from api.common.logging import setup_logging, get_logger
-setup_logging(level=logging.INFO)
+from api.common.logging import get_logger
+
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["data-contracts"])

@@ -35,8 +35,8 @@ from api.common.search_registry import searchable_asset
 # Import NotificationsManager (adjust path if necessary)
 from api.controller.notifications_manager import NotificationsManager
 
-from api.common.logging import setup_logging, get_logger
-setup_logging(level=logging.INFO)
+from api.common.logging import get_logger
+
 logger = get_logger(__name__)
 
 # Import necessary components for creating a session

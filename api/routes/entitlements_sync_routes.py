@@ -10,8 +10,8 @@ from api.controller.entitlements_sync_manager import EntitlementsSyncManager
 from api.models.entitlements_sync import EntitlementSyncConfig
 
 # Configure logging
-from api.common.logging import setup_logging, get_logger
-setup_logging(level=logging.INFO)
+from api.common.logging import get_logger
+
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["entitlements-sync"])

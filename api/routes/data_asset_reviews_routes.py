@@ -22,7 +22,7 @@ from api.common.database import get_db
 from api.common.workspace_client import get_workspace_client_dependency
 from databricks.sdk import WorkspaceClient
 
-from api.common.logging import setup_logging, get_logger
+from api.common.logging import get_logger
 from api.common.dependencies import (
     DBSessionDep, 
     # Define annotated types for WorkspaceClient and NotificationsManager if not already done
@@ -35,21 +35,7 @@ from api.common.dependencies import (
     NotificationsManagerDep,
     WorkspaceClientDep 
 )
-# Remove the old getter import
-# from api.common.dependencies import get_notifications_manager 
 
-# --- REMOVE Need to define these in dependencies.py --- #
-# # Example placeholder definition (replace with actual implementation in dependencies.py)
-# from api.common.manager_dependencies import get_notifications_manager
-# from api.common.workspace_client import get_workspace_client
-# from typing import Annotated
-# NotificationsManagerDep = Annotated[NotificationsManager, Depends(get_notifications_manager)]
-# WorkspaceClientDep = Annotated[WorkspaceClient, Depends(get_workspace_client)] # Assuming get_workspace_client exists
-# --- End placeholder definitions --- #
-
-# --- REMOVED Define DataAssetReviewManagerDep --- #
-
-setup_logging(level=logging.INFO)
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["data-asset-reviews"])
@@ -58,16 +44,15 @@ router = APIRouter(prefix="/api", tags=["data-asset-reviews"])
 
 @router.post("/data-asset-reviews", response_model=DataAssetReviewRequestApi, status_code=status.HTTP_201_CREATED)
 def create_review_request(
-    request_in: DataAssetReviewRequestCreate,
+    request_data: DataAssetReviewRequestCreate,
     # Inject manager directly using its Annotated type
     manager: DataAssetReviewManagerDep,
-    db: DBSessionDep # Keep DB session if manager methods require it explicitly
 ):
     """Create a new data asset review request."""
-    logger.info(f"Received request to create data asset review from {request_in.requester_email} for {request_in.reviewer_email}")
+    logger.info(f"Received request to create data asset review from {request_data.requester_email} for {request_data.reviewer_email}")
     try:
         # Pass db session if needed by the manager method
-        created_request = manager.create_review_request(db=db, request_in=request_in)
+        created_request = manager.create_review_request(request_data=request_data)
         return created_request
     except ValueError as e:
         logger.warning(f"Value error creating review request: {e}")
@@ -112,7 +97,7 @@ def get_review_request(
     """Get a specific data asset review request by its ID."""
     logger.info(f"Fetching data asset review request ID: {request_id}")
     try:
-        request = manager.get_review_request(db=db, request_id=request_id)
+        request = manager.get_review_request(request_id=request_id)
         if request is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review request not found")
         return request
@@ -128,12 +113,11 @@ def update_review_request_status(
     request_id: str,
     status_update: DataAssetReviewRequestUpdateStatus,
     manager: DataAssetReviewManagerDep,
-    db: DBSessionDep
 ):
     """Update the overall status of a data asset review request."""
     logger.info(f"Updating status for review request ID: {request_id} to {status_update.status}")
     try:
-        updated_request = manager.update_review_request_status(db=db, request_id=request_id, status_update=status_update)
+        updated_request = manager.update_review_request_status(request_id=request_id, status_update=status_update)
         if updated_request is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review request not found")
         return updated_request
@@ -150,16 +134,15 @@ def update_reviewed_asset_status(
     asset_id: str,
     asset_update: ReviewedAssetUpdate,
     manager: DataAssetReviewManagerDep,
-    db: DBSessionDep
 ):
     """Update the status and comments of a specific asset within a review request."""
     logger.info(f"Updating status for asset ID: {asset_id} in request {request_id} to {asset_update.status}")
     try:
-        updated_asset = manager.update_reviewed_asset_status(db=db, request_id=request_id, asset_id=asset_id, asset_update=asset_update)
+        updated_asset = manager.update_reviewed_asset_status(request_id=request_id, asset_id=asset_id, asset_update=asset_update)
         if updated_asset is None:
             # Distinguish between request not found and asset not found in request
             # Manager method should handle fetching request if needed
-            request_exists = manager.get_review_request(db=db, request_id=request_id)
+            request_exists = manager.get_review_request(request_id=request_id)
             if not request_exists:
                  raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review request not found")
             else:
@@ -177,12 +160,11 @@ def update_reviewed_asset_status(
 def delete_review_request(
     request_id: str,
     manager: DataAssetReviewManagerDep,
-    db: DBSessionDep
 ):
     """Delete a data asset review request."""
     logger.info(f"Deleting review request ID: {request_id}")
     try:
-        deleted = manager.delete_review_request(db=db, request_id=request_id)
+        deleted = manager.delete_review_request(request_id=request_id)
         if not deleted:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review request not found")
         # Return No Content on success
@@ -198,24 +180,27 @@ async def get_asset_definition(
     request_id: str,
     asset_id: str,
     manager: DataAssetReviewManagerDep,
-    db: DBSessionDep # Pass DB if needed to get asset info first
+    # db: DBSessionDep # No longer needed here
 ):
     """Get the definition (e.g., SQL) for a view or function asset."""
     logger.info(f"Getting definition for asset {asset_id} in request {request_id}")
     try:
-        # Let the manager handle getting the asset info and definition
+        reviewed_asset = manager.get_reviewed_asset(request_id=request_id, asset_id=asset_id)
+        if not reviewed_asset:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reviewed asset not found")
+
+        if reviewed_asset.asset_type not in [AssetType.VIEW, AssetType.FUNCTION]:
+             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Asset definition can only be fetched for VIEW or FUNCTION types, not {reviewed_asset.asset_type.value}")
+
         definition = await manager.get_asset_definition(
-            db=db, 
-            request_id=request_id, 
-            asset_id=asset_id
+            asset_fqn=reviewed_asset.asset_fqn,
+            asset_type=reviewed_asset.asset_type
         )
 
         if definition is None:
-             # Manager should raise appropriate exception or return None if handled here
-             # This logic might be better inside the manager
-             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset definition not found, invalid type, or access denied.")
+             # This might indicate asset not found by ws_client or permission issue, handled by manager logging
+             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset definition not found by the workspace client, or access denied.")
                  
-        # Return as plain text
         from fastapi.responses import PlainTextResponse
         return PlainTextResponse(content=definition)
         
@@ -229,26 +214,30 @@ async def get_asset_definition(
 async def get_table_preview(
     request_id: str,
     asset_id: str,
-    db: DBSessionDep, 
+    # db: DBSessionDep, # No longer needed here
     manager: DataAssetReviewManagerDep,
     limit: int = Query(25, ge=1, le=100, description="Number of rows to preview"),
 ):
     """Get a preview of data for a table asset."""
     logger.info(f"Getting preview for asset {asset_id} (table) in request {request_id} (limit={limit})")
     try:
-        # Let manager handle fetching asset info and preview
+        reviewed_asset = manager.get_reviewed_asset(request_id=request_id, asset_id=asset_id)
+        if not reviewed_asset:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reviewed asset not found")
+
+        if reviewed_asset.asset_type != AssetType.TABLE:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Table preview can only be fetched for TABLE types, not {reviewed_asset.asset_type.value}")
+
         preview_data = await manager.get_table_preview(
-            db=db, 
-            request_id=request_id, 
-            asset_id=asset_id, 
+            table_fqn=reviewed_asset.asset_fqn, 
             limit=limit
         )
 
         if preview_data is None:
-             # Manager should raise appropriate exception or return None if handled here
-             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table preview not available, invalid type, or access denied.")
+             # This might indicate asset not found by ws_client or permission issue, handled by manager logging
+             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table preview not available, or access denied by the workspace client.")
              
-        return preview_data # Returns dict {schema: [], data: []}
+        return preview_data
         
     except HTTPException as e:
         raise e

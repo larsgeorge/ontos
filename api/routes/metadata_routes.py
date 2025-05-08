@@ -9,8 +9,8 @@ from api.controller.metadata_manager import MetadataManager
 from api.models.metadata import MetastoreTableInfo
 from api.common.workspace_client import get_workspace_client_dependency
 
-from api.common.logging import setup_logging, get_logger
-setup_logging(level=logging.INFO)
+from api.common.logging import get_logger
+
 logger = get_logger(__name__)
 
 # Define router with /api/metadata prefix

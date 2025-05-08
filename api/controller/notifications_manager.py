@@ -18,8 +18,8 @@ from api.models.users import UserInfo
 from api.repositories.notification_repository import notification_repo, NotificationRepository
 
 # Set up logging
-from api.common.logging import setup_logging, get_logger
-setup_logging(level=logging.INFO)
+from api.common.logging import get_logger
+
 logger = get_logger(__name__)
 
 class NotificationNotFoundError(Exception):

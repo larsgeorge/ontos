@@ -28,8 +28,8 @@ from api.common.features import FeatureAccessLevel
 from api.common.dependencies import CurrentUserDep, DBSessionDep # Add DBSessionDep
 
 # Configure logging
-from api.common.logging import setup_logging, get_logger
-setup_logging(level=logging.INFO)
+from api.common.logging import get_logger
+
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["data-products"])

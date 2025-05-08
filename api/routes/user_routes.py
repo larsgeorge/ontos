@@ -11,7 +11,7 @@ from api.models.users import UserInfo
 from api.models.users import UserPermissions
 from api.models.notifications import Notification, NotificationType
 from api.common.config import get_settings, Settings
-from api.common.logging import setup_logging, get_logger
+from api.common.logging import get_logger
 from api.controller.authorization_manager import AuthorizationManager
 from api.common.dependencies import get_auth_manager, get_db # Import get_db
 from api.common.dependencies import get_settings_manager, get_notifications_manager
@@ -21,7 +21,6 @@ from api.common.features import FeatureAccessLevel
 from api.common.authorization import get_user_details_from_sdk
 from sqlalchemy.orm import Session # Import Session
 
-setup_logging(level=logging.INFO)
 logger = get_logger(__name__)
 
 # Define router at the module level with /api prefix

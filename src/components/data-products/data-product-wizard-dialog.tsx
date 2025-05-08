@@ -197,16 +197,23 @@ export default function DataProductWizardDialog({
 
   // Transform links/custom from Record<string, T> to Array<{key: string, value: T}> for form
   const transformInitialData = (product: DataProduct | null): z.infer<typeof dataProductSchema> => {
-      const base = {
-        dataProductSpecification: "0.0.1",
-        info: { title: '', owner: '', status: statuses?.[0] || '' },
-        version: 'v1.0',
+      const base: z.infer<typeof dataProductSchema> = {
+        dataProductSpecification: "0.0.1", // Explicit default
+        info: {
+          title: '',
+          owner: '',
+          domain: '',
+          description: '',
+          status: statuses?.[0] || '',
+        },
+        version: "v1.0", // Explicit default
+        productType: productTypes[0],
         inputPorts: [],
         outputPorts: [],
         links: [],
         custom: [],
         tags: [],
-        productType: productTypes[0],
+        // id, created_at, updated_at are optional and can be undefined initially
         id: undefined,
         created_at: undefined,
         updated_at: undefined,
@@ -223,33 +230,65 @@ export default function DataProductWizardDialog({
       };
 
       return {
-          ...base, // Start with a complete base to satisfy the schema
+          ...base,
           ...product,
-          dataProductSpecification: product.dataProductSpecification || "0.0.1",
-          // Transform links: Handle cases where product.links might be null/undefined
-          links: product.links ? Object.entries(product.links).map(([key, value]) => ({
-               url: value?.url || '', // Provide default for url
-               description: value?.description || '', // Provide default for description
-            })) : [],
-          // Transform custom: Handle cases where product.custom might be null/undefined
-          custom: product.custom ? Object.entries(product.custom).map(([key, value]) => ({ key, value })) : [],
-          // Safely handle tags which might not be a simple string array in the source
-          tags: transformTags(product.tags),
-          // Ensure ports are arrays and transform optional booleans
-          inputPorts: product.inputPorts || [],
-          outputPorts: (product.outputPorts || []).map(port => ({
-              ...port,
-              containsPii: port.containsPii ?? false, // Provide default if undefined
-              autoApprove: port.autoApprove ?? false, // Provide default if undefined
-          })),
-          // Ensure info object and its fields exist
+          dataProductSpecification: product.dataProductSpecification || base.dataProductSpecification,
+          version: product.version || base.version,
+          links: product.links 
+            ? Object.entries(product.links).map(([_, linkValue]) => ({ 
+                url: linkValue.url || '', 
+                description: linkValue.description || '' 
+              })) 
+            : base.links,
+          custom: product.custom 
+            ? Object.entries(product.custom).map(([key, value]) => ({ 
+                key: key || '', 
+                value: value ?? '' // Default value to empty string if null/undefined
+              })) 
+            : base.custom,
+          tags: transformTags(product.tags) || base.tags,
+          inputPorts: product.inputPorts ? product.inputPorts.map(port => {
+            // Explicitly map fields to match inputPortSchema (Zod)
+            // port is of type InputPort from @/types/data-product
+            return {
+              id: port.id || '',
+              name: port.name || '',
+              description: port.description || '',
+              type: port.type || '',
+              assetType: '', // Not in InputPort type, default for form
+              assetIdentifier: '', // Not in InputPort type, default for form
+              location: port.location || '',
+              sourceSystemId: port.sourceSystemId || '',
+              sourceOutputPortId: port.sourceOutputPortId || '',
+              // links and custom are handled by field array state, not directly part of this default mapping if complex
+            };
+          }) : base.inputPorts,
+          outputPorts: product.outputPorts ? product.outputPorts.map(port => {
+            // Explicitly map fields to match outputPortSchema (Zod)
+            // port is of type OutputPort from @/types/data-product
+            return {
+              id: port.id || '',
+              name: port.name || '',
+              description: port.description || '',
+              type: port.type || '',
+              assetType: '', // Not in OutputPort type, default for form
+              assetIdentifier: '', // Not in OutputPort type, default for form
+              location: port.location || '',
+              status: port.status || '',
+              containsPii: port.containsPii ?? false,
+              autoApprove: port.autoApprove ?? false,
+              dataContractId: port.dataContractId || '',
+              // server, links and custom might need more specific handling or default empty objects if complex
+            };
+          }) : base.outputPorts,
           info: {
-            ...base.info,
-            ...product.info,
-            status: product.info?.status || statuses?.[0] || '',
+            title: product.info?.title || base.info.title,
+            owner: product.info?.owner || base.info.owner,
+            domain: product.info?.domain ?? base.info.domain,
+            description: product.info?.description ?? base.info.description,
+            status: product.info?.status ?? base.info.status,
           },
-          version: product.version || 'v1.0', // Use existing version or default
-          productType: product.productType as z.infer<typeof dataProductSchema>['productType'] || base.productType,
+          productType: (product.productType && productTypes.includes(product.productType as any)) ? product.productType as z.infer<typeof dataProductSchema>['productType'] : base.productType,
           id: product.id || undefined,
       };
   };

@@ -13,7 +13,7 @@ from api.common.logging import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/workspace", tags=["workspace"])
+router = APIRouter(prefix="/api", tags=["workspace"])
 
 
 class WorkspaceAsset(BaseModel):
@@ -25,7 +25,7 @@ class WorkspaceAsset(BaseModel):
     url: Optional[str] = None
 
 # Example simplified endpoint - needs refinement for actual SDK calls and error handling
-@router.get("/assets/search", response_model=List[WorkspaceAsset])
+@router.get("/workspace/assets/search", response_model=List[WorkspaceAsset])
 async def search_workspace_assets(
     request: Request,
     asset_type: str = Query(..., description="Type of asset to search (e.g., 'table', 'notebook', 'job')"),

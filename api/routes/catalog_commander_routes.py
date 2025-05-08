@@ -10,8 +10,8 @@ from api.common.authorization import PermissionChecker
 from api.common.features import FeatureAccessLevel
 
 # Configure logging
-from api.common.logging import setup_logging, get_logger
-setup_logging(level=logging.INFO)
+from api.common.logging import get_logger
+
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["catalog-commander"])

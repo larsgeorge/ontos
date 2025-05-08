@@ -7,8 +7,8 @@ import yaml
 
 from api.models.entitlements import AccessPrivilege, Persona
 
-from api.common.logging import setup_logging, get_logger
-setup_logging(level=logging.INFO)
+from api.common.logging import get_logger
+
 logger = get_logger(__name__)
 
 class EntitlementsManager:

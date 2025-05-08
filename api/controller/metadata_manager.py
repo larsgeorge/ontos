@@ -9,8 +9,8 @@ from pydantic import ValidationError
 from api.models.metadata import MetastoreTableInfo
 from api.common.workspace_client import CachingWorkspaceClient
 
-from api.common.logging import setup_logging, get_logger
-setup_logging(level=logging.INFO)
+from api.common.logging import get_logger
+
 logger = get_logger(__name__)
 
 # Cache for metastore tables to avoid repeated SDK calls within a short period

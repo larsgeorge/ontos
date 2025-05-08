@@ -12,8 +12,8 @@ from api.controller.authorization_manager import AuthorizationManager
 from api.models.users import UserInfo
 from api.common.features import FeatureAccessLevel
 
-from api.common.logging import setup_logging, get_logger
-setup_logging(level=logging.INFO)
+from api.common.logging import get_logger
+
 logger = get_logger(__name__)
 
 class SearchManager:
