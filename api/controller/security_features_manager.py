@@ -57,33 +57,63 @@ class SecurityFeaturesManager:
         del self.features[feature_id]
         return True
 
-    def load_from_yaml(self, yaml_path: Path) -> None:
+    def load_from_yaml(self, yaml_path: Path) -> bool:
         try:
             if not yaml_path.exists():
                 logger.warning(f"YAML file not found at {yaml_path}")
-                return
-            with open(yaml_path) as f:
-                data = yaml.safe_load(f)
-                if not data or 'features' not in data:
-                    logger.warning("No features found in YAML data")
-                    return
-                for feature_data in data['features']:
+                return False
+            
+            with open(yaml_path, 'r') as f:
+                try:
+                    data = yaml.safe_load(f)
+                except yaml.YAMLError as e:
+                    logger.error(f"Error parsing YAML syntax in {yaml_path}: {e!s}")
+                    return False
+
+                if not data:
+                    logger.info(f"YAML file at {yaml_path} is empty. No features loaded.")
+                    return True # Successfully loaded an empty file
+
+                if 'features' not in data:
+                    logger.warning(f"'features' key not found in YAML data at {yaml_path}. No features loaded.")
+                    return True # File loaded, but no 'features' section
+
+                features_list = data.get('features')
+                if not isinstance(features_list, list):
+                    logger.warning(f"'features' key in YAML at {yaml_path} is not a list. Found type: {type(features_list)}. No features loaded.")
+                    return False
+
+                if not features_list:
+                    logger.info(f"YAML file loaded from {yaml_path}, and the 'features' list was empty. No features loaded.")
+                    return True
+
+                loaded_count = 0
+                for i, feature_data in enumerate(features_list):
                     try:
+                        if not isinstance(feature_data, dict) or 'id' not in feature_data:
+                            logger.warning(f"Skipping invalid feature entry #{i+1} (not a dict or no id) in {yaml_path}: {feature_data}")
+                            continue
                         feature = SecurityFeature.from_dict(feature_data)
                         self.features[feature.id] = feature
+                        loaded_count += 1
                     except Exception as e:
-                        logger.error(f"Error processing feature data: {feature_data}")
-                        logger.error(f"Error: {e!s}")
+                        logger.error(f"Error processing feature entry #{i+1} from {yaml_path}: {feature_data}. Error: {e!s}")
                         import traceback
-                        logger.error(f"Stack trace: {traceback.format_exc()}")
-                        raise
-                logger.info(f"Successfully loaded {len(self.features)} security features")
+                        logger.debug(f"Stack trace for feature error: {traceback.format_exc()}")
+                
+                if loaded_count > 0:
+                    logger.info(f"Successfully loaded {loaded_count} security features out of {len(features_list)} entries from {yaml_path}.")
+                elif len(features_list) > 0:
+                    logger.warning(f"No security features were successfully loaded from {len(features_list)} entries in {yaml_path} due to errors in all entries.")
+                # If features_list was empty and loaded_count is 0, it's covered by "empty list" case returning True.
+                
+                return True # Indicates the file was processed, even if some/all individual items failed.
+
         except Exception as e:
-            logger.error(f"Error loading security features from YAML: {e!s}")
-            logger.error(f"Error type: {type(e)}")
+            logger.error(f"Unexpected error loading security features from YAML {yaml_path}: {e!s}")
             import traceback
-            logger.error(f"Stack trace: {traceback.format_exc()}")
-            raise
+            logger.error(f"Stack trace for unexpected error: {traceback.format_exc()}")
+            return False
 
     def save_to_yaml(self, yaml_path: Path) -> None:
         try:
