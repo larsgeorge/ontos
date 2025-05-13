@@ -1,4 +1,12 @@
+# Initialize configuration and logging first
 import logging
+from api.common.config import get_settings, init_config
+from api.common.logging import setup_logging, get_logger
+init_config()
+settings = get_settings()
+setup_logging(level=settings.LOG_LEVEL, log_file=settings.LOG_FILE)
+logger = get_logger(__name__)
+
 import mimetypes
 import time
 from pathlib import Path
@@ -10,7 +18,6 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 from fastapi import HTTPException, status
 
-from api.common.config import get_settings, init_config, Settings
 from api.common.middleware import ErrorHandlingMiddleware, LoggingMiddleware
 from api.routes import (
     business_glossary_routes,
@@ -34,7 +41,6 @@ from api.routes import (
     workspace_routes,
 )
 
-from api.common.logging import setup_logging, get_logger
 from api.common.database import init_db, get_session_factory, SQLAlchemySession
 from api.controller.data_products_manager import DataProductsManager
 from api.controller.data_asset_reviews_manager import DataAssetReviewManager
@@ -51,11 +57,6 @@ from api.utils.startup_tasks import (
     load_initial_data
 )
 
-# Initialize configuration and logging first
-init_config()
-settings = get_settings()
-setup_logging(level=settings.LOG_LEVEL, log_file=settings.LOG_FILE)
-logger = get_logger(__name__)
 
 logger.info(f"Starting application in {settings.ENV} mode.")
 logger.info(f"Debug mode: {settings.DEBUG}")
@@ -133,8 +134,8 @@ app.add_middleware(
 )
 
 # Add custom middleware
-app.add_middleware(LoggingMiddleware)
 app.add_middleware(ErrorHandlingMiddleware)
+app.add_middleware(LoggingMiddleware)
 
 # Mount static files for the React application
 app.mount("/static", StaticFiles(directory=STATIC_ASSETS_PATH, html=True), name="static")

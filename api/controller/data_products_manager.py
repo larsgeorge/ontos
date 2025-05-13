@@ -20,7 +20,7 @@ from api.models.data_products import (
     DataProductType,
     DataSource,
     SchemaField,
-    GenieSpaceRequest,
+    GenieSpaceRequest
 )
 from api.models.users import UserInfo
 
@@ -193,28 +193,50 @@ class DataProductsManager(SearchableAsset):
             logger.error(f"Unexpected error listing products: {e}")
             raise
 
-    def update_product(self, product_id: str, product_data: DataProductApi) -> Optional[DataProductApi]:
-        """Update an existing data product using the repository."""
+    def update_product(self, product_id: str, product_data_dict: Dict[str, Any]) -> Optional[DataProductApi]:
+        """Update an existing data product. Expects a dictionary for product_data_dict."""
+        logger.debug(f"Manager attempting to update product ID {product_id} with dict data.")
         try:
             db_obj = self._repo.get(db=self._db, id=product_id)
             if not db_obj:
                 logger.warning(f"Attempted to update non-existent product: {product_id}")
                 return None
 
-            product_data.id = product_id 
-            product_data.updated_at = datetime.utcnow() 
-            product_data.created_at = db_obj.created_at 
+            # Prepare the dictionary for Pydantic validation
+            update_payload = product_data_dict.copy()
+            update_payload['id'] = product_id  # Ensure ID from path is used
+            update_payload['updated_at'] = datetime.utcnow() # Set update timestamp
+            
+            # Preserve created_at from the existing DB object if it exists in the dict or db_obj
+            if 'created_at' not in update_payload and hasattr(db_obj, 'created_at'):
+                update_payload['created_at'] = db_obj.created_at
+            elif 'created_at' not in update_payload:
+                # Fallback if created_at is somehow missing everywhere, though unlikely for an update
+                update_payload['created_at'] = db_obj.updated_at # Or some other sensible default
 
-            updated_db_obj = self._repo.update(db=self._db, db_obj=db_obj, obj_in=product_data)
+            # Validate the dictionary into the Pydantic model (DataProductUpdate or DataProductApi)
+            try:
+                # Assuming DataProductUpdate is an alias or same as DataProductApi for now
+                # If DataProductUpdate is different, ensure it's imported and used here.
+                product_update_model = DataProductApi(**update_payload) 
+            except ValidationError as e:
+                logger.error(f"Validation error for update data (ID: {product_id}): {e.errors()}")
+                raise ValueError(f"Invalid data for product update: {e.errors()}") from e
+
+            # Pass the validated Pydantic model to the repository's update method
+            updated_db_obj = self._repo.update(db=self._db, db_obj=db_obj, obj_in=product_update_model)
             
             return DataProductApi.from_orm(updated_db_obj)
             
         except SQLAlchemyError as e:
             logger.error(f"Database error updating data product {product_id}: {e}")
             raise
-        except ValidationError as e:
-            logger.error(f"Validation error during update/mapping for product {product_id}: {e}")
-            raise ValueError(f"Invalid data or mapping error for update {product_id}: {e}")
+        except ValueError as e: # Catch validation errors from above
+            logger.error(f"Value error during product update for ID {product_id}: {e}")
+            raise
+        except ValidationError as e: # Catch from_orm errors
+            logger.error(f"Validation error mapping DB object to API model post-update for ID {product_id}: {e}")
+            raise ValueError(f"Internal data mapping error post-update for ID {product_id}: {e}")
         except Exception as e:
             logger.error(f"Unexpected error updating data product {product_id}: {e}")
             raise

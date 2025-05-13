@@ -2,9 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, DateTime, String, JSON, Boolean
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import declarative_base
-
-Base = declarative_base()
+from api.common.database import Base
 
 class AuditLog(Base):
     __tablename__ = 'audit_logs'

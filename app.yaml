@@ -8,11 +8,10 @@ command: [
 ]
 
 env:
-# postgresql://lars.george%40databricks.com:${PGPASSWORD}@instance-7bdc4a72-528d-43bb-855e-5212001a675d.database.cloud.databricks.com:5432/databricks_postgres?sslmode=require
   - name: "DATABASE_TYPE"
     value: "postgres"
   - name: "POSTGRES_HOST"
-    value: "instance-7bdc4a72-528d-43bb-855e-5212001a675d.database.cloud.databricks.com"
+    value: "instance-33607cf0-86c1-4306-a5c3-2464761fa328.database.cloud.databricks.com"
   - name: "POSTGRES_PORT"
     value: "5432"
   - name: "POSTGRES_USER"
@@ -37,5 +36,6 @@ env:
   - name: "APP_ADMIN_DEFAULT_GROUPS"
     value: '["admins"]'
   - name: "APP_AUDIT_LOG_DIR"
-    value: "/Volumes/${workspace.env.DATABRICKS_CATALOG}/${workspace.env.DATABRICKS_SCHEMA}/${workspace.env.DATABRICKS_VOLUME}/audit_logs"
+    value: "audit_logs"
+    #value: "/Volumes/${workspace.env.DATABRICKS_CATALOG}/${workspace.env.DATABRICKS_SCHEMA}/${workspace.env.DATABRICKS_VOLUME}/audit_logs"
   

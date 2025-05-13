@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import json
 
 import yaml
 from pydantic import Field, field_validator
@@ -73,6 +74,9 @@ class Settings(BaseSettings):
 
     # SQLAlchemy Echo Flag (controls SQL query logging)
     DB_ECHO: bool = Field(False, env='APP_DB_ECHO')
+
+    # Mock User Details (for local development when MOCK_USER_DETAILS is True or ENV is LOCAL*)
+    MOCK_USER_DETAILS: bool = Field(False, env='MOCK_USER_DETAILS')
 
     # Replace nested Config class with model_config dictionary
     model_config = SettingsConfigDict(

@@ -367,8 +367,8 @@ def init_db() -> None:
             raise NotImplementedError(f"Database type {settings.DATABASE_TYPE} not fully implemented in init_db.")
 
         logger.info("Connecting to database...")
-        logger.info(f"- Database URL: {db_url}")
-        logger.info(f"- Connect args: {connect_args}")
+        logger.info(f"> Database URL: {db_url}")
+        logger.info(f"> Connect args: {connect_args}")
         _engine = create_engine(db_url,
                                 connect_args=connect_args, 
                                 echo=settings.DB_ECHO, 
@@ -488,11 +488,19 @@ def get_db():
     global _SessionLocal
     if _SessionLocal is None:
         logger.error("Database not initialized. Cannot get session.")
-        raise RuntimeError("Database session factory is not available.")
+        # Consider raising HTTPException for FastAPI to handle gracefully if this occurs at runtime
+        raise RuntimeError("Database session factory is not available. Database might not have been initialized correctly.")
     
     db = _SessionLocal()
     try:
         yield db
+        db.commit()  # Commit the transaction on successful completion of the request
+    except Exception as e: # Catch all exceptions to ensure rollback
+        logger.error(f"Error during database session for request, rolling back: {e}", exc_info=True)
+        db.rollback()
+        # Re-raise the exception so FastAPI can handle it appropriately
+        # (e.g., return a 500 error or specific HTTPException if e is one)
+        raise
     finally:
         db.close()
 

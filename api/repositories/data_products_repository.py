@@ -167,10 +167,14 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                      if 'type' in port_data:
                          port_data['port_type'] = port_data.pop('type')
                      
-                     # Handle assetType/assetIdentifier from update_data
-                     port_data['asset_type'] = port_in_dict.get('assetType') # Use Pydantic name from input dict
+                     # Map Pydantic keys to DB keys
+                     port_data['asset_type'] = port_in_dict.get('assetType')
                      port_data['asset_identifier'] = port_in_dict.get('assetIdentifier')
                      
+                     # Remove original Pydantic keys to avoid conflict with **kwargs
+                     port_data.pop('assetType', None)
+                     port_data.pop('assetIdentifier', None)
+
                      # Stringify JSON fields
                      port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
                      port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
@@ -186,10 +190,15 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                      if 'type' in port_data:
                          port_data['port_type'] = port_data.pop('type')
                      
-                     # Handle assetType/assetIdentifier from update_data
-                     port_data['asset_type'] = port_in_dict.get('assetType') # Use Pydantic name from input dict
+                     # Map Pydantic keys to DB keys
+                     port_data['asset_type'] = port_in_dict.get('assetType')
                      port_data['asset_identifier'] = port_in_dict.get('assetIdentifier')
-                     
+
+                     # Remove original Pydantic keys to avoid conflict with **kwargs
+                     port_data.pop('assetType', None)
+                     port_data.pop('assetIdentifier', None)
+
+                     # Stringify JSON fields
                      port_data['server'] = json.dumps(port_data.get('server')) if port_data.get('server') else '{}'
                      port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
                      port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'

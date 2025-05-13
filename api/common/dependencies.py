@@ -86,50 +86,37 @@ async def get_current_user(user_details: UserInfo = Depends(get_user_details_fro
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve user information.")
     return user_details # Return the user object obtained from the underlying function
 
-
 # --- Annotated Dependency Types --- #
+# Define ALL Annotated types first
 
 DBSessionDep = Annotated[Session, Depends(get_db)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 CurrentUserDep = Annotated[UserInfo, Depends(get_current_user)]
 WorkspaceClientDep = Annotated[WorkspaceClient, Depends(get_workspace_client)]
 
-# Manager Dependencies (using Annotated types that resolve via manager_dependencies.py)
-# These rely on the functions defined in manager_dependencies.py
+# Manager Dependencies
 SettingsManagerDep = Annotated[SettingsManager, Depends(get_settings_manager)]
 AuditManagerDep = Annotated[AuditManager, Depends(get_audit_manager)]
 UsersManagerDep = Annotated[UsersManager, Depends(get_users_manager)]
 AuthorizationManagerDep = Annotated[AuthorizationManager, Depends(get_auth_manager)]
-
-# Add DataAssetReviewManagerDep
 DataAssetReviewManagerDep = Annotated[DataAssetReviewManager, Depends(get_data_asset_review_manager)]
-
-# Add NotificationsManagerDep
 NotificationsManagerDep = Annotated[NotificationsManager, Depends(get_notifications_manager)]
-
-# Add DataProductsManagerDep
 DataProductsManagerDep = Annotated[DataProductsManager, Depends(get_data_products_manager)]
-
-# Add DataDomainManagerDep
 DataDomainManagerDep = Annotated[DataDomainManager, Depends(get_data_domain_manager)]
-
-# Add other Manager Annotated Types
 DataContractsManagerDep = Annotated[DataContractsManager, Depends(get_data_contracts_manager)]
 BusinessGlossariesManagerDep = Annotated[BusinessGlossariesManager, Depends(get_business_glossaries_manager)]
 SearchManagerDep = Annotated[SearchManager, Depends(get_search_manager)]
 
-# Permission Checker Dependency (Relies on AuthorizationManager)
-# This Dep provides the AuthorizationManager needed by PermissionChecker('feature', level)
+# Permission Checker Dependency
 PermissionCheckerDep = AuthorizationManagerDep 
-# Alternatively: PermissionCheckerDep = Annotated[AuthorizationManager, Depends(get_auth_manager)] 
 
 # --- Permission Checking Function --- #
-
+# Can now safely use Annotated types defined above
 async def require_permission(
-    feature: str, # Changed type hint to str
+    feature: str,
     level: FeatureAccessLevel,
-    user: CurrentUserDep, # Use Annotated type (UserInfo)
-    auth_manager: AuthorizationManagerDep # Depend on the Auth Manager
+    user: CurrentUserDep, 
+    auth_manager: AuthorizationManagerDep
 ):
     """
     FastAPI Dependency function to check if the current user has the required permission level
@@ -147,11 +134,10 @@ async def require_permission(
         )
 
     try:
-        # Use the injected AuthorizationManager directly
         effective_permissions = auth_manager.get_user_effective_permissions(user.groups)
         has_required_permission = auth_manager.has_permission(
             effective_permissions,
-            feature, # Use feature string ID directly
+            feature,
             level
         )
 
@@ -167,11 +153,10 @@ async def require_permission(
             )
 
         logger.debug(f"Permission granted via require_permission for user '{user.username}' on feature '{feature}'")
-        # If permission is granted, the dependency resolves successfully
-        return # Success
+        return
 
     except HTTPException:
-        raise # Re-raise exceptions from dependencies
+        raise
     except Exception as e:
         logger.error(f"Unexpected error during permission check (require_permission) for feature '{feature}': {e}", exc_info=True)
         raise HTTPException(
@@ -179,7 +164,24 @@ async def require_permission(
             detail="Error checking user permissions."
         )
 
+# --- Helper to get current user for audit logging --- #
+# Defined *after* CurrentUserDep is defined
+async def get_current_user_details_for_audit(
+    current_user: CurrentUserDep # Uses Annotated type defined above
+) -> UserInfo:
+    """
+    Provides UserInfo specifically for audit logging purposes.
+    """
+    if not current_user:
+        logger.error("Audit specific user fetch: CurrentUserDep resolved to None unexpectedly.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authenticated for audit log generation.")
+    return current_user
+
+# Define AuditCurrentUserDep *after* its dependency function is defined
+AuditCurrentUserDep = Annotated[UserInfo, Depends(get_current_user_details_for_audit)]
+
 # --- Other Manager Annotated Types (Add as needed) --- #
+# (The example can be removed or kept)
 # Example:
 # from api.controller.data_products_manager import DataProductsManager
 # from api.common.manager_dependencies import get_data_products_manager

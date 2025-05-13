@@ -4,51 +4,39 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 import yaml
-from fastapi import APIRouter, HTTPException, UploadFile, File, Body, Depends, Request
+from fastapi import APIRouter, HTTPException, UploadFile, File, Body, Depends, Request, BackgroundTasks
 from pydantic import ValidationError
 import uuid
 from sqlalchemy.orm import Session
 
 from api.controller.data_products_manager import DataProductsManager
-from api.models.data_products import DataProduct, GenieSpaceRequest, NewVersionRequest # Import NewVersionRequest
-from api.models.users import UserInfo # Needed for user context in auth
-# Remove WorkspaceClient dependency if get_workspace_client_dependency is no longer used directly here
-# from databricks.sdk import WorkspaceClient 
-from databricks.sdk.errors import PermissionDenied # Import specific error
+from api.models.data_products import DataProduct, GenieSpaceRequest, NewVersionRequest
+from api.models.users import UserInfo
+from databricks.sdk.errors import PermissionDenied
 
-# Remove dependency functions if no longer used directly here
-# from api.common.workspace_client import get_workspace_client_dependency
-# from api.common.database import get_db
-
-# Import Permission Checker and Levels
 from api.common.authorization import PermissionChecker
 from api.common.features import FeatureAccessLevel
 
-# Import Annotated dependency types
-from api.common.dependencies import CurrentUserDep, DBSessionDep # Add DBSessionDep
+from api.common.dependencies import (
+    CurrentUserDep, 
+    DBSessionDep, 
+    AuditManagerDep,
+    AuditCurrentUserDep
+)
+from api.common.audit_logging import _extract_details_default
 
-# Configure logging
 from api.common.logging import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["data-products"])
 
-# --- Helper to get manager instance with dependencies ---
+DATA_PRODUCTS_FEATURE_ID = "data-products"
+
 def get_data_products_manager(
-    # Remove old dependencies
-    # db: Session = Depends(get_db),
-    # ws_client: WorkspaceClient = Depends(get_workspace_client_dependency())
     request: Request # Inject Request
 ) -> DataProductsManager:
-    """Retrieves the DataProductsManager singleton from app.state."""
-    # Pass both db and ws_client to the manager
-    # return DataProductsManager(db=db, ws_client=ws_client)
-
-    # Corrected access: Use direct attribute access on app.state
-    # manager = request.app.state.manager_instances.get('data_products') # INCORRECT
     manager = getattr(request.app.state, 'data_products_manager', None)
-
     if manager is None:
          logger.critical("DataProductsManager instance not found in app.state!")
          raise HTTPException(status_code=500, detail="Data Products service is not available.")
@@ -57,16 +45,11 @@ def get_data_products_manager(
         raise HTTPException(status_code=500, detail="Data Products service configuration error.")
     return manager
 
-# --- ORDERING CRITICAL: Define ALL static paths before ANY dynamic paths --- 
-
-# --- Specific Helper Endpoints (Read-Only Access Needed) --- 
-
 @router.get('/data-products/statuses', response_model=List[str])
 async def get_data_product_statuses(
     manager: DataProductsManager = Depends(get_data_products_manager),
-    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
 ):
-    """Get all distinct data product statuses from info and output ports."""
     try:
         statuses = manager.get_distinct_statuses()
         logger.info(f"Retrieved {len(statuses)} distinct data product statuses")
@@ -79,9 +62,8 @@ async def get_data_product_statuses(
 @router.get('/data-products/types', response_model=List[str])
 async def get_data_product_types(
     manager: DataProductsManager = Depends(get_data_products_manager),
-    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
 ):
-    """Get all distinct data product types."""
     try:
         types = manager.get_distinct_product_types()
         logger.info(f"Retrieved {len(types)} distinct data product types")
@@ -94,9 +76,8 @@ async def get_data_product_types(
 @router.get('/data-products/owners', response_model=List[str])
 async def get_data_product_owners(
     manager: DataProductsManager = Depends(get_data_products_manager),
-    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
 ):
-    """Get all distinct data product owners."""
     try:
         owners = manager.get_distinct_owners()
         logger.info(f"Retrieved {len(owners)} distinct data product owners")
@@ -108,107 +89,168 @@ async def get_data_product_owners(
 
 @router.post("/data-products/upload", response_model=List[DataProduct], status_code=201)
 async def upload_data_products(
+    request: Request, 
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     file: UploadFile = File(...),
     manager: DataProductsManager = Depends(get_data_products_manager),
-    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_WRITE))
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
-    """Upload a YAML or JSON file containing a list of data products."""
     if not (file.filename.endswith('.yaml') or file.filename.endswith('.json')):
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action="UPLOAD",
+            success=False,
+            details={
+                "filename": file.filename,
+                "error": "Invalid file type",
+                "params": { "filename_in_request": file.filename },
+                "response_status_code": 400
+            }
+        )
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload a YAML or JSON file.")
+
+    success = False
+    response_status_code = 500
+    created_products_for_response: List[DataProduct] = []
+    processing_errors_for_audit: List[Dict[str, Any]] = []
+    created_ids_for_audit: List[str] = []
+
+    details_for_audit = {
+        "filename": file.filename,
+        "params": { "filename_in_request": file.filename },
+    }
 
     try:
         content = await file.read()
         if file.filename.endswith('.yaml'):
             data = yaml.safe_load(content)
-        else: # .json
+        else:
             import json
             data = json.loads(content)
             
-        # Allow either a single object or a list
         data_list: List[Dict[str, Any]]
-        if isinstance(data, dict): 
-            data_list = [data] # Wrap single object in a list
+        if isinstance(data, dict):
+            data_list = [data]
         elif isinstance(data, list):
-            data_list = data # Use the list directly
+            data_list = data
         else:
-            # Raise error if it's neither a dict nor a list
-            raise HTTPException(status_code=400, detail="File must contain a JSON object/array or a YAML mapping/list of data product objects.")
+            response_status_code = 400
+            exc = HTTPException(status_code=response_status_code, detail="File must contain a JSON object/array or a YAML mapping/list of data product objects.")
+            details_for_audit["exception"] = {"type": "HTTPException", "status_code": exc.status_code, "detail": exc.detail}
+            raise exc
 
-        created_products = []
-        errors = []
-        # Process the unified data_list
+        errors_for_response_detail = [] 
         for product_data in data_list:
              if not isinstance(product_data, dict):
-                 errors.append({"error": "Skipping non-dictionary item within list/array.", "item": product_data})
+                 err_detail = {"error": "Skipping non-dictionary item within list/array.", "item_preview": str(product_data)[:100]}
+                 errors_for_response_detail.append(err_detail)
+                 processing_errors_for_audit.append(err_detail)
                  continue
              
              product_id_in_data = product_data.get('id')
              
              try:
-                 # --- Generate ID if missing BEFORE validation --- 
                  if not product_id_in_data:
                      generated_id = str(uuid.uuid4())
                      product_data['id'] = generated_id
                      logger.info(f"Generated ID {generated_id} for uploaded product lacking one.")
-                     # Update product_id_in_data for the duplicate check below
                      product_id_in_data = generated_id 
                  
-                 # --- Duplicate Check (using potentially generated ID) --- 
                  if product_id_in_data and manager.get_product(product_id_in_data):
-                     errors.append({"id": product_id_in_data, "error": "Product with this ID already exists. Skipping."})
+                     err_detail = {"id": product_id_in_data, "error": "Product with this ID already exists. Skipping."}
+                     errors_for_response_detail.append(err_detail)
+                     processing_errors_for_audit.append(err_detail)
                      continue
                  
-                 # --- Pydantic Validation --- 
-                 # Now validate with the ID definitely present
-                 product_model = DataProduct(**product_data)
-                 product_dict = product_model.model_dump(by_alias=True)
-                 
-                 # --- Creation --- 
-                 # The ID is already in product_dict from model_dump
-                 created_product = manager.create_product(product_dict)
-                 created_products.append(created_product)
-                 
-             except ValidationError as e:
-                 # Use the ID we determined (original or generated) for the error message
-                 error_id = product_id_in_data if product_id_in_data else 'N/A_ValidationFailure'
-                 errors.append({"id": error_id, "error": f"Validation failed: {e}"})
-             except Exception as e:
-                 error_id = product_id_in_data if product_id_in_data else 'N/A_CreationFailure'
-                 errors.append({"id": error_id, "error": f"Creation failed: {e!s}"})
+                 try:
+                    _ = DataProduct(**product_data)
+                 except ValidationError as e_val:
+                     logger.error(f"Validation failed for uploaded product (ID: {product_id_in_data}): {e_val}")
+                     err_detail = {"id": product_id_in_data, "error": f"Validation failed: {e_val.errors() if hasattr(e_val, 'errors') else str(e_val)}"}
+                     errors_for_response_detail.append(err_detail)
+                     processing_errors_for_audit.append(err_detail)
+                     continue 
 
-        # After processing all items, check if any errors occurred
-        if errors:
-            logger.warning(f"Encountered {len(errors)} errors during file upload processing.")
-            # Return a 422 error if any product failed validation or processing
+                 created_product = manager.create_product(product_data)
+                 created_products_for_response.append(created_product)
+                 if created_product and hasattr(created_product, 'id'):
+                    created_ids_for_audit.append(str(created_product.id))
+                 
+             except Exception as e_item:
+                 error_id_for_log = product_id_in_data if product_id_in_data else 'N/A_CreationFailure'
+                 err_detail = {"id": error_id_for_log, "error": f"Creation failed: {e_item!s}"}
+                 errors_for_response_detail.append(err_detail)
+                 processing_errors_for_audit.append(err_detail)
+
+        if errors_for_response_detail:
+            success = False
+            response_status_code = 422 
+            logger.warning(f"Encountered {len(errors_for_response_detail)} errors during file upload processing.")
             raise HTTPException(
-                status_code=422, 
-                detail={"message": "Validation errors occurred during upload.", "errors": errors}
+                status_code=response_status_code, 
+                detail={"message": "Validation or creation errors occurred during upload.", "errors": errors_for_response_detail}
             )
+        
+        success = True
+        response_status_code = 201
+        logger.info(f"Successfully created {len(created_products_for_response)} data products from uploaded file {file.filename}")
+        return created_products_for_response
 
-        # If no errors, proceed with success logging and return
-        logger.info(f"Successfully created {len(created_products)} data products from uploaded file {file.filename}")
-        return created_products # Return list of successfully created products
-
-    except yaml.YAMLError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid YAML format: {e}")
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid JSON format: {e}")
-    except HTTPException as e:
-        # Re-raise specific HTTPExceptions (like 400 for non-list input)
-        raise e
-    except Exception as e:
-        error_msg = f"Error processing uploaded file: {e!s}"
+    except yaml.YAMLError as e_yaml:
+        success = False
+        response_status_code = 400
+        details_for_audit["exception"] = {"type": "YAMLError", "message": str(e_yaml)}
+        raise HTTPException(status_code=response_status_code, detail=f"Invalid YAML format: {e_yaml}")
+    except json.JSONDecodeError as e_json:
+        success = False
+        response_status_code = 400
+        details_for_audit["exception"] = {"type": "JSONDecodeError", "message": str(e_json)}
+        raise HTTPException(status_code=response_status_code, detail=f"Invalid JSON format: {e_json}")
+    except HTTPException as http_exc:
+        if response_status_code != 422 and response_status_code != 400 :
+            success = False
+        response_status_code = http_exc.status_code
+        if "exception" not in details_for_audit:
+            details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
+        raise
+    except Exception as e_general:
+        success = False
+        response_status_code = 500 
+        error_msg = f"Unexpected error processing uploaded file: {e_general!s}"
+        details_for_audit["exception"] = {"type": type(e_general).__name__, "message": str(e_general)}
         logger.exception(error_msg)
-        raise HTTPException(status_code=500, detail=error_msg)
+        raise HTTPException(status_code=response_status_code, detail=error_msg)
+    finally:
+        if "exception" not in details_for_audit and not success:
+             details_for_audit["processing_summary"] = "One or more items failed processing but no overarching exception was raised."
+        elif "exception" not in details_for_audit and success:
+             details_for_audit["response_status_code"] = response_status_code
 
-# --- Generic List/Create Endpoints --- 
+        if created_ids_for_audit:
+            details_for_audit["created_resource_ids"] = created_ids_for_audit
+        if processing_errors_for_audit:
+            details_for_audit["item_processing_errors"] = processing_errors_for_audit
+        
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action="UPLOAD_BATCH",
+            success=success,
+            details=details_for_audit,
+        )
 
 @router.get('/data-products', response_model=Any)
 async def get_data_products(
     manager: DataProductsManager = Depends(get_data_products_manager),
-    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
 ):
-    """Get all data products."""
     try:
         logger.info("Retrieving all data products via get_data_products route...")
         products = manager.list_products()
@@ -221,79 +263,325 @@ async def get_data_products(
 
 @router.post('/data-products', response_model=DataProduct, status_code=201)
 async def create_data_product(
+    request: Request, # Moved request to be before parameters with defaults
     payload: Dict[str, Any] = Body(...),
     manager: DataProductsManager = Depends(get_data_products_manager),
-    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_WRITE))
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
-    """Create a new data product from a JSON payload dictionary."""
+    # Remove all the audit logging setup variables
+    # success = False
+    # response_status_code = 500 # Default to internal server error
+    # created_product_id_for_log = payload.get('id', 'N/A_PreCreate')
+    # details_for_audit = {
+    #     "params": {"product_id_in_payload": created_product_id_for_log},
+    #     "body_preview": _extract_details_default(payload=payload) # Extract from payload
+    # }
+
     try:
         logger.info(f"Received raw payload for creation: {payload}")
         product_id = payload.get('id')
 
-        # Existence check
         if product_id and manager.get_product(product_id):
+             # response_status_code = 409 # Handled by HTTPException
              raise HTTPException(status_code=409, detail=f"Data product with ID {product_id} already exists.")
-        # ID generation if missing (fallback, frontend should provide it)
+
         if not product_id:
-             payload['id'] = str(uuid.uuid4())
+             generated_id = str(uuid.uuid4())
+             payload['id'] = generated_id
+             # created_product_id_for_log = generated_id # Update for logging
+             # details_for_audit["params"]["generated_product_id"] = generated_id
              logger.info(f"Generated ID for new product: {payload['id']}")
+        # else:
+             # created_product_id_for_log = product_id # Ensure it's set if provided initially
 
-        # --- Explicit Validation (Optional but recommended for 422 errors) ---
-        # Although the manager validates internally, doing it here allows returning detailed 422 errors.
         try:
-            _ = DataProduct(**payload) # Attempt validation
+            validated_model = DataProduct(**payload)
         except ValidationError as e:
-             logger.error(f"Validation failed for payload: {e}")
-             raise HTTPException(status_code=422, detail=e.errors()) # Return Pydantic validation errors
+             # response_status_code = 422 # Handled by HTTPException
+             logger.error(f"Validation failed for payload (ID: {payload.get('id', 'N/A_Validation')}): {e}")
+             error_details = e.errors() if hasattr(e, 'errors') else str(e)
+             # details_for_audit["validation_error"] = error_details
+             raise HTTPException(status_code=422, detail=error_details)
 
-        created_product = manager.create_product(payload)
+        # The manager.create_product method should handle its own DB session if needed
+        # or take db as an argument if it cannot get it from its own initialization.
+        # Assuming manager can handle its session, or it's passed if required (e.g. via app.state or another Depends).
+        created_product = manager.create_product(payload) 
         
-        logger.info(f"Successfully created data product with ID: {created_product.id}")
+        # --- Add created ID to request.state for audit logging --- 
+        if created_product and hasattr(created_product, 'id'):
+            request.state.audit_created_resource_id = str(created_product.id)
+        # -----------------------------------------------------------
+        
+        logger.info(f"Successfully created data product with ID: {created_product.id if created_product else payload.get('id')}")
         return created_product
-    
-    except HTTPException: # Re-raise specific HTTP exceptions (like 409, 422)
-        raise
-    # Note: ValueError from manager.create_product (if internal validation fails) 
-    # might be caught here if explicit validation above is skipped or passes unexpectedly.
-    # It would result in a 500 error unless specifically caught.
-    except Exception as e:
-        error_msg = f"Unexpected error creating data product: {e!s}"
-        logger.exception(error_msg)
-        raise HTTPException(status_code=500, detail=error_msg)
 
-# --- Endpoint to Create a New Version --- 
+    except HTTPException as http_exc:
+        # success = False # Ensure success is false if it was an HTTPException
+        # response_status_code = http_exc.status_code
+        # details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
+        raise # Re-raise standard exceptions
+    except Exception as e:
+        # success = False
+        # response_status_code = 500 # Explicitly set for general exceptions
+        error_msg = f"Unexpected error creating data product (ID: {payload.get('id', 'N/A_Exception')}): {e!s}"
+        logger.exception(error_msg)
+        # details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=500, detail=error_msg)
+    # finally:
+        # Remove audit log call from here
+        # audit_manager.log_action(...)
+
 @router.post("/data-products/{product_id}/versions", response_model=DataProduct, status_code=201)
 async def create_data_product_version(
-    product_id: str,
-    version_request: NewVersionRequest, # Use the helper model
+    product_id: str, # This is the original product ID
+    request: Request, 
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    version_request: NewVersionRequest = Body(...), # Ensure Body is used if it was intended
     manager: DataProductsManager = Depends(get_data_products_manager),
-    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_WRITE))
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
-    """Creates a new version of an existing data product."""
+    success = False
+    response_status_code = 500
+    details_for_audit = {
+        "params": {"original_product_id": product_id, "requested_new_version": version_request.new_version},
+        "body_preview": _extract_details_default(
+            request=request, 
+            response_or_exc=None, 
+            route_args=(), 
+            route_kwargs={'product_id': product_id, 'version_request': version_request}
+        )
+    }
+    new_product_response = None
+
     try:
         logger.info(f"Received request to create version '{version_request.new_version}' from product ID: {product_id}")
-        new_product = manager.create_new_version(product_id, version_request.new_version)
-        return new_product
-    except ValueError as e:
-        # Catch specific errors like 'not found' or validation errors from manager
-        logger.error(f"Value error creating version for {product_id}: {e!s}")
-        # Determine status code based on error (404 if original not found, 400/422 for validation)
-        status_code = 404 if "not found" in str(e).lower() else 400
-        raise HTTPException(status_code=status_code, detail=str(e))
-    except Exception as e:
-        error_msg = f"Unexpected error creating version for data product {product_id}: {e!s}"
-        logger.exception(error_msg)
-        raise HTTPException(status_code=500, detail=error_msg)
+        # The manager method handles its own DB interactions
+        new_product_response = manager.create_new_version(product_id, version_request.new_version)
+        
+        # request.state.audit_created_resource_id is no longer needed here as we capture it below
+        
+        success = True
+        response_status_code = 201
+        logger.info(f"Successfully created new version ID: {new_product_response.id} from original product ID: {product_id}")
+        return new_product_response
 
-# --- Dynamic ID Endpoints (MUST BE LAST) --- 
+    except ValueError as ve:
+        success = False
+        # Determine status code based on error message content, or default to 400/404
+        response_status_code = 404 if "not found" in str(ve).lower() else 400
+        details_for_audit["exception"] = {"type": "ValueError", "status_code": response_status_code, "message": str(ve)}
+        logger.error(f"Value error creating version for {product_id}: {ve!s}")
+        raise HTTPException(status_code=response_status_code, detail=str(ve))
+    except HTTPException as http_exc: # Should come after more specific exceptions if they might raise HTTPExceptions
+        success = False
+        response_status_code = http_exc.status_code
+        details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
+        raise
+    except Exception as e:
+        success = False
+        response_status_code = 500
+        error_msg = f"Unexpected error creating version for data product {product_id}: {e!s}"
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        logger.exception(error_msg)
+        raise HTTPException(status_code=response_status_code, detail=error_msg)
+    finally:
+        if "exception" not in details_for_audit:
+             details_for_audit["response_status_code"] = response_status_code
+        
+        if success and new_product_response and hasattr(new_product_response, 'id'):
+            details_for_audit["created_version_id"] = str(new_product_response.id)
+        
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action="CREATE_VERSION", # Specific action type
+            success=success,
+            details=details_for_audit,
+        )
+
+@router.put('/data-products/{product_id}', response_model=DataProduct)
+async def update_data_product(
+    product_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    background_tasks: BackgroundTasks,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
+):
+    # --- Manually read and validate body ---
+    try:
+        body_dict = await request.json()
+        product_update = DataProduct(**body_dict)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON body.")
+    except ValidationError as e:
+        logger.error(f"Validation failed for PUT request body (ID: {product_id}): {e}")
+        raise HTTPException(status_code=422, detail=e.errors())
+    # --------------------------------------
+
+    if product_id != product_update.id:
+        exc = HTTPException(status_code=400, detail="Product ID in path does not match ID in request body.")
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action="UPDATE",
+            success=False, 
+            details=_extract_details_default(
+                request=request, 
+                response_or_exc=exc, 
+                route_args=(), 
+                route_kwargs={'product_id': product_id, 'product_update': product_update}
+            )
+        )
+        raise exc
+
+    success = False
+    response_status_code = 500 
+    details_for_audit = {
+        "params": {"product_id": product_id},
+        "body_preview": _extract_details_default(
+            request=request, 
+            response_or_exc=None, 
+            route_args=(), 
+            route_kwargs={'product_id': product_id, 'product_update': product_update}
+        )
+    }
+    updated_product_response = None
+    exception_details = None
+
+    try:
+        logger.info(f"Received request to update data product ID: {product_id}")
+        
+        # Use the manually validated model 
+        product_dict = product_update.model_dump(by_alias=True)
+        
+        updated_product_response = manager.update_product(product_id, product_dict)
+
+        if not updated_product_response:
+            response_status_code = 404
+            exc = HTTPException(status_code=response_status_code, detail="Data product not found")
+            details_for_audit["exception"] = {"type": "HTTPException", "status_code": exc.status_code, "detail": exc.detail}
+            logger.warning(f"Update failed: Data product not found with ID: {product_id}")
+            raise exc
+
+        success = True
+        response_status_code = 200 
+        logger.info(f"Successfully updated data product with ID: {product_id}")
+        return updated_product_response
+
+    except HTTPException as http_exc:
+        success = False
+        response_status_code = http_exc.status_code
+        exception_details = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
+        raise
+    except ValueError as ve:
+        success = False
+        response_status_code = 400
+        exception_details = {"type": "ValueError", "message": str(ve)}
+        raise HTTPException(status_code=response_status_code, detail=str(ve))
+    except Exception as e:
+        success = False
+        response_status_code = 500
+        error_msg = f"Unexpected error updating data product {product_id}: {e!s}"
+        exception_details = {"type": type(e).__name__, "message": str(e)}
+        logger.exception(error_msg)
+        raise HTTPException(status_code=response_status_code, detail=error_msg)
+    finally:
+        if exception_details:
+            details_for_audit["exception"] = exception_details
+        else:
+             details_for_audit["response_status_code"] = response_status_code
+        
+        if success and updated_product_response and hasattr(updated_product_response, 'id'):
+            details_for_audit["updated_resource_id"] = str(updated_product_response.id)
+
+        background_tasks.add_task(
+            audit_manager.log_action_background,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action="UPDATE",
+            success=success,
+            details=details_for_audit.copy()
+        )
+
+@router.delete('/data-products/{product_id}', status_code=204) 
+async def delete_data_product(
+    product_id: str,
+    request: Request, 
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.ADMIN))
+):
+    success = False
+    response_status_code = 500 # Default for audit in case of unexpected server error
+    details_for_audit = {
+        "params": {"product_id": product_id},
+        # For delete, body_preview is not applicable from route args
+    }
+
+    try:
+        logger.info(f"Received request to delete data product ID: {product_id}")
+        deleted = manager.delete_product(product_id)
+        if not deleted:
+            response_status_code = 404
+            exc = HTTPException(status_code=response_status_code, detail="Data product not found")
+            details_for_audit["exception"] = {"type": "HTTPException", "status_code": exc.status_code, "detail": exc.detail}
+            logger.warning(f"Deletion failed: Data product not found with ID: {product_id}")
+            raise exc
+
+        success = True
+        response_status_code = 204 # Standard for successful DELETE
+        logger.info(f"Successfully deleted data product with ID: {product_id}")
+        # No response body for 204, so no updated_product_response or response_preview
+        return None 
+
+    except HTTPException as http_exc:
+        success = False
+        response_status_code = http_exc.status_code
+        details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
+        raise
+    except Exception as e:
+        success = False
+        response_status_code = 500 
+        error_msg = f"Unexpected error deleting data product {product_id}: {e!s}"
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        logger.exception(error_msg)
+        raise HTTPException(status_code=response_status_code, detail=error_msg)
+    finally:
+        if "exception" not in details_for_audit:
+             details_for_audit["response_status_code"] = response_status_code
+        
+        # For delete, we can confirm the ID of the resource that was targeted for deletion.
+        details_for_audit["deleted_resource_id_attempted"] = product_id
+
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action="DELETE",
+            success=success,
+            details=details_for_audit,
+        )
 
 @router.get('/data-products/{product_id}', response_model=Any)
 async def get_data_product(
     product_id: str,
     manager: DataProductsManager = Depends(get_data_products_manager),
-    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY))
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
 ) -> Any: # Return Any to allow returning a dict
-    """Gets a single data product by its ID."""
     try:
         product = manager.get_product(product_id)
         if not product:
@@ -305,81 +593,19 @@ async def get_data_product(
         logger.exception(f"Unexpected error fetching product {product_id}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.put('/data-products/{product_id}', response_model=DataProduct)
-async def update_data_product(
-    product_id: str,
-    product_data: DataProduct = Body(...),
-    manager: DataProductsManager = Depends(get_data_products_manager),
-    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_WRITE))
-):
-    """Update an existing data product using a JSON payload conforming to the schema."""
-    if product_id != product_data.id:
-         raise HTTPException(status_code=400, detail="Product ID in path does not match ID in request body.")
-
-    try:
-        logger.info(f"Received request to update data product ID: {product_id}")
-        
-        product_dict = product_data.model_dump(by_alias=True)
-        
-        updated_product = manager.update_product(product_id, product_dict)
-        if not updated_product:
-            logger.warning(f"Update failed: Data product not found with ID: {product_id}")
-            raise HTTPException(status_code=404, detail="Data product not found")
-
-        logger.info(f"Successfully updated data product with ID: {product_id}")
-        return updated_product
-    except ValueError as e: # Catch validation errors from manager
-        logger.error(f"Validation error during product update for ID {product_id}: {e!s}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except HTTPException: # Re-raise specific HTTP exceptions
-        raise
-    except Exception as e:
-        error_msg = f"Unexpected error updating data product {product_id}: {e!s}"
-        logger.exception(error_msg)
-        raise HTTPException(status_code=500, detail=error_msg)
-
-@router.delete('/data-products/{product_id}', status_code=204) # No content response
-async def delete_data_product(
-    product_id: str,
-    manager: DataProductsManager = Depends(get_data_products_manager),
-    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.ADMIN)) # Require ADMIN to delete
-):
-    """Delete a data product by ID."""
-    try:
-        logger.info(f"Received request to delete data product ID: {product_id}")
-        deleted = manager.delete_product(product_id)
-        if not deleted:
-            logger.warning(f"Deletion failed: Data product not found with ID: {product_id}")
-            raise HTTPException(status_code=404, detail="Data product not found")
-
-        logger.info(f"Successfully deleted data product with ID: {product_id}")
-        return None 
-    except HTTPException:
-        raise
-    except Exception as e:
-        error_msg = f"Unexpected error deleting data product {product_id}: {e!s}"
-        logger.exception(error_msg)
-        raise HTTPException(status_code=500, detail=error_msg)
-
-# --- Genie Space Endpoint --- 
 @router.post("/data-products/genie-space", status_code=202)
 async def create_genie_space_from_products(
     request_body: GenieSpaceRequest,
     current_user: CurrentUserDep, # Moved up, no default value
     db: DBSessionDep, # Inject the database session
     manager: DataProductsManager = Depends(get_data_products_manager), # Has default
-    _: bool = Depends(PermissionChecker('data-products', FeatureAccessLevel.READ_WRITE)) # Has default
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE)) # Has default
 ):
-    """
-    Initiates the (simulated) creation of a Databricks Genie Space 
-    based on selected Data Products.
-    """
     if not request_body.product_ids:
         raise HTTPException(status_code=400, detail="No product IDs provided.")
 
     try:
-        # Call the manager method to start the process, passing the db session and user info
-        await manager.initiate_genie_space_creation(request_body, current_user, db=db) # Pass full current_user object
+        await manager.initiate_genie_space_creation(request_body, current_user, db=db)
         return {"message": "Genie Space creation process initiated. You will be notified upon completion."}
     except RuntimeError as e:
         logger.error(f"Runtime error initiating Genie Space creation: {e}", exc_info=True)
@@ -388,8 +614,6 @@ async def create_genie_space_from_products(
         logger.error(f"Unexpected error initiating Genie Space creation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to initiate Genie Space creation.")
 
-# Function to register routes (if used elsewhere)
 def register_routes(app):
-    """Register routes with the FastAPI app."""
     app.include_router(router)
     logger.info("Data product routes registered")

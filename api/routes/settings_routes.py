@@ -11,10 +11,9 @@ from ..common.workspace_client import get_workspace_client
 from ..controller.settings_manager import SettingsManager
 from ..models.settings import AppRole, AppRoleCreate
 from ..common.database import get_db
-from ..common.dependencies import get_settings_manager
+from ..common.dependencies import get_settings_manager, get_notifications_manager
 from ..models.settings import HandleRoleRequest
 from ..models.notifications import Notification, NotificationType
-from ..common.dependencies import get_notifications_manager
 from ..controller.notifications_manager import NotificationsManager
 
 # Configure logging
@@ -24,24 +23,26 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["settings"])
 
+SETTINGS_FEATURE_ID = "settings" # Define a feature ID for settings
+
 @router.get('/settings')
-async def get_settings(manager: SettingsManager = Depends(get_settings_manager)):
+async def get_settings_route(manager: SettingsManager = Depends(get_settings_manager)):
     """Get all settings including available job clusters"""
     try:
-        settings = manager.get_settings()
-        return settings
+        settings_data = manager.get_settings() # Renamed variable to avoid conflict
+        return settings_data
     except Exception as e:
         logger.error(f"Error getting settings: {e!s}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put('/settings')
 async def update_settings(
-    settings: dict,
+    settings_payload: dict, # Renamed to avoid conflict with module
     manager: SettingsManager = Depends(get_settings_manager)
 ):
     """Update settings"""
     try:
-        updated = manager.update_settings(settings)
+        updated = manager.update_settings(settings_payload)
         return updated.to_dict()
     except Exception as e:
         logger.error(f"Error updating settings: {e!s}")
@@ -51,7 +52,6 @@ async def update_settings(
 async def health_check(manager: SettingsManager = Depends(get_settings_manager)):
     """Check if the settings API is healthy"""
     try:
-        # Try to list workflows as a health check
         manager.list_available_workflows()
         logger.info("Workflows health check successful")
         return {"status": "healthy"}
@@ -102,13 +102,18 @@ async def list_roles(manager: SettingsManager = Depends(get_settings_manager)):
 @router.post("/settings/roles", response_model=AppRole, status_code=status.HTTP_201_CREATED)
 async def create_role(
     role_data: AppRoleCreate = Body(..., embed=False),
-    manager: SettingsManager = Depends(get_settings_manager)
+    manager: SettingsManager = Depends(get_settings_manager),
+    db: Session = Depends(get_db)
 ):
     """Create a new application role."""
     try:
-        # The SettingsManager handles the creation logic, including ID generation if needed
-        # Pass the AppRoleCreate object directly
-        created_role = manager.create_app_role(role_data)
+        created_role = manager.create_app_role(db=db, role_data=role_data)
+        
+        # --- Add created ID to request.state for audit logging --- 
+        if created_role and hasattr(created_role, 'id'):
+            request.state.audit_created_resource_id = str(created_role.id)
+        # -----------------------------------------------------------
+            
         return created_role
     except ValueError as e:
         logger.warning(f"Validation error creating role '{role_data.name}': {e!s}")

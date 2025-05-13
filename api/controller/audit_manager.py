@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from datetime import datetime
@@ -12,6 +13,7 @@ from api.common.logging import get_logger
 from api.models.audit_log import AuditLogCreate, AuditLogRead
 from api.repositories.audit_log_repository import audit_log_repository
 from api.db_models.audit_log import AuditLog # Import the DB model
+from api.common.database import get_session_factory # Import session factory
 
 # Use the main logger configuration but add a specific handler for audit logs
 file_audit_logger = logging.getLogger("audit_file")
@@ -67,9 +69,43 @@ class AuditManager:
             file_audit_logger.disabled = True 
 
 
-    async def log_action(
+    def _log_action_internal(
         self,
         db: Session,
+        log_entry_data: Dict[str, Any]
+    ):
+        """Internal synchronous logic to log to file and DB using a given session."""
+        # 1. Log to file (structured as JSON string)
+        if not file_audit_logger.disabled:
+            try:
+                file_log_message = {
+                    "user": log_entry_data["username"],
+                    "ip": log_entry_data["ip_address"],
+                    "feature": log_entry_data["feature"],
+                    "action": log_entry_data["action"],
+                    "success": log_entry_data["success"],
+                    "details": log_entry_data["details"]
+                }
+                file_audit_logger.info(str(file_log_message).replace("'", '"'))
+            except Exception as e:
+                main_logger = get_logger(__name__)
+                main_logger.error(f"Failed to write audit log to file: {e}", exc_info=True)
+
+        # 2. Log to database
+        try:
+            log_entry = AuditLogCreate(**log_entry_data)
+            self.repository.create(db=db, obj_in=log_entry)
+            db.commit() # Commit this independent transaction
+        except Exception as e:
+            main_logger = get_logger(__name__)
+            main_logger.error(f"Failed to write audit log to database: {e}", exc_info=True)
+            db.rollback() # Rollback only the audit transaction on error
+            # Do not re-raise here, as it's a background task
+
+    # Original log_action (can be kept for synchronous logging if needed elsewhere, e.g., failures)
+    def log_action(
+        self,
+        db: Session, # Takes the request's session
         *,
         username: str,
         ip_address: Optional[str],
@@ -78,7 +114,7 @@ class AuditManager:
         success: bool,
         details: Optional[Dict[str, Any]] = None
     ):
-        """Logs an action to both the audit file and the database."""
+        """Logs an action synchronously using the provided DB session (NO commit)."""
         log_entry_data = {
             "username": username,
             "ip_address": ip_address,
@@ -87,33 +123,54 @@ class AuditManager:
             "success": success,
             "details": details or {},
         }
-
-        # 1. Log to file (structured as JSON string)
-        if not file_audit_logger.disabled:
-            try:
-                # Manually construct the JSON message for the file logger
-                file_log_message = {
-                    "user": username,
-                    "ip": ip_address,
-                    "feature": feature,
-                    "action": action,
-                    "success": success,
-                    "details": details or {}
-                }
-                file_audit_logger.info(str(file_log_message).replace("'", '"')) # Basic JSON-like string
-            except Exception as e:
-                main_logger = get_logger(__name__)
-                main_logger.error(f"Failed to write audit log to file: {e}", exc_info=True)
-
-        # 2. Log to database
+        # Log ONLY to DB using the passed session (no commit)
         try:
             log_entry = AuditLogCreate(**log_entry_data)
-            await self.repository.create(db=db, obj_in=log_entry)
+            self.repository.create(db=db, obj_in=log_entry)
         except Exception as e:
-            # Use the main application logger for DB errors
             main_logger = get_logger(__name__)
-            main_logger.error(f"Failed to write audit log to database: {e}", exc_info=True)
-            # Optionally re-raise or handle differently
+            main_logger.error(f"[SYNC] Failed to add audit log to session: {e}", exc_info=True)
+            # db.rollback() # Don't rollback the request session here
+
+    # New method for background task
+    async def log_action_background(
+        self,
+        *,
+        username: str,
+        ip_address: Optional[str],
+        feature: str,
+        action: str,
+        success: bool,
+        details: Optional[Dict[str, Any]] = None
+    ):
+        """Logs an action in the background using an independent DB session."""
+        session_factory = get_session_factory()
+        if not session_factory:
+            main_logger = get_logger(__name__)
+            main_logger.error("Cannot log audit action in background: DB session factory not available.")
+            return
+
+        log_entry_data = {
+            "username": username,
+            "ip_address": ip_address,
+            "feature": feature,
+            "action": action,
+            "success": success,
+            "details": details or {},
+        }
+        
+        db_session = None
+        try:
+            with session_factory() as db_session:
+                # Run the internal logging logic (which now handles file+DB and commits)
+                self._log_action_internal(db=db_session, log_entry_data=log_entry_data)
+        except Exception as e:
+            # Catch potential errors during session creation or the internal log call itself
+            main_logger = get_logger(__name__)
+            main_logger.error(f"Error during background audit logging process: {e}", exc_info=True)
+            if db_session:
+                 db_session.rollback() # Ensure rollback if session existed but internal log failed before commit
+        # Session is automatically closed by the context manager
 
     async def get_audit_logs(
         self,

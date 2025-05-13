@@ -102,6 +102,10 @@ def initialize_managers(app: FastAPI):
         # --- Instantiate and Store Managers Directly on app.state --- 
         logger.debug("Instantiating managers...")
         
+        # Store the global settings object on app.state for easy access
+        app.state.settings = settings
+        logger.info(f"Stored global settings object on app.state.settings: {type(app.state.settings)}")
+
         # Instantiate SettingsManager first, passing settings
         app.state.settings_manager = SettingsManager(db=db_session, settings=settings, workspace_client=ws_client)
 

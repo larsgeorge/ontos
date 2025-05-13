@@ -2,7 +2,7 @@ import logging
 import time
 from typing import Awaitable, Callable
 
-from fastapi import Request, Response
+from fastapi import Request, Response, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from api.common.logging import get_logger
@@ -29,10 +29,15 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         try:
             return await call_next(request)
+        except HTTPException as http_exc: # Handle FastAPI's HTTPExceptions specifically
+             logger.warning(f"HTTPException caught by middleware: {http_exc.status_code} {http_exc.detail}")
+             # Re-raise HTTPException so FastAPI's default handler can format it
+             raise http_exc
         except Exception as e:
-            logger.error(f"Error processing request: {e!s}")
+            logger.error(f"Unhandled error processing request {request.method} {request.url.path}: {e!s}", exc_info=True)
+            # Return a generic 500 response for unhandled exceptions
             return Response(
-                content=str(e),
-                status_code=500,
+                content="Internal Server Error",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 media_type="text/plain"
             )
