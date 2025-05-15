@@ -17,6 +17,7 @@ import DataContracts from './views/data-contracts';
 import BusinessGlossary from './views/business-glossary';
 import Compliance from './views/compliance';
 import EstateManager from './views/estate-manager';
+import EstateDetailsView from './views/estate-details';
 import MasterDataManagement from './views/master-data-management';
 import SecurityFeatures from './views/security-features';
 import Entitlements from './views/entitlements';
@@ -72,6 +73,7 @@ export default function App() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/about" element={<About />} />
               <Route path="/estate-manager" element={<EstateManager />} />
+              <Route path="/estates/:estateId" element={<EstateDetailsView />} />
               <Route path="/data-asset-reviews" element={<DataAssetReviews />} />
               <Route path="/data-asset-reviews/:requestId" element={<DataAssetReviewDetails />} />
               <Route path="*" element={<NotFound />} />
