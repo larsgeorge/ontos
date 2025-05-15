@@ -19,6 +19,7 @@ import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import DataProductGraphView from '@/components/data-products/data-product-graph-view';
+import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
 // --- Helper Function Type Definition --- 
 type CheckApiResponseFn = <T>(
@@ -68,6 +69,8 @@ export default function DataProducts() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
+  const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
+  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
 
   // Get permissions
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
@@ -80,6 +83,10 @@ export default function DataProducts() {
 
   // Fetch initial data for the table and dropdowns
   useEffect(() => {
+    // Set breadcrumbs for this top-level view
+    setStaticSegments([]); // No static parents other than Home
+    setDynamicTitle('Data Products');
+
     const loadInitialData = async () => {
       setLoading(true);
       setError(null);
@@ -122,8 +129,17 @@ export default function DataProducts() {
         // Ensure loading is stopped if permissions are loaded but access denied.
         // The permission denied message is handled by the render logic.
         setLoading(false);
+        // Clear breadcrumbs if no permission
+        setStaticSegments([]);
+        setDynamicTitle(null);
     }
-  }, [get, canRead, permissionsLoading]);
+
+    // Cleanup breadcrumbs on unmount
+    return () => {
+        setStaticSegments([]);
+        setDynamicTitle(null);
+    };
+  }, [get, canRead, permissionsLoading, setStaticSegments, setDynamicTitle]);
 
   // Function to refetch products list
   const fetchProducts = async () => {

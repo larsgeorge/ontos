@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { AlertCircle, GitCompare, Plus } from 'lucide-react';
+import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
 interface Dataset {
   id: string;
@@ -49,6 +50,8 @@ export default function MasterDataManagement() {
   const [detailedResults, setDetailedResults] = useState<ComparisonResult[]>([]);
   const [selectedComparison, setSelectedComparison] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
+  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
   const [datasets] = useState<Dataset[]>([
     {
       id: '1',
@@ -131,6 +134,18 @@ export default function MasterDataManagement() {
       totalRecords: 150
     }
   ]);
+
+  useEffect(() => {
+    // Set breadcrumbs
+    setStaticSegments([]);
+    setDynamicTitle('Master Data Management');
+
+    // Cleanup breadcrumbs on unmount
+    return () => {
+        setStaticSegments([]);
+        setDynamicTitle(null);
+    };
+  }, [setStaticSegments, setDynamicTitle]);
 
   const handleAnalyze = async () => {
     if (selectedDatasets.length < 2) {

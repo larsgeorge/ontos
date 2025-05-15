@@ -18,6 +18,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { Toaster } from "@/components/ui/toaster";
+import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
 // Check API response helper (adjusted for nullable error)
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
@@ -42,6 +43,8 @@ export default function DataDomainsView() {
   const api = useApi();
   const { toast } = useToast();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
+  const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
+  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
 
   const featureId = 'data-domains';
   const canRead = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_ONLY);
@@ -71,7 +74,17 @@ export default function DataDomainsView() {
 
   useEffect(() => {
     fetchDataDomains();
-  }, [fetchDataDomains]);
+
+    // Set breadcrumbs
+    setStaticSegments([]);
+    setDynamicTitle('Data Domains');
+
+    // Cleanup breadcrumbs on unmount
+    return () => {
+        setStaticSegments([]);
+        setDynamicTitle(null);
+    };
+  }, [fetchDataDomains, setStaticSegments, setDynamicTitle]);
 
   const handleOpenCreateDialog = () => {
     if (!canWrite) {

@@ -16,6 +16,7 @@ import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, useSensor, useSe
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import 'reactflow/dist/style.css';
+import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
 interface SortableTreeItemProps {
   item: BusinessGlossary | GlossaryTerm;
@@ -236,6 +237,9 @@ export default function BusinessGlossary() {
   // Add new state for filtered glossaries
   const [filteredGlossaries, setFilteredGlossaries] = useState<BusinessGlossary[]>([]);
 
+  const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
+  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
+
   // Add sensors for drag and drop
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -247,7 +251,16 @@ export default function BusinessGlossary() {
 
   useEffect(() => {
     fetchGlossaries();
-  }, []);
+    // Set breadcrumbs
+    setStaticSegments([]);
+    setDynamicTitle('Business Glossary');
+
+    // Cleanup breadcrumbs on unmount
+    return () => {
+        setStaticSegments([]);
+        setDynamicTitle(null);
+    };
+  }, [setStaticSegments, setDynamicTitle]);
 
   const fetchGlossaries = async () => {
     try {

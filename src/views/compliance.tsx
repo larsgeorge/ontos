@@ -40,6 +40,7 @@ import {
 } from "@tanstack/react-table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useApi } from '@/hooks/use-api';
+import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
 interface CompliancePolicy {
   id: string;
@@ -69,6 +70,8 @@ interface ComplianceApiResponse {
 export default function Compliance() {
   const { toast } = useToast();
   const api = useApi();
+  const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
+  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
   const [policies, setPolicies] = useState<CompliancePolicy[]>([]);
   const [stats, setStats] = useState<ComplianceStats>({
     overall_compliance: 0,
@@ -85,7 +88,14 @@ export default function Compliance() {
 
   useEffect(() => {
     loadPolicies();
-  }, []);
+    setStaticSegments([]);
+    setDynamicTitle('Compliance');
+
+    return () => {
+        setStaticSegments([]);
+        setDynamicTitle(null);
+    };
+  }, [api, setStaticSegments, setDynamicTitle]);
 
   const loadPolicies = async () => {
     try {

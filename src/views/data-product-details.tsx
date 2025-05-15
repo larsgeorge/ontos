@@ -43,7 +43,8 @@ export default function DataProductDetails() {
   const api = useApi();
   const { get, post, delete: deleteApi } = api; // Destructure methods
   const { toast } = useToast();
-  const setDynamicBreadcrumbTitle = useBreadcrumbStore((state) => state.setDynamicTitle); // Get setter action
+  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
+  const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments); // For potential parent path
   const { hasPermission, isLoading: permissionsLoading } = usePermissions(); // Use permissions hook
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications); // Get refresh action
 
@@ -88,19 +89,20 @@ export default function DataProductDetails() {
   const fetchDetailsAndDropdowns = async () => {
     if (!productId) {
       setError('Product ID not found in URL.');
-      setDynamicBreadcrumbTitle(null); // Clear title if ID is missing
+      setDynamicTitle(null); // Clear title if ID is missing
       setLoading(false);
       return;
     }
     if (!canRead && !permissionsLoading) {
         setError('Permission Denied: Cannot view data product details.');
-        setDynamicBreadcrumbTitle('Permission Denied');
+        setDynamicTitle('Permission Denied');
         setLoading(false);
         return;
     }
     setLoading(true);
     setError(null);
-    setDynamicBreadcrumbTitle('Loading...'); // Set loading state
+    setStaticSegments([{ label: 'Data Products', path: '/data-products'}]); // Set parent breadcrumb
+    setDynamicTitle('Loading...'); // Set loading state for the dynamic part
     try {
       // Fetch product details and dropdown values concurrently
       const [productResp, statusesResp, ownersResp, typesResp] = await Promise.all([
@@ -123,7 +125,7 @@ export default function DataProductDetails() {
       setOwners(Array.isArray(ownersData) ? ownersData : []);
 
       // Update breadcrumb store with the actual title
-      setDynamicBreadcrumbTitle(productData.info.title);
+      setDynamicTitle(productData.info.title);
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch data';
@@ -133,7 +135,7 @@ export default function DataProductDetails() {
       setStatuses([]);
       setProductTypes([]);
       setOwners([]);
-      setDynamicBreadcrumbTitle('Error'); // Set error state or null
+      setDynamicTitle('Error'); // Set error state or null
       toast({ title: 'Error', description: `Failed to load data: ${errorMessage}`, variant: 'destructive' });
     } finally {
       setLoading(false);
@@ -147,10 +149,11 @@ export default function DataProductDetails() {
     // Cleanup function: Clear the title when the component unmounts
     return () => {
         console.log("DataProductDetails unmounting, clearing breadcrumb title.");
-        setDynamicBreadcrumbTitle(null);
+        setStaticSegments([]); // Clear static segments as well
+        setDynamicTitle(null);
     };
     // Depend on permissions and canRead status as well
-  }, [productId, get, toast, setDynamicBreadcrumbTitle, canRead, permissionsLoading]);
+  }, [productId, get, toast, setDynamicTitle, setStaticSegments, canRead, permissionsLoading]);
 
   const handleEdit = () => {
     if (!canWrite) {

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
 interface Privilege {
   securable_id: string;
@@ -43,6 +44,9 @@ const Entitlements: React.FC = () => {
   });
   const { toast } = useToast();
 
+  const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
+  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
+
   const availableGroups = [
     'data_science_team',
     'ml_engineers',
@@ -62,7 +66,14 @@ const Entitlements: React.FC = () => {
 
   useEffect(() => {
     fetchPersonas();
-  }, []);
+    setStaticSegments([]);
+    setDynamicTitle('Entitlements');
+
+    return () => {
+        setStaticSegments([]);
+        setDynamicTitle(null);
+    };
+  }, [setStaticSegments, setDynamicTitle]);
 
   const fetchPersonas = async () => {
     try {

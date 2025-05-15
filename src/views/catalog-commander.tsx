@@ -22,6 +22,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/feature-access-levels';
+import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
 interface CatalogItem {
   id: string;
@@ -80,6 +81,9 @@ const CatalogCommander: React.FC = () => {
 
   const { hasPermission } = usePermissions();
   const canPerformWriteActions = hasPermission('catalog-commander', FeatureAccessLevel.FULL);
+
+  const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
+  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
 
   const handleViewDataset = async (path: string) => {
     setSelectedDataset(path);
@@ -204,7 +208,14 @@ const CatalogCommander: React.FC = () => {
   useEffect(() => {
     fetchCatalogs();
     fetchEstates();
-  }, []);
+    setStaticSegments([]);
+    setDynamicTitle('Catalog Commander');
+
+    return () => {
+        setStaticSegments([]);
+        setDynamicTitle(null);
+    };
+  }, [setStaticSegments, setDynamicTitle]);
 
   const fetchEstates = async () => {
     try {

@@ -31,6 +31,7 @@ import {
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
+import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
 export default function DataContracts() {
   const { toast } = useToast();
@@ -60,9 +61,21 @@ export default function DataContracts() {
   const [contractText, setContractText] = useState('');
   const [format, setFormat] = useState('json');
 
+  const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
+  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
+
   useEffect(() => {
     fetchContracts();
-  }, []);
+    // Set breadcrumbs
+    setStaticSegments([]);
+    setDynamicTitle('Data Contracts');
+
+    // Cleanup breadcrumbs on unmount
+    return () => {
+        setStaticSegments([]);
+        setDynamicTitle(null);
+    };
+  }, [setStaticSegments, setDynamicTitle]);
 
   const fetchContracts = async () => {
     try {

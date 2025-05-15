@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu"
+import useBreadcrumbStore from '@/stores/breadcrumb-store'
 
 interface EntitlementsSyncConfig {
   id: string
@@ -52,6 +53,9 @@ export default function EntitlementsSync() {
   const [catalogs, setCatalogs] = useState<string[]>([])
   const { toast } = useToast()
 
+  const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments)
+  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle)
+
   // Table state
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -63,7 +67,14 @@ export default function EntitlementsSync() {
     fetchConfigs()
     fetchConnections()
     fetchCatalogs()
-  }, [])
+    setStaticSegments([])
+    setDynamicTitle('Entitlements Sync')
+
+    return () => {
+      setStaticSegments([])
+      setDynamicTitle(null)
+    }
+  }, [setStaticSegments, setDynamicTitle])
 
   const fetchConfigs = async () => {
     try {

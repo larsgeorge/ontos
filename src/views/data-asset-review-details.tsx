@@ -25,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import AssetReviewEditor from '@/components/data-asset-reviews/asset-review-editor';
 
 // Helper function to check API response (reuse if available globally)
-const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string }, name: string): T => {
+const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
     // ... (implementation as in data-asset-reviews.tsx)
     if (response.error) throw new Error(`${name} fetch failed: ${response.error}`);
     if (response.data && typeof response.data === 'object' && 'detail' in response.data && typeof response.data.detail === 'string') {
@@ -43,7 +43,8 @@ export default function DataAssetReviewDetails() {
     const api = useApi();
     const { get, put } = api;
     const { toast } = useToast();
-    const setDynamicBreadcrumbTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
+    const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
+    const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
 
     const [request, setRequest] = useState<DataAssetReviewRequest | null>(null);
     const [loading, setLoading] = useState(true);
@@ -57,22 +58,25 @@ export default function DataAssetReviewDetails() {
         if (!requestId) {
             setError('Request ID not found in URL.');
             setLoading(false);
-            setDynamicBreadcrumbTitle(null);
+            setStaticSegments([{ label: 'Data Asset Reviews', path: '/data-asset-reviews'}]);
+            setDynamicTitle(null);
             return;
         }
         setLoading(true);
         setError(null);
-        setDynamicBreadcrumbTitle('Loading Review...');
+        setStaticSegments([{ label: 'Data Asset Reviews', path: '/data-asset-reviews'}]);
+        setDynamicTitle('Loading Review...');
         try {
             const response = await get<DataAssetReviewRequest>(`/api/data-asset-reviews/${requestId}`);
             const requestData = checkApiResponse(response, 'Review Request Details');
             setRequest(requestData);
-            setDynamicBreadcrumbTitle(`Review: ${requestData.id.substring(0, 8)}...`);
+            setDynamicTitle(`Review: ${requestData.id.substring(0, 8)}...`);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Failed to fetch request details';
             setError(errorMessage);
             setRequest(null);
-            setDynamicBreadcrumbTitle('Error');
+            setStaticSegments([{ label: 'Data Asset Reviews', path: '/data-asset-reviews'}]);
+            setDynamicTitle('Error');
             toast({ title: 'Error', description: `Failed to load request: ${errorMessage}`, variant: 'destructive' });
         } finally {
             setLoading(false);
@@ -84,9 +88,10 @@ export default function DataAssetReviewDetails() {
         // Cleanup function
         return () => {
             console.log("DataAssetReviewDetails unmounting, clearing breadcrumb title.");
-            setDynamicBreadcrumbTitle(null);
+            setStaticSegments([]);
+            setDynamicTitle(null);
         };
-    }, [requestId, get, toast, setDynamicBreadcrumbTitle]);
+    }, [requestId, get, toast, setDynamicTitle, setStaticSegments]);
 
     const handleOverallStatusChange = async (newStatus: ReviewRequestStatus) => {
         if (!requestId || !request || newStatus === request.status) return;

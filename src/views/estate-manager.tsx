@@ -135,20 +135,54 @@ const EstateGraphViewReactFlow: React.FC<EstateGraphViewProps> = ({ estates, onN
       updated_at: new Date().toISOString(),
     };
 
-    // Define dynamic source handles for the local node based on enabled estates
-    const localNodeSourceHandles: DynamicHandle[] = estates
-      .filter(estate => estate.is_enabled)
-      .map(estate => ({
-        id: `handle-local-to-${estate.id}`, // Unique handle ID for each connection
-        position: Position.Right, // All on the right for now
-      }));
-
     const canvasWidth = reactFlowWrapper.current.clientWidth;
     const canvasHeight = reactFlowWrapper.current.clientHeight;
     const centerX = canvasWidth / 2;
     const centerY = canvasHeight / 2;
-    // Ensure radius is positive and sensible if canvas dimensions are small
     const radius = Math.max(50, Math.min(canvasWidth, canvasHeight) / 3);
+
+    // 1. Calculate positions for remote nodes first
+    const remoteNodeCount = estates.length;
+    const remoteNodesWithPositions = estates.map((estate, index) => {
+      const angle = remoteNodeCount > 0 ? (index / remoteNodeCount) * 2 * Math.PI : 0;
+      const x = centerX + radius * Math.cos(angle) - NODE_WIDTH / 2;
+      const y = centerY + radius * Math.sin(angle) - NODE_HEIGHT / 2;
+      return {
+        estate,
+        position: { x, y },
+      };
+    });
+
+    // 2. Determine dynamic source handles for the local node based on remote node positions
+    const localNodeSourceHandles: DynamicHandle[] = remoteNodesWithPositions
+      .filter(rn => rn.estate.is_enabled)
+      .map(rn => {
+        const remoteNodeCenterX = rn.position.x + NODE_WIDTH / 2;
+        const remoteNodeCenterY = rn.position.y + NODE_HEIGHT / 2;
+
+        // Angle from local node center to remote node center
+        const deltaX = remoteNodeCenterX - centerX;
+        const deltaY = remoteNodeCenterY - centerY;
+        const angleRad = Math.atan2(deltaY, deltaX);
+
+        let handlePosition: Position;
+        // Determine position based on angle (dividing circle into 4 quadrants for handles)
+        // Angles are typically: Right (0), Bottom (PI/2), Left (PI), Top (-PI/2 or 3PI/2)
+        if (angleRad >= -Math.PI / 4 && angleRad < Math.PI / 4) {
+          handlePosition = Position.Right;
+        } else if (angleRad >= Math.PI / 4 && angleRad < 3 * Math.PI / 4) {
+          handlePosition = Position.Bottom;
+        } else if (angleRad >= 3 * Math.PI / 4 || angleRad < -3 * Math.PI / 4) {
+          handlePosition = Position.Left;
+        } else { // -3*PI/4 <= angleRad < -PI/4
+          handlePosition = Position.Top;
+        }
+
+        return {
+          id: `handle-local-to-${rn.estate.id}`,
+          position: handlePosition,
+        };
+      });
 
     const localNode: Node<EstateNodeData> = {
       id: 'local-instance',
@@ -165,7 +199,6 @@ const EstateGraphViewReactFlow: React.FC<EstateGraphViewProps> = ({ estates, onN
       style: { borderColor: 'var(--foreground)', borderWidth: 2, background: 'var(--muted)' }
     };
 
-    const remoteNodeCount = estates.length;
     const remoteNodes: Node<EstateNodeData>[] = estates.map((estate, index) => {
       // Ensure remoteNodeCount is not zero to prevent division by zero if estates array could be empty here
       const angle = remoteNodeCount > 0 ? (index / remoteNodeCount) * 2 * Math.PI : 0;
@@ -230,7 +263,8 @@ export default function EstateManager() {
   const { toast } = useToast();
   const { get, post, put, delete: deleteEstateApi } = useApi();
   const navigate = useNavigate();
-  const setBreadcrumbTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
+  const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
+  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
   const [estates, setEstates] = useState<Estate[]>([]);
   const [selectedEstate, setSelectedEstate] = useState<Estate | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -253,12 +287,16 @@ export default function EstateManager() {
 
   useEffect(() => {
     fetchEstates();
-    setBreadcrumbTitle("Estate Manager");
+    // Set breadcrumbs for this top-level view
+    setStaticSegments([]); // No static parents other than Home
+    setDynamicTitle('Estate Manager');
 
     return () => {
-        setBreadcrumbTitle(null);
+        // Clear breadcrumbs when component unmounts
+        setStaticSegments([]);
+        setDynamicTitle(null);
     };
-  }, []);
+  }, [setStaticSegments, setDynamicTitle]);
 
   const fetchEstates = async () => {
     try {

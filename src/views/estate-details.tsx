@@ -7,8 +7,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Globe, Edit3, PlusCircle, Trash2, Share2, Database, Zap, ZapOff, Settings2, ShieldCheck, ListFilter } from 'lucide-react';
-import useBreadcrumbStore from '@/stores/breadcrumb-store'; // Corrected import for default export
-import AddSharingPolicyDialog from '@/components/estates/add-sharing-policy-dialog'; // Import the dialog
+import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import AddSharingPolicyDialog from '@/components/estates/add-sharing-policy-dialog';
 
 // --- TypeScript Interfaces (Consider moving to a shared types/estate.ts file later) ---
 type CloudType = 'aws' | 'azure' | 'gcp';
@@ -58,7 +58,10 @@ export default function EstateDetailsView() {
   const navigate = useNavigate();
   const { get, put } = useApi();
   const { toast } = useToast();
-  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle); // Correctly select the action
+  
+  // Destructure actions from the store
+  const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
+  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
 
   const [estate, setEstate] = useState<Estate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -66,29 +69,36 @@ export default function EstateDetailsView() {
   const [isAddPolicyDialogOpen, setIsAddPolicyDialogOpen] = useState(false); // State for Add Policy Dialog
 
   useEffect(() => {
+    // Set static breadcrumb for Estate Manager parent
+    setStaticSegments([{ label: 'Estate Manager', path: '/estates' }]);
+
     if (estateId) {
       fetchEstateDetails(estateId);
+      // Initial dynamic title while loading specific estate
+      setDynamicTitle('Loading...');
+    } else {
+      // If no estateId, this is an invalid state or direct access to a generic details page
+      setDynamicTitle('Estate Details');
     }
-    // Set initial breadcrumb title during loading or if no ID
-    if (!estateId) {
-        setDynamicTitle('Estate Details');
-    } else if (isLoading) {
-        setDynamicTitle('Loading...');
-    }
-    // Cleanup breadcrumb title on unmount
-    return () => setDynamicTitle(null);
-  }, [estateId]); // Removed isLoading from dependency array to avoid loop with setDynamicTitle
+    
+    // Cleanup breadcrumbs on unmount
+    return () => {
+        setStaticSegments([]);
+        setDynamicTitle(null);
+    };
+  // Use stable setters in dependency array
+  }, [estateId, setStaticSegments, setDynamicTitle]);
 
   useEffect(() => {
     if (estate) {
       setDynamicTitle(estate.name);
-    } else if (!isLoading && error) { // Only set error title if not loading and error exists
-        setDynamicTitle('Error');
-    } else if (!isLoading && !estateId) { // If loading finished and still no ID (e.g. direct nav to /estates/ without id)
-        setDynamicTitle('Estate Details');
-    }
-    // No cleanup here, previous useEffect handles unmount cleanup
-  }, [estate, isLoading, error, setDynamicTitle, estateId]);
+    } else if (!isLoading && error) {
+      setDynamicTitle('Error');
+    } else if (!isLoading && !estateId) {
+      setDynamicTitle('Estate Details');
+    } 
+  // Use stable setters in dependency array
+  }, [estate, isLoading, error, setDynamicTitle, estateId, setStaticSegments]);
 
   const fetchEstateDetails = async (id: string) => {
     setIsLoading(true);
