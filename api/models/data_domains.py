@@ -10,6 +10,7 @@ class DataDomainBase(BaseModel):
     description: Optional[str] = Field(None, description="Optional description for the domain.")
     owner: List[str] = Field(..., min_items=1, description="List of owners (principals - users/groups) for the domain.")
     tags: Optional[List[str]] = Field(None, description="Optional list of tags associated with the domain.")
+    parent_id: Optional[UUID] = Field(None, description="ID of the parent data domain, if any.")
 
     @validator('owner', 'tags', pre=True, each_item=True)
     def check_string_not_empty(cls, v):
@@ -28,6 +29,7 @@ class DataDomainUpdate(BaseModel):
     description: Optional[str] = Field(None, description="New description for the domain.")
     owner: Optional[List[str]] = Field(None, min_items=1, description="New list of owners for the domain.")
     tags: Optional[List[str]] = Field(None, description="New list of tags for the domain.")
+    parent_id: Optional[UUID] = Field(None, description="New parent ID for the data domain. Set to null to remove parent.")
 
     @validator('owner', 'tags', pre=True, each_item=True)
     def check_update_string_not_empty(cls, v):
@@ -41,6 +43,8 @@ class DataDomainRead(DataDomainBase):
     created_at: datetime
     updated_at: datetime
     created_by: str
+    parent_name: Optional[str] = Field(None, description="Name of the parent data domain, if any.")
+    children_count: int = Field(0, description="Number of direct child data domains.")
 
     # Validator to parse stringified list from DB before standard validation
     @field_validator('owner', 'tags', mode='before')

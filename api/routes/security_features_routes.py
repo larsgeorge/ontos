@@ -86,17 +86,16 @@ async def create_security_feature(feature: SecurityFeatureCreate) -> SecurityFea
 @router.get("/security-features", response_model=List[SecurityFeatureResponse])
 async def list_security_features():
     try:
-        logger.info("Listing security features...")
         features = manager.list_features()
-        logger.info(f"Found {len(features)} security features")
-        logger.info(f"Features: {features}")
+        logger.debug(f"Found {len(features)} security features")
+        logger.debug(f"Features: {features}")
         # Add detailed logging for each feature
         for feature in features:
             try:
-                logger.info(f"Feature details: {feature.to_dict()}")
+                logger.debug(f"Feature details: {feature.to_dict()}")
                 # Try to convert to response model
                 response = SecurityFeatureResponse.from_orm(feature)
-                logger.info(f"Response model: {response.dict()}")
+                logger.debug(f"Response model: {response.dict()}")
             except Exception as e:
                 logger.error(f"Error processing feature {feature.id}: {e!s}")
                 logger.error(f"Feature data: {feature.to_dict()}")
@@ -113,7 +112,7 @@ async def list_security_features():
 async def get_security_feature(feature_id: str) -> SecurityFeatureResponse:
     """Get a security feature by ID"""
     try:
-        logging.info(f"Getting security feature: {feature_id}")
+        logging.debug(f"Getting security feature: {feature_id}")
         feature = manager.get_feature(feature_id)
         if not feature:
             raise HTTPException(status_code=404, detail="Security feature not found")
@@ -128,7 +127,7 @@ async def get_security_feature(feature_id: str) -> SecurityFeatureResponse:
 async def update_security_feature(feature_id: str, feature_update: SecurityFeatureUpdate) -> SecurityFeatureResponse:
     """Update a security feature"""
     try:
-        logging.info(f"Updating security feature: {feature_id}")
+        logging.debug(f"Updating security feature: {feature_id}")
         existing_feature = manager.get_feature(feature_id)
         if not existing_feature:
             raise HTTPException(status_code=404, detail="Security feature not found")
@@ -159,7 +158,7 @@ async def update_security_feature(feature_id: str, feature_update: SecurityFeatu
 async def delete_security_feature(feature_id: str):
     """Delete a security feature"""
     try:
-        logging.info(f"Deleting security feature: {feature_id}")
+        logging.debug(f"Deleting security feature: {feature_id}")
         if not manager.delete_feature(feature_id):
             raise HTTPException(status_code=404, detail="Security feature not found")
         return {"message": "Security feature deleted successfully"}

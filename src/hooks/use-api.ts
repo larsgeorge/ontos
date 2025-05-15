@@ -13,8 +13,68 @@ export const useApi = () => {
     setLoading(true);
     try {
       const response = await fetch(url);
-      const data = await response.json();
-      return { data };
+
+      // Check for non-OK responses first
+      if (!response.ok) {
+        let errorBody: any;
+        const contentType = response.headers.get('Content-Type');
+        try {
+          if (contentType?.includes('application/json')) {
+            errorBody = await response.json();
+          } else {
+            errorBody = await response.text();
+          }
+        } catch (parseError) {
+          errorBody = response.statusText; // Fallback
+        }
+        const errorMsg = errorBody?.detail || (typeof errorBody === 'string' ? errorBody : JSON.stringify(errorBody)) || `HTTP error! status: ${response.status}`;
+        console.error(`[useApi] GET error response from ${url} (${response.status}):`, errorBody);
+        return { data: {} as T, error: errorMsg };
+      }
+
+      // Handle successful responses (response.ok is true)
+      // Check for empty body for 2xx status codes like 200 or 204
+      const contentType = response.headers.get('Content-Type');
+      const contentLength = response.headers.get('Content-Length');
+
+      if (response.status === 204 || (contentLength !== null && parseInt(contentLength, 10) === 0)) {
+        // For 204 No Content, or explicit zero content length, return default/empty data
+        // Assuming T might be an array, an empty array is a sensible default.
+        // If T is an object, an empty object might be better.
+        // For now, provide {} and let the caller cast or handle.
+        return { data: [] as unknown as T }; // Adjust default as needed, e.g., {} as T if T is an object
+      }
+
+      // Attempt to parse JSON if content type suggests it
+      if (contentType?.includes('application/json')) {
+        const data = await response.json();
+        return { data };
+      } else if (response.ok) { // Handle other 200 OK responses (non-JSON, not 204, not Content-Length 0)
+        const textData = await response.text();
+        // Attempt to parse as JSON if it looks like it, otherwise return as text.
+        // This is a common case for APIs that might return simple strings or lists as text.
+        try {
+          // A simple heuristic: if it starts with [ or { assume it might be JSON-like text
+          if (textData.trim().startsWith('[') || textData.trim().startsWith('{')) {
+            return { data: JSON.parse(textData) as T };
+          } 
+        } catch (e) {
+          // If JSON.parse fails, or it doesn't look like JSON, return as plain text wrapped in a way T might expect.
+          // This part is tricky as T is generic. For now, we'll log a warning and return it as is,
+          // which might require the caller to handle non-object/array types if T expects them.
+          console.warn(`[useApi] GET response from ${url} was text/plain but not directly parsable as JSON. Returning as raw text. Caller needs to handle this if T expects an object/array. Text:`, textData.substring(0,100)); 
+          return { data: textData as any as T }; // This cast is risky, caller must be aware
+        }
+        // If it didn't look like JSON initially, return as text.
+        return { data: textData as any as T }; // Cast to T, caller might need to verify type
+      }
+      
+      // Fallback if something unexpected happens, though previous branches should cover response.ok cases.
+      // This line should ideally not be reached if response.ok is true.
+      console.warn(`[useApi] Unhandled GET response type from ${url}. Status: ${response.status}, Content-Type: ${contentType}`);
+      const fallbackData = await response.json(); // Last resort, likely to fail if previous checks didn't catch it.
+      return { data: fallbackData };
+
     } catch (error) {
       console.error(`[useApi] GET error from ${url}:`, error);
       return { data: {} as T, error: (error as Error).message };

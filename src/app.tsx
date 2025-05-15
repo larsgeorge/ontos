@@ -28,6 +28,7 @@ import CatalogCommander from './views/catalog-commander';
 import Settings from './views/settings';
 import About from './views/about';
 import NotFound from './views/not-found';
+import DataDomainDetailsView from "@/views/data-domain-details";
 
 export default function App() {
   const fetchUserInfo = useUserStore((state: any) => state.fetchUserInfo);
@@ -60,6 +61,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/data-domains" element={<DataDomainsView />} />
+              <Route path="/data-domains/:domainId" element={<DataDomainDetailsView />} />
               <Route path="/data-products" element={<DataProducts />} />
               <Route path="/data-products/:productId" element={<DataProductDetails />} />
               <Route path="/data-contracts" element={<DataContracts />} />

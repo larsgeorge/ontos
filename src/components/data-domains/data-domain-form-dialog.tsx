@@ -9,25 +9,30 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
 import {
-  Form, FormControl, FormField, FormItem, FormLabel, FormMessage
+  Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataDomain, DataDomainCreate, DataDomainUpdate } from '@/types/data-domain';
-import { useApi } from '@/hooks/use-api'; // Import useApi
-import { useToast } from '@/hooks/use-toast'; // Import useToast
+import { useApi } from '@/hooks/use-api';
+import { useToast } from '@/hooks/use-toast';
 
 interface DataDomainFormDialogProps {
-  domain?: DataDomain | null; // Existing domain for editing
+  domain?: DataDomain | null;
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmitSuccess: (domain: DataDomain) => void; // Callback on successful save
-  trigger?: React.ReactNode; // Optional trigger element
+  onSubmitSuccess: (domain: DataDomain) => void;
+  trigger?: React.ReactNode;
+  allDomains: DataDomain[];
 }
 
 const formSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }).max(100),
   description: z.string().max(500, { message: "Description must not exceed 500 characters." }).optional().nullable(),
+  owner: z.string().min(1, { message: "Owner(s) are required. Enter comma-separated values." }),
+  tags: z.string().optional().nullable(),
+  parent_id: z.string().uuid().optional().nullable().or(z.literal('')),
 });
 
 export function DataDomainFormDialog({
@@ -36,9 +41,10 @@ export function DataDomainFormDialog({
   onOpenChange,
   onSubmitSuccess,
   trigger,
+  allDomains,
 }: DataDomainFormDialogProps) {
-  const api = useApi(); // Use the hook
-  const { toast } = useToast(); // Use the hook
+  const api = useApi();
+  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -46,46 +52,56 @@ export function DataDomainFormDialog({
     defaultValues: {
       name: domain?.name || "",
       description: domain?.description || "",
+      owner: domain?.owner?.join(', ') || "",
+      tags: domain?.tags?.join(', ') || "",
+      parent_id: domain?.parent_id || "",
     },
   });
 
-  // Reset form when dialog opens or domain changes
   React.useEffect(() => {
     if (isOpen) {
       form.reset({
         name: domain?.name || "",
         description: domain?.description || "",
+        owner: domain?.owner?.join(', ') || "",
+        tags: domain?.tags?.join(', ') || "",
+        parent_id: domain?.parent_id || "",
       });
     }
-  }, [isOpen, domain, form]);
+  }, [isOpen, domain, form, allDomains]);
 
   const handleFormSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     let result;
+
+    const processedValues: DataDomainCreate | DataDomainUpdate = {
+      name: values.name,
+      description: values.description,
+      owner: values.owner.split(',').map(s => s.trim()).filter(s => s !== ""),
+      tags: values.tags ? values.tags.split(',').map(s => s.trim()).filter(s => s !== "") : null,
+      parent_id: values.parent_id === "" ? null : values.parent_id,
+    };
+
+    if (domain?.id) {
+      result = await api.put<DataDomain>(`/api/data-domains/${domain.id}`, processedValues as DataDomainUpdate);
+    } else {
+      result = await api.post<DataDomain>('/api/data-domains', processedValues as DataDomainCreate);
+    }
+
+    if (result.error) {
+      throw new Error(result.error);
+    }
+    if (!result.data) {
+       throw new Error('No data returned from API.');
+    }
+
+    toast({ title: domain ? "Domain Updated" : "Domain Created", description: `Successfully saved '${result.data.name}'.` });
+    onSubmitSuccess(result.data);
+    onOpenChange(false);
+
     try {
-      if (domain?.id) {
-        // Update existing domain
-        result = await api.put<DataDomain>(`/api/data-domains/${domain.id}`, values as DataDomainUpdate);
-      } else {
-        // Create new domain
-        result = await api.post<DataDomain>('/api/data-domains', values as DataDomainCreate);
-      }
-
-      if (result.error) {
-        throw new Error(result.error);
-      }
-
-      if (!result.data) {
-         throw new Error('No data returned from API.');
-      }
-
-      toast({ title: domain ? "Domain Updated" : "Domain Created", description: `Successfully saved '${result.data.name}'.` });
-      onSubmitSuccess(result.data); // Call success callback
-      onOpenChange(false); // Close dialog on success
-
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error Saving Domain", description: error.message || 'An unknown error occurred.' });
-      // Keep dialog open on error
     } finally {
       setIsSubmitting(false);
     }
@@ -97,8 +113,10 @@ export function DataDomainFormDialog({
     : "Add a new data domain to the system.";
   const submitButtonText = domain ? "Save Changes" : "Create Domain";
 
+  const parentDomainOptions = allDomains.filter(d => d.id !== domain?.id);
+
   const dialogContent = (
-    <DialogContent className="sm:max-w-[425px]">
+    <DialogContent className="sm:max-w-[525px]">
       <DialogHeader>
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogDescription>{dialogDescription}</DialogDescription>
@@ -129,9 +147,62 @@ export function DataDomainFormDialog({
                     placeholder="Describe the purpose of this domain..."
                     className="resize-none"
                     {...field}
-                    value={field.value ?? ''} // Handle null for textarea
+                    value={field.value ?? ''}
                   />
                 </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="owner"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Owners *</FormLabel>
+                <FormControl>
+                  <Input placeholder="user@example.com, group@example.com" {...field} />
+                </FormControl>
+                <FormDescription>Comma-separated list of owner emails or group names.</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="tags"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tags</FormLabel>
+                <FormControl>
+                  <Input placeholder="finance, pii, core-data" {...field} value={field.value ?? ''} />
+                </FormControl>
+                <FormDescription>Comma-separated list of tags.</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="parent_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Parent Domain</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a parent domain (optional)" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="">No Parent</SelectItem>
+                    {parentDomainOptions.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <FormMessage />
               </FormItem>
             )}
@@ -140,7 +211,7 @@ export function DataDomainFormDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || !form.formState.isValid}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
               {submitButtonText}
             </Button>
@@ -159,7 +230,6 @@ export function DataDomainFormDialog({
     );
   }
 
-  // If no trigger, render the Dialog and Content directly (controlled externally)
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       {dialogContent}

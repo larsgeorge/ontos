@@ -51,6 +51,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import EstateNode, { EstateNodeData, DynamicHandle } from '@/components/estates/estate-node';
+import EstateGraphView from '@/components/estates/estate-graph-view';
 
 // --- TypeScript Interfaces corresponding to Pydantic Models ---
 type CloudType = 'aws' | 'azure' | 'gcp';
@@ -95,169 +96,8 @@ interface Estate {
 }
 // --- End TypeScript Interfaces ---
 
-// Simple Graph View Component (Will be replaced with ReactFlow based one)
-interface EstateGraphViewProps {
-  estates: Estate[];
-  onNodeClick: (estateId: string) => void;
-}
-
 // Define nodeTypes outside the component for memoization
 const nodeTypes = { estateNode: EstateNode };
-
-const EstateGraphViewReactFlow: React.FC<EstateGraphViewProps> = ({ estates, onNodeClick }) => {
-  const [nodes, setNodes, onNodesChange] = useNodesState<EstateNodeData | any>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const reactFlowWrapper = React.useRef<HTMLDivElement>(null);
-
-  // Define node dimensions (should match EstateNode styling if fixed, or be dynamic)
-  const NODE_WIDTH = 288; // Corresponds to w-72
-  const NODE_HEIGHT = 128; // Approximate based on EstateNode content
-
-  useEffect(() => {
-    if (!estates || !reactFlowWrapper.current) { // Wait for wrapper to be available
-      setNodes([]);
-      setEdges([]);
-      return;
-    }
-
-    const localInstanceNodeData: Partial<Estate> = {
-      id: 'local-instance',
-      name: 'Local Application Instance',
-      description: 'This application instance, managing connections to remote estates.',
-      cloud_type: 'aws', // Example, could be dynamic if app instance has cloud type
-      connection_type: 'delta_share', // Example
-      is_enabled: true, // App itself is always 'enabled' in this context
-      sharing_policies: [],
-      metastore_name: 'local_app_metastore',
-      workspace_url: 'N/A',
-      sync_schedule: 'N/A',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    const canvasWidth = reactFlowWrapper.current.clientWidth;
-    const canvasHeight = reactFlowWrapper.current.clientHeight;
-    const centerX = canvasWidth / 2;
-    const centerY = canvasHeight / 2;
-    const radius = Math.max(50, Math.min(canvasWidth, canvasHeight) / 3);
-
-    // 1. Calculate positions for remote nodes first
-    const remoteNodeCount = estates.length;
-    const remoteNodesWithPositions = estates.map((estate, index) => {
-      const angle = remoteNodeCount > 0 ? (index / remoteNodeCount) * 2 * Math.PI : 0;
-      const x = centerX + radius * Math.cos(angle) - NODE_WIDTH / 2;
-      const y = centerY + radius * Math.sin(angle) - NODE_HEIGHT / 2;
-      return {
-        estate,
-        position: { x, y },
-      };
-    });
-
-    // 2. Determine dynamic source handles for the local node based on remote node positions
-    const localNodeSourceHandles: DynamicHandle[] = remoteNodesWithPositions
-      .filter(rn => rn.estate.is_enabled)
-      .map(rn => {
-        const remoteNodeCenterX = rn.position.x + NODE_WIDTH / 2;
-        const remoteNodeCenterY = rn.position.y + NODE_HEIGHT / 2;
-
-        // Angle from local node center to remote node center
-        const deltaX = remoteNodeCenterX - centerX;
-        const deltaY = remoteNodeCenterY - centerY;
-        const angleRad = Math.atan2(deltaY, deltaX);
-
-        let handlePosition: Position;
-        // Determine position based on angle (dividing circle into 4 quadrants for handles)
-        // Angles are typically: Right (0), Bottom (PI/2), Left (PI), Top (-PI/2 or 3PI/2)
-        if (angleRad >= -Math.PI / 4 && angleRad < Math.PI / 4) {
-          handlePosition = Position.Right;
-        } else if (angleRad >= Math.PI / 4 && angleRad < 3 * Math.PI / 4) {
-          handlePosition = Position.Bottom;
-        } else if (angleRad >= 3 * Math.PI / 4 || angleRad < -3 * Math.PI / 4) {
-          handlePosition = Position.Left;
-        } else { // -3*PI/4 <= angleRad < -PI/4
-          handlePosition = Position.Top;
-        }
-
-        return {
-          id: `handle-local-to-${rn.estate.id}`,
-          position: handlePosition,
-        };
-      });
-
-    const localNode: Node<EstateNodeData> = {
-      id: 'local-instance',
-      type: 'estateNode',
-      position: { x: centerX - NODE_WIDTH / 2, y: centerY - NODE_HEIGHT / 2 }, // Center the node
-      data: { 
-        estate: localInstanceNodeData as Estate, 
-        onClick: () => console.log('Local instance node clicked'),
-        dynamicSourceHandles: localNodeSourceHandles, // Pass the dynamic handles
-        isLocalInstance: true, // Identify as local instance
-      },
-      draggable: true,
-      selectable: true,
-      style: { borderColor: 'var(--foreground)', borderWidth: 2, background: 'var(--muted)' }
-    };
-
-    const remoteNodes: Node<EstateNodeData>[] = estates.map((estate, index) => {
-      // Ensure remoteNodeCount is not zero to prevent division by zero if estates array could be empty here
-      const angle = remoteNodeCount > 0 ? (index / remoteNodeCount) * 2 * Math.PI : 0;
-      const x = centerX + radius * Math.cos(angle) - NODE_WIDTH / 2;
-      const y = centerY + radius * Math.sin(angle) - NODE_HEIGHT / 2;
-      return {
-        id: estate.id,
-        type: 'estateNode',
-        position: { x, y },
-        data: { estate, onClick: onNodeClick },
-        draggable: true,
-        selectable: true,
-      };
-    });
-
-    const initialNodes = [localNode, ...remoteNodes];
-
-    const initialEdges: Edge[] = estates
-      .filter(estate => estate.is_enabled)
-      .map(estate => ({
-        id: `edge-local-to-${estate.id}`,
-        source: 'local-instance',
-        target: estate.id,
-        sourceHandle: `handle-local-to-${estate.id}`, // Specify the source handle ID
-        type: 'smoothstep', 
-        animated: true,
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#888' }, // Hardcoded dark gray color for marker
-        style: { strokeWidth: 1.5, stroke: '#888' }, // Hardcoded dark gray color for stroke
-      }));
-
-    setNodes(initialNodes);
-    setEdges(initialEdges);
-    console.log('GraphView: Nodes set:', initialNodes);
-    console.log('GraphView: Edges set:', initialEdges);
-
-  // Add reactFlowWrapper.current to dependency array to re-run when it's available
-  // Note: This specific usage might not trigger re-layout on *resize* effectively.
-  // A ResizeObserver would be more robust for dynamic resizing.
-  }, [estates, onNodeClick, setNodes, setEdges, reactFlowWrapper.current]);
-
-  return (
-    <div ref={reactFlowWrapper} className="h-[calc(100vh-280px)] w-full border rounded-lg" data-testid="estate-graph-view-rf">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeTypes={nodeTypes}
-        fitView
-        attributionPosition="bottom-right"
-        className="bg-background"
-      >
-        <Controls />
-        <MiniMap nodeStrokeWidth={3} zoomable pannable />
-        <Background color="#aaa" gap={20} />
-      </ReactFlow>
-    </div>
-  );
-};
 
 export default function EstateManager() {
   const { toast } = useToast();
@@ -575,9 +415,11 @@ export default function EstateManager() {
           <TooltipProvider delayDuration={100}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Badge variant={badgeVariant} className="cursor-default">
-                  {statusText}
-                </Badge>
+                <span>
+                  <Badge variant={badgeVariant} className="cursor-default">
+                    {statusText}
+                  </Badge>
+                </span>
               </TooltipTrigger>
               <TooltipContent side="top">
                 <p>Status: {statusText}</p>
@@ -857,7 +699,9 @@ export default function EstateManager() {
             </div>
           </>
         ) : (
-          <EstateGraphViewReactFlow estates={estates} onNodeClick={handleNodeClick} />
+          <div className="h-[calc(100vh-280px)] w-full border rounded-lg">
+            <EstateGraphView estates={estates} onNodeClick={handleNodeClick} />
+          </div>
         )}
       </div>
 

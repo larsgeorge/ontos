@@ -8,6 +8,8 @@ from sqlalchemy.sql import func
 
 # Import the shared Base from the common database module
 from api.common.database import Base 
+from sqlalchemy import ForeignKey # Added
+from sqlalchemy.orm import relationship # Added
 
 # Base = declarative_base()
 
@@ -21,6 +23,11 @@ class DataDomain(Base):
     # Store owners and tags as String, assuming JSON serialization happens elsewhere
     owner = Column(String, nullable=False) # Represents List[str]
     tags = Column(String, nullable=True) # Represents List[str]
+    
+    parent_id = Column(String, ForeignKey('data_domains.id'), nullable=True)
+    parent = relationship("DataDomain", remote_side=[id], back_populates="children", lazy="select")
+    children = relationship("DataDomain", back_populates="parent", lazy="select", cascade="all, delete-orphan")
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     created_by = Column(String, nullable=False) # Store user ID (e.g., email)

@@ -8,53 +8,70 @@ domains:
     description: "Financial accounting, reporting, and metrics."
     owner: ["finance.team@company.com", "data.governance@company.com"]
     tags: ["finance", "reporting", "metrics"]
+    parent_name: "Core"
 
   - name: Sales
     description: "Sales processes, opportunities, leads, and performance."
     owner: ["sales.ops@company.com"]
     tags: ["sales", "crm", "pipeline"]
+    parent_name: "Core"
 
   - name: Marketing
     description: "Customer acquisition, campaigns, engagement, and branding."
     owner: ["marketing.analytics@company.com", "marketing.lead@company.com"]
     tags: ["marketing", "campaigns", "customer"]
+    parent_name: "Core"
+
+  - name: Retail
+    description: "All data related to retail business line, including operations and analytics."
+    owner: ["retail.lead@company.com"]
+    tags: ["retail", "business-line"]
+    parent_name: "Core"
 
   - name: Retail Operations
     description: "Store operations, point-of-sale (POS), inventory, and logistics (source systems focus)."
     owner: ["retail.systems@company.com"]
     tags: ["retail", "operations", "pos", "inventory", "source"]
+    parent_name: "Retail"
 
   - name: Retail Analytics
     description: "Analytics derived from retail operations data, including sales, demand, pricing."
     owner: ["analytics.team@company.com", "retail.analysts@company.com"]
     tags: ["retail", "analytics", "sales", "forecasting", "pricing"]
+    parent_name: "Retail"
 
   - name: Supply Chain
     description: "Logistics, inventory management, reordering, and supplier relations."
     owner: ["supply.chain.team@company.com"]
     tags: ["logistics", "inventory", "supplier"]
+    parent_name: "Core"
 
   - name: Customer
     description: "Direct customer information, profiles, segmentation, and interactions (often overlaps Marketing/Sales)."
     owner: ["crm.team@company.com", "customer.success@company.com"]
     tags: ["customer", "crm", "profile", "segmentation"]
+    parent_name: "Core"
 
   - name: Product
     description: "Product catalog, features, lifecycle, and development."
     owner: ["product.management@company.com"]
     tags: ["product", "catalog", "development"]
+    parent_name: "Core"
 
-  - name: HR
+  - name: Human Resources
     description: "Human resources, employee data, payroll, and recruitment."
     owner: ["hr.data@company.com"]
     tags: ["hr", "employee", "payroll"]
+    parent_name: "Core"
 
   - name: IoT
     description: "Data from Internet of Things devices, sensors, and telemetry."
     owner: ["iot.platform.team@company.com"]
     tags: ["iot", "sensor", "telemetry"]
+    parent_name: "Core"
 
   - name: Compliance
     description: "Data related to legal, regulatory, and internal compliance requirements."
     owner: ["compliance.office@company.com", "legal.team@company.com"]
-    tags: ["compliance", "legal", "governance", "audit"] 
+    tags: ["compliance", "legal", "governance", "audit"]
+    parent_name: "Core" 
