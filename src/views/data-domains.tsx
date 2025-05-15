@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, PlusCircle, Loader2, AlertCircle, BoxSelect, ListTree, TableIcon } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, Loader2, AlertCircle, BoxSelect, ListTree, TableIcon, WorkflowIcon } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { DataDomain } from '@/types/data-domain';
@@ -22,6 +22,7 @@ import { Toaster } from "@/components/ui/toaster";
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { useNavigate } from 'react-router-dom';
 import DataDomainGraphView from '@/components/data-domains/data-domain-graph-view';
+import { ViewModeToggle } from '@/components/common/view-mode-toggle';
 
 // Placeholder for Graph View
 // const DataDomainGraphViewPlaceholder = () => (
@@ -278,26 +279,12 @@ export default function DataDomainsView() {
            Data Domains
         </h1>
         <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 border rounded-md p-0.5">
-                <Button
-                    variant={viewMode === 'table' ? 'secondary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('table')}
-                    className="h-8 px-2"
-                    title="Table View"
-                >
-                    <TableIcon className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant={viewMode === 'graph' ? 'secondary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('graph')}
-                    className="h-8 px-2"
-                    title="Graph View"
-                >
-                    <ListTree className="h-4 w-4" />
-                </Button>
-            </div>
+            <ViewModeToggle 
+                currentView={viewMode}
+                onViewChange={setViewMode}
+                tableViewIcon={<TableIcon className="h-4 w-4" />}
+                graphViewIcon={<WorkflowIcon className="h-4 w-4" />}
+            />
             <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading || apiIsLoading}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Add New Domain
             </Button>

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload # Added joinedload,
 from sqlalchemy.exc import IntegrityError # Import IntegrityError
 
 from api.repositories.data_domain_repository import DataDomainRepository
-from api.models.data_domains import DataDomainCreate, DataDomainUpdate, DataDomainRead
+from api.models.data_domains import DataDomainCreate, DataDomainUpdate, DataDomainRead, DataDomainBasicInfo # Added DataDomainBasicInfo
 from api.db_models.data_domains import DataDomain
 from api.common.logging import get_logger
 from api.common.errors import ConflictError, NotFoundError, AppError # Import custom errors, AppError for validation
@@ -24,10 +24,16 @@ class DataDomainManager:
     def _convert_db_to_read_model(self, db_domain: DataDomain) -> DataDomainRead:
         """Helper to convert DB model to Read model, populating parent_name and children_count."""
         parent_name = None
+        parent_info_data: Optional[DataDomainBasicInfo] = None
         if db_domain.parent: # Assuming parent is loaded
             parent_name = db_domain.parent.name
+            parent_info_data = DataDomainBasicInfo.model_validate(db_domain.parent) # Use model_validate for Pydantic v2
         
         children_count = len(db_domain.children) # Assuming children are loaded or counted
+        children_info_data: List[DataDomainBasicInfo] = []
+        if db_domain.children:
+            for child_db_obj in db_domain.children:
+                children_info_data.append(DataDomainBasicInfo.model_validate(child_db_obj))
 
         # Ensure tags and owner are lists when converting from JSON string
         # The DataDomainRead model's validator will handle JSON string parsing if it gets a string.
@@ -62,7 +68,9 @@ class DataDomainManager:
             updated_at=db_domain.updated_at,
             created_by=db_domain.created_by,
             parent_name=parent_name,
-            children_count=children_count
+            children_count=children_count,
+            parent_info=parent_info_data,
+            children_info=children_info_data
         )
 
     def create_domain(self, db: Session, domain_in: DataDomainCreate, current_user_id: str) -> DataDomainRead:

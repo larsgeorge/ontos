@@ -37,6 +37,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useNavigate } from 'react-router-dom';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { Table as TableIcon, Workflow as WorkflowIcon } from 'lucide-react';
+import { ViewModeToggle } from '@/components/common/view-mode-toggle';
 
 import ReactFlow, {
     Node, 
@@ -545,26 +546,12 @@ export default function EstateManager() {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            <div className="flex items-center gap-1 border rounded-md p-0.5 ml-auto">
-                <Button
-                    variant={viewMode === 'table' ? 'secondary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('table')}
-                    className="h-8 px-2"
-                    title="Table View"
-                >
-                    <TableIcon className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant={viewMode === 'graph' ? 'secondary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('graph')}
-                    className="h-8 px-2"
-                    title="Graph View"
-                >
-                    <WorkflowIcon className="h-4 w-4" />
-                </Button>
-            </div>
+            <ViewModeToggle 
+                currentView={viewMode}
+                onViewChange={setViewMode}
+                graphViewIcon={<WorkflowIcon className="h-4 w-4" />}
+                className="ml-auto"
+            />
             <Button onClick={() => openDialog()} className="h-9">
               <Plus className="h-4 w-4 mr-2" />
               Add Estate

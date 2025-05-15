@@ -6,12 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, Edit3, LinkIcon, Paperclip, FileText, Users, Tag, Hash, CalendarDays, UserCircle, ListTree } from 'lucide-react';
+import { ArrowLeft, Edit3, LinkIcon, Paperclip, FileText, Users, Tag, Hash, CalendarDays, UserCircle, ListTree, ChevronsUpDown } from 'lucide-react';
 import { DataDomain } from '@/types/data-domain';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { RelativeDate } from '@/components/common/relative-date';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
+import { DataDomainMiniGraph } from '@/components/data-domains/data-domain-mini-graph';
 
 // Helper to check API response (can be moved to a shared util if used in many places)
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
@@ -41,7 +42,6 @@ const InfoItem: React.FC<InfoItemProps> = ({ label, value, icon, children, class
     {children && <div className="mt-0.5">{children}</div>}
   </div>
 );
-
 
 export default function DataDomainDetailsView() {
   const { domainId } = useParams<{ domainId: string }>();
@@ -92,6 +92,12 @@ export default function DataDomainDetailsView() {
         setDynamicTitle(null);
     };
   }, [domainId, fetchDomainDetails, setStaticSegments, setDynamicTitle]);
+
+  useEffect(() => {
+    if (domain) {
+      setDynamicTitle(domain.name);
+    }
+  }, [domain, setDynamicTitle]);
 
   if (isLoading) {
     return (
@@ -151,10 +157,10 @@ export default function DataDomainDetailsView() {
         <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2">
             <InfoItem label="ID" value={domain.id} icon={<Hash />} className="lg:col-span-1 md:col-span-2" />
             
-            {domain.parent_id && domain.parent_name && (
+            {domain.parent_info && (
               <InfoItem label="Parent Domain" icon={<ListTree />}>
-                <Link to={`/data-domains/${domain.parent_id}`} className="text-primary hover:underline">
-                  {domain.parent_name}
+                <Link to={`/data-domains/${domain.parent_info.id}`} className="text-primary hover:underline">
+                  {domain.parent_info.name}
                 </Link>
               </InfoItem>
             )}
@@ -220,6 +226,21 @@ export default function DataDomainDetailsView() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Mini Graph Display */}
+      {(domain.parent_info || (domain.children_info && domain.children_info.length > 0)) && (
+        <Card className="mb-6">
+          <CardHeader className='pb-2'>
+            <CardTitle className="text-lg font-semibold flex items-center">
+              <ChevronsUpDown className="h-5 w-5 mr-2 text-primary" />
+              Domain Hierarchy Context
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DataDomainMiniGraph currentDomain={domain} />
+          </CardContent>
+        </Card>
+      )}
 
       {domain.children_count !== undefined && domain.children_count > 0 && (
         <>

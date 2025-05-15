@@ -1,8 +1,17 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel, Field, validator, field_validator
 import json # For parsing stringified lists
+
+# --- Basic Info Model (New) --- #
+class DataDomainBasicInfo(BaseModel):
+    id: UUID
+    name: str
+
+    model_config = {
+        "from_attributes": True
+    }
 
 # --- Base Model --- #
 class DataDomainBase(BaseModel):
@@ -45,6 +54,8 @@ class DataDomainRead(DataDomainBase):
     created_by: str
     parent_name: Optional[str] = Field(None, description="Name of the parent data domain, if any.")
     children_count: int = Field(0, description="Number of direct child data domains.")
+    parent_info: Optional[DataDomainBasicInfo] = Field(None, description="Basic info of the parent domain.")
+    children_info: List[DataDomainBasicInfo] = Field(default_factory=list, description="List of basic info for direct child domains.")
 
     # Validator to parse stringified list from DB before standard validation
     @field_validator('owner', 'tags', mode='before')
