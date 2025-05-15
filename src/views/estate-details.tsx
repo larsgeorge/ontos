@@ -70,7 +70,7 @@ export default function EstateDetailsView() {
 
   useEffect(() => {
     // Set static breadcrumb for Estate Manager parent
-    setStaticSegments([{ label: 'Estate Manager', path: '/estates' }]);
+    setStaticSegments([{ label: 'Estate Manager', path: '/estate-manager' }]);
 
     if (estateId) {
       fetchEstateDetails(estateId);
