@@ -191,57 +191,51 @@ export default function DataDomainsView() {
     },
   ], [canWrite, canAdmin]);
 
-  if (loading || permissionsLoading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!canRead) {
-    return (
-       <div className="container mx-auto py-10">
-            <Alert variant="destructive" className="mb-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>Permission Denied: Cannot view data domains.</AlertDescription>
-            </Alert>
-       </div>
-    );
-  }
-
   return (
-    <div className="container mx-auto py-10">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-           <BoxSelect className="w-8 h-8" />
-           Data Domains
-        </h1>
-        <DataDomainFormDialog
-          isOpen={isFormOpen}
-          onOpenChange={setIsFormOpen}
-          domain={editingDomain}
-          onSubmitSuccess={handleFormSubmitSuccess}
-          trigger={
-            <Button onClick={handleOpenCreateDialog} disabled={!canWrite}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Add New Domain
-            </Button>
-          }
-        />
-      </div>
+    <div className="py-6">
+      <h1 className="text-3xl font-bold mb-6 flex items-center gap-2">
+         <BoxSelect className="w-8 h-8" />
+         Data Domains
+      </h1>
 
-      {error && (
+      {(loading || permissionsLoading) ? (
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
+      ) : !canRead ? (
+         <div> {/* Removed redundant 'container mx-auto py-10' from here */}
+              <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>Permission Denied: Cannot view data domains.</AlertDescription>
+              </Alert>
+         </div>
+      ) : error ? (
           <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>Error loading data: {error}</AlertDescription>
           </Alert>
+      ) : (
+        <>
+          <DataTable 
+             columns={columns} 
+             data={domains} 
+             searchColumn="name"
+             toolbarActions={
+               <DataDomainFormDialog
+                 isOpen={isFormOpen}
+                 onOpenChange={setIsFormOpen}
+                 domain={editingDomain}
+                 onSubmitSuccess={handleFormSubmitSuccess}
+                 trigger={
+                   <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading}>
+                     <PlusCircle className="mr-2 h-4 w-4" /> Add New Domain
+                   </Button>
+                 }
+               />
+             }
+          />
+        </>
       )}
-
-      <DataTable 
-         columns={columns} 
-         data={domains} 
-         searchColumn="name"
-      />
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
