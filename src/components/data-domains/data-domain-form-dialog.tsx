@@ -27,12 +27,14 @@ interface DataDomainFormDialogProps {
   allDomains: DataDomain[];
 }
 
+const NO_PARENT_VALUE = "__NO_PARENT_SELECTED__"; // Constant for "No Parent" option
+
 const formSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }).max(100),
   description: z.string().max(500, { message: "Description must not exceed 500 characters." }).optional().nullable(),
   owner: z.string().min(1, { message: "Owner(s) are required. Enter comma-separated values." }),
   tags: z.string().optional().nullable(),
-  parent_id: z.string().uuid().optional().nullable().or(z.literal('')),
+  parent_id: z.string().uuid().optional().nullable().or(z.literal(NO_PARENT_VALUE)), // Allow NO_PARENT_VALUE
 });
 
 export function DataDomainFormDialog({
@@ -54,7 +56,7 @@ export function DataDomainFormDialog({
       description: domain?.description || "",
       owner: domain?.owner?.join(', ') || "",
       tags: domain?.tags?.join(', ') || "",
-      parent_id: domain?.parent_id || "",
+      parent_id: domain?.parent_id ?? NO_PARENT_VALUE, // Use NO_PARENT_VALUE for null/undefined
     },
   });
 
@@ -65,7 +67,7 @@ export function DataDomainFormDialog({
         description: domain?.description || "",
         owner: domain?.owner?.join(', ') || "",
         tags: domain?.tags?.join(', ') || "",
-        parent_id: domain?.parent_id || "",
+        parent_id: domain?.parent_id ?? NO_PARENT_VALUE, // Use NO_PARENT_VALUE for null/undefined
       });
     }
   }, [isOpen, domain, form, allDomains]);
@@ -79,7 +81,7 @@ export function DataDomainFormDialog({
       description: values.description,
       owner: values.owner.split(',').map(s => s.trim()).filter(s => s !== ""),
       tags: values.tags ? values.tags.split(',').map(s => s.trim()).filter(s => s !== "") : null,
-      parent_id: values.parent_id === "" ? null : values.parent_id,
+      parent_id: values.parent_id === NO_PARENT_VALUE ? null : values.parent_id, // Convert back to null for API
     };
 
     if (domain?.id) {
@@ -188,14 +190,17 @@ export function DataDomainFormDialog({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Parent Domain</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
+                <Select
+                  onValueChange={field.onChange}
+                  value={field.value ?? NO_PARENT_VALUE}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a parent domain (optional)" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="">No Parent</SelectItem>
+                    <SelectItem value={NO_PARENT_VALUE}>No Parent</SelectItem>
                     {parentDomainOptions.map((d) => (
                       <SelectItem key={d.id} value={d.id}>
                         {d.name}
