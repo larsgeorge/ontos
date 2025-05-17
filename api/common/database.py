@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker, Session as SQLAlchemySession
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.schema import CreateTable
 from sqlalchemy import pool
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, URL
 from sqlalchemy import event
 
 from alembic import command
@@ -229,14 +229,31 @@ def get_db_url(settings: Settings) -> str:
     if settings.DATABASE_TYPE == "postgres":
         if not all([settings.POSTGRES_HOST, settings.POSTGRES_USER, settings.POSTGRES_PASSWORD, settings.POSTGRES_DB]):
             raise ValueError("PostgreSQL connection details (Host, User, Password, DB) are missing in settings.")
-        # Using psycopg2 driver
-        url = (
-            f"postgresql+psycopg2://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@"
-            f"{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
-            f"?sslmode=require"
+
+        query_params = {}
+        if settings.POSTGRES_DB_SCHEMA:
+            # For options like search_path, it's typically passed as a single string value for the 'options' key.
+            # The -c part is a command-line option syntax for psql, which some drivers interpret.
+            query_params["options"] = f"-csearch_path={settings.POSTGRES_DB_SCHEMA},public"
+            logger.info(f"PostgreSQL schema will be set via options: {settings.POSTGRES_DB_SCHEMA}")
+        else:
+            logger.info("No specific PostgreSQL schema configured, using default (public).")
+        
+        # Add other options like sslmode if needed
+        # query_params["sslmode"] = "require" 
+
+        db_url_obj = URL.create(
+            drivername="postgresql+psycopg2",
+            username=settings.POSTGRES_USER,
+            password=settings.POSTGRES_PASSWORD,
+            host=settings.POSTGRES_HOST,
+            port=settings.POSTGRES_PORT,
+            database=settings.POSTGRES_DB,
+            query=query_params if query_params else None  # Pass None if no query params
         )
-        logger.debug(f"Constructed PostgreSQL SQLAlchemy URL (credentials redacted, sslmode=require)")
-        return url
+        url_str = db_url_obj.render_as_string(hide_password=False) # Render with password for engine
+        logger.debug(f"Constructed PostgreSQL SQLAlchemy URL using URL.create (credentials redacted in log): {db_url_obj.render_as_string(hide_password=True)}")
+        return url_str
     elif settings.DATABASE_TYPE == "databricks":
         token = os.getenv("DATABRICKS_TOKEN")
         if not settings.DATABRICKS_HOST or not settings.DATABRICKS_HTTP_PATH:
@@ -392,7 +409,7 @@ def init_db() -> None:
         alembic_cfg_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..' , 'alembic.ini'))
         logger.info(f"Loading Alembic configuration from: {alembic_cfg_path}")
         alembic_cfg = AlembicConfig(alembic_cfg_path)
-        alembic_cfg.set_main_option("sqlalchemy.url", db_url) # Ensure Alembic uses the same URL
+        alembic_cfg.set_main_option("sqlalchemy.url", db_url.replace("%", "%%")) # Ensure Alembic uses the same URL
         script = ScriptDirectory.from_config(alembic_cfg)
         head_revision = script.get_current_head()
         logger.info(f"Alembic Head Revision: {head_revision}")
@@ -438,6 +455,22 @@ def init_db() -> None:
         # Ensure all tables defined in Base metadata exist
         logger.info("Verifying/creating tables based on SQLAlchemy models...")
         is_databricks = settings.DATABASE_TYPE == 'databricks'
+        
+        # Schema for create_all if PostgreSQL
+        schema_to_create_in = None
+        if settings.DATABASE_TYPE == "postgres" and settings.POSTGRES_DB_SCHEMA:
+            schema_to_create_in = settings.POSTGRES_DB_SCHEMA
+            # We need to ensure this schema exists before calling create_all if it's not 'public'
+            # and if tables don't explicitly define their schema.
+            # SQLAlchemy create_all does not create schemas.
+            # The search_path option in the URL handles where tables are looked for and created if no schema is specified on the Table object.
+            # However, for explicit control, ensuring schema existence might be needed.
+            # For now, relying on search_path. If schema needs explicit creation:
+            # with engine.connect() as connection:
+            # connection.execute(sqlalchemy.text(f"CREATE SCHEMA IF NOT EXISTS {schema_to_create_in}"))
+            # connection.commit()
+            logger.info(f"PostgreSQL: Tables will be targeted for schema '{schema_to_create_in}' via search_path or model definitions.")
+
         if is_databricks:
             logger.info("Databricks dialect detected. Modifying metadata for DDL generation.")
             indexes_to_remove = []
@@ -475,7 +508,9 @@ def init_db() -> None:
 
         # Now, call create_all. It will operate on the potentially modified metadata.
         logger.info("Executing Base.metadata.create_all()...")
-        Base.metadata.create_all(bind=_engine)
+        Base.metadata.create_all(bind=_engine) # schema argument is not directly used here if search_path is set.
+                                               # If tables have schema set in their definition, that's used.
+                                               # Otherwise, the first schema in search_path is used.
         logger.info("Database tables checked/created by create_all.")
     except Exception as e:
         logger.critical(f"Database initialization failed: {e}", exc_info=True)
