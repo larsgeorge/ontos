@@ -17,6 +17,7 @@ from databricks.sdk import WorkspaceClient # Added for WorkspaceClientDep
 from api.controller.data_contracts_manager import DataContractsManager
 from api.controller.business_glossaries_manager import BusinessGlossariesManager
 from api.controller.search_manager import SearchManager
+from api.controller.tags_manager import TagsManager # Import TagsManager
 
 # Import base dependencies
 from api.common.database import get_session_factory # Import the factory function
@@ -186,3 +187,20 @@ AuditCurrentUserDep = Annotated[UserInfo, Depends(get_current_user_details_for_a
 # from api.controller.data_products_manager import DataProductsManager
 # from api.common.manager_dependencies import get_data_products_manager
 # DataProductsManagerDep = Annotated[DataProductsManager, Depends(get_data_products_manager)]
+
+# --- TagsManager Dependency ---
+async def get_tags_manager(request: Request) -> TagsManager:
+    manager = getattr(request.app.state, 'tags_manager', None)
+    if manager is None:
+        logger.critical("TagsManager instance not found in app.state!")
+        raise HTTPException(status_code=500, detail="Tags service is not available.")
+    if not isinstance(manager, TagsManager):
+        logger.critical(f"Object found at app.state.tags_manager is not a TagsManager instance (Type: {type(manager)})!")
+        raise HTTPException(status_code=500, detail="Tags service configuration error.")
+    return manager
+
+# Type alias for dependency injection
+TagsManagerDep = Annotated[TagsManager, Depends(get_tags_manager)]
+
+# --- Feature Flags Manager Dependency (Example if you add one) ---
+# async def get_feature_flags_manager(request: Request) -> FeatureFlagsManager:

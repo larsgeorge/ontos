@@ -5,10 +5,10 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from api.common.repository import CRUDBase
-from api.db_models.audit_log import AuditLog
-from api.models.audit_log import AuditLogCreate # Will create soon
+from api.models.audit_log import AuditLogCreate  # Pydantic model for creation
+from api.db_models.audit_log import AuditLogDb # Corrected import
 
-class AuditLogRepository(CRUDBase[AuditLog, AuditLogCreate, None]):
+class AuditLogRepository(CRUDBase[AuditLogDb, AuditLogCreate, AuditLogCreate]):
     
     async def get_multi(
         self,
@@ -22,7 +22,7 @@ class AuditLogRepository(CRUDBase[AuditLog, AuditLogCreate, None]):
         feature: Optional[str] = None,
         action: Optional[str] = None,
         success: Optional[bool] = None,
-    ) -> Sequence[AuditLog]:
+    ) -> Sequence[AuditLogDb]:
         """Retrieve multiple audit logs with filtering and pagination."""
         statement = select(self.model).order_by(self.model.timestamp.desc())
 
@@ -75,4 +75,4 @@ class AuditLogRepository(CRUDBase[AuditLog, AuditLogCreate, None]):
         return result.scalar_one()
 
 
-audit_log_repository = AuditLogRepository(AuditLog) 
+audit_log_repository = AuditLogRepository(AuditLogDb) 

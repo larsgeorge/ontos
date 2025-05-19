@@ -39,6 +39,7 @@ from api.routes import (
     user_routes,
     audit_routes,
     workspace_routes,
+    tags_routes,
 )
 
 from api.common.database import init_db, get_session_factory, SQLAlchemySession
@@ -54,7 +55,9 @@ from api.controller.authorization_manager import AuthorizationManager
 from api.utils.startup_tasks import (
     initialize_database,
     initialize_managers,
-    load_initial_data
+    load_initial_data,
+    startup_event_handler,
+    shutdown_event_handler
 )
 
 
@@ -163,6 +166,7 @@ user_routes.register_routes(app)
 audit_routes.register_routes(app)
 data_domains_routes.register_routes(app)
 workspace_routes.register_routes(app)
+tags_routes.register_routes(app)
 
 # Define other specific API routes BEFORE the catch-all
 @app.get("/api/time")
@@ -187,6 +191,8 @@ def serve_spa(full_path: str):
     # If it starts with api/ or static/ but wasn't handled by a router/StaticFiles,
     # FastAPI will return its default 404 Not Found, which is correct.
     # No explicit return needed here for that case.
+
+logger.info("All routes registered.")
 
 if __name__ == '__main__':
     import uvicorn

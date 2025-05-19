@@ -6,7 +6,7 @@ import json # Needed for parsing JSON strings
 from api.common.repository import CRUDBase
 from api.models.data_products import DataProduct as DataProductApi, Info, InputPort, OutputPort # Pydantic models
 # Import all relevant DB models
-from api.db_models.data_products import (DataProductDb, InfoDb, InputPortDb, OutputPortDb, Tag)
+from api.db_models.data_products import (DataProductDb, InfoDb, InputPortDb, OutputPortDb)
 from api.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -22,25 +22,6 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
     # We can override methods here if needed, e.g., for complex queries or specific logic.
     # For basic CRUD with JSON fields, the base class might suffice initially.
     # However, let's override create and update to show potential mapping/handling.
-
-    def _get_or_create_tags(self, db: Session, tag_names: List[str]) -> List[Tag]:
-        """Finds existing tags or creates new ones."""
-        tags = []
-        if not tag_names: return tags
-        
-        existing_tags = db.query(Tag).filter(Tag.name.in_(tag_names)).all()
-        existing_names = {t.name for t in existing_tags}
-        tags.extend(existing_tags)
-        
-        new_names = set(tag_names) - existing_names
-        for name in new_names:
-            new_tag = Tag(name=name)
-            tags.append(new_tag)
-            db.add(new_tag) # Add new tags to session
-            
-        # Flush to get IDs if needed immediately, but commit handles it later
-        # db.flush()
-        return tags
 
     # Repository create method now expects the validated Pydantic model
     def create(self, db: Session, *, obj_in: DataProductApi) -> DataProductDb:
@@ -108,8 +89,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 db_obj.outputPorts.append(port_obj)
             
         # 5. Handle Tags (Many-to-Many)
-        if obj_in.tags:
-             db_obj.tags = self._get_or_create_tags(db, obj_in.tags)
+        # Tags are now handled by the DataProductsManager using EntityTagRepository
 
         try:
             db.add(db_obj) # Adding parent cascades adds related objects
@@ -207,8 +187,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                      db_obj.outputPorts.append(port_obj)
 
             # Update Tags (Many-to-Many)
-            if 'tags' in update_data:
-                db_obj.tags = self._get_or_create_tags(db, update_data['tags'])
+            # Tags are now handled by the DataProductsManager using EntityTagRepository
 
             db.add(db_obj)
             db.flush()
@@ -229,7 +208,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 selectinload(self.model.info),
                 selectinload(self.model.inputPorts),
                 selectinload(self.model.outputPorts),
-                selectinload(self.model.tags)
+                # selectinload(self.model.tags) # Tags are loaded via DataProductManager now
             ).filter(self.model.id == id).first()
         except Exception as e:
             logger.error(f"Database error fetching normalized DataProduct by id {id}: {e}", exc_info=True)
@@ -245,7 +224,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                  selectinload(self.model.info),
                  selectinload(self.model.inputPorts),
                  selectinload(self.model.outputPorts),
-                 selectinload(self.model.tags)
+                 # selectinload(self.model.tags) # Tags are loaded via DataProductManager now
             ).offset(skip).limit(limit).all()
         except Exception as e:
             logger.error(f"Database error fetching multiple normalized DataProducts: {e}", exc_info=True)

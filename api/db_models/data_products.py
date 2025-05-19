@@ -7,23 +7,22 @@ import json # For links/custom
 from api.common.database import Base
 
 # --- Association Table for Many-to-Many Tags ---
-data_product_tag_association = Table(
-    'data_product_tag_association', Base.metadata,
-    Column('data_product_id', String, ForeignKey('data_products.id'), primary_key=True),
-    Column('tag_id', String, ForeignKey('tags.id'), primary_key=True)
-)
+# data_product_tag_association = Table(
+#     'data_product_tag_association', Base.metadata,
+#     Column('data_product_id', String, ForeignKey('data_products.id'), primary_key=True),
+#     Column('tag_id', String, ForeignKey('tags.id'), primary_key=True)
+# )
 
 # --- Tag Table (Corrected for Databricks Unique Constraint) ---
-class Tag(Base):
-    __tablename__ = 'tags'
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = Column(String, nullable=False)
-
-    # Define uniqueness using a table-level constraint
-    __table_args__ = (UniqueConstraint('name', name='uq_tags_name'),)
-
-    def __repr__(self):
-        return f"<Tag(id='{self.id}', name='{self.name}')>"
+# class Tag(Base):
+#     __tablename__ = 'tags'
+#     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+#     
+#     # Define uniqueness using a table-level constraint
+#     __table_args__ = (UniqueConstraint('name', name='uq_tags_name'),)
+#     
+#     def __repr__(self):
+#         return f"<Tag(id='{self.id}', name='{self.name}')>"
 
 # --- Main DataProduct Table (Corrected Name & Relationships) ---
 class DataProductDb(Base):
@@ -42,7 +41,7 @@ class DataProductDb(Base):
     info = relationship("InfoDb", back_populates="data_product", uselist=False, cascade="all, delete-orphan")
     inputPorts = relationship("InputPortDb", back_populates="data_product", cascade="all, delete-orphan", lazy="selectin")
     outputPorts = relationship("OutputPortDb", back_populates="data_product", cascade="all, delete-orphan", lazy="selectin")
-    tags = relationship("Tag", secondary=data_product_tag_association, backref="data_products", lazy="selectin")
+    # tags = relationship("Tag", secondary=data_product_tag_association, backref="data_products", lazy="selectin") # REMOVED relationship to old Tag model
 
     # Kept as JSON Strings
     links = Column(String, nullable=True, default='{}')

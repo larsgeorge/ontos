@@ -4,7 +4,7 @@ from sqlalchemy import Column, DateTime, String, JSON, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from api.common.database import Base
 
-class AuditLog(Base):
+class AuditLogDb(Base):
     __tablename__ = 'audit_logs'
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

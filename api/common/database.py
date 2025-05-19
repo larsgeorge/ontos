@@ -42,6 +42,14 @@ try:
     from api.db_models import data_products
     from api.db_models import notifications
     from api.db_models import data_domains
+    from api.db_models.data_products import DataProductDb, InfoDb, InputPortDb, OutputPortDb
+    from api.db_models.settings import AppRoleDb
+    # from api.db_models.users import UserActivityDb, UserSearchHistoryDb # Commented out due to missing file
+    from api.db_models.audit_log import AuditLogDb
+    from api.db_models.notifications import NotificationDb
+    # from api.db_models.business_glossary import GlossaryDb, TermDb, CategoryDb, term_category_association, term_related_terms, term_asset_association # Commented out due to missing file
+    # Add new tag models
+    from api.db_models.tags import TagDb, TagNamespaceDb, TagNamespacePermissionDb, EntityTagAssociationDb
     # Add imports for any other future model modules here
     logger.debug("DB model modules imported successfully.")
 except ImportError as e:

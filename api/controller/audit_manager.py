@@ -12,7 +12,7 @@ from api.common.config import Settings
 from api.common.logging import get_logger
 from api.models.audit_log import AuditLogCreate, AuditLogRead
 from api.repositories.audit_log_repository import audit_log_repository
-from api.db_models.audit_log import AuditLog # Import the DB model
+from api.db_models.audit_log import AuditLogDb # Import the DB model
 from api.common.database import get_session_factory # Import session factory
 
 # Use the main logger configuration but add a specific handler for audit logs

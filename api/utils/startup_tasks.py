@@ -26,6 +26,7 @@ from api.controller.authorization_manager import AuthorizationManager
 from api.controller.notifications_manager import NotificationsManager
 from api.controller.audit_manager import AuditManager
 from api.controller.data_domains_manager import DataDomainManager # Import new manager
+from api.controller.tags_manager import TagsManager # Import TagsManager
 
 # Import repositories (needed for manager instantiation)
 from api.repositories.settings_repository import AppRoleRepository
@@ -36,11 +37,11 @@ from api.repositories.data_domain_repository import DataDomainRepository # Impor
 # Import the required DB model
 from api.db_models.settings import AppRoleDb
 # Import the AuditLog DB model
-from api.db_models.audit_log import AuditLog
+from api.db_models.audit_log import AuditLogDb
 # Import the DataAssetReviewRequestDb DB model
 from api.db_models.data_asset_reviews import DataAssetReviewRequestDb
 # Import the DataProductDb DB model
-from api.db_models.data_products import DataProductDb
+from api.db_models.data_products import DataProductDb, InfoDb, InputPortDb, OutputPortDb
 
 # Import Demo Data Loader
 # from api.utils.demo_data_loader import load_demo_data # Removed unused import
@@ -48,6 +49,18 @@ from api.db_models.data_products import DataProductDb
 # from api.common.search_registry import SEARCHABLE_ASSET_MANAGERS # Not strictly needed for this approach
 # Import the CORRECT base class for type checking
 from api.common.search_interfaces import SearchableAsset
+
+# Import repositories that managers might need
+from api.repositories.data_products_repository import data_product_repo
+from api.repositories.settings_repository import app_role_repo
+# Import tag repositories
+from api.repositories.tags_repository import (
+    tag_namespace_repo, tag_repo, tag_namespace_permission_repo, entity_tag_repo
+)
+
+from api.common.search_registry import SEARCHABLE_ASSET_MANAGERS
+from api.common.config import get_settings
+from api.common.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -92,7 +105,7 @@ def initialize_managers(app: FastAPI):
         logger.debug("Initializing repositories...")
         app_role_repo = AppRoleRepository(model=AppRoleDb)
         # Pass the DB model to the repository constructor
-        audit_repo = AuditLogRepository(model=AuditLog)
+        audit_repo = AuditLogRepository(model=AuditLogDb)
         data_asset_review_repo = DataAssetReviewRepository(model=DataAssetReviewRequestDb)
         data_product_repo = DataProductRepository(model=DataProductDb)
         data_domain_repo = DataDomainRepository()
@@ -161,6 +174,41 @@ def initialize_managers(app: FastAPI):
         logger.info(f"Found {len(searchable_managers_instances)} managers inheriting from SearchableAsset by checking app.state._state.values().")
         app.state.search_manager = SearchManager(searchable_managers=searchable_managers_instances)
         logger.info("SearchManager initialized.")
+
+        # Instantiate and store TagsManager
+        try:
+            tags_manager = TagsManager(
+                namespace_repo=tag_namespace_repo,
+                tag_repository=tag_repo,
+                permission_repo=tag_namespace_permission_repo
+                # entity_assoc_repo will be used when integrating with other features
+            )
+            app.state.tags_manager = tags_manager
+            SEARCHABLE_ASSET_MANAGERS.append(tags_manager) # Register for search
+            logger.info("TagsManager initialized and registered for search.")
+
+            # Ensure default tag namespace exists (using a new session for this setup task)
+            with SessionLocal() as setup_db:
+                try:
+                    tags_manager.get_or_create_default_namespace(setup_db, user_email="system@startup.ucapp")
+                    logger.info("Default tag namespace ensured.")
+                except Exception as e_ns:
+                    logger.error(f"Failed to ensure default tag namespace: {e_ns}", exc_info=True)
+                    # Decide if this is a fatal error for startup
+
+        except Exception as e:
+            logger.error(f"Error initializing TagsManager: {e}", exc_info=True)
+            # Decide if this is a fatal error
+
+        # --- Instantiate MetadataManager (if it exists and needs to be in app.state) --- 
+        # This was removed in previous steps as tag CRUD moved to TagsManager
+        # If MetadataManager still has other responsibilities, initialize it here.
+        # For now, assuming it's not strictly needed for basic app startup if its main role was tags.
+        # if hasattr(app.state, 'ws_client'): # Example: if it needs ws_client
+        #     metadata_manager = MetadataManager(ws_client=app.state.ws_client)
+        #     app.state.metadata_manager = metadata_manager
+        #     SEARCHABLE_ASSET_MANAGERS.append(metadata_manager) # If it's searchable
+        #     logger.info("MetadataManager initialized.")
 
         logger.info("All managers instantiated and stored in app.state.")
         
@@ -234,3 +282,34 @@ def load_initial_data(app: FastAPI) -> None:
         db.rollback()
     finally:
         db.close() 
+
+async def startup_event_handler(app: FastAPI):
+    logger.info("Executing application startup event handler...")
+    try:
+        initialize_database() # Step 1: Setup Database
+        logger.info("Database initialization sequence complete.")
+
+        # Step 2: Initialize managers (requires ws_client to be set up if managers need it)
+        # Create a temporary session for manager initializations that require DB access (like default namespace)
+        # Note: Managers themselves should request sessions via DBSessionDep for their operational methods.
+        initialize_managers(app) # Pass the app to store managers in app.state
+        logger.info("Managers initialization sequence complete.")
+
+        # Step 3: Load initial data (requires managers to be initialized)
+        # This function now creates its own session for data loading operations.
+        load_initial_data(app) 
+        logger.info("Initial data loading sequence complete.")
+
+        logger.info("Application startup event handler finished successfully.")
+    except Exception as e:
+        logger.critical(f"CRITICAL ERROR during application startup: {e}", exc_info=True)
+        # Depending on the severity, you might want to prevent the app from starting
+        # or raise the exception to let FastAPI handle it (which might stop the server).
+        # For now, just logging critically.
+
+
+async def shutdown_event_handler(app: FastAPI):
+    # Implement shutdown logic here
+    logger.info("Executing application shutdown event handler...")
+    # Add any necessary cleanup or resource release logic here
+    logger.info("Application shutdown event handler finished successfully.") 
