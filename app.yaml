@@ -20,6 +20,8 @@ env:
     valueFrom: "db_password"
   - name: "POSTGRES_DB"
     value: "app_ucsak"
+  - name: "POSTGRES_DB_SCHEMA"
+    value: "app_ucsak"
 
   - name: "DATABRICKS_WAREHOUSE_ID"
     valueFrom: "sql_warehouse"
