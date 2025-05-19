@@ -26,9 +26,9 @@ async def get_notifications(
 ):
     """Get notifications filtered for the current user."""
     try:
-        logger.info(f"Retrieving notifications for user: {user_info.email} with groups: {user_info.groups}")
+        logger.debug(f"Retrieving notifications for user: {user_info.email} with groups: {user_info.groups}")
         notifications = manager.get_notifications(db=db, user_info=user_info)
-        logger.info(f"Number of notifications retrieved: {len(notifications)}")
+        logger.debug(f"Number of notifications retrieved: {len(notifications)}")
         return notifications
     except Exception as e:
         logger.error(f"Error retrieving notifications: {e!s}", exc_info=True)

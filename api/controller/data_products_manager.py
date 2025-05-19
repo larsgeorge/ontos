@@ -121,51 +121,7 @@ class DataProductsManager(SearchableAsset):
         try:
             product_db = self._repo.get(db=self._db, id=product_id)
             if product_db:
-                # --- DEBUGGING START ---
-                logger.info(f"--- DEBUG [DataProductsManager get_product] ---")
-                logger.info(f"DB Object Type: {type(product_db)}")
-                logger.info(f"DB Object ID: {product_db.id}")
-                db_has_tags = hasattr(product_db, '_tags')
-                logger.info(f"DB Object has '_tags' attribute: {db_has_tags}")
-                if db_has_tags:
-                     logger.info(f"DB Object '_tags' value: {product_db._tags}")
-                     logger.info(f"DB Object '_tags' type: {type(product_db._tags)}")
-                else:
-                     logger.info(f"DB Object '_tags' attribute NOT FOUND.")
-                # --- DEBUGGING END ---
-                
-                # Convert DB model to API model
                 product_api = DataProductApi.from_orm(product_db)
-                
-                # --- DEBUGGING START ---
-                logger.info(f"--- DEBUG [DataProductsManager get_product after from_orm] ---")
-                logger.info(f"API Object Type: {type(product_api)}")
-                logger.info(f"API Object ID: {product_api.id}")
-                api_has_tags = hasattr(product_api, 'tags')
-                logger.info(f"API Object has 'tags' attribute: {api_has_tags}")
-                api_tags_value = "<Error accessing tags>" # Default for logging
-                if api_has_tags:
-                    try:
-                         api_tags_value = product_api.tags # Access the computed field
-                         logger.info(f"API Object 'tags' computed value: {api_tags_value}")
-                         logger.info(f"API Object 'tags' type: {type(api_tags_value)}")
-                    except Exception as e_compute:
-                         logger.error(f"ERROR accessing computed 'tags' field: {e_compute}")
-                else:
-                     logger.info(f"API Object 'tags' attribute NOT FOUND.")
-                # Log the dictionary representation
-                try:
-                    excluded_dump = product_api.model_dump(exclude={'tags'})
-                    logger.info(f"API Object model_dump (excluding tags): {excluded_dump}")
-                except Exception as e_dump_excl:
-                    logger.error(f"ERROR dumping API model (excluding tags): {e_dump_excl}")
-                try:
-                    included_dump = product_api.model_dump()
-                    logger.info(f"API Object model_dump (including tags?): {included_dump}")
-                except Exception as e_dump_incl:
-                    logger.error(f"ERROR dumping API model (including tags?): {e_dump_incl}")
-                # --- DEBUGGING END ---
-                
                 return product_api
             return None
         except SQLAlchemyError as e:

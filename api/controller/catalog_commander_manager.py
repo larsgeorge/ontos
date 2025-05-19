@@ -16,9 +16,9 @@ class CatalogCommanderManager:
         Args:
             client: Databricks workspace client
         """
-        logger.info("Initializing CatalogCommanderManager...")
+        logger.debug("Initializing CatalogCommanderManager...")
         self.client = client
-        logger.info("CatalogCommanderManager initialized successfully")
+        logger.debug("CatalogCommanderManager initialized successfully")
 
     def list_catalogs(self) -> List[Dict[str, Any]]:
         """List all catalogs in the Databricks workspace.
@@ -27,9 +27,9 @@ class CatalogCommanderManager:
             List of catalog information dictionaries
         """
         try:
-            logger.info("Fetching all catalogs from Databricks workspace")
+            logger. debug("Fetching all catalogs from Databricks workspace")
             catalogs = list(self.client.catalogs.list())  # Convert generator to list
-            logger.info(f"Retrieved {len(catalogs)} catalogs from Databricks")
+            logger.debug(f"Retrieved {len(catalogs)} catalogs from Databricks")
 
             result = [{
                 'id': catalog.name,
@@ -39,7 +39,7 @@ class CatalogCommanderManager:
                 'hasChildren': True  # Catalogs can always have schemas
             } for catalog in catalogs]
 
-            logger.info(f"Successfully formatted {len(result)} catalogs")
+            logger.debug(f"Successfully formatted {len(result)} catalogs")
             return result
         except Exception as e:
             logger.error(f"Error in list_catalogs: {e!s}", exc_info=True)
@@ -54,7 +54,7 @@ class CatalogCommanderManager:
         Returns:
             List of schema information dictionaries
         """
-        logger.info(f"Fetching schemas for catalog: {catalog_name}")
+        logger.debug(f"Fetching schemas for catalog: {catalog_name}")
         schemas = list(self.client.schemas.list(catalog_name=catalog_name))  # Convert generator to list
 
         result = [{
@@ -65,7 +65,7 @@ class CatalogCommanderManager:
             'hasChildren': True  # Schemas can always have tables
         } for schema in schemas]
 
-        logger.info(f"Successfully retrieved {len(result)} schemas for catalog {catalog_name}")
+        logger.debug(f"Successfully retrieved {len(result)} schemas for catalog {catalog_name}")
         return result
 
     def list_tables(self, catalog_name: str, schema_name: str) -> List[Dict[str, Any]]:
@@ -78,7 +78,7 @@ class CatalogCommanderManager:
         Returns:
             List of table/view information dictionaries
         """
-        logger.info(f"Fetching tables for schema: {catalog_name}.{schema_name}")
+        logger.debug(f"Fetching tables for schema: {catalog_name}.{schema_name}")
         tables = list(self.client.tables.list(catalog_name=catalog_name, schema_name=schema_name))  # Convert generator to list
 
         result = [{
@@ -89,7 +89,7 @@ class CatalogCommanderManager:
             'hasChildren': False  # Tables/views are leaf nodes
         } for table in tables]
 
-        logger.info(f"Successfully retrieved {len(result)} tables for schema {catalog_name}.{schema_name}")
+        logger.debug(f"Successfully retrieved {len(result)} tables for schema {catalog_name}.{schema_name}")
         return result
 
     def list_views(self, catalog_name: str, schema_name: str) -> List[Dict[str, Any]]:
@@ -102,7 +102,7 @@ class CatalogCommanderManager:
         Returns:
             List of view information dictionaries
         """
-        logger.info(f"Fetching views for schema: {catalog_name}.{schema_name}")
+        logger.debug(f"Fetching views for schema: {catalog_name}.{schema_name}")
         try:
             # Use tables.list and filter for views
             all_tables = list(self.client.tables.list(catalog_name=catalog_name, schema_name=schema_name))
@@ -116,7 +116,7 @@ class CatalogCommanderManager:
                 'hasChildren': False
             } for view in views]
 
-            logger.info(f"Successfully retrieved {len(result)} views for schema {catalog_name}.{schema_name}")
+            logger.debug(f"Successfully retrieved {len(result)} views for schema {catalog_name}.{schema_name}")
             return result
         except Exception as e:
             logger.error(f"Error listing views for {catalog_name}.{schema_name}: {e!s}", exc_info=True)

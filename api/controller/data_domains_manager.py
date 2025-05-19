@@ -19,7 +19,7 @@ class DataDomainManager:
     def __init__(self, repository: DataDomainRepository):
         self.repository = repository
         # self.audit_log_manager = AuditLogManager() # Placeholder: Inject later
-        logger.info("DataDomainManager initialized.")
+        logger.debug("DataDomainManager initialized.")
 
     def _convert_db_to_read_model(self, db_domain: DataDomain) -> DataDomainRead:
         """Helper to convert DB model to Read model, populating parent_name and children_count."""
@@ -75,7 +75,7 @@ class DataDomainManager:
 
     def create_domain(self, db: Session, domain_in: DataDomainCreate, current_user_id: str) -> DataDomainRead:
         """Creates a new data domain."""
-        logger.info(f"Attempting to create data domain: {domain_in.name}")
+        logger.debug(f"Attempting to create data domain: {domain_in.name}")
         
         if domain_in.parent_id:
             parent_domain = self.repository.get(db, domain_in.parent_id)
@@ -103,7 +103,7 @@ class DataDomainManager:
             # A subquery for count in repository.get might be better for children_count.
             # For now, using len(db_domain.children) implicitly assumes they are accessible.
 
-            logger.info(f"Successfully created data domain '{db_domain.name}' with id: {db_domain.id}")
+            logger.debug(f"Successfully created data domain '{db_domain.name}' with id: {db_domain.id}")
             # Load parent again to ensure its name is available for the read model conversion
             # This is needed if the initial refresh didn't fully populate it or if not using joinedload in repo.
             if db_domain.parent_id and not db_domain.parent:
@@ -155,7 +155,7 @@ class DataDomainManager:
 
     def update_domain(self, db: Session, domain_id: UUID, domain_in: DataDomainUpdate, current_user_id: str) -> Optional[DataDomainRead]:
         """Updates an existing data domain."""
-        logger.info(f"Attempting to update data domain with id: {domain_id}")
+        logger.debug(f"Attempting to update data domain with id: {domain_id}")
         db_domain = self.repository.get(db, domain_id) # Get the raw domain first
         if not db_domain:
             logger.warning(f"Data domain with id {domain_id} not found for update.")
@@ -186,7 +186,7 @@ class DataDomainManager:
             db.refresh(updated_db_domain, attribute_names=['parent']) # Ensure parent is loaded if parent_id changed
             # db.refresh(updated_db_domain, attribute_names=['children']) # if children count could change indirectly
 
-            logger.info(f"Successfully updated data domain '{updated_db_domain.name}' (id: {domain_id})")
+            logger.debug(f"Successfully updated data domain '{updated_db_domain.name}' (id: {domain_id})")
             return self._convert_db_to_read_model(updated_db_domain)
         except IntegrityError as e:
              db.rollback()
@@ -205,7 +205,7 @@ class DataDomainManager:
 
     def delete_domain(self, db: Session, domain_id: UUID, current_user_id: str) -> Optional[DataDomainRead]:
         """Deletes a data domain by its ID."""
-        logger.info(f"Attempting to delete data domain with id: {domain_id}")
+        logger.debug(f"Attempting to delete data domain with id: {domain_id}")
         
         db_domain_to_delete = self.repository.get_with_details(db, domain_id) # Load details for return
         if not db_domain_to_delete:
@@ -229,7 +229,7 @@ class DataDomainManager:
             # The actual object `db_domain_to_delete` will become stale after deletion from session.
             self.repository.remove(db=db, id=domain_id)
             # db.commit() is handled by the route typically
-            logger.info(f"Successfully marked data domain '{read_model_of_deleted.name}' (id: {domain_id}) for deletion.")
+            logger.debug(f"Successfully marked data domain '{read_model_of_deleted.name}' (id: {domain_id}) for deletion.")
             return read_model_of_deleted 
         except Exception as e:
             db.rollback()
@@ -239,7 +239,7 @@ class DataDomainManager:
     # --- Demo Data Loading --- #
     def load_initial_data(self, db: Session) -> None:
         """Loads initial data domains from a YAML file if the table is empty."""
-        logger.info("DataDomainManager: Checking if data domains table is empty...")
+        logger.debug("DataDomainManager: Checking if data domains table is empty...")
         try:
             is_empty = self.repository.is_empty(db)
         except Exception as e:
@@ -247,7 +247,7 @@ class DataDomainManager:
              return 
 
         if not is_empty:
-            logger.info("Data domains table is not empty. Skipping initial data loading.")
+            logger.debug("Data domains table is not empty. Skipping initial data loading.")
             return
 
         import yaml
@@ -258,7 +258,7 @@ class DataDomainManager:
             logger.warning(f"Demo data file not found: {data_file}. Cannot load initial domains.")
             return
 
-        logger.info(f"Loading initial data domains from {data_file}...")
+        logger.debug(f"Loading initial data domains from {data_file}...")
         try:
             with open(data_file, 'r') as f:
                 data = yaml.safe_load(f)
@@ -307,7 +307,7 @@ class DataDomainManager:
 
             # Second pass: update parent_id if parent_name was used
             if any('parent_name' in d for d in data['domains']):
-                logger.info("Starting second pass to link parent domains by name...")
+                logger.debug("Starting second pass to link parent domains by name...")
                 for domain_data in data['domains']:
                     parent_name_to_resolve = domain_data.get('parent_name')
                     current_domain_name = domain_data.get('name')
@@ -315,7 +315,7 @@ class DataDomainManager:
                         parent_id_resolved = domains_created_map.get(parent_name_to_resolve)
                         current_domain_id = domains_created_map[current_domain_name]
                         if parent_id_resolved:
-                            logger.info(f"Linking '{current_domain_name}' to parent '{parent_name_to_resolve}' (ID: {parent_id_resolved})")
+                            logger.debug(f"Linking '{current_domain_name}' to parent '{parent_name_to_resolve}' (ID: {parent_id_resolved})")
                             db_domain_to_update = self.repository.get(db, current_domain_id)
                             if db_domain_to_update:
                                 db_domain_to_update.parent_id = parent_id_resolved
@@ -326,7 +326,7 @@ class DataDomainManager:
                             logger.warning(f"Could not resolve parent_name '{parent_name_to_resolve}' for domain '{current_domain_name}'. Skipping parent link.")
             
             db.commit() 
-            logger.info(f"Successfully processed {count} initial data domains over two passes.")
+            logger.debug(f"Successfully processed {count} initial data domains over two passes.")
 
         except yaml.YAMLError as ye:
             logger.error(f"Error parsing YAML file {data_file}: {ye}")

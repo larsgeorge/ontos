@@ -166,13 +166,13 @@ def init_config() -> None:
 
     # Load environment variables from .env file if it exists
     if DOTENV_FILE.exists():
-        logger.info(f"Loading environment from {DOTENV_FILE}")
+        logger.debug(f"Loading environment from {DOTENV_FILE}")
         _settings = Settings(_env_file=DOTENV_FILE)
     else:
-        logger.info("No .env file found, using existing environment variables")
+        logger.debug("No .env file found, using existing environment variables")
         _settings = Settings()
 
-    logger.info(f"Initializing config manager with settings: {_settings}")
+    logger.debug(f"Initializing config manager with settings: {_settings}")
     _config_manager = ConfigManager(_settings)
 
 def get_settings() -> Settings:
