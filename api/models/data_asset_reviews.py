@@ -74,3 +74,15 @@ class DataAssetReviewRequestUpdateStatus(BaseModel):
 class ReviewedAssetUpdate(BaseModel):
     status: ReviewedAssetStatus
     comments: Optional[str] = None
+
+# --- LLM Analysis Models ---
+class AssetAnalysisRequest(BaseModel):
+    asset_content: str = Field(..., description="The content of the asset (e.g., SQL or Python code) to be analyzed.")
+    asset_type: AssetType = Field(..., description="The type of asset being analyzed.")
+
+class AssetAnalysisResponse(BaseModel):
+    request_id: str = Field(..., description="The ID of the review request.")
+    asset_id: str = Field(..., description="The ID of the reviewed asset.")
+    analysis_summary: str = Field(..., description="The LLM-generated summary of the asset review.")
+    model_used: Optional[str] = Field(None, description="The name of the LLM model used for analysis.")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of when the analysis was performed.")

@@ -89,4 +89,13 @@ export interface TablePreview {
   schema: Array<{ name: string; type: string; nullable: boolean }>;
   data: any[];
   total_rows?: number; // Optional based on backend capability
+}
+
+// --- LLM Analysis Types --- //
+export interface AssetAnalysisResponse {
+    request_id: string;
+    asset_id: string;
+    analysis_summary: string;
+    model_used?: string | null;
+    timestamp: string; // ISO date string
 } 

@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     # Mock User Details (for local development when MOCK_USER_DETAILS is True or ENV is LOCAL*)
     MOCK_USER_DETAILS: bool = Field(False, env='MOCK_USER_DETAILS')
 
+    # Databricks Serving Endpoint for LLM
+    SERVING_ENDPOINT: Optional[str] = Field(None, env='SERVING_ENDPOINT')
+
     # Replace nested Config class with model_config dictionary
     model_config = SettingsConfigDict(
         env_file=str(DOTENV_FILE), 

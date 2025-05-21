@@ -4,15 +4,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, SparklesIcon } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from "@/hooks/use-toast";
-import { ReviewedAsset, ReviewedAssetStatus, AssetType, AssetDefinition, TablePreview, ReviewedAssetUpdate } from '@/types/data-asset-review';
+import { 
+    ReviewedAsset, 
+    ReviewedAssetStatus, 
+    AssetType, 
+    AssetDefinition, 
+    TablePreview, 
+    ReviewedAssetUpdate,
+    AssetAnalysisResponse
+} from '@/types/data-asset-review';
 import { DataTable } from "@/components/ui/data-table"; // For table preview
 import { Alert, AlertDescription } from '@/components/ui/alert';
-// Import SyntaxHighlighter
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { RelativeDate } from '@/components/common/relative-date';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Choose a style (e.g., oneLight)
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface AssetReviewEditorProps {
     requestId: string;
@@ -49,6 +58,11 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
     const [comments, setComments] = useState<string>(asset.comments || '');
     const [isSaving, setIsSaving] = useState(false);
 
+    // LLM Analysis State
+    const [analysisResult, setAnalysisResult] = useState<AssetAnalysisResponse | null>(null);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisError, setAnalysisError] = useState<string | null>(null);
+
     // Fetch content based on asset type
     useEffect(() => {
         const fetchContent = async () => {
@@ -56,6 +70,8 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
             setContentError(null);
             setDefinition(null);
             setPreview(null);
+            setAnalysisResult(null); // Reset analysis when asset changes
+            setAnalysisError(null);
 
             try {
                 if (asset.asset_type === AssetType.VIEW || asset.asset_type === AssetType.FUNCTION) {
@@ -86,7 +102,7 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
 
     const handleSaveReview = async () => {
         setIsSaving(true);
-        setContentError(null);
+        // setContentError(null); // Error from content fetching should not block saving review itself
         const payload: ReviewedAssetUpdate = {
             status: currentStatus,
             comments: comments || null,
@@ -96,12 +112,34 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
             const response = await put<ReviewedAsset>(`/api/data-asset-reviews/${requestId}/assets/${asset.id}/status`, payload);
             const updatedAsset = checkApiResponse(response, 'Update Asset Status');
             toast({ title: 'Success', description: `Review for ${asset.asset_fqn} saved.` });
-            onReviewSave(updatedAsset); // Notify parent component
+            onReviewSave(updatedAsset);
         } catch (err: any) {
-            setContentError(err.message || 'Failed to save review.');
-            toast({ title: 'Error', description: `Failed to save review: ${err.message}`, variant: 'destructive' });
+            // Display error related to saving the review, not to be confused with contentError
+            toast({ title: 'Error Saving Review', description: `Failed to save review: ${err.message}`, variant: 'destructive' });
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleAiAnalysis = async () => {
+        if (!requestId || !asset.id) return;
+        setIsAnalyzing(true);
+        setAnalysisError(null);
+        setAnalysisResult(null); 
+
+        try {
+            const response = await api.post<AssetAnalysisResponse>(
+                `/api/data-asset-reviews/${requestId}/assets/${asset.id}/analyze`, 
+                {} 
+            );
+            const result = checkApiResponse(response, 'AI Analysis');
+            setAnalysisResult(result);
+            toast({ title: 'AI Analysis Complete', description: 'Review summary generated.' });
+        } catch (err: any) {
+            setAnalysisError(err.message || 'Failed to perform AI analysis.');
+            toast({ title: 'AI Analysis Error', description: err.message, variant: 'destructive' });
+        } finally {
+            setIsAnalyzing(false);
         }
     };
 
@@ -110,7 +148,7 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
         if (isLoadingContent) {
             return <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
         }
-        if (contentError) {
+        if (contentError && !definition && !preview) { // Only show general content error if no specific content could be loaded
              return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{contentError}</AlertDescription></Alert>;
         }
 
@@ -160,11 +198,11 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
             return <p className="text-sm text-muted-foreground">Model review details not yet implemented.</p>;
         }
 
-        return <p className="text-sm text-muted-foreground">No preview or definition available for this asset type.</p>;
+        return <p className="text-sm text-muted-foreground">No preview or definition available for this asset type, or content is still loading.</p>;
     };
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6 p-1">
              {/* Asset Details */}
              <div>
                  <h4 className="font-medium text-lg mb-2">Asset Details</h4>
@@ -226,6 +264,41 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
                     <Button variant="outline" disabled>Run Automated Checks (Not Implemented)</Button>
                 </div>
              )}
+
+            {/* AI Analysis Section */}
+            {(asset.asset_type === AssetType.VIEW || asset.asset_type === AssetType.FUNCTION) && (
+                <div className="pt-4 border-t space-y-3">
+                    <h4 className="font-medium text-lg flex items-center">
+                        <SparklesIcon className="w-5 h-5 mr-2 text-purple-500" /> AI Assisted Review
+                    </h4>
+                    <Button onClick={handleAiAnalysis} disabled={isAnalyzing || !definition } >
+                        {isAnalyzing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {analysisResult ? 'Re-run AI Analysis' : 'Run AI Analysis'}
+                    </Button>
+                    {analysisError && (
+                        <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>{analysisError}</AlertDescription>
+                        </Alert>
+                    )}
+                    {analysisResult && (
+                        <Card className="mt-2">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-base">AI Analysis Summary</CardTitle>
+                                <p className="text-xs text-muted-foreground">
+                                    Model: {analysisResult.model_used || 'N/A'} | 
+                                    Generated: <RelativeDate date={analysisResult.timestamp} />
+                                </p>
+                            </CardHeader>
+                            <CardContent>
+                                <pre className="whitespace-pre-wrap text-xs bg-muted p-3 rounded-md overflow-x-auto">
+                                    {analysisResult.analysis_summary}
+                                </pre>
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
+            )}
         </div>
     );
 } 

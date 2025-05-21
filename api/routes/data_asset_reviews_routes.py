@@ -12,7 +12,9 @@ from api.models.data_asset_reviews import (
     DataAssetReviewRequestUpdateStatus,
     ReviewedAsset as ReviewedAssetApi,
     ReviewedAssetUpdate,
-    AssetType
+    AssetType,
+    AssetAnalysisRequest,
+    AssetAnalysisResponse
 )
 
 # Import Manager and other dependencies
@@ -244,6 +246,56 @@ async def get_table_preview(
     except Exception as e:
         logger.exception(f"Error getting preview for asset {asset_id}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error getting table preview.")
+
+@router.post("/data-asset-reviews/{request_id}/assets/{asset_id}/analyze", response_model=AssetAnalysisResponse)
+async def analyze_asset_with_llm(
+    request_id: str,
+    asset_id: str,
+    manager: DataAssetReviewManagerDep,
+):
+    """Triggers LLM analysis for a specific asset's content."""
+    logger.info(f"Received request to analyze asset {asset_id} in request {request_id} with LLM.")
+
+    try:
+        # 1. Fetch the reviewed asset to get its FQN and type
+        # get_reviewed_asset is synchronous, so it can be called directly.
+        reviewed_asset_api = manager.get_reviewed_asset(request_id=request_id, asset_id=asset_id)
+        if not reviewed_asset_api:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reviewed asset not found")
+
+        # 2. Fetch the asset's definition (content) - this is an async call
+        asset_content = await manager.get_asset_definition(
+            asset_fqn=reviewed_asset_api.asset_fqn,
+            asset_type=reviewed_asset_api.asset_type
+        )
+
+        if asset_content is None:
+            # Consider if asset_type is TABLE or MODEL, for which definition might be None
+            # but we might want to send schema or other metadata. For now, only code.
+            if reviewed_asset_api.asset_type not in [AssetType.VIEW, AssetType.FUNCTION]:
+                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"LLM content analysis currently only supports VIEW or FUNCTION types, not {reviewed_asset_api.asset_type.value}. Content could not be retrieved.") 
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset content not found or not available for analysis.")
+
+        # 3. Call the manager's analysis method (which is synchronous)
+        # To call a synchronous method from an async route, FastAPI handles it by running it in a thread pool.
+        analysis_result = manager.analyze_asset_content(
+            request_id=request_id,
+            asset_id=asset_id,
+            asset_content=asset_content,
+            asset_type=reviewed_asset_api.asset_type
+        )
+
+        if not analysis_result:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="LLM analysis failed or returned no result. Check server logs.")
+
+        return analysis_result
+
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during LLM analysis for asset {asset_id}: {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Unexpected error during LLM analysis for asset {asset_id} in request {request_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
 # --- Register Routes (if using a central registration pattern) --- #
 def register_routes(app):
