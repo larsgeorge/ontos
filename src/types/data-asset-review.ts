@@ -22,6 +22,8 @@ export enum AssetType {
     VIEW = "view",
     FUNCTION = "function",
     MODEL = "model",
+    VOLUME = "volume",
+    NOTEBOOK = "notebook",
     // Add others as needed
 }
 

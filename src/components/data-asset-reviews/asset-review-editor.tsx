@@ -22,6 +22,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { RelativeDate } from '@/components/common/relative-date';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import ReactMarkdown from 'react-markdown';
 
 interface AssetReviewEditorProps {
     requestId: string;
@@ -74,8 +75,7 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
             setAnalysisError(null);
 
             try {
-                if (asset.asset_type === AssetType.VIEW || asset.asset_type === AssetType.FUNCTION) {
-                    // Fetch definition (returns plain text)
+                if (asset.asset_type === AssetType.VIEW || asset.asset_type === AssetType.FUNCTION || asset.asset_type === AssetType.NOTEBOOK) {
                     const response = await fetch(`/api/data-asset-reviews/${requestId}/assets/${asset.id}/definition`);
                     if (!response.ok) {
                         const errorText = await response.text();
@@ -148,26 +148,24 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
         if (isLoadingContent) {
             return <div className="flex justify-center items-center h-40"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
         }
-        if (contentError && !definition && !preview) { // Only show general content error if no specific content could be loaded
+        if (contentError && !definition && !preview) { 
              return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{contentError}</AlertDescription></Alert>;
         }
 
         if (definition !== null) {
-            // Determine language based on asset type (simple heuristic)
-            const language = asset.asset_type === AssetType.FUNCTION ? 'python' : 'sql';
+            const language = (asset.asset_type === AssetType.FUNCTION || asset.asset_type === AssetType.NOTEBOOK) ? 'python' : 'sql';
             return (
-                <div className="border rounded max-h-96 overflow-auto text-sm">
-                    {/* Use SyntaxHighlighter */}
+                <div className="border rounded text-sm"> 
                     <SyntaxHighlighter
                         language={language}
-                        style={oneLight} // Use the imported style
-                        showLineNumbers // Optional: Show line numbers
+                        style={oneLight} 
+                        showLineNumbers 
                         wrapLines={true}
                         customStyle={{
-                            margin: 0, // Remove default margins
-                            padding: '0.5rem', // Add some padding
-                            fontSize: '0.75rem', // Match text-xs roughly
-                            maxHeight: '24rem', // Ensure it fits within max-h-96
+                            margin: 0, 
+                            padding: '0.5rem', 
+                            fontSize: '0.75rem', 
+                            maxHeight: '24rem', // SyntaxHighlighter handles its own scroll
                         }}
                     >
                         {definition || ''} 
@@ -177,10 +175,9 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
         }
 
         if (preview !== null) {
-            const columns = preview.schema.map(col => ({
+            const columns = preview.schema.map((col: { name: string; type: string; nullable: boolean }) => ({
                 accessorKey: col.name,
                 header: col.name,
-                // Basic cell rendering, consider type formatting
                 cell: ({ row }: { row: any }) => <span className="text-xs font-mono truncate" title={String(row.getValue(col.name))}>{String(row.getValue(col.name))}</span>,
             }));
             return (
@@ -188,7 +185,6 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
                     <DataTable
                         columns={columns}
                         data={preview.data}
-                        // Enable pagination if desired, might need adjustments
                     />
                 </div>
             );
@@ -265,13 +261,17 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
                 </div>
              )}
 
-            {/* AI Analysis Section */}
-            {(asset.asset_type === AssetType.VIEW || asset.asset_type === AssetType.FUNCTION) && (
+            {/* AI Analysis Section - Conditionally shown for VIEW and FUNCTION */}
+            {(asset.asset_type === AssetType.VIEW || asset.asset_type === AssetType.FUNCTION || asset.asset_type === AssetType.NOTEBOOK) && (
                 <div className="pt-4 border-t space-y-3">
                     <h4 className="font-medium text-lg flex items-center">
                         <SparklesIcon className="w-5 h-5 mr-2 text-purple-500" /> AI Assisted Review
                     </h4>
-                    <Button onClick={handleAiAnalysis} disabled={isAnalyzing || !definition } >
+                    <Button 
+                        onClick={handleAiAnalysis} 
+                        disabled={isAnalyzing || isLoadingContent || !definition}
+                        title={!definition && !isLoadingContent ? "Asset content (definition) must be loaded to run AI analysis." : ""}
+                    >
                         {isAnalyzing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {analysisResult ? 'Re-run AI Analysis' : 'Run AI Analysis'}
                     </Button>
@@ -291,9 +291,11 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
                                 </p>
                             </CardHeader>
                             <CardContent>
-                                <pre className="whitespace-pre-wrap text-xs bg-muted p-3 rounded-md overflow-x-auto">
-                                    {analysisResult.analysis_summary}
-                                </pre>
+                                <div className="markdown-container prose prose-sm dark:prose-invert max-w-none p-3 bg-muted rounded-md overflow-x-auto">
+                                    <ReactMarkdown>
+                                        {analysisResult.analysis_summary}
+                                    </ReactMarkdown>
+                                </div>
                             </CardContent>
                         </Card>
                     )}

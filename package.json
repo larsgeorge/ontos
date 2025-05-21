@@ -61,6 +61,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.16",
     "@types/dagre": "^0.7.52",
     "@types/lodash": "^4.17.16",
     "@vitejs/plugin-react": "^4.3.4",

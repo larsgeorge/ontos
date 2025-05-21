@@ -25,7 +25,9 @@ class AssetType(str, Enum):
     VIEW = "view"
     FUNCTION = "function"
     MODEL = "model"
-    # Add others as needed, e.g., NOTEBOOK, DASHBOARD, JOB
+    VOLUME = "volume"
+    NOTEBOOK = "notebook"
+    # Add others as needed, e.g., DASHBOARD, JOB
 
 # --- Pydantic Models --- #
 

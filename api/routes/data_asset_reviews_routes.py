@@ -191,8 +191,8 @@ async def get_asset_definition(
         if not reviewed_asset:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reviewed asset not found")
 
-        if reviewed_asset.asset_type not in [AssetType.VIEW, AssetType.FUNCTION]:
-             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Asset definition can only be fetched for VIEW or FUNCTION types, not {reviewed_asset.asset_type.value}")
+        if reviewed_asset.asset_type not in [AssetType.VIEW, AssetType.FUNCTION, AssetType.NOTEBOOK]:
+             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Asset definition can only be fetched for VIEW, FUNCTION, or NOTEBOOK types, not {reviewed_asset.asset_type.value}")
 
         definition = await manager.get_asset_definition(
             asset_fqn=reviewed_asset.asset_fqn,
@@ -272,8 +272,8 @@ async def analyze_asset_with_llm(
         if asset_content is None:
             # Consider if asset_type is TABLE or MODEL, for which definition might be None
             # but we might want to send schema or other metadata. For now, only code.
-            if reviewed_asset_api.asset_type not in [AssetType.VIEW, AssetType.FUNCTION]:
-                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"LLM content analysis currently only supports VIEW or FUNCTION types, not {reviewed_asset_api.asset_type.value}. Content could not be retrieved.") 
+            if reviewed_asset_api.asset_type not in [AssetType.VIEW, AssetType.FUNCTION, AssetType.NOTEBOOK]:
+                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"LLM content analysis currently only supports VIEW, FUNCTION, or NOTEBOOK types, not {reviewed_asset_api.asset_type.value}. Content could not be retrieved.") 
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset content not found or not available for analysis.")
 
         # 3. Call the manager's analysis method (which is synchronous)

@@ -414,28 +414,70 @@ ORDER BY
 
         sample_function_python = '''# Sample Function: dev.staging.udf_process_customer
 from pyspark.sql.functions import udf
-from pyspark.sql.types import StringType
 import re
 
-# Example of a potentially sensitive pattern (email)
-EMAIL_PATTERN = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
+SSN_PATTERN = r"\b\d{3}-\d{2}-\d{4}\b"
 
-def _contains_email(text_column):
-    """
-    Checks if the text column contains an email address.
-    WARNING: This is a simplified example for demonstration.
-    Real PII detection requires more robust methods.
-    """
-    if text_column and re.search(EMAIL_PATTERN, text_column):
-        return "Contains Email"
-    return "No Email Detected"
+def log_sensitive_match(value):
+    print(f"Found sensitive data: {value}")
+    # dbutils.fs.put("/logs/raw.log", value, overwrite=True)  # Uncomment to write to storage
 
-contains_email_udf = udf(_contains_email, StringType())
+@udf("string")
+def analyze_text(text):
+    ssn_matches = re.findall(SSN_PATTERN, text)
+    if ssn_matches:
+        log_sensitive_match(ssn_matches[0])
+    return text.replace(SSN_PATTERN, "XXX-XX-XXXX (masked)")'''
 
-# Example usage (not part of the function definition itself, but for context):
-# df = spark.createDataFrame([("test@example.com",1), ("no_email_here",2)], ["text_col", "id"])
-# df_with_flag = df.withColumn("email_check", contains_email_udf(df["text_col"]))
-# df_with_flag.show()'''
+        sample_notebook_python = '''# Databricks Notebook Source
+# MAGIC %md
+# MAGIC # Sample Notebook for Review
+# MAGIC This notebook demonstrates basic Spark operations and includes a simple UDF.
+
+# COMMAND ----------
+
+from pyspark.sql.functions import col, udf
+from pyspark.sql.types import StringType
+
+# COMMAND ----------
+
+# Sample Data
+data = [("LogA", "user1@example.com|PII:123-456-7890"),
+        ("LogB", "user2@example.com|No PII here"),
+        ("LogC", "another.user@test.com|PII:987-654-3210")]
+df = spark.createDataFrame(data, ["log_source", "log_message"])
+df.show(truncate=False)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Simple UDF to Mask PII (Illustrative)
+# MAGIC This is a placeholder for more complex PII detection and masking logic.
+# MAGIC **Warning**: This UDF is overly simplistic and not for production use.
+
+# COMMAND ----------
+
+def mask_pii_in_log(message: str) -> str:
+    if message is None:
+        return None
+    # A very basic and insecure way to "mask" for demo
+    # In reality, use proper libraries and techniques
+    if "PII:" in message:
+        parts = message.split("PII:")
+        return parts[0] + "PII:[MASKED]"
+    return message
+
+mask_pii_udf = udf(mask_pii_in_log, StringType())
+
+# COMMAND ----------
+
+df_masked = df.withColumn("masked_message", mask_pii_udf(col("log_message")))
+df_masked.show(truncate=False)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC End of notebook.'''
 
         if not self._ws_client:
             logger.warning(f"Cannot fetch definition for {asset_fqn}: WorkspaceClient not available.")
@@ -445,10 +487,13 @@ contains_email_udf = udf(_contains_email, StringType())
             elif asset_type == AssetType.FUNCTION:
                 logger.info(f"Returning hardcoded Python for function {asset_fqn} as fallback.")
                 return sample_function_python
+            elif asset_type == AssetType.NOTEBOOK:
+                logger.info(f"Returning hardcoded Python for notebook {asset_fqn} as fallback.")
+                return sample_notebook_python
             return None
             
-        if asset_type not in [AssetType.VIEW, AssetType.FUNCTION]:
-            logger.info(f"Definition fetch only supported for VIEW/FUNCTION, not {asset_type} ({asset_fqn})")
+        if asset_type not in [AssetType.VIEW, AssetType.FUNCTION, AssetType.NOTEBOOK]:
+            logger.info(f"Definition fetch only supported for VIEW/FUNCTION/NOTEBOOK, not {asset_type} ({asset_fqn})")
             return None
             
         try:
@@ -458,37 +503,48 @@ contains_email_udf = udf(_contains_email, StringType())
             elif asset_type == AssetType.FUNCTION:
                  func_info = self._ws_client.functions.get(name=asset_fqn)
                  return func_info.definition
+            elif asset_type == AssetType.NOTEBOOK:
+                # Actual SDK call for notebook content might be different, e.g., self._ws_client.workspace.export_notebook
+                # For now, using fallback as direct content fetching via simple .get might not exist or work this way.
+                logger.info(f"SDK call for notebook {asset_fqn} content not yet implemented, returning hardcoded sample.")
+                return sample_notebook_python
         except AttributeError as e:
-            logger.error(f"AttributeError fetching definition for {asset_fqn} (type: {asset_type}): {e}. Likely SDK object mismatch (e.g., CachedTables).")
+            logger.error(f"AttributeError fetching definition for {asset_fqn} (type: {asset_type}): {e}. Likely SDK object mismatch.")
             if asset_type == AssetType.VIEW:
                 logger.info(f"Returning hardcoded SQL for view {asset_fqn} due to AttributeError.")
                 return sample_view_sql
             elif asset_type == AssetType.FUNCTION:
                 logger.info(f"Returning hardcoded Python for function {asset_fqn} due to AttributeError.")
                 return sample_function_python
+            elif asset_type == AssetType.NOTEBOOK:
+                logger.info(f"Returning hardcoded Python for notebook {asset_fqn} due to AttributeError.")
+                return sample_notebook_python
         except NotFound:
             logger.warning(f"Asset {asset_fqn} not found when fetching definition.")
-            # Fallback for demo even if asset not found by SDK
             if asset_type == AssetType.VIEW:
                 return sample_view_sql
             elif asset_type == AssetType.FUNCTION:
                 return sample_function_python
+            elif asset_type == AssetType.NOTEBOOK:
+                return sample_notebook_python
             return None
         except PermissionDenied:
             logger.warning(f"Permission denied when fetching definition for {asset_fqn}.")
-            # Fallback for demo even if permission denied
             if asset_type == AssetType.VIEW:
                 return sample_view_sql
             elif asset_type == AssetType.FUNCTION:
                 return sample_function_python
+            elif asset_type == AssetType.NOTEBOOK:
+                return sample_notebook_python
             return None
         except Exception as e:
             logger.error(f"Error fetching definition for {asset_fqn}: {e}", exc_info=True)
-            # General fallback
             if asset_type == AssetType.VIEW:
                 return sample_view_sql
             elif asset_type == AssetType.FUNCTION:
                 return sample_function_python
+            elif asset_type == AssetType.NOTEBOOK:
+                return sample_notebook_python
             return None
         return None # Should not be reached if logic is correct
         
