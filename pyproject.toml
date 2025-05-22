@@ -52,3 +52,25 @@ deploy-and-run = [
   'databricks bundle deploy --var="catalog=app_data" --var="schema=app_ucsak"',
   "databricks bundle run app_ucsak",
 ]
+
+[project.optional-dependencies]
+# ... existing code ...
+
+dependencies = [
+    "fastapi>=0.104.1,<0.112.0",
+    "uvicorn[standard]>=0.24.0,<0.25.0",
+    "sqlalchemy>=2.0.23,<2.1.0",
+    "psycopg2-binary>=2.9.9,<2.10.0", # For Postgres
+    "pydantic>=2.5.2,<2.8.0",
+    "pydantic-settings>=2.1.0,<2.3.0",
+    "databricks-sdk>=0.12.0,<0.21.0", # Updated to reflect a more recent version, ensure compatibility
+    "pyyaml>=6.0.1,<6.1.0",
+    "python-jose[cryptography]>=3.3.0,<3.4.0", # For JWT
+    "passlib[bcrypt]>=5.0.0,<5.1.0", # For password hashing
+    "python-multipart>=0.0.6,<0.0.8", # For file uploads (if needed by other features)
+    "requests>=2.31.0,<2.32.0", # Often a dependency of SDKs or for direct HTTP calls
+    "alembic>=1.13.0,<1.14.0", # For database migrations
+    "tenacity>=8.2.3,<8.3.0", # For retries, useful for SDK calls
+    "openai>=1.3.0,<1.18.0", # For LLM interactions
+    "mlflow>=2.9.0,<2.14.0", # For Databricks Model Serving interactions
+]

@@ -14,7 +14,8 @@ from databricks.sdk.errors import NotFound, PermissionDenied, DatabricksError
 import yaml # Import yaml
 from pathlib import Path # Import Path
 import os
-from openai import OpenAI
+# from openai import OpenAI # Removed OpenAI client
+from mlflow.deployments import get_deploy_client # Added MLflow deployment client
 
 # Import API models
 from api.models.data_asset_reviews import (
@@ -326,227 +327,166 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             raise
     
     def analyze_asset_content(self, request_id: str, asset_id: str, asset_content: str, asset_type: AssetType) -> Optional[AssetAnalysisResponse]:
-        """Analyzes asset content using an LLM via Databricks Serving Endpoint."""
+        """Analyzes asset content using an LLM via Databricks Serving Endpoint (using MLflow client)."""
         settings: Settings = get_settings()
-        if not settings.SERVING_ENDPOINT:
+        endpoint_name = settings.SERVING_ENDPOINT
+
+        if not endpoint_name:
             logger.warning("SERVING_ENDPOINT is not configured. Cannot perform LLM analysis.")
             return None
         
-        databricks_host = settings.DATABRICKS_HOST
-        # Ensure host does not have https:// prefix for OpenAI base_url constructor
-        if databricks_host.startswith("https://"):
-            # Slice off "https://"
-            formatted_host = databricks_host[8:]
-        else:
-            formatted_host = databricks_host
+        # No need for explicit DATABRICKS_HOST or DATABRICKS_TOKEN handling here,
+        # as get_deploy_client('databricks') should use environment context or MLflow config.
 
-        # DATABRICKS_TOKEN can be set in .env for local dev or injected in Databricks App environment
-        databricks_token = os.environ.get('DATABRICKS_TOKEN')
-        if not databricks_token:
-            logger.warning("DATABRICKS_TOKEN environment variable not found. LLM analysis might fail if not authenticated.")
-            # Attempt to use ws_client for token if available and if it makes sense for OpenAI client
-            # This is a fallback, direct env var is preferred for OpenAI client.
-            if self._ws_client and hasattr(self._ws_client.config, 'token') and self._ws_client.config.token:
-                databricks_token = self._ws_client.config.token
-                logger.info("Using token from WorkspaceClient configuration for LLM call.")
-            else:
-                 logger.warning("No fallback token available from WorkspaceClient configuration.")
+        system_prompt = "You are a Data Steward tasked with reviewing metadata, data, and SQL/Python code to check if any sensitive information is used. These include PII data, like names, addresses, age, social security numbers, credit card numbers etc. Look at the provided text and identify insecure coding or sensitive data and return a summary."
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": asset_content}
+        ]
+        
+        # Define max_tokens, can be configurable if needed
+        max_tokens = 1024 
 
         try:
-            client = OpenAI(
-                api_key=databricks_token, 
-                base_url=f"https://{formatted_host}/serving-endpoints" 
+            logger.info(f"Sending content of asset {asset_id} (type: {asset_type.value}) to MLflow deployment endpoint: {endpoint_name}")
+            
+            deploy_client = get_deploy_client('databricks')
+            response_payload = deploy_client.predict(
+                endpoint=endpoint_name,
+                inputs={'messages': messages, "max_tokens": max_tokens},
             )
 
-            system_prompt = "You are a Data Steward tasked with reviewing metadata, data, and SQL/Python code to check if any sensitive information is used. These include PII data, like names, addresses, age, social security numbers, credit card numbers etc. Look at the provided text and identify insecure coding or sensitive data and return a summary."
-            
-            logger.info(f"Sending content of asset {asset_id} (type: {asset_type.value}) to LLM endpoint: {settings.SERVING_ENDPOINT} at {formatted_host}")
+            # Handle response based on common patterns for Databricks model serving
+            assistant_response_content = None
+            if "choices" in response_payload and response_payload["choices"]:
+                # Common for OpenAI-compatible (like Foundation Model APIs) or similar chat completion formats
+                message = response_payload["choices"][0].get("message")
+                if message and "content" in message:
+                    assistant_response_content = message["content"]
+            elif "candidates" in response_payload and response_payload["candidates"]:
+                 # Another common format, e.g. Vertex AI on Databricks
+                candidate = response_payload["candidates"][0]
+                if "content" in candidate:
+                    assistant_response_content = candidate["content"]
+            # Add other potential response structures if your endpoint has a different one.
+            # The example _query_endpoint directly returns `res["messages"]` or `res["choices"][0]["message"]`
+            # which implies the output is already structured. We need the actual text content.
 
-            # Assuming openai.chat.completions.create is synchronous based on typical usage
-            response = client.chat.completions.create(
-                model=settings.SERVING_ENDPOINT, # Model name is the serving endpoint name
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": asset_content}
-                ],
-                # Add other parameters like temperature, max_tokens if needed
-            )
-            
-            analysis_summary = response.choices[0].message.content
-            if not analysis_summary:
-                logger.warning(f"LLM analysis for asset {asset_id} returned empty summary.")
+            if not assistant_response_content:
+                logger.warning(f"LLM analysis for asset {asset_id} returned an unexpected or empty payload structure: {response_payload}")
+                # Fallback or error based on the provided _query_endpoint example which raises an exception for unknown formats
+                # For now, we'll log and return None, but you might want to raise an exception like in the example.
+                # raise Exception("LLM endpoint returned an unrecognized response format.")
                 return None
 
             logger.info(f"LLM analysis successful for asset {asset_id}.")
             return AssetAnalysisResponse(
                 request_id=request_id,
                 asset_id=asset_id,
-                analysis_summary=analysis_summary.strip(),
-                model_used=settings.SERVING_ENDPOINT,
+                analysis_summary=str(assistant_response_content).strip(), # Ensure it's a string
+                model_used=endpoint_name,
                 timestamp=datetime.utcnow()
             )
 
         except Exception as e:
-            logger.error(f"Error during LLM analysis for asset {asset_id} (request {request_id}): {e}", exc_info=True)
+            logger.error(f"Error during LLM analysis for asset {asset_id} (request {request_id}) using MLflow client: {e}", exc_info=True)
             return None
 
     # Add methods for getting asset content (text/data preview) using ws_client
     async def get_asset_definition(self, asset_fqn: str, asset_type: AssetType) -> Optional[str]:
         """Fetches the definition (e.g., SQL) for a view or function."""
-        # Hardcoded data for demo purposes
-        sample_view_sql = '''-- Sample View: main.marketing.campaign_view
-SELECT
-    c.campaign_id,
-    c.campaign_name,
-    SUM(s.amount) AS total_sales_amount,
-    COUNT(DISTINCT s.customer_id) AS unique_customers
-FROM
-    main.sales.orders s
-JOIN
-    main.marketing.campaigns c ON s.campaign_id = c.campaign_id
-WHERE
-    s.order_date BETWEEN c.start_date AND c.end_date
-GROUP BY
-    c.campaign_id,
-    c.campaign_name
-ORDER BY
-    total_sales_amount DESC;'''
+        settings: Settings = get_settings()
+        is_demo_mode = settings.APP_DEMO_MODE
 
-        sample_function_python = '''# Sample Function: dev.staging.udf_process_customer
-from pyspark.sql.functions import udf
-import re
+        def _load_sample_from_file(sample_filename: str) -> Optional[str]:
+            try:
+                base_dir = Path(__file__).parent.parent # api/
+                file_path = base_dir / "data" / sample_filename
+                if file_path.is_file():
+                    return file_path.read_text()
+                else:
+                    logger.warning(f"Sample data file not found: {file_path}")
+                    return None
+            except Exception as e:
+                logger.error(f"Error loading sample data file {sample_filename}: {e}", exc_info=True)
+                return None
 
-SSN_PATTERN = r"\b\d{3}-\d{2}-\d{4}\b"
-
-def log_sensitive_match(value):
-    print(f"Found sensitive data: {value}")
-    # dbutils.fs.put("/logs/raw.log", value, overwrite=True)  # Uncomment to write to storage
-
-@udf("string")
-def analyze_text(text):
-    ssn_matches = re.findall(SSN_PATTERN, text)
-    if ssn_matches:
-        log_sensitive_match(ssn_matches[0])
-    return text.replace(SSN_PATTERN, "XXX-XX-XXXX (masked)")'''
-
-        sample_notebook_python = '''# Databricks Notebook Source
-# MAGIC %md
-# MAGIC # Sample Notebook for Review
-# MAGIC This notebook demonstrates basic Spark operations and includes a simple UDF.
-
-# COMMAND ----------
-
-from pyspark.sql.functions import col, udf
-from pyspark.sql.types import StringType
-
-# COMMAND ----------
-
-# Sample Data
-data = [("LogA", "user1@example.com|PII:123-456-7890"),
-        ("LogB", "user2@example.com|No PII here"),
-        ("LogC", "another.user@test.com|PII:987-654-3210")]
-df = spark.createDataFrame(data, ["log_source", "log_message"])
-df.show(truncate=False)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## Simple UDF to Mask PII (Illustrative)
-# MAGIC This is a placeholder for more complex PII detection and masking logic.
-# MAGIC **Warning**: This UDF is overly simplistic and not for production use.
-
-# COMMAND ----------
-
-def mask_pii_in_log(message: str) -> str:
-    if message is None:
-        return None
-    # A very basic and insecure way to "mask" for demo
-    # In reality, use proper libraries and techniques
-    if "PII:" in message:
-        parts = message.split("PII:")
-        return parts[0] + "PII:[MASKED]"
-    return message
-
-mask_pii_udf = udf(mask_pii_in_log, StringType())
-
-# COMMAND ----------
-
-df_masked = df.withColumn("masked_message", mask_pii_udf(col("log_message")))
-df_masked.show(truncate=False)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC End of notebook.'''
+        def _try_load_sample_for_demo(current_asset_type: AssetType, current_asset_fqn: str, reason_for_fallback: str) -> Optional[str]:
+            """Attempts to load sample content if in demo mode, logs appropriately."""
+            if is_demo_mode:
+                logger.info(f"{reason_for_fallback} for asset {current_asset_fqn} (type: {current_asset_type.value}). In demo mode, attempting to load sample content.")
+                sample_filename = None
+                if current_asset_type == AssetType.VIEW:
+                    sample_filename = "sample_view_definition.sql"
+                elif current_asset_type == AssetType.FUNCTION:
+                    sample_filename = "sample_function_definition.py"
+                elif current_asset_type == AssetType.NOTEBOOK:
+                    sample_filename = "sample_notebook_definition.py"
+                
+                if sample_filename:
+                    sample_content = _load_sample_from_file(sample_filename)
+                    if sample_content:
+                        logger.info(f"Returning sample content for {current_asset_type.value} {current_asset_fqn}.")
+                        return sample_content
+                    else:
+                        logger.warning(f"Failed to load sample content from {sample_filename} for {current_asset_type.value} {current_asset_fqn} after {reason_for_fallback}.")
+                else:
+                    logger.warning(f"No sample file defined for asset type {current_asset_type.value} during fallback for {current_asset_fqn}.")
+            else:
+                logger.info(f"{reason_for_fallback} for asset {current_asset_fqn} (type: {current_asset_type.value}). Not in demo mode, so no sample will be loaded.")
+            return None
 
         if not self._ws_client:
             logger.warning(f"Cannot fetch definition for {asset_fqn}: WorkspaceClient not available.")
-            if asset_type == AssetType.VIEW:
-                logger.info(f"Returning hardcoded SQL for view {asset_fqn} as fallback.")
-                return sample_view_sql
-            elif asset_type == AssetType.FUNCTION:
-                logger.info(f"Returning hardcoded Python for function {asset_fqn} as fallback.")
-                return sample_function_python
-            elif asset_type == AssetType.NOTEBOOK:
-                logger.info(f"Returning hardcoded Python for notebook {asset_fqn} as fallback.")
-                return sample_notebook_python
-            return None
+            return _try_load_sample_for_demo(asset_type, asset_fqn, "WorkspaceClient not available")
             
         if asset_type not in [AssetType.VIEW, AssetType.FUNCTION, AssetType.NOTEBOOK]:
             logger.info(f"Definition fetch only supported for VIEW/FUNCTION/NOTEBOOK, not {asset_type} ({asset_fqn})")
-            return None
+            return None # No sample data for unsupported types in this context
             
         try:
+            definition = None
             if asset_type == AssetType.VIEW:
                  table_info = self._ws_client.tables.get(full_name_arg=asset_fqn)
-                 return table_info.view_definition
+                 definition = table_info.view_definition
             elif asset_type == AssetType.FUNCTION:
                  func_info = self._ws_client.functions.get(name=asset_fqn)
-                 return func_info.definition
+                 definition = func_info.definition
             elif asset_type == AssetType.NOTEBOOK:
-                # Actual SDK call for notebook content might be different, e.g., self._ws_client.workspace.export_notebook
-                # For now, using fallback as direct content fetching via simple .get might not exist or work this way.
-                logger.info(f"SDK call for notebook {asset_fqn} content not yet implemented, returning hardcoded sample.")
-                return sample_notebook_python
+                try:
+                    notebook_path = asset_fqn # This might need adjustment
+                    logger.info(f"Attempting to export notebook from workspace path: {notebook_path}")
+                    exported_content = self._ws_client.workspace.export_notebook(notebook_path)
+                    definition = exported_content
+                    logger.info(f"Successfully exported notebook {asset_fqn}.")
+                except Exception as nb_export_error:
+                    logger.error(f"SDK error exporting notebook {asset_fqn}: {nb_export_error}", exc_info=True)
+                    definition = None 
+
+            if definition is not None:
+                logger.info(f"Successfully fetched live definition for {asset_type.value} {asset_fqn}.")
+                return definition
+            else:
+                # SDK call returned None or notebook export failed
+                logger.warning(f"Live definition for {asset_type.value} {asset_fqn} was None or an SDK export/get operation returned None.")
+                return _try_load_sample_for_demo(asset_type, asset_fqn, "SDK returned None or export failure")
+
         except AttributeError as e:
-            logger.error(f"AttributeError fetching definition for {asset_fqn} (type: {asset_type}): {e}. Likely SDK object mismatch.")
-            if asset_type == AssetType.VIEW:
-                logger.info(f"Returning hardcoded SQL for view {asset_fqn} due to AttributeError.")
-                return sample_view_sql
-            elif asset_type == AssetType.FUNCTION:
-                logger.info(f"Returning hardcoded Python for function {asset_fqn} due to AttributeError.")
-                return sample_function_python
-            elif asset_type == AssetType.NOTEBOOK:
-                logger.info(f"Returning hardcoded Python for notebook {asset_fqn} due to AttributeError.")
-                return sample_notebook_python
+            logger.error(f"AttributeError fetching definition for {asset_fqn} (type: {asset_type}): {e}. Likely SDK object mismatch or issue with returned data structure.")
+            return _try_load_sample_for_demo(asset_type, asset_fqn, f"AttributeError: {e}")
         except NotFound:
-            logger.warning(f"Asset {asset_fqn} not found when fetching definition.")
-            if asset_type == AssetType.VIEW:
-                return sample_view_sql
-            elif asset_type == AssetType.FUNCTION:
-                return sample_function_python
-            elif asset_type == AssetType.NOTEBOOK:
-                return sample_notebook_python
-            return None
+            logger.warning(f"Asset {asset_fqn} (type: {asset_type.value}) not found by SDK when fetching definition.")
+            return _try_load_sample_for_demo(asset_type, asset_fqn, "Asset NotFound by SDK")
         except PermissionDenied:
-            logger.warning(f"Permission denied when fetching definition for {asset_fqn}.")
-            if asset_type == AssetType.VIEW:
-                return sample_view_sql
-            elif asset_type == AssetType.FUNCTION:
-                return sample_function_python
-            elif asset_type == AssetType.NOTEBOOK:
-                return sample_notebook_python
-            return None
+            logger.warning(f"Permission denied by SDK when fetching definition for {asset_fqn} (type: {asset_type.value}).")
+            return _try_load_sample_for_demo(asset_type, asset_fqn, "PermissionDenied by SDK")
+        except DatabricksError as de:
+            logger.error(f"Databricks SDK error fetching definition for {asset_fqn} (type: {asset_type.value}): {de}", exc_info=True)
+            return _try_load_sample_for_demo(asset_type, asset_fqn, f"DatabricksError: {de}")
         except Exception as e:
-            logger.error(f"Error fetching definition for {asset_fqn}: {e}", exc_info=True)
-            if asset_type == AssetType.VIEW:
-                return sample_view_sql
-            elif asset_type == AssetType.FUNCTION:
-                return sample_function_python
-            elif asset_type == AssetType.NOTEBOOK:
-                return sample_notebook_python
-            return None
-        return None # Should not be reached if logic is correct
+            logger.error(f"Unexpected error fetching definition for {asset_fqn} (type: {asset_type.value}): {e}", exc_info=True)
+            return _try_load_sample_for_demo(asset_type, asset_fqn, f"Unexpected error: {e}")
         
     async def get_table_preview(self, table_fqn: str, limit: int = 25) -> Optional[Dict[str, Any]]:
         """Fetches a preview of data from a table."""

@@ -188,7 +188,7 @@ def initialize_managers(app: FastAPI):
             logger.info("TagsManager initialized and registered for search.")
 
             # Ensure default tag namespace exists (using a new session for this setup task)
-            with SessionLocal() as setup_db:
+            with session_factory() as setup_db:
                 try:
                     tags_manager.get_or_create_default_namespace(setup_db, user_email="system@startup.ucapp")
                     logger.info("Default tag namespace ensured.")
@@ -306,7 +306,6 @@ async def startup_event_handler(app: FastAPI):
         # Depending on the severity, you might want to prevent the app from starting
         # or raise the exception to let FastAPI handle it (which might stop the server).
         # For now, just logging critically.
-
 
 async def shutdown_event_handler(app: FastAPI):
     # Implement shutdown logic here
