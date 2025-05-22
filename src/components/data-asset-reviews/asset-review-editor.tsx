@@ -291,7 +291,7 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
                                 </p>
                             </CardHeader>
                             <CardContent>
-                                <div className="markdown-container prose prose-sm dark:prose-invert max-w-none p-3 bg-muted rounded-md overflow-x-auto">
+                                <div className="markdown-container prose prose-xs dark:prose-invert max-w-none p-3 bg-muted rounded-md overflow-x-auto">
                                     <ReactMarkdown>
                                         {analysisResult.analysis_summary}
                                     </ReactMarkdown>
