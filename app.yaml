@@ -42,4 +42,4 @@ env:
     #value: "/Volumes/${workspace.env.DATABRICKS_CATALOG}/${workspace.env.DATABRICKS_SCHEMA}/${workspace.env.DATABRICKS_VOLUME}/audit_logs"
   
   - name: "SERVING_ENDPOINT"
-    valueFrom: "serving-endpoint"
+    valueFrom: "serving_endpoint"
