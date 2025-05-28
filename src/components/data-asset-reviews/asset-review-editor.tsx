@@ -20,9 +20,15 @@ import { DataTable } from "@/components/ui/data-table"; // For table preview
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { RelativeDate } from '@/components/common/relative-date';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { PrismAsyncLight as SyntaxHighlighter } from 'react-syntax-highlighter';
+import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
+import python from 'react-syntax-highlighter/dist/esm/languages/prism/python';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
+
+// Register languages
+SyntaxHighlighter.registerLanguage('sql', sql);
+SyntaxHighlighter.registerLanguage('python', python);
 
 interface AssetReviewEditorProps {
     requestId: string;
@@ -198,7 +204,7 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
     };
 
     return (
-        <div className="space-y-6 p-1">
+        <div className="px-1 pb-1">
              {/* Asset Details */}
              <div>
                  <h4 className="font-medium text-lg mb-2">Asset Details</h4>
@@ -207,13 +213,13 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
              </div>
 
             {/* Content Viewer */}
-            <div className="space-y-2">
+            <div className="space-y-2 mt-6">
                  <h4 className="font-medium text-lg">Content Preview / Definition</h4>
                 {renderAssetContent()}
             </div>
 
             {/* Review Form */}
-            <div className="space-y-3 pt-4 border-t">
+            <div className="space-y-3 mt-6 border-t">
                 <h4 className="font-medium text-lg">Your Review</h4>
                 <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="asset-status" className="text-right">Status *</Label>
@@ -263,7 +269,7 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
 
             {/* AI Analysis Section - Conditionally shown for VIEW and FUNCTION */}
             {(asset.asset_type === AssetType.VIEW || asset.asset_type === AssetType.FUNCTION || asset.asset_type === AssetType.NOTEBOOK) && (
-                <div className="pt-4 border-t space-y-3">
+                <div className="mt-6 border-t space-y-3">
                     <h4 className="font-medium text-lg flex items-center">
                         <SparklesIcon className="w-5 h-5 mr-2 text-purple-500" /> AI Assisted Review
                     </h4>

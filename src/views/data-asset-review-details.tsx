@@ -184,65 +184,67 @@ export default function DataAssetReviewDetails() {
     }
 
     return (
-        <div className="py-6 space-y-6">
-            <div className="flex justify-between items-start mb-4">
-                <div>
-                    <Button variant="ghost" size="sm" onClick={() => navigate('/data-asset-reviews')} className="mb-2">
-                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
-                    </Button>
-                    <h1 className="text-3xl font-bold">Review Request Details</h1>
-                    <p className="text-sm text-muted-foreground font-mono">ID: {request.id}</p>
+        <div className="py-6">
+            <div className="space-y-6">
+                <div className="flex justify-between items-start mb-4">
+                    <div>
+                        <Button variant="ghost" size="sm" onClick={() => navigate('/data-asset-reviews')} className="mb-2">
+                            <ArrowLeft className="mr-2 h-4 w-4" /> Back to List
+                        </Button>
+                        <h1 className="text-3xl font-bold">Review Request Details</h1>
+                        <p className="text-sm text-muted-foreground font-mono">ID: {request.id}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Label htmlFor="overall-status" className="text-sm font-medium">Overall Status:</Label>
+                        <Select
+                            value={request.status}
+                            onValueChange={(value) => handleOverallStatusChange(value as ReviewRequestStatus)}
+                            disabled={isUpdatingStatus}
+                        >
+                            <SelectTrigger id="overall-status" className="w-[180px]">
+                                <SelectValue placeholder="Set Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Object.values(ReviewRequestStatus).map((status) => (
+                                    <SelectItem key={status} value={status}>{status}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {isUpdatingStatus && <Loader2 className="h-4 w-4 animate-spin" />}
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Label htmlFor="overall-status" className="text-sm font-medium">Overall Status:</Label>
-                    <Select
-                        value={request.status}
-                        onValueChange={(value) => handleOverallStatusChange(value as ReviewRequestStatus)}
-                        disabled={isUpdatingStatus}
-                    >
-                        <SelectTrigger id="overall-status" className="w-[180px]">
-                            <SelectValue placeholder="Set Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {Object.values(ReviewRequestStatus).map((status) => (
-                                <SelectItem key={status} value={status}>{status}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    {isUpdatingStatus && <Loader2 className="h-4 w-4 animate-spin" />}
-                </div>
+
+                {/* Request Info Card */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Request Information</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid md:grid-cols-3 gap-4 text-sm">
+                        <div><Label>Requester:</Label> {request.requester_email}</div>
+                        <div><Label>Reviewer:</Label> {request.reviewer_email}</div>
+                        <div><Label>Current Status:</Label> <Badge variant={getRequestStatusColor(request.status)}>{request.status}</Badge></div>
+                        <div><Label>Created:</Label> <RelativeDate date={request.created_at} /></div>
+                        <div><Label>Last Updated:</Label> <RelativeDate date={request.updated_at} /></div>
+                        <div className="md:col-span-3"><Label>Notes:</Label> <p className="text-xs mt-1 whitespace-pre-wrap">{request.notes || 'N/A'}</p></div>
+                    </CardContent>
+                </Card>
+
+                {/* Assets Table Card */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Assets for Review ({request.assets?.length ?? 0})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <DataTable
+                            columns={assetColumns}
+                            data={request.assets ?? []}
+                            // No search needed for this small table within details
+                        />
+                    </CardContent>
+                </Card>
             </div>
 
-            {/* Request Info Card */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Request Information</CardTitle>
-                </CardHeader>
-                <CardContent className="grid md:grid-cols-3 gap-4 text-sm">
-                    <div><Label>Requester:</Label> {request.requester_email}</div>
-                    <div><Label>Reviewer:</Label> {request.reviewer_email}</div>
-                    <div><Label>Current Status:</Label> <Badge variant={getRequestStatusColor(request.status)}>{request.status}</Badge></div>
-                    <div><Label>Created:</Label> <RelativeDate date={request.created_at} /></div>
-                    <div><Label>Last Updated:</Label> <RelativeDate date={request.updated_at} /></div>
-                    <div className="md:col-span-3"><Label>Notes:</Label> <p className="text-xs mt-1 whitespace-pre-wrap">{request.notes || 'N/A'}</p></div>
-                </CardContent>
-            </Card>
-
-            {/* Assets Table Card */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Assets for Review ({request.assets?.length ?? 0})</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <DataTable
-                        columns={assetColumns}
-                        data={request.assets ?? []}
-                        // No search needed for this small table within details
-                    />
-                </CardContent>
-            </Card>
-
-            {/* Asset Review Editor - Placeholder */}
+            {/* Asset Review Editor - Now outside the space-y-6 wrapper */}
             {isEditorOpen && selectedAsset && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4">
                     <Card className="w-full max-w-4xl max-h-[90vh] flex flex-col bg-background">
@@ -283,7 +285,6 @@ export default function DataAssetReviewDetails() {
                     </Card>
                 </div>
             )}
-
 
             <Toaster />
         </div>
