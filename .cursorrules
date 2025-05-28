@@ -175,3 +175,7 @@ The project implements a web application designed to run as a **Databricks App**
 - Implement **unit tests** (e.g., using `pytest` for backend, Jest/React Testing Library for frontend).
 - Ensure proper input validation (Pydantic on backend, Zod/react-hook-form on frontend) and error handling.
 - **Deployment**: Deployed as a Databricks App via `databricks bundle deploy` using `api/app.yaml`. Requires building the frontend (`npm run build`) so static assets are placed in `./static` before deployment.
+
+### Package Management
+
+- This project uses **Yarn** for frontend package management. Use `yarn add`, `yarn install`, `yarn remove`, etc., instead of `npm`.
