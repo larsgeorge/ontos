@@ -122,7 +122,7 @@ Set the `DATABASE_TYPE` environment variable to choose the database backend:
     *   The tables will be created under `<DATABRICKS_CATALOG>.<DATABRICKS_SCHEMA>`.
 
 *   **`DATABASE_TYPE=postgres`**:
-    *   Uses an external PostgreSQL database server.
+    *   Uses a PostgreSQL database server.
     *   **Required PostgreSQL Variables:**
         *   `POSTGRES_HOST`: Hostname of your PostgreSQL server.
         *   `POSTGRES_PORT`: Port of your PostgreSQL server (default `5432`).
@@ -142,6 +142,98 @@ Set the `DATABASE_TYPE` environment variable to choose the database backend:
   ```
 - Hatch (Python build tool)
 
+If you want to use a local PostgreSQL instance for development, here are the steps:
+
+1. Install PostgreSQL locally, here for MacOS:
+
+    ```
+    ➜  > brew install postgresql@16
+    ==> Downloading https://ghcr.io/v2/homebrew/core/postgresql/16/manifests/16.9
+    ############################################################################################################################################ 100.0%
+    ==> Fetching postgresql@16
+    ==> Downloading https://ghcr.io/v2/homebrew/core/postgresql/16/blobs/sha256:8e883e6e9e7231d49b90965f42ebc53981efb02e6ed7fdcbd1ebfdc2bfb5959a
+    ############################################################################################################################################ 100.0%
+    ==> Pouring postgresql@16--16.9.arm64_sequoia.bottle.tar.gz
+    ==> /opt/homebrew/Cellar/postgresql@16/16.9/bin/initdb --locale=C -E UTF-8 /opt/homebrew/var/postgresql@16
+    ==> Caveats
+    This formula has created a default database cluster with:
+    initdb --locale=C -E UTF-8 /opt/homebrew/var/postgresql@16
+
+    postgresql@16 is keg-only, which means it was not symlinked into /opt/homebrew,
+    because this is an alternate version of another formula.
+
+    If you need to have postgresql@16 first in your PATH, run:
+    echo 'export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"' >> ~/.zshrc
+
+    For compilers to find postgresql@16 you may need to set:
+    export LDFLAGS="-L/opt/homebrew/opt/postgresql@16/lib"
+    export CPPFLAGS="-I/opt/homebrew/opt/postgresql@16/include"
+
+    For pkg-config to find postgresql@16 you may need to set:
+    export PKG_CONFIG_PATH="/opt/homebrew/opt/postgresql@16/lib/pkgconfig"
+
+    To start postgresql@16 now and restart at login:
+    brew services start postgresql@16
+    Or, if you don't want/need a background service you can just run:
+    LC_ALL="C" /opt/homebrew/opt/postgresql@16/bin/postgres -D /opt/homebrew/var/postgresql@16
+    ==> Summary
+    🍺  /opt/homebrew/Cellar/postgresql@16/16.9: 3,811 files, 69MB
+    ==> Running `brew cleanup postgresql@16`...
+    Disable this behaviour by setting HOMEBREW_NO_INSTALL_CLEANUP.
+    Hide these hints with HOMEBREW_NO_ENV_HINTS (see `man brew`).
+    ```
+
+    Read the emitted instructions above, for example, run `brew services start postgresql@16` if you want to run PostgreSQL in the background.
+
+2. Setup the path and start the CLI as superuser
+
+    ```
+    > export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
+    > psql -U $(whoami) -d postgres
+    psql (16.9 (Homebrew))
+    Type "help" for help.
+    ```
+
+3. Run the necessary commands to create resources
+
+    ```sql
+    postgres=# CREATE ROLE rucsak_app_user WITH LOGIN PASSWORD '<my_password>';
+    postgres=# CREATE DATABASE app_ucsak;
+    postgres=# GRANT ALL PRIVILEGES ON DATABASE app_ucsak TO rucsak_app_user;
+    postgres=# GRANT USAGE ON SCHEMA public TO rucsak_app_user;
+    postgres=# GRANT CREATE ON SCHEMA public TO rucsak_app_user;
+
+    postgres=# 
+    \q
+    ```
+
+    Note: Replace `<my_password>` with your password of choice.
+
+4. Log in as the app user role and create remaining resources
+
+    ```sql
+    ➜  ucapp git:(main) ✗ psql -U rucsak_app_user -d app_ucsak
+    psql (16.9 (Homebrew))
+    Type "help" for help.
+    app_ucsak=> CREATE SCHEMA app_ucsak;
+    app_ucsak=> GRANT USAGE ON SCHEMA app_ucsak TO rucsak_app_user;
+    app_ucsak=> GRANT ALL ON SCHEMA app_ucsak TO rucsak_app_user;
+    ```
+
+5. Configure app to use local database 
+
+    ```env
+    DATABASE_TYPE=postgres
+    POSTGRES_HOST=localhost
+    POSTGRES_PORT=5432
+    POSTGRES_USER=rucsak_app_user
+    POSTGRES_PASSWORD=<my_password>
+    POSTGRES_DB=app_ucsak
+    POSTGRES_DB_SCHEMA=app_ucsak
+    ```
+
+    Note: Use the above `<my_password>` here
+    
 ## Installation
 
 1. Install Hatch (if you haven't already):
