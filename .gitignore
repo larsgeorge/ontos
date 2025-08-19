@@ -5,12 +5,9 @@
 /.pnp
 .pnp.js
 
-# testing
+# local artifacts
 /coverage
-
-# production
-# /build
-# /static
+/static
 
 # misc
 .DS_Store
