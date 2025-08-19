@@ -15,7 +15,8 @@ import yaml # Import yaml
 from pathlib import Path # Import Path
 import os
 # from openai import OpenAI # Removed OpenAI client
-from mlflow.deployments import get_deploy_client # Added MLflow deployment client
+# NOTE: Avoid importing MLflow at module import time to prevent optional
+# dependency issues during app startup. We'll import lazily when needed.
 
 # Import API models
 from api.models.data_asset_reviews import (
@@ -349,6 +350,16 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
         max_tokens = 1024 
 
         try:
+            # Lazy import MLflow deployments client to avoid hard dependency at startup
+            try:
+                from mlflow.deployments import get_deploy_client  # type: ignore
+            except Exception as import_err:
+                logger.warning(
+                    "MLflow is not available or failed to import (optional feature). "
+                    f"Skipping LLM analysis. Error: {import_err}"
+                )
+                return None
+
             logger.info(f"Sending content of asset {asset_id} (type: {asset_type.value}) to MLflow deployment endpoint: {endpoint_name}")
             
             deploy_client = get_deploy_client('databricks')
