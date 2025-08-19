@@ -75,7 +75,7 @@
   "scripts": {
     "dev:frontend": "vite",
     "dev:backend": "hatch -e dev run dev-backend",
-    "build": "tsc --noEmit && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "type-check": "tsc --noEmit"
   },

@@ -53,6 +53,11 @@ deploy-and-run = [
   "databricks bundle run app_ucsak",
 ]
 
+[tool.pytest.ini_options]
+pythonpath = [
+  "."
+]
+
 [project.optional-dependencies]
 # ... existing code ...
 
