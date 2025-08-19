@@ -73,7 +73,6 @@ export default function UserInfo() {
       availableRoles,
       appliedRoleId,
       setRoleOverride,
-      hasPermission,
   } = usePermissions();
   
   // Use a string state for the radio group value, mapping null to 'actual'
@@ -125,10 +124,11 @@ export default function UserInfo() {
     hasFetched.current = true;
   }, []);
 
-  // Determine if user can switch roles
+  // Determine if user can switch roles (use ACTUAL permissions, not overridden)
   const isLocalDev = userInfo?.username === 'localdev';
-  const isAdmin = hasPermission('settings', FeatureAccessLevel.ADMIN);
-  const canSwitchRoles = !permissionsLoading && (isLocalDev || isAdmin);
+  const actualSettingsLevel = permissions['settings'] ?? FeatureAccessLevel.NONE;
+  const isAdminActual = ACCESS_LEVEL_ORDER[actualSettingsLevel] >= ACCESS_LEVEL_ORDER[FeatureAccessLevel.ADMIN];
+  const canSwitchRoles = !permissionsLoading && (isLocalDev || isAdminActual);
 
   const displayName = userInfo?.user || userInfo?.username || userInfo?.email || 'Loading...';
   const initials = displayName === 'Loading...' ? '?' : displayName.charAt(0).toUpperCase();
