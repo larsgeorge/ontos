@@ -1,0 +1,69 @@
+---
+name: Project Structure
+priority: 85
+scope:
+  globs: ["**/*"]
+---
+
+### Project Structure
+
+- **Frontend**: (`./src`)
+  - **Language**: TypeScript
+  - **Framework**: React
+  - **UI Library**: Shadcn UI & Tailwind CSS
+  - **Build Tool**: Vite
+  - **Directory Structure**:
+    - `src/`: Main source code
+    - `src/index.html`: Main HTML file
+    - `src/main.tsx`: Application entry point
+    - `src/App.tsx`: Root component with routing
+    - `src/components/`: Reusable UI components (Tailwind CSS + Shadcn UI)
+      - `src/components/ui/`: Base Shadcn UI components
+      - `src/components/common/`: App-specific common components (e.g., `RelativeDate`)
+      - `src/components/<feature>/`: Feature-specific components (e.g., `data-products/data-product-form-dialog.tsx`)
+    - `src/views/`: Page-level components corresponding to features (e.g., `data-products.tsx`, `settings.tsx`)
+    - `src/hooks/`: Custom React hooks (e.g., `useApi`, `useToast`)
+    - `src/stores/`: State management (e.g., Zustand for `permissions-store`, `breadcrumb-store`)
+    - `src/types/`: TypeScript type definitions (e.g., `data-product.ts`, `settings.ts`)
+    - `src/config/`: Application configuration (e.g., `features.ts`)
+    - `src/lib/`: Utility functions (e.g., `utils.ts`)
+  - **Configuration Files**:
+    - `tsconfig.json`, `tsconfig.node.json`
+    - `vite.config.ts`
+    - `tailwind.config.js`
+    - `postcss.config.js`
+    - `index.html` (entry point)
+    - `package.json`
+
+- **Backend**: (`./api`)
+  - **Language**: Python
+  - **Framework**: FastAPI
+  - **Build Tool**: hatch (`pyproject.toml`)
+  - **Database ORM**: SQLAlchemy
+  - **Directory Structure**:
+    - `api/`: Main source code
+    - `api/controller/`: Manager classes implementing business logic (e.g., `data_products_manager.py`).
+    - `api/models/`: Pydantic models for API data structures (e.g., `data_products.py`, `settings.py`).
+    - `api/db_models/`: SQLAlchemy ORM models defining database tables (e.g., `data_products.py`).
+    - `api/repositories/`: Database access layer using the Repository pattern (e.g., `data_products_repository.py`).
+    - `api/routes/`: FastAPI routers defining API endpoints (e.g., `data_product_routes.py`).
+    - `api/utils/`: Helper classes and functions (e.g., `startup_tasks.py`, `demo_data_loader.py`).
+    - `api/common/`: Shared utilities and base classes.
+      - `api/common/database.py`: Database setup and session management.
+      - `api/common/config.py`: Settings loading (`Settings` model) and management.
+      - `api/common/logging.py`: Logging setup.
+      - `api/common/workspace_client.py`: Databricks SDK client setup.
+      - `api/common/dependencies.py`: FastAPI dependency injectors (e.g., `get_settings_manager`, `get_auth_manager`).
+      - `api/common/authorization.py`: Permissions checking logic (`PermissionChecker`, user detail fetching).
+      - `api/common/features.py`: Feature definitions and access levels (`FeatureAccessLevel` enum).
+      - `api/common/search_interfaces.py`: `SearchableAsset` interface definition.
+      - `api/common/search_registry.py`: `@searchable_asset` decorator and registry (`SEARCHABLE_ASSET_MANAGERS`).
+      - `api/common/middleware.py`: Custom FastAPI middleware (Logging, Error Handling).
+      - `api/common/repository.py`: Base repository class (`CRUDBase`).
+    - **Configuration & Data**:
+      - `.env` / `.env.example`: Environment variables (loaded by `api/common/config.py`).
+      - `api/data/`: Example/Demo data for services (YAML files, e.g., `data_products.yaml`). Loaded by managers or `demo_data_loader.py`.
+      - `api/schemas/`: JSON schema files (e.g., for Data Contract validation).
+      - `api/workflows/`: YAML definitions for Databricks jobs/workflows.
+      - `api/app.yaml`: Databricks App configuration (Asset Bundle format).
+    - `api/app.py`: FastAPI application entry point.

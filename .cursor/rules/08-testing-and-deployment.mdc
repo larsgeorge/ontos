@@ -1,0 +1,12 @@
+---
+name: Testing and Deployment
+priority: 65
+scope:
+  globs: ["**/*"]
+---
+
+### Testing and Deployment
+
+- Implement **unit tests** (e.g., using `pytest` for backend, Jest/React Testing Library for frontend).
+- Ensure proper input validation (Pydantic on backend, Zod/react-hook-form on frontend) and error handling.
+- **Deployment**: Deployed as a Databricks App via `databricks bundle deploy` using `api/app.yaml`.
