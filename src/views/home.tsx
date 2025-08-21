@@ -43,8 +43,8 @@ interface RecentActivity {
 }
 
 const quickActions: QuickAction[] = [
-  { name: 'Create Data Product', path: '/data-products/new' },
   { name: 'Define Data Contract', path: '/data-contracts/new' },
+  { name: 'Create Data Product', path: '/data-products/new' },
   { name: 'Add Glossary Term', path: '/business-glossary/new' },
   { name: 'Request Role Access', path: '/settings?tab=roles' },
 ];
@@ -242,6 +242,17 @@ export default function Home() {
       maturity: 'ga',
     },
     {
+      id: 'data-contracts',
+      title: 'Data Contracts',
+      value: stats.dataContracts.count,
+      loading: stats.dataContracts.loading,
+      error: stats.dataContracts.error,
+      link: '/data-contracts',
+      icon: <FileTextIcon className="h-4 w-4" />,
+      description: 'Active contracts',
+      maturity: 'ga',
+    },
+    {
       id: 'data-products',
       title: 'Data Products',
       value: stats.dataProducts.count,
@@ -250,17 +261,6 @@ export default function Home() {
       link: '/data-products',
       icon: <Database className="h-4 w-4" />,
       description: 'Total data products',
-      maturity: 'ga',
-    },
-    {
-       id: 'data-contracts',
-      title: 'Data Contracts',
-      value: stats.dataContracts.count,
-      loading: stats.dataContracts.loading,
-      error: stats.dataContracts.error,
-      link: '/data-contracts',
-      icon: <FileTextIcon className="h-4 w-4" />,
-      description: 'Active contracts',
       maturity: 'ga',
     },
     {
