@@ -39,3 +39,86 @@ The project implements a web application designed to run as a **Databricks App**
     - If a violation is detected, the owner and subscribers are alerted via the built-in ITSM notification feature
     - App users with the Data Governance role maintain Data Domains and Business Glossaries, which are used to assign specific values to Data Products and Data Contracts
 - The **Home Page** differs for each app user role, for instance, for Data Consumers, they find an easy discovery option (like a marketplace) for Data Products to subscribe to. For Data Producers, they find the options to create Data Products or continue working on draft products and contracts.
+
+### General Data Product Details
+
+#### 1. Inception
+- **Start with desired business outcomes**
+  - Clearly define what the business aims to achieve with the data product.
+- **Assign owner**
+  - Appoint a responsible product owner for governance and delivery.
+- **Assign resources**
+  - Allocate the necessary team members and budget.
+- **Define business metrics**
+  - Set measurable objectives for success.
+
+#### 2. Design
+- **Create a data contract**
+  - Draft an agreement outlining expected data inputs, outputs, quality, and responsibilities.
+- **Create a data product design specification**
+  - Document technical requirements, features, and integration needs.
+- **Ensure semantic consistency**
+  - Align definitions, formats, and business logic with existing data products.
+
+#### 3. Creation
+- **Build modular pipelines**
+  - Develop features, models, dashboards, and alerts aligned to design specs.
+- **Test against data contract**
+  - Validate outputs for compliance with the contract; ensure quality and reliability.
+
+#### 4. Publishing
+- **Deploy using DataOps or MLOps**
+  - Use automated pipelines for reliable deployment and scaling (for models and data apps).
+- **Publish to catalog**
+  - Register product and metadata in the organization’s catalog.
+- **Manage access permissions**
+  - Set roles and permissions per the established data contract.
+
+#### 5. Operation & Governance
+- **Monitor metrics, quality, usage, permissions**
+  - Continuously track product performance and access.
+- **Handle compliance requests**
+  - Respond to audits, legal, and regulatory needs as they arise.
+- **Audit data product access**
+  - Regularly review and update access control records.
+
+#### 6. Consumption & Value Creation
+- **Enable feedback**
+  - Gather and process feedback from data consumers for improvements.
+- **Share information**
+  - Communicate curations and changes with stakeholders.
+
+#### 7. Iteration
+- **Iterate new version**
+  - Refine product design and contract based on feedback and operational results.
+
+#### 8. Retirement
+- **Deprecate product**
+  - Mark the data product as deprecated and communicate status.
+- **Inform consumers**
+  - Notify users and stakeholders of planned retirement.
+- **Shutdown production**
+  - Disable active processing and remove integrations.
+- **Archive assets**
+  - Store relevant artifacts securely as needed for compliance.
+- **Clean up resources**
+  - Release or repurpose infrastructure and team resources.
+
+***
+
+#### Roles & Responsibilities (mapped from diagram)
+- **Business/consumer:** Define needs, use product, provide feedback.
+- **Product owner:** Manages lifecycle, ensures delivery.
+- **Data engineer / Data scientist / Business analyst:** Design, create, test, publish, iterate data products.
+- **Data steward:** Oversees governance and compliance at all stages.
+- **DataOps/MLOps:** Supports deployment, publishing, monitoring.
+
+***
+
+#### Contract Maintenance Principles
+- Data contracts should be updated iteratively whenever requirements or data formats change.
+- All stakeholders must be notified of contract updates.
+- Testing and validation are required for any contract change before production rollout.
+- Contracts must be archived alongside retired data products for compliance purposes.
+
+***
