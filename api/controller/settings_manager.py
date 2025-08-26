@@ -190,18 +190,20 @@ class SettingsManager:
 
     def get_job_clusters(self) -> List[JobCluster]:
         """Get available job clusters"""
-        clusters = self._client.clusters.list()
-        return [
-            JobCluster(
-                id=cluster.cluster_id,
-                name=cluster.cluster_name,
-                node_type_id=cluster.node_type_id,
-                autoscale=bool(cluster.autoscale),
-                min_workers=cluster.autoscale.min_workers if cluster.autoscale else cluster.num_workers,
-                max_workers=cluster.autoscale.max_workers if cluster.autoscale else cluster.num_workers
-            )
-            for cluster in clusters
-        ]
+        return []
+        # TODO: This call is too slow and blocks the entire call to get_settings, need to fix this
+        # clusters = self._client.clusters.list()
+        # return [
+        #     JobCluster(
+        #         id=cluster.cluster_id,
+        #         name=cluster.cluster_name,
+        #         node_type_id=cluster.node_type_id,
+        #         autoscale=bool(cluster.autoscale),
+        #         min_workers=cluster.autoscale.min_workers if cluster.autoscale else cluster.num_workers,
+        #         max_workers=cluster.autoscale.max_workers if cluster.autoscale else cluster.num_workers
+        #     )
+        #     for cluster in clusters
+        # ]
 
     def get_settings(self) -> dict:
         """Get current settings"""
