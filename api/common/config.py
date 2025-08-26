@@ -22,7 +22,6 @@ class Settings(BaseSettings):
 
     # Database settings
     DATABASE_URL: Optional[str] = Field(None, env='DATABASE_URL')
-    DATABASE_TYPE: str = "postgres"
 
     # Postgres connection settings
     POSTGRES_HOST: Optional[str] = None

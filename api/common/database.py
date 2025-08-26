@@ -4,16 +4,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, TypeVar
 
-from sqlalchemy import create_engine, Index  # Need Index for type checking
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session as SQLAlchemySession
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.schema import CreateTable
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection, URL
-from sqlalchemy import event
 
-from alembic import command
-# Rename the Alembic Config import to avoid collision
 from alembic.config import Config as AlembicConfig
 from alembic.script import ScriptDirectory
 from alembic.runtime.migration import MigrationContext
@@ -232,53 +228,32 @@ db_manager: Optional[DatabaseManager] = None
 
 
 def get_db_url(settings: Settings) -> str:
-    """Constructs the Databricks SQLAlchemy URL."""
-    logger.info(f"Configuring database connection for type: {settings.DATABASE_TYPE}")
-    if settings.DATABASE_TYPE == "postgres":
-        if not all([settings.POSTGRES_HOST, settings.POSTGRES_USER, settings.POSTGRES_PASSWORD, settings.POSTGRES_DB]):
-            raise ValueError("PostgreSQL connection details (Host, User, Password, DB) are missing in settings.")
+    """Construct the PostgreSQL SQLAlchemy URL."""
+    if not all([settings.POSTGRES_HOST, settings.POSTGRES_USER, settings.POSTGRES_PASSWORD, settings.POSTGRES_DB]):
+        raise ValueError("PostgreSQL connection details (Host, User, Password, DB) are missing in settings.")
 
-        query_params = {}
-        if settings.POSTGRES_DB_SCHEMA:
-            # For options like search_path, it's typically passed as a single string value for the 'options' key.
-            # The -c part is a command-line option syntax for psql, which some drivers interpret.
-            query_params["options"] = f"-csearch_path={settings.POSTGRES_DB_SCHEMA},public"
-            logger.info(f"PostgreSQL schema will be set via options: {settings.POSTGRES_DB_SCHEMA}")
-        else:
-            logger.info("No specific PostgreSQL schema configured, using default (public).")
-        
-        # Add other options like sslmode if needed
-        # query_params["sslmode"] = "require" 
-
-        db_url_obj = URL.create(
-            drivername="postgresql+psycopg2",
-            username=settings.POSTGRES_USER,
-            password=settings.POSTGRES_PASSWORD,
-            host=settings.POSTGRES_HOST,
-            port=settings.POSTGRES_PORT,
-            database=settings.POSTGRES_DB,
-            query=query_params if query_params else None  # Pass None if no query params
-        )
-        url_str = db_url_obj.render_as_string(hide_password=False) # Render with password for engine
-        logger.debug(f"Constructed PostgreSQL SQLAlchemy URL using URL.create (credentials redacted in log): {db_url_obj.render_as_string(hide_password=True)}")
-        return url_str
-    elif settings.DATABASE_TYPE == "databricks":
-        token = os.getenv("DATABRICKS_TOKEN")
-        if not settings.DATABRICKS_HOST or not settings.DATABRICKS_HTTP_PATH:
-            raise ValueError("DATABRICKS_HOST and DATABRICKS_HTTP_PATH must be configured.")
-        host = settings.DATABRICKS_HOST.replace("https://", "")
-        schema = settings.DATABRICKS_SCHEMA or "default"
-        catalog = settings.DATABRICKS_CATALOG or "main"
-        url = (
-            f"databricks://token:{token}@{host}"
-            f"?http_path={settings.DATABRICKS_HTTP_PATH}"
-            f"&catalog={catalog}"
-            f"&schema={schema}"
-        )
-        logger.debug(f"Constructed Databricks SQLAlchemy URL (token redacted)")
-        return url
+    query_params = {}
+    if settings.POSTGRES_DB_SCHEMA:
+        query_params["options"] = f"-csearch_path={settings.POSTGRES_DB_SCHEMA},public"
+        logger.info(f"PostgreSQL schema will be set via options: {settings.POSTGRES_DB_SCHEMA}")
     else:
-        raise ValueError(f"Unsupported DATABASE_TYPE: {settings.DATABASE_TYPE}")
+        logger.info("No specific PostgreSQL schema configured, using default (public).")
+
+    db_url_obj = URL.create(
+        drivername="postgresql+psycopg2",
+        username=settings.POSTGRES_USER,
+        password=settings.POSTGRES_PASSWORD,
+        host=settings.POSTGRES_HOST,
+        port=settings.POSTGRES_PORT,
+        database=settings.POSTGRES_DB,
+        query=query_params if query_params else None
+    )
+    url_str = db_url_obj.render_as_string(hide_password=False)
+    logger.debug(
+        f"Constructed PostgreSQL SQLAlchemy URL using URL.create (credentials redacted in log): "
+        f"{db_url_obj.render_as_string(hide_password=True)}"
+    )
+    return url_str
 
 
 def ensure_catalog_schema_exists(settings: Settings):
@@ -365,31 +340,8 @@ def init_db() -> None:
     try:
         db_url = get_db_url(settings)
 
-        if settings.DATABASE_TYPE == "databricks":
-            # Ensure target catalog and schema exist before connecting engine (uses API)
-            ensure_catalog_schema_exists(settings)
-            # Databricks specific connect_args
-            logger.info(f"Environment for DB connection: {settings.ENV}")
-            if settings.ENV.startswith('LOCAL'):
-                connect_args = {
-                    "server_hostname": settings.DATABRICKS_HOST,
-                    "http_path": settings.DATABRICKS_HTTP_PATH,
-                    "access_token": settings.DATABRICKS_TOKEN,
-                }
-            else:
-                cfg = Config() # Hands in SQL host and OAuth function when run in Databricks
-                connect_args = {
-                    "server_hostname": cfg.host,
-                    "http_path": settings.DATABRICKS_HTTP_PATH,
-                    "credentials_provider": lambda: cfg.authenticate,
-                    "auth_type": "databricks-oauth",
-                }
-        elif settings.DATABASE_TYPE == "postgres":
-            # No special pre-checks needed for standard PG catalog/schema
-            # Standard connect_args for PG are usually empty or handled by the URL
-            connect_args = {}
-        else:
-            raise NotImplementedError(f"Database type {settings.DATABASE_TYPE} not fully implemented in init_db.")
+        # PostgreSQL connect args are typically empty; URL contains necessary options
+        connect_args = {}
 
         logger.info("Connecting to database...")
         logger.info(f"> Database URL: {db_url}")
@@ -462,11 +414,9 @@ def init_db() -> None:
 
         # Ensure all tables defined in Base metadata exist
         logger.info("Verifying/creating tables based on SQLAlchemy models...")
-        is_databricks = settings.DATABASE_TYPE == 'databricks'
-        
         # Schema for create_all if PostgreSQL
         schema_to_create_in = None
-        if settings.DATABASE_TYPE == "postgres" and settings.POSTGRES_DB_SCHEMA:
+        if settings.POSTGRES_DB_SCHEMA:
             schema_to_create_in = settings.POSTGRES_DB_SCHEMA
             # We need to ensure this schema exists before calling create_all if it's not 'public'
             # and if tables don't explicitly define their schema.
@@ -479,40 +429,7 @@ def init_db() -> None:
             # connection.commit()
             logger.info(f"PostgreSQL: Tables will be targeted for schema '{schema_to_create_in}' via search_path or model definitions.")
 
-        if is_databricks:
-            logger.info("Databricks dialect detected. Modifying metadata for DDL generation.")
-            indexes_to_remove = []
-            for table in Base.metadata.tables.values():
-                # Find indexes associated directly with this table via Column(index=True)
-                # We check the column's index attribute, not just table.indexes 
-                # as table.indexes might include functional indexes etc.
-                for col in table.columns:
-                    if col.index:
-                        # Find the actual Index object SQLAlchemy created for this column
-                        # This is a bit involved as Index name isn't guaranteed
-                        # Let's try removing ALL indexes associated with the table for simplicity
-                        # as UC doesn't support any CREATE INDEX.
-                        logger.debug(f"Preparing to remove indexes associated with table: {table.name}")
-                        # Collect indexes associated with the table to avoid modifying while iterating
-                        for idx in list(table.indexes): # Iterate over a copy
-                            if idx not in indexes_to_remove:
-                                indexes_to_remove.append(idx)
-                                logger.debug(f"Marked index {idx.name} for removal from metadata.")
-
-            # Actually remove them from the metadata's central index collection if necessary
-            # In newer SQLAlchemy, removing from table.indexes might be sufficient
-            for idx in indexes_to_remove:
-                try:
-                    # Attempt removal from the table's collection first
-                    if hasattr(idx, 'table') and idx in idx.table.indexes:
-                        idx.table.indexes.remove(idx)
-                    # Attempt removal from metadata collection (less common needed)
-                    # if idx in Base.metadata.indexes:
-                    #     Base.metadata.indexes.remove(idx)
-                    logger.info(f"Successfully removed index {idx.name} from metadata for DDL generation.")
-                except Exception as remove_err:
-                    logger.warning(f"Could not fully remove index {idx.name} from metadata: {remove_err}")
-        # --- End Conditional Metadata Modification --- 
+        # No Databricks-specific metadata modifications required
 
         # Now, call create_all. It will operate on the potentially modified metadata.
         logger.info("Executing Base.metadata.create_all()...")

@@ -77,13 +77,13 @@ The application requires a `.env` file in the root directory for configuration. 
 | Variable                   | Description                                                                                                   | Example Value                                | Required |
 |----------------------------|---------------------------------------------------------------------------------------------------------------|----------------------------------------------|----------|
 | `DATABRICKS_HOST`          | Your Databricks workspace URL                                                                                 | `https://your-workspace.cloud.databricks.com`| Yes      |
-| `DATABRICKS_WAREHOUSE_ID`  | The ID of the Databricks SQL Warehouse to use (required if `DATABASE_TYPE` is `databricks`)                   | `1234567890abcdef`                           | Cond.    |
-| `DATABRICKS_CATALOG`       | Default Unity Catalog catalog to use (required if `DATABASE_TYPE` is `databricks`)                            | `main`                                       | Cond.    |
-| `DATABRICKS_SCHEMA`        | Default Unity Catalog schema to use (required if `DATABASE_TYPE` is `databricks`)                             | `default`                                    | Cond.    |
+| `DATABRICKS_WAREHOUSE_ID`  | The ID of the Databricks SQL Warehouse to use (used by features, not DB)                   | `1234567890abcdef`                           | No    |
+| `DATABRICKS_CATALOG`       | Default Unity Catalog catalog (used by features, not DB)                            | `main`                                       | No    |
+| `DATABRICKS_SCHEMA`        | Default Unity Catalog schema (used by features, not DB)                             | `default`                                    | No    |
 | `DATABRICKS_VOLUME`        | Default Unity Catalog volume for storing app-related files (e.g., data contract outputs)                      | `app_volume`                                 | Yes      |
 | `APP_AUDIT_LOG_DIR`        | Directory path within the `DATABRICKS_VOLUME` for storing audit logs                                          | `audit_logs`                                 | Yes      |
 | `DATABRICKS_TOKEN`         | Personal access token for Databricks authentication (Optional - SDK can use other methods)                    | `dapi1234567890abcdef`                       | No       |
-| `DATABASE_TYPE`            | Specifies the type of database to use for application metadata. Options: `databricks`, `postgres`.              | `postgres`                                   | Yes      |
+| `DATABASE_TYPE`            | [Removed] App now uses PostgreSQL for metadata storage.              | `postgres`                                   | -      |
 | `POSTGRES_HOST`            | Hostname or IP address of the PostgreSQL server (required if `DATABASE_TYPE` is `postgres`)                   | `localhost` or `your.pg.server.com`          | Cond.    |
 | `POSTGRES_PORT`            | Port number for the PostgreSQL server (required if `DATABASE_TYPE` is `postgres`)                             | `5432`                                       | Cond.    |
 | `POSTGRES_USER`            | Username for connecting to PostgreSQL (required if `DATABASE_TYPE` is `postgres`)                             | `app_user`                                   | Cond.    |
@@ -107,30 +107,16 @@ The application requires a `.env` file in the root directory for configuration. 
 
 ### Database Configuration
 
-The application stores its metadata (settings, roles, reviews, etc.) in a database. You can configure the application to use either Databricks SQL or a PostgreSQL instance.
+The application stores its metadata (settings, roles, reviews, etc.) in PostgreSQL only.
 
-Set the `DATABASE_TYPE` environment variable to choose the database backend:
+Required PostgreSQL variables:
 
-*   **`DATABASE_TYPE=databricks`**:
-    *   Uses a Databricks SQL endpoint (warehouse) to store application tables within Unity Catalog.
-    *   **Required Databricks Variables:**
-        *   `DATABRICKS_HOST`: Your workspace URL.
-        *   `DATABRICKS_WAREHOUSE_ID`: The ID of the SQL Warehouse.
-        *   `DATABRICKS_CATALOG`: The UC catalog where app tables will be created.
-        *   `DATABRICKS_SCHEMA`: The UC schema within the catalog for app tables.
-        *   `DATABRICKS_TOKEN` (Optional): For authentication if not using other SDK methods.
-    *   The tables will be created under `<DATABRICKS_CATALOG>.<DATABRICKS_SCHEMA>`.
-
-*   **`DATABASE_TYPE=postgres`**:
-    *   Uses a PostgreSQL database server.
-    *   **Required PostgreSQL Variables:**
-        *   `POSTGRES_HOST`: Hostname of your PostgreSQL server.
-        *   `POSTGRES_PORT`: Port of your PostgreSQL server (default `5432`).
-        *   `POSTGRES_USER`: Username for PostgreSQL connection.
-        *   `POSTGRES_PASSWORD`: Password for the PostgreSQL user.
-        *   `POSTGRES_DB`: Database name on the PostgreSQL server.
-    *   **Optional PostgreSQL Variable:**
-        *   `DB_SCHEMA`: The schema within the PostgreSQL database where tables will be created (defaults to `public`).
+- `POSTGRES_HOST`: Hostname of your PostgreSQL server.
+- `POSTGRES_PORT`: Port of your PostgreSQL server (default `5432`).
+- `POSTGRES_USER`: Username for PostgreSQL connection.
+- `POSTGRES_PASSWORD`: Password for the PostgreSQL user.
+- `POSTGRES_DB`: Database name on the PostgreSQL server.
+- `POSTGRES_DB_SCHEMA`: Optional schema in the PostgreSQL database (defaults to `public`).
 
 ## Prerequisites
 
@@ -223,7 +209,6 @@ If you want to use a local PostgreSQL instance for development, here are the ste
 5. Configure app to use local database 
 
     ```env
-    DATABASE_TYPE=postgres
     POSTGRES_HOST=localhost
     POSTGRES_PORT=5432
     POSTGRES_USER=rucsak_app_user
