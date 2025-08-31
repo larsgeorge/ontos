@@ -18,6 +18,7 @@ import { useNotificationsStore } from '@/stores/notifications-store'; // Import 
 import CreateVersionDialog from '@/components/data-products/create-version-dialog';
 import IriPickerDialog from '@/components/semantic/iri-picker-dialog';
 import type { EntitySemanticLink } from '@/types/semantic-link';
+import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 
 // Helper Function Type Definition (copied from DataProducts view for checking API responses)
 type CheckApiResponseFn = <T>(
@@ -449,7 +450,10 @@ export default function DataProductDetails() {
         </CardContent>
       </Card>
 
-      {/* TODO: Add Cards for Links, Custom Properties, etc. */}
+      {/* Metadata Panel */}
+      {product.id && (
+        <EntityMetadataPanel entityId={product.id} entityType="data_product" />
+      )}
 
       {/* Render the reusable Edit Wizard component */}
       {isEditWizardOpen && product && (

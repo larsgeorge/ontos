@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import DataContractWizardDialog from '@/components/data-contracts/data-contract-wizard-dialog'
 import { useToast } from '@/hooks/use-toast'
+import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel'
 
 type Contract = {
   id: string
@@ -146,6 +147,11 @@ export default function DataContractDetails() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Metadata Panel */}
+      {contract.id && (
+        <EntityMetadataPanel entityId={contract.id} entityType="data_contract" />
+      )}
 
       <DataContractWizardDialog
         isOpen={isWizardOpen}
