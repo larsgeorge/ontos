@@ -14,6 +14,7 @@ import DataDomainsView from './views/data-domains';
 import DataProducts from './views/data-products';
 import DataProductDetails from './views/data-product-details';
 import DataContracts from './views/data-contracts';
+import DataContractDetails from './views/data-contract-details';
 import BusinessGlossary from './views/business-glossary';
 import Compliance from './views/compliance';
 import EstateManager from './views/estate-manager';
@@ -29,6 +30,7 @@ import Settings from './views/settings';
 import About from './views/about';
 import NotFound from './views/not-found';
 import DataDomainDetailsView from "@/views/data-domain-details";
+import SearchView from './views/search';
 
 export default function App() {
   const fetchUserInfo = useUserStore((state: any) => state.fetchUserInfo);
@@ -65,6 +67,7 @@ export default function App() {
               <Route path="/data-products" element={<DataProducts />} />
               <Route path="/data-products/:productId" element={<DataProductDetails />} />
               <Route path="/data-contracts" element={<DataContracts />} />
+              <Route path="/data-contracts/:contractId" element={<DataContractDetails />} />
               <Route path="/business-glossary" element={<BusinessGlossary />} />
               <Route path="/master-data" element={<MasterDataManagement />} />
               <Route path="/entitlements" element={<Entitlements />} />
@@ -73,6 +76,7 @@ export default function App() {
               <Route path="/compliance" element={<Compliance />} />
               <Route path="/catalog-commander" element={<CatalogCommander />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/search" element={<SearchView />} />
               <Route path="/about" element={<About />} />
               <Route path="/estate-manager" element={<EstateManager />} />
               <Route path="/estates/:estateId" element={<EstateDetailsView />} />

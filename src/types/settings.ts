@@ -1,3 +1,22 @@
+export type FeatureAccessLevel = 'None' | 'Read-only' | 'Read/Write' | 'Filtered' | 'Full' | 'Admin';
+
+export interface AppRole {
+  id: string;
+  name: string;
+  description?: string;
+  assigned_groups: string[];
+  feature_permissions: Record<string, FeatureAccessLevel>;
+}
+
+export interface FeatureConfig {
+  name: string;
+  allowed_levels: FeatureAccessLevel[];
+}
+
+export interface UserPermissions {
+  [featureId: string]: FeatureAccessLevel;
+}
+
 // Based on api/common/features.py FeatureAccessLevel
 export enum FeatureAccessLevel {
     NONE = "None",

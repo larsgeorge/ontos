@@ -1,0 +1,28 @@
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+<http://example.org/sporting>
+    a skos:ConceptScheme ;
+    skos:prefLabel "Sporting Goods Taxonomy"@en .
+
+<http://example.org/sporting/equipment>
+    a skos:Concept ;
+    skos:inScheme <http://example.org/sporting> ;
+    skos:prefLabel "Equipment"@en ;
+    skos:narrower <http://example.org/sporting/balls> , <http://example.org/sporting/rackets> , <http://example.org/sporting/footwear> .
+
+<http://example.org/sporting/balls>
+    a skos:Concept ;
+    skos:inScheme <http://example.org/sporting> ;
+    skos:prefLabel "Balls"@en .
+
+<http://example.org/sporting/rackets>
+    a skos:Concept ;
+    skos:inScheme <http://example.org/sporting> ;
+    skos:prefLabel "Rackets"@en .
+
+<http://example.org/sporting/footwear>
+    a skos:Concept ;
+    skos:inScheme <http://example.org/sporting> ;
+    skos:prefLabel "Footwear"@en .
+
+

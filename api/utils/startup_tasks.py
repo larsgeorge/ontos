@@ -27,6 +27,7 @@ from api.controller.notifications_manager import NotificationsManager
 from api.controller.audit_manager import AuditManager
 from api.controller.data_domains_manager import DataDomainManager # Import new manager
 from api.controller.tags_manager import TagsManager # Import TagsManager
+from api.controller.semantic_models_manager import SemanticModelsManager
 
 # Import repositories (needed for manager instantiation)
 from api.repositories.settings_repository import AppRoleRepository
@@ -34,6 +35,8 @@ from api.repositories.audit_log_repository import AuditLogRepository
 from api.repositories.data_asset_reviews_repository import DataAssetReviewRepository
 from api.repositories.data_products_repository import DataProductRepository
 from api.repositories.data_domain_repository import DataDomainRepository # Import new repo
+# Import repository for semantic models
+from api.repositories.semantic_models_repository import SemanticModelsRepository
 # Import the required DB model
 from api.db_models.settings import AppRoleDb
 # Import the AuditLog DB model
@@ -109,6 +112,7 @@ def initialize_managers(app: FastAPI):
         data_asset_review_repo = DataAssetReviewRepository(model=DataAssetReviewRequestDb)
         data_product_repo = DataProductRepository(model=DataProductDb)
         data_domain_repo = DataDomainRepository()
+        semantic_models_repo = SemanticModelsRepository(model=None)  # model unused due to singleton instance
         # Add other repos if needed
         logger.debug("Repositories initialized.")
 
@@ -145,6 +149,7 @@ def initialize_managers(app: FastAPI):
         app.state.data_domain_manager = DataDomainManager(repository=data_domain_repo)
         app.state.data_contracts_manager = DataContractsManager(data_dir=data_dir)
         app.state.business_glossaries_manager = BusinessGlossariesManager(data_dir=data_dir)
+        app.state.semantic_models_manager = SemanticModelsManager(db=db_session, data_dir=Path(__file__).parent.parent / "data")
         notifications_manager = getattr(app.state, 'notifications_manager', None)
         # Add other managers: Compliance, Estate, MDM, Security, Entitlements, Catalog Commander...
 
@@ -271,6 +276,9 @@ def load_initial_data(app: FastAPI) -> None:
             data_contracts_manager.load_initial_data(db)
         if business_glossaries_manager and hasattr(business_glossaries_manager, 'load_initial_data'):
             business_glossaries_manager.load_initial_data(db)
+        semantic_models_manager = getattr(app.state, 'semantic_models_manager', None)
+        if semantic_models_manager and hasattr(semantic_models_manager, 'load_initial_data'):
+            semantic_models_manager.load_initial_data(db)
         if notifications_manager and hasattr(notifications_manager, 'load_initial_data'):
             notifications_manager.load_initial_data(db)
         

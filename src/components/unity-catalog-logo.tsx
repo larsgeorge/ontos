@@ -17,3 +17,4 @@ export function UnityCatalogLogo({ className }: UnityCatalogLogoProps) {
     />
   );
 } 
+export default UnityCatalogLogo;

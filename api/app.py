@@ -36,8 +36,11 @@ from api.routes import (
     search_routes,
     security_features_routes,
     settings_routes,
+    semantic_models_routes,
+    semantic_links_routes,
     user_routes,
     audit_routes,
+    change_log_routes,
     workspace_routes,
     tags_routes,
 )
@@ -162,8 +165,11 @@ metadata_routes.register_routes(app)
 notifications_routes.register_routes(app)
 search_routes.register_routes(app)
 settings_routes.register_routes(app)
+semantic_models_routes.register_routes(app)
+semantic_links_routes.register_routes(app)
 user_routes.register_routes(app)
 audit_routes.register_routes(app)
+change_log_routes.register_routes(app)
 data_domains_routes.register_routes(app)
 workspace_routes.register_routes(app)
 tags_routes.register_routes(app)

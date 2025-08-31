@@ -17,6 +17,7 @@ from api.controller.data_domains_manager import DataDomainManager
 from api.controller.data_contracts_manager import DataContractsManager
 from api.controller.business_glossaries_manager import BusinessGlossariesManager
 from api.controller.search_manager import SearchManager
+from api.controller.semantic_models_manager import SemanticModelsManager
 
 # Import other dependencies needed by these providers
 from api.common.database import get_db
@@ -104,6 +105,13 @@ def get_search_manager(request: Request) -> SearchManager:
     if not manager:
         logger.critical("SearchManager not found in application state during request!")
         raise HTTPException(status_code=503, detail="Search service not configured.")
+    return manager
+
+def get_semantic_models_manager(request: Request) -> SemanticModelsManager:
+    manager = getattr(request.app.state, 'semantic_models_manager', None)
+    if not manager:
+        logger.critical("SemanticModelsManager not found in application state during request!")
+        raise HTTPException(status_code=503, detail="Semantic Models service not configured.")
     return manager
 
 # Add getters for Compliance, Estate, MDM, Security, Entitlements, Catalog Commander managers when they are added

@@ -113,13 +113,25 @@ export default function SearchBar({ variant = 'default', placeholder = 'Search..
             variant === 'large' ? "h-12 text-lg" : "h-10"
           )}
         />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-        >
-          <Search className="h-4 w-4" />
-        </Button>
+        <div className="absolute right-0 top-0 h-full flex items-center gap-1 pr-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hover:bg-transparent"
+            title="Search"
+          >
+            <Search className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hover:bg-transparent"
+            onClick={() => navigate('/search')}
+            title="Open advanced search"
+          >
+            Advanced
+          </Button>
+        </div>
       </div>
 
       {isOpen && (query.trim() || results.length > 0) && (

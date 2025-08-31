@@ -2,7 +2,7 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import os
 from pathlib import Path
 
@@ -25,6 +25,13 @@ from api.common.search_interfaces import SearchableAsset, SearchIndexItem
 from api.common.search_registry import searchable_asset
 
 from api.common.logging import get_logger
+from api.db_models.data_contracts import (
+    DataContractDb,
+    DataContractTagDb,
+    DataContractRoleDb,
+    DataContractServerDb,
+)
+from api.repositories.data_contracts_repository import data_contract_repo
 
 logger = get_logger(__name__)
 
@@ -34,7 +41,6 @@ class DataContractsManager(SearchableAsset):
     def __init__(self, data_dir: Path):
         self._contracts: Dict[str, DataContract] = {}
         self._data_dir = data_dir
-        self._load_initial_data()
 
     def _load_initial_data(self):
         """Loads initial data from the YAML file if it exists."""
@@ -398,7 +404,7 @@ class DataContractsManager(SearchableAsset):
         return {
             'name': contract.name,
             'version': contract.version,
-            'status': contract.status.value,
+            'status': getattr(contract.status, 'value', contract.status),
             'description': contract.metadata.business_description,
             'owner': contract.metadata.owner,
             'domain': contract.metadata.domain,
@@ -446,3 +452,147 @@ class DataContractsManager(SearchableAsset):
         except Exception as e:
             logger.error(f"Error fetching or mapping data contracts for search: {e}", exc_info=True)
             return [] # Return empty list on error
+
+    # --- ODCS Helpers ---
+    def create_from_odcs_dict(self, db, odcs: Dict[str, Any], current_username: Optional[str]) -> DataContractDb:
+        name = odcs.get('name') or 'contract'
+        version = odcs.get('version') or 'v1.0'
+        status = odcs.get('status') or 'draft'
+        owner = odcs.get('owner') or (current_username or 'unknown')
+        kind = odcs.get('kind') or 'DataContract'
+        api_version = odcs.get('apiVersion') or 'v3.0.1'
+        description = odcs.get('description') or {}
+        db_obj = DataContractDb(
+            name=name,
+            version=version,
+            status=status,
+            owner=owner,
+            kind=kind,
+            api_version=api_version,
+            description_usage=description.get('usage'),
+            description_purpose=description.get('purpose'),
+            description_limitations=description.get('limitations'),
+            raw_format='json',
+            raw_text=json.dumps(odcs),
+            created_by=current_username,
+            updated_by=current_username,
+        )
+        created = data_contract_repo.create(db=db, obj_in=db_obj)  # type: ignore[arg-type]
+
+        # tags
+        tags = odcs.get('tags') or []
+        if isinstance(tags, list):
+            for t in tags:
+                if isinstance(t, str):
+                    db.add(DataContractTagDb(contract_id=created.id, name=t))
+        # roles
+        for r in odcs.get('roles', []) or []:
+            if isinstance(r, dict) and r.get('role'):
+                db.add(DataContractRoleDb(
+                    contract_id=created.id,
+                    role=r.get('role'),
+                    description=r.get('description'),
+                    access=r.get('access'),
+                    first_level_approvers=r.get('firstLevelApprovers'),
+                    second_level_approvers=r.get('secondLevelApprovers'),
+                ))
+        # servers (minimal)
+        for s in odcs.get('servers', []) or []:
+            if isinstance(s, dict) and s.get('type'):
+                db.add(DataContractServerDb(
+                    contract_id=created.id,
+                    server=s.get('server'),
+                    type=s.get('type'),
+                    description=s.get('description'),
+                    environment=s.get('environment'),
+                ))
+        return created
+
+    def build_odcs_from_db(self, db_obj: DataContractDb) -> Dict[str, Any]:
+        odcs: Dict[str, Any] = {
+            'version': db_obj.version,
+            'kind': db_obj.kind or 'DataContract',
+            'apiVersion': db_obj.api_version or 'v3.0.1',
+            'id': db_obj.id,
+            'name': db_obj.name,
+            'status': db_obj.status,
+        }
+        description: Dict[str, Any] = {}
+        if db_obj.description_usage:
+            description['usage'] = db_obj.description_usage
+        if db_obj.description_purpose:
+            description['purpose'] = db_obj.description_purpose
+        if db_obj.description_limitations:
+            description['limitations'] = db_obj.description_limitations
+        if description:
+            odcs['description'] = description
+        if db_obj.tags:
+            odcs['tags'] = [t.name for t in db_obj.tags]
+        if db_obj.roles:
+            odcs['roles'] = [
+                {
+                    'role': r.role,
+                    'description': r.description,
+                    'access': r.access,
+                    'firstLevelApprovers': r.first_level_approvers,
+                    'secondLevelApprovers': r.second_level_approvers,
+                }
+                for r in db_obj.roles
+            ]
+        if db_obj.servers:
+            odcs['servers'] = [
+                {
+                    'server': s.server,
+                    'type': s.type,
+                    'description': s.description,
+                    'environment': s.environment,
+                }
+                for s in db_obj.servers
+            ]
+        return odcs
+
+    # --- App startup data loader ---
+    def load_initial_data(self, db) -> None:
+        """Load example contracts from YAML into the database if not present."""
+        try:
+            yaml_path = self._data_dir / 'data_contracts.yaml'
+            if not yaml_path.exists():
+                logger.info("No data_contracts.yaml found; skipping initial contract load.")
+                return
+            with open(yaml_path, 'r') as f:
+                data = yaml.safe_load(f) or {}
+            contracts = data.get('contracts') or []
+            created_count = 0
+            for c in contracts:
+                name = c.get('name')
+                version = c.get('version') or 'v1.0'
+                if not name:
+                    continue
+                # Skip if exists
+                existing = db.query(DataContractDb).filter(
+                    DataContractDb.name == name,
+                    DataContractDb.version == version
+                ).first()
+                if existing:
+                    continue
+                db_obj = DataContractDb(
+                    name=name,
+                    version=version,
+                    status=c.get('status') or 'draft',
+                    owner=c.get('owner') or 'unknown@local',
+                    kind='DataContract',
+                    api_version='v3.0.1',
+                    raw_format=c.get('format') or 'json',
+                    raw_text=c.get('contract_text') or '',
+                    created_by='system@startup',
+                    updated_by='system@startup',
+                )
+                data_contract_repo.create(db=db, obj_in=db_obj)  # type: ignore[arg-type]
+                created_count += 1
+            if created_count:
+                db.commit()
+                logger.info(f"Loaded {created_count} data contracts from YAML into DB.")
+            else:
+                logger.info("No new data contracts loaded from YAML (existing entries found).")
+        except Exception as e:
+            logger.error(f"Failed to load initial data contracts into DB: {e}", exc_info=True)

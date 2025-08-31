@@ -38,6 +38,8 @@ try:
     from api.db_models import data_products
     from api.db_models import notifications
     from api.db_models import data_domains
+    from api.db_models import semantic_links
+    from api.db_models import semantic_models
     from api.db_models.data_products import DataProductDb, InfoDb, InputPortDb, OutputPortDb
     from api.db_models.settings import AppRoleDb
     # from api.db_models.users import UserActivityDb, UserSearchHistoryDb # Commented out due to missing file

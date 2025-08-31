@@ -1,0 +1,51 @@
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+<http://example.org/banking>
+    a skos:ConceptScheme ;
+    skos:prefLabel "Banking Taxonomy"@en .
+
+<http://example.org/banking/retail>
+    a skos:Concept ;
+    skos:inScheme <http://example.org/banking> ;
+    skos:prefLabel "Retail Banking"@en ;
+    skos:narrower <http://example.org/banking/accounts> , <http://example.org/banking/cards> .
+
+<http://example.org/banking/accounts>
+    a skos:Concept ;
+    skos:inScheme <http://example.org/banking> ;
+    skos:prefLabel "Deposit Accounts"@en ;
+    skos:broader <http://example.org/banking/retail> ;
+    skos:narrower <http://example.org/banking/checking> , <http://example.org/banking/savings> .
+
+<http://example.org/banking/cards>
+    a skos:Concept ;
+    skos:inScheme <http://example.org/banking> ;
+    skos:prefLabel "Payment Cards"@en ;
+    skos:broader <http://example.org/banking/retail> ;
+    skos:narrower <http://example.org/banking/credit> , <http://example.org/banking/debit> .
+
+<http://example.org/banking/checking>
+    a skos:Concept ;
+    skos:inScheme <http://example.org/banking> ;
+    skos:prefLabel "Checking Account"@en ;
+    skos:broader <http://example.org/banking/accounts> .
+
+<http://example.org/banking/savings>
+    a skos:Concept ;
+    skos:inScheme <http://example.org/banking> ;
+    skos:prefLabel "Savings Account"@en ;
+    skos:broader <http://example.org/banking/accounts> .
+
+<http://example.org/banking/credit>
+    a skos:Concept ;
+    skos:inScheme <http://example.org/banking> ;
+    skos:prefLabel "Credit Card"@en ;
+    skos:broader <http://example.org/banking/cards> .
+
+<http://example.org/banking/debit>
+    a skos:Concept ;
+    skos:inScheme <http://example.org/banking> ;
+    skos:prefLabel "Debit Card"@en ;
+    skos:broader <http://example.org/banking/cards> .
+
+

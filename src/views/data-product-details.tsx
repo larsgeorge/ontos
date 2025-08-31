@@ -16,6 +16,8 @@ import { usePermissions } from '@/stores/permissions-store'; // Import permissio
 import { FeatureAccessLevel } from '@/types/settings'; // Import FeatureAccessLevel
 import { useNotificationsStore } from '@/stores/notifications-store'; // Import notification store
 import CreateVersionDialog from '@/components/data-products/create-version-dialog';
+import IriPickerDialog from '@/components/semantic/iri-picker-dialog';
+import type { EntitySemanticLink } from '@/types/semantic-link';
 
 // Helper Function Type Definition (copied from DataProducts view for checking API responses)
 type CheckApiResponseFn = <T>(
@@ -53,6 +55,8 @@ export default function DataProductDetails() {
   const [error, setError] = useState<string | null>(null);
   const [isEditWizardOpen, setIsEditWizardOpen] = useState(false);
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false);
+  const [iriDialogOpen, setIriDialogOpen] = useState(false);
+  const [links, setLinks] = useState<EntitySemanticLink[]>([]);
 
   // State for dropdown values needed by the dialog
   const [statuses, setStatuses] = useState<DataProductStatus[]>([]);
@@ -105,11 +109,12 @@ export default function DataProductDetails() {
     setDynamicTitle('Loading...'); // Set loading state for the dynamic part
     try {
       // Fetch product details and dropdown values concurrently
-      const [productResp, statusesResp, ownersResp, typesResp] = await Promise.all([
+      const [productResp, statusesResp, ownersResp, typesResp, linksResp] = await Promise.all([
         get<DataProduct>(`/api/data-products/${productId}`),
         get<DataProductStatus[]>('/api/data-products/statuses'),
         get<DataProductOwner[]>('/api/data-products/owners'),
         get<DataProductType[]>('/api/data-products/types'),
+        get<EntitySemanticLink[]>(`/api/semantic-links/entity/data_product/${productId}`),
       ]);
 
       // Check responses using the helper
@@ -123,6 +128,7 @@ export default function DataProductDetails() {
       setStatuses(Array.isArray(statusesData) ? statusesData : []);
       setProductTypes(Array.isArray(typesData) ? typesData : []);
       setOwners(Array.isArray(ownersData) ? ownersData : []);
+      setLinks(Array.isArray(linksResp.data) ? linksResp.data : []);
 
       // Update breadcrumb store with the actual title
       setDynamicTitle(productData.info.title);
@@ -190,6 +196,34 @@ export default function DataProductDetails() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete product';
       toast({ title: 'Error', description: `Failed to delete: ${errorMessage}`, variant: 'destructive' });
+    }
+  };
+
+  const addIri = async (iri: string) => {
+    if (!productId) return;
+    try {
+      const res = await post<EntitySemanticLink>(`/api/semantic-links/`, {
+        entity_id: productId,
+        entity_type: 'data_product',
+        iri,
+      });
+      if (res.error) throw new Error(res.error);
+      await fetchDetailsAndDropdowns();
+      setIriDialogOpen(false);
+      toast({ title: 'Linked', description: 'IRI linked to data product.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message || 'Failed to link IRI', variant: 'destructive' });
+    }
+  };
+
+  const removeLink = async (linkId: string) => {
+    try {
+      const res = await fetch(`/api/semantic-links/${linkId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to remove link');
+      await fetchDetailsAndDropdowns();
+      toast({ title: 'Removed', description: 'IRI link removed.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message || 'Failed to remove link', variant: 'destructive' });
     }
   };
 
@@ -356,6 +390,22 @@ export default function DataProductDetails() {
               )}
             </div>
           </div>
+          <div className="space-y-1">
+            <Label>Linked RDF IRIs:</Label>
+            <div className="flex flex-wrap gap-2 mt-1 items-center">
+              {links.length === 0 ? (
+                <span className="text-sm text-muted-foreground">No IRIs linked</span>
+              ) : (
+                links.map(l => (
+                  <span key={l.id} className="inline-flex items-center gap-1 border rounded px-2 py-1 text-sm max-w-[420px] truncate">
+                    <a href={`/search?startIri=${encodeURIComponent(l.iri)}`} className="hover:underline truncate" title={l.iri}>{l.iri}</a>
+                    <button aria-label="Remove IRI" className="ml-1 text-muted-foreground hover:text-foreground" onClick={(e) => { e.preventDefault(); removeLink(l.id); }}>×</button>
+                  </span>
+                ))
+              )}
+              <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add IRI</Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -426,6 +476,8 @@ export default function DataProductDetails() {
               onSubmit={submitNewVersion} // Pass the submit handler
           />
       )}
+
+      <IriPickerDialog isOpen={iriDialogOpen} onOpenChange={setIriDialogOpen} onPick={addIri} />
 
       <Toaster />
     </div>

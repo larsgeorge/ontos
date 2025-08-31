@@ -98,6 +98,10 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'name': 'Settings',
         'allowed_levels': ADMIN_ONLY_LEVELS # Only Admins change settings
     },
+    'semantic-models': {
+        'name': 'Semantic Models',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS
+    },
     # 'about': { ... } # About page doesn't need explicit permissions here
 
 }
