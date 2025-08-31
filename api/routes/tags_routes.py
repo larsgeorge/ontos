@@ -11,7 +11,8 @@ from api.models.users import UserInfo # For CurrentUserDep
 from api.models.tags import (
     Tag, TagCreate, TagUpdate, TagStatus,
     TagNamespace, TagNamespaceCreate, TagNamespaceUpdate,
-    TagNamespacePermission, TagNamespacePermissionCreate, TagNamespacePermissionUpdate
+    TagNamespacePermission, TagNamespacePermissionCreate, TagNamespacePermissionUpdate,
+    AssignedTagCreate, AssignedTag
 )
 
 logger = get_logger(__name__)
@@ -229,6 +230,53 @@ async def delete_namespace_permission(
     if not manager.remove_permission_from_namespace(db, perm_id=permission_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found or could not be deleted") # Fallback
     return
+
+# --- Generic Entity Tagging Routes ---
+@router.get("/entities/{entity_type}/{entity_id}/tags", response_model=List[AssignedTag])
+async def list_entity_tags(
+    entity_type: str,
+    entity_id: str,
+    db: DBSessionDep,
+    manager: TagsManager = Depends(get_tags_manager)
+):
+    return manager.list_assigned_tags(db, entity_id=entity_id, entity_type=entity_type)
+
+@router.post("/entities/{entity_type}/{entity_id}/tags:set", response_model=List[AssignedTag])
+async def set_entity_tags(
+    entity_type: str,
+    entity_id: str,
+    tags: List[AssignedTagCreate],
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager: TagsManager = Depends(get_tags_manager)
+):
+    return manager.set_tags_for_entity(db, entity_id=entity_id, entity_type=entity_type, tags=tags, user_email=current_user.email)
+
+@router.post("/entities/{entity_type}/{entity_id}/tags:add", response_model=AssignedTag)
+async def add_tag_to_entity_route(
+    entity_type: str,
+    entity_id: str,
+    tag_id: UUID,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    assigned_value: Optional[str] = None,
+    manager: TagsManager = Depends(get_tags_manager)
+):
+    return manager.add_tag_to_entity(db, entity_id=entity_id, entity_type=entity_type, tag_id=tag_id, assigned_value=assigned_value, user_email=current_user.email)
+
+@router.delete("/entities/{entity_type}/{entity_id}/tags:remove", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_tag_from_entity_route(
+    entity_type: str,
+    entity_id: str,
+    tag_id: UUID,
+    db: DBSessionDep,
+    manager: TagsManager = Depends(get_tags_manager)
+):
+    ok = manager.remove_tag_from_entity(db, entity_id=entity_id, entity_type=entity_type, tag_id=tag_id)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag association not found")
+    return
+
 
 def register_routes(app):
     app.include_router(router)

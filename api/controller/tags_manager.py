@@ -30,12 +30,12 @@ class TagsManager(SearchableAsset):
         namespace_repo: TagNamespaceRepository = tag_namespace_repo,
         tag_repository: TagRepository = tag_repo,
         permission_repo: TagNamespacePermissionRepository = tag_namespace_permission_repo,
-        # entity_assoc_repo: EntityTagAssociationRepository = entity_tag_repo # Not used directly in this manager yet
+        entity_assoc_repo: EntityTagAssociationRepository = entity_tag_repo
     ):
         self._namespace_repo = namespace_repo
         self._tag_repo = tag_repository
         self._permission_repo = permission_repo
-        # self._entity_assoc_repo = entity_assoc_repo
+        self._entity_assoc_repo = entity_assoc_repo
 
     # --- Namespace Methods ---
     def create_namespace(self, db: Session, *, namespace_in: TagNamespaceCreate, user_email: Optional[str]) -> TagNamespace:
@@ -91,6 +91,55 @@ class TagsManager(SearchableAsset):
             db.commit()
             return True
         return False
+
+    # --- Entity Tagging Methods (generic across entity types) ---
+    def list_assigned_tags(self, db: Session, *, entity_id: str, entity_type: str) -> List[AssignedTag]:
+        return self._entity_assoc_repo.get_assigned_tags_for_entity(db, entity_id=entity_id, entity_type=entity_type)
+
+    def set_tags_for_entity(self, db: Session, *, entity_id: str, entity_type: str, tags: List[AssignedTagCreate], user_email: Optional[str]) -> List[AssignedTag]:
+        ns_repo = self._namespace_repo
+        assigned = self._entity_assoc_repo.set_tags_for_entity(
+            db,
+            entity_id=entity_id,
+            entity_type=entity_type,
+            tags_data=tags,
+            user_email=user_email,
+            tag_repo=self._tag_repo,
+            ns_repo=ns_repo,
+        )
+        db.commit()
+        return assigned
+
+    def add_tag_to_entity(self, db: Session, *, entity_id: str, entity_type: str, tag_id: UUID, assigned_value: Optional[str], user_email: Optional[str]) -> AssignedTag:
+        assoc = self._entity_assoc_repo.add_tag_to_entity(
+            db,
+            entity_id=entity_id,
+            entity_type=entity_type,
+            tag_id=tag_id,
+            assigned_value=assigned_value,
+            assigned_by=user_email,
+        )
+        db.commit()
+        # Build AssignedTag result
+        tag_db = self._tag_repo.get(db, id=tag_id)
+        ns = self._namespace_repo.get(db, id=tag_db.namespace_id) if tag_db and tag_db.namespace_id else None
+        return AssignedTag(
+            tag_id=tag_db.id,
+            tag_name=tag_db.name,
+            namespace_id=tag_db.namespace_id,
+            namespace_name=ns.name if ns else DEFAULT_NAMESPACE_NAME,
+            status=TagStatus(tag_db.status),
+            fully_qualified_name=f"{(ns.name if ns else DEFAULT_NAMESPACE_NAME)}{TAG_NAMESPACE_SEPARATOR}{tag_db.name}",
+            assigned_value=assoc.assigned_value,
+            assigned_by=assoc.assigned_by,
+            assigned_at=assoc.assigned_at,
+        )
+
+    def remove_tag_from_entity(self, db: Session, *, entity_id: str, entity_type: str, tag_id: UUID) -> bool:
+        ok = self._entity_assoc_repo.remove_tag_from_entity(db, entity_id=entity_id, entity_type=entity_type, tag_id=tag_id)
+        if ok:
+            db.commit()
+        return ok
 
     def get_or_create_default_namespace(self, db: Session, *, user_email: Optional[str]) -> TagNamespaceDb:
         """Ensures the default namespace exists, creating it if necessary."""

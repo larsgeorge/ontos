@@ -18,6 +18,7 @@ from api.controller.data_contracts_manager import DataContractsManager
 from api.controller.business_glossaries_manager import BusinessGlossariesManager
 from api.controller.search_manager import SearchManager
 from api.controller.semantic_models_manager import SemanticModelsManager
+from api.controller.metadata_manager import MetadataManager
 
 # Import other dependencies needed by these providers
 from api.common.database import get_db
@@ -112,6 +113,15 @@ def get_semantic_models_manager(request: Request) -> SemanticModelsManager:
     if not manager:
         logger.critical("SemanticModelsManager not found in application state during request!")
         raise HTTPException(status_code=503, detail="Semantic Models service not configured.")
+    return manager
+
+def get_metadata_manager(request: Request) -> MetadataManager:
+    manager = getattr(request.app.state, 'metadata_manager', None)
+    if not manager:
+        # Instantiate lazily and cache on app.state
+        manager = MetadataManager()
+        setattr(request.app.state, 'metadata_manager', manager)
+        logger.info("Initialized MetadataManager and stored on app.state.metadata_manager")
     return manager
 
 # Add getters for Compliance, Estate, MDM, Security, Entitlements, Catalog Commander managers when they are added

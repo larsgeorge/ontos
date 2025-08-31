@@ -2,10 +2,10 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 
 interface MarkdownViewerProps {
-  content: string;
+  markdown: string;
 }
 
-const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ content }) => {
+const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ markdown }) => {
   return (
     <div className="p-4 bg-background rounded-lg">
       <ReactMarkdown
@@ -62,7 +62,7 @@ const MarkdownViewer: React.FC<MarkdownViewerProps> = ({ content }) => {
           ),
         }}
       >
-        {content}
+        {markdown}
       </ReactMarkdown>
     </div>
   );

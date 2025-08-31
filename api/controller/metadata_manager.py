@@ -1,197 +1,153 @@
-import logging
-import json
-from pathlib import Path
-from typing import List, Optional, Dict, Any
-from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.catalog import TableInfo, TableType
-from pydantic import ValidationError
+from typing import List, Optional
 
-from api.models.metadata import MetastoreTableInfo
-from api.common.workspace_client import CachingWorkspaceClient
+from sqlalchemy.orm import Session
 
 from api.common.logging import get_logger
+from api.models.metadata import (
+    RichText, RichTextCreate, RichTextUpdate,
+    Link, LinkCreate, LinkUpdate,
+    Document, DocumentCreate,
+)
+from api.repositories.metadata_repository import (
+    rich_text_repo, link_repo, document_repo,
+    RichTextRepository, LinkRepository, DocumentRepository,
+)
+from api.repositories.change_log_repository import change_log_repo
+from api.db_models.change_log import ChangeLogDb
 
 logger = get_logger(__name__)
 
-# Cache for metastore tables to avoid repeated SDK calls within a short period
-_metastore_table_cache: Optional[List[MetastoreTableInfo]] = None
-_cache_timestamp: Optional[float] = None
-CACHE_TTL_SECONDS = 60 # Cache for 1 minute
 
 class MetadataManager:
-    def __init__(self, ws_client: CachingWorkspaceClient):
-        if ws_client is None:
-            raise ValueError("WorkspaceClient cannot be None for MetadataManager")
-        self.ws_client = ws_client
-        logger.info("MetadataManager initialized.")
+    def __init__(
+        self,
+        rich_text_repository: RichTextRepository = rich_text_repo,
+        link_repository: LinkRepository = link_repo,
+        document_repository: DocumentRepository = document_repo,
+    ):
+        self._rich_text_repo = rich_text_repository
+        self._link_repo = link_repository
+        self._document_repo = document_repository
 
-    def list_metastore_tables(self, force_refresh: bool = False) -> List[MetastoreTableInfo]:
-        """
-        Lists accessible tables across all catalogs and schemas in the metastore.
-        Leverages the injected DatabricksWorkspaceClient which handles caching.
-        """
-        global _metastore_table_cache, _cache_timestamp
-        # Use client's internal caching logic if force_refresh is not True
-        # The manager-level cache might be redundant if client cache works well,
-        # but keeping it for now as an example or potential optimization layer.
-        
-        # Simplified logic: rely primarily on the client's cache mechanism triggered via its methods
-        # We just need to iterate correctly.
+    def _log_change(self, db: Session, *, entity_type: str, entity_id: str, action: str, username: Optional[str], details_json: Optional[str] = None) -> None:
+        entry = ChangeLogDb(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            action=action,
+            username=username,
+            details_json=details_json,
+        )
+        db.add(entry)
+        db.commit()
 
-        all_tables_info: List[MetastoreTableInfo] = []
-        try:
-            # Use the client's cached catalog list method
-            # Correct SDK access pattern: client.catalogs.list()
-            catalogs_generator = self.ws_client.catalogs.list()
-            # Convert generator to list to get count, assuming catalog list is not huge
-            # Alternatively, count while iterating if memory is a concern
-            catalogs = list(catalogs_generator) 
-            logger.info(f"Found {len(catalogs)} catalogs to scan.")
+    # --- Rich Text ---
+    def create_rich_text(self, db: Session, *, data: RichTextCreate, user_email: Optional[str]) -> RichText:
+        db_obj = self._rich_text_repo.create(db, obj_in=data)
+        db.commit()
+        db.refresh(db_obj)
+        self._log_change(db, entity_type=f"{data.entity_type}:rich_text", entity_id=data.entity_id, action="CREATE", username=user_email)
+        return RichText.from_orm(db_obj)
 
-            for catalog in catalogs:
-                catalog_name = catalog.name
-                logger.debug(f"Scanning catalog: {catalog_name}")
-                try:
-                    # Use the client's cached schema list method
-                    # Correct SDK access pattern: client.schemas.list(...)
-                    # This returns a generator, so we iterate directly
-                    schemas_generator = self.ws_client.schemas.list(catalog_name=catalog_name)
-                    schema_count = 0
-                    for schema in schemas_generator: 
-                        schema_count += 1
-                        schema_name = schema.name
-                        logger.debug(f"Scanning schema: {catalog_name}.{schema_name}")
-                        try:
-                            # Use the client's cached table list method
-                            # Correct SDK access pattern: client.tables.list(...)
-                            # This also returns a generator
-                            tables_generator = self.ws_client.tables.list(catalog_name=catalog_name, 
-                                                                         schema_name=schema_name)
-                            table_count_in_schema = 0
-                            for table in tables_generator:
-                                table_count_in_schema += 1
-                                try:
-                                    # Basic filtering: Include only MANAGED or EXTERNAL tables
-                                    # Could add more filters (e.g., based on owner, tags)
-                                    if table.table_type in [TableType.MANAGED, TableType.EXTERNAL]:
-                                        table_info = MetastoreTableInfo(
-                                            catalog_name=table.catalog_name,
-                                            schema_name=table.schema_name,
-                                            table_name=table.name,
-                                            full_name=table.full_name,
-                                            comment=table.comment or "",
-                                            owner=table.owner or "Unknown",
-                                            table_type=str(table.table_type.value) # Convert Enum to string
-                                        )
-                                        all_tables_info.append(table_info)
-                                except ValidationError as ve:
-                                     logger.warning(f"Validation error processing table {table.full_name}: {ve}")
-                                except Exception as e_inner:
-                                    logger.error(f"Error processing table {catalog_name}.{schema_name}.{table.name}: {e_inner}", exc_info=True)
-                            logger.debug(f"Found {table_count_in_schema} tables in schema {catalog_name}.{schema_name}")
+    def list_rich_texts(self, db: Session, *, entity_type: str, entity_id: str) -> List[RichText]:
+        rows = self._rich_text_repo.list_for_entity(db, entity_type=entity_type, entity_id=entity_id)
+        return [RichText.from_orm(r) for r in rows]
 
-                        except Exception as e_mid:
-                            # Log error listing tables in a specific schema but continue to next schema
-                            logger.error(f"Error listing tables in schema {catalog_name}.{schema_name}: {e_mid}", exc_info=True)
-                    logger.info(f"Scanned {schema_count} schemas in catalog {catalog_name}")
+    def update_rich_text(self, db: Session, *, id: str, data: RichTextUpdate, user_email: Optional[str]) -> Optional[RichText]:
+        db_obj = self._rich_text_repo.get(db, id=id)
+        if not db_obj:
+            return None
+        updated = self._rich_text_repo.update(db, db_obj=db_obj, obj_in=data)
+        db.commit()
+        db.refresh(updated)
+        self._log_change(db, entity_type=f"{updated.entity_type}:rich_text", entity_id=updated.entity_id, action="UPDATE", username=user_email)
+        return RichText.from_orm(updated)
 
-                except Exception as e_outer:
-                     # Log error listing schemas in a specific catalog but continue to next catalog
-                    logger.error(f"Error listing schemas in catalog {catalog_name}: {e_outer}", exc_info=True)
+    def delete_rich_text(self, db: Session, *, id: str, user_email: Optional[str]) -> bool:
+        db_obj = self._rich_text_repo.get(db, id=id)
+        if not db_obj:
+            return False
+        entity_type, entity_id = db_obj.entity_type, db_obj.entity_id
+        removed = self._rich_text_repo.remove(db, id=id)
+        if removed:
+            db.commit()
+            self._log_change(db, entity_type=f"{entity_type}:rich_text", entity_id=entity_id, action="DELETE", username=user_email)
+            return True
+        return False
 
-            logger.info(f"Compiled list of {len(all_tables_info)} accessible metastore tables.")
-            return all_tables_info
+    # --- Link ---
+    def create_link(self, db: Session, *, data: LinkCreate, user_email: Optional[str]) -> Link:
+        db_obj = self._link_repo.create(db, obj_in=data)
+        db.commit()
+        db.refresh(db_obj)
+        self._log_change(db, entity_type=f"{data.entity_type}:link", entity_id=data.entity_id, action="CREATE", username=user_email)
+        return Link.from_orm(db_obj)
 
-        except Exception as e_top:
-            logger.exception(f"Failed to list metastore tables comprehensively: {e_top}")
-            return [] # Return empty list on top-level failure
+    def list_links(self, db: Session, *, entity_type: str, entity_id: str) -> List[Link]:
+        rows = self._link_repo.list_for_entity(db, entity_type=entity_type, entity_id=entity_id)
+        return [Link.from_orm(r) for r in rows]
 
-    def search_metastore_tables(self, query: str, limit: int = 50) -> List[MetastoreTableInfo]:
-        """Searches the cached metastore tables by full name (case-insensitive)."""
-        # Ensure the cache is populated by calling the main list method if needed
-        # Note: This assumes list_metastore_tables handles its own caching/refresh logic
-        all_tables = self.list_metastore_tables() 
-        
-        if not query:
-            # Return the first N items if query is empty, similar to get_initial
-            return all_tables[:limit]
+    def update_link(self, db: Session, *, id: str, data: LinkUpdate, user_email: Optional[str]) -> Optional[Link]:
+        db_obj = self._link_repo.get(db, id=id)
+        if not db_obj:
+            return None
+        updated = self._link_repo.update(db, db_obj=db_obj, obj_in=data)
+        db.commit()
+        db.refresh(updated)
+        self._log_change(db, entity_type=f"{updated.entity_type}:link", entity_id=updated.entity_id, action="UPDATE", username=user_email)
+        return Link.from_orm(updated)
 
-        query_lower = query.lower()
-        results = [
-            table for table in all_tables 
-            if query_lower in table.full_name.lower()
-        ]
-        logger.info(f"Metastore table search for '{query}' found {len(results)} results (limited to {limit}).")
-        return results[:limit] # Apply limit to search results
-        
-    def get_initial_metastore_tables(self, limit: int = 20) -> List[MetastoreTableInfo]:
-        """Returns the first N tables from the cached list."""
-        all_tables = self.list_metastore_tables()
-        logger.info(f"Returning initial {min(limit, len(all_tables))} metastore tables.")
-        return all_tables[:limit]
+    def delete_link(self, db: Session, *, id: str, user_email: Optional[str]) -> bool:
+        db_obj = self._link_repo.get(db, id=id)
+        if not db_obj:
+            return False
+        entity_type, entity_id = db_obj.entity_type, db_obj.entity_id
+        removed = self._link_repo.remove(db, id=id)
+        if removed:
+            db.commit()
+            self._log_change(db, entity_type=f"{entity_type}:link", entity_id=entity_id, action="DELETE", username=user_email)
+            return True
+        return False
 
-    def get_schema(self, schema_name: str) -> Dict[str, Any]:
-        """Loads and parses a JSON schema file from the schemas directory."""
-        try:
-            schemas_dir = Path(__file__).parent.parent / 'schemas'
-            schema_file = schemas_dir / f"{schema_name}.json"
-            
-            if not schema_file.exists():
-                logger.warning(f"Schema file not found: {schema_file}")
-                raise FileNotFoundError(f"Schema '{schema_name}' not found.")
+    # --- Document ---
+    def create_document_record(self, db: Session, *, data: DocumentCreate, filename: str, content_type: Optional[str], size_bytes: Optional[int], storage_path: str, user_email: Optional[str]) -> Document:
+        # DocumentCreate has base fields; other metadata supplied by upload logic
+        from api.db_models.metadata import DocumentMetadataDb
+        db_obj = DocumentMetadataDb(
+            entity_id=data.entity_id,
+            entity_type=data.entity_type,
+            title=data.title,
+            short_description=data.short_description,
+            original_filename=filename,
+            content_type=content_type,
+            size_bytes=size_bytes,
+            storage_path=storage_path,
+            created_by=user_email,
+            updated_by=user_email,
+        )
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        self._log_change(db, entity_type=f"{data.entity_type}:document", entity_id=data.entity_id, action="CREATE", username=user_email)
+        return Document.from_orm(db_obj)
 
-            logger.info(f"Loading schema file: {schema_file}")
-            with open(schema_file, 'r') as f:
-                schema_data = json.load(f) # Use json.load for direct parsing
-            return schema_data
-        except json.JSONDecodeError as e:
-            logger.error(f"Error decoding JSON from schema {schema_name}: {e}")
-            raise ValueError(f"Schema '{schema_name}' contains invalid JSON.")
-        except Exception as e:
-            logger.exception(f"Unexpected error loading schema '{schema_name}': {e}")
-            raise
+    def list_documents(self, db: Session, *, entity_type: str, entity_id: str) -> List[Document]:
+        rows = self._document_repo.list_for_entity(db, entity_type=entity_type, entity_id=entity_id)
+        return [Document.from_orm(r) for r in rows]
 
-    def clear_cache(self):
-        """Clears the metastore table cache."""
-        # Note: The current implementation uses the CachingWorkspaceClient's cache primarily.
-        # This manager-level cache logic might be less relevant now.
-        # Consider removing if CachingWorkspaceClient handles all caching needs.
-        logger.info("Clearing manager-level cache (if any). Client cache persists based on its TTL.")
-        # Placeholder for potential future manager-level cache clearing:
-        # global _metastore_table_cache, _cache_timestamp
-        # _metastore_table_cache = None
-        # _cache_timestamp = None
+    def delete_document(self, db: Session, *, id: str, user_email: Optional[str]) -> bool:
+        db_obj = self._document_repo.get(db, id=id)
+        if not db_obj:
+            return False
+        entity_type, entity_id = db_obj.entity_type, db_obj.entity_id
+        removed = self._document_repo.remove(db, id=id)
+        if removed:
+            db.commit()
+            self._log_change(db, entity_type=f"{entity_type}:document", entity_id=entity_id, action="DELETE", username=user_email)
+            return True
+        return False
 
-# Example usage (for testing or direct invocation if needed)
-if __name__ == '__main__':
-    # This requires DATABRICKS_HOST and DATABRICKS_TOKEN to be set in environment
-    # or other SDK authentication methods.
-    logging.basicConfig(level=logging.INFO)
-    try:
-        # Ensure SDK client is initialized correctly for testing
-        # Note: Requires appropriate environment variables or config
-        ws_sdk_client = WorkspaceClient() 
-        cached_client = CachingWorkspaceClient(ws_sdk_client) # Wrap it
-        manager = MetadataManager(cached_client)
-        
-        print("Listing tables (first time)...")
-        tables = manager.list_metastore_tables()
-        print(f"Found {len(tables)} tables.")
-        # Example: Print details of the first few tables found
-        # for table in tables[:10]: 
-        #     print(f"- {table.full_name} (Type: {table.table_type}, Owner: {table.owner})")
-
-        # Example of using cache (commented out by default)
-        # print("\nListing tables (cached)...")
-        # tables_cached = manager.list_metastore_tables()
-        # print(f"Found {len(tables_cached)} tables from cache.")
-
-        # Example of forcing refresh (commented out by default)
-        # print("\nListing tables (forced refresh)...")
-        # tables_refreshed = manager.list_metastore_tables(force_refresh=True)
-        # print(f"Found {len(tables_refreshed)} tables after refresh.")
-
-    except Exception as main_e:
-        print(f"An error occurred during standalone test: {main_e}")
-        # Optionally log the exception traceback for more details
-        # logger.exception("Error during standalone test run") 
+    def get_document(self, db: Session, *, id: str) -> Optional[Document]:
+        db_obj = self._document_repo.get(db, id=id)
+        if not db_obj:
+            return None
+        return Document.from_orm(db_obj)

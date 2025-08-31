@@ -164,6 +164,8 @@ catalog_commander_routes.register_routes(app)
 metadata_routes.register_routes(app)
 notifications_routes.register_routes(app)
 search_routes.register_routes(app)
+from api.routes import metadata_routes as generic_metadata_routes
+generic_metadata_routes.register_routes(app)
 settings_routes.register_routes(app)
 semantic_models_routes.register_routes(app)
 semantic_links_routes.register_routes(app)

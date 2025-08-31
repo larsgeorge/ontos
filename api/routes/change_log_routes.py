@@ -43,7 +43,7 @@ async def create_change_log(
 
 @router.get(
     "/change-log",
-    dependencies=[Depends(lambda: require_permission(feature='audit', level=FeatureAccessLevel.READ))]
+    dependencies=[Depends(lambda: require_permission(feature='audit', level=FeatureAccessLevel.READ_ONLY))]
 )
 async def list_change_log(
     db: DBSessionDep,

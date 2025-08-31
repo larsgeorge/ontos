@@ -12,6 +12,7 @@ from . import entitlements_sync_routes
 from . import estate_manager_routes
 from . import master_data_management_routes
 from . import metadata_routes
+from . import metadata_routes as generic_metadata_routes
 from . import notifications_routes
 from . import search_routes
 from . import security_features_routes

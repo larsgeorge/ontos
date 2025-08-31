@@ -39,6 +39,7 @@ try:
     from api.db_models import notifications
     from api.db_models import data_domains
     from api.db_models import semantic_links
+    from api.db_models import metadata as metadata_db
     from api.db_models import semantic_models
     from api.db_models.data_products import DataProductDb, InfoDb, InputPortDb, OutputPortDb
     from api.db_models.settings import AppRoleDb

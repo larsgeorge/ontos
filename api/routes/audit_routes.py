@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api", tags=["Audit Trail"])
     "/audit", 
     response_model=PaginatedAuditLogResponse,
     # Secure this endpoint: require READ access to the AUDIT feature
-    dependencies=[Depends(lambda: require_permission(feature='audit', level=FeatureAccessLevel.READ))]
+    dependencies=[Depends(lambda: require_permission(feature='audit', level=FeatureAccessLevel.READ_ONLY))]
 )
 async def get_audit_trail(
     db: DBSessionDep,
