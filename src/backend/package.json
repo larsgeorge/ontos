@@ -1,0 +1,15 @@
+{
+  "name": "ucapp-backend-build",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Builds frontend and copies assets into backend static for Databricks Apps.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "scripts/build_static.sh",
+    "clean": "rm -rf ./static"
+  }
+}
+
+
