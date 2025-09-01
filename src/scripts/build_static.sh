@@ -3,8 +3,8 @@ set -euo pipefail
 
 # Resolve directories
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-FRONTEND_DIR="$(cd "${BACKEND_DIR}/../frontend" && pwd)"
+BACKEND_DIR="$(cd "${SCRIPT_DIR}/../backend" && pwd)"
+FRONTEND_DIR="$(cd "${SCRIPT_DIR}/../frontend" && pwd)"
 DEST_DIR="${BACKEND_DIR}/static"
 SRC_DIR="${FRONTEND_DIR}/static"
 
