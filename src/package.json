@@ -7,7 +7,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "bash ../scripts/build_static.sh",
+    "build": "bash ./scripts/build_static.sh",
     "clean": "rm -rf ./static"
   }
 }
