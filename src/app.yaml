@@ -1,13 +1,12 @@
-command: [
-  "uvicorn",
-  "src.app:app",
-  "--host",
-  "0.0.0.0",
-  "--port",
-  "8000"
-]
+command: ['python', 'backend/src/app.py']
 
 env:
+  - name: "PYTHONPATH"
+    value: "./backend:${PYTHONPATH}"
+  - name: "PYTHONUNBUFFERED"
+    value: "1"
+  - name: "FRONTEND_STATIC_DIR"
+    value: "./static"
   - name: "POSTGRES_HOST"
     value: "instance-33607cf0-86c1-4306-a5c3-2464761fa328.database.cloud.databricks.com"
   - name: "POSTGRES_PORT"
