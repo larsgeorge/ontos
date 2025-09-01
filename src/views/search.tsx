@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { useApi } from '@/hooks/use-api';
@@ -298,8 +299,24 @@ export default function SearchView() {
 
           <Card className="mt-4">
             <CardHeader>
-              <CardTitle>SPARQL</CardTitle>
-              <CardDescription>Run advanced queries over the loaded graph.</CardDescription>
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <CardTitle>SPARQL</CardTitle>
+                  <CardDescription>Run advanced queries over the loaded graph.</CardDescription>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">Examples</Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-[420px] max-w-[80vw]">
+                    <DropdownMenuItem onClick={() => setSparql('SELECT ?resource WHERE { ?resource ?p ?o . FILTER(REGEX(STR(?resource), "^urn:ucapp")) }')}>Resources in app namespace</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSparql('SELECT ?s ?label WHERE { ?s <http://www.w3.org/2000/01/rdf-schema#label> ?label } LIMIT 50')}>Resources with rdfs:label</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSparql('SELECT ?s ?type WHERE { ?s a ?type } LIMIT 100')}>Subjects and their types</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSparql('SELECT ?p (COUNT(*) AS ?count) WHERE { ?s ?p ?o } GROUP BY ?p ORDER BY DESC(?count) LIMIT 25')}>Top predicates by frequency</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSparql('SELECT ?o (COUNT(*) AS ?count) WHERE { ?s <http://www.w3.org/2000/01/rdf-schema#seeAlso> ?o } GROUP BY ?o ORDER BY DESC(?count) LIMIT 25')}>Most linked via rdfs:seeAlso</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               <Input value={sparql} onChange={(e) => setSparql(e.target.value)} />
