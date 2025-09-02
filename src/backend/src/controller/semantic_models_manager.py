@@ -169,6 +169,23 @@ class SemanticModelsManager:
                 self._parse_into_graph(it.content_text or "", it.format)
             except Exception as e:
                 logger.warning(f"Skipping model '{it.name}' due to parse error: {e}")
+        # Always-on ontologies from src/schemas/rdf
+        try:
+            rdf_dir = Path(__file__).parent.parent / "schemas" / "rdf"
+            if rdf_dir.exists() and rdf_dir.is_dir():
+                for f in rdf_dir.iterdir():
+                    if not f.is_file():
+                        continue
+                    name = f.name.lower()
+                    try:
+                        if name.endswith('.ttl'):
+                            self._graph.parse(f.as_posix(), format='turtle')
+                        elif name.endswith('.rdf') or name.endswith('.xml'):
+                            self._graph.parse(f.as_posix(), format='xml')
+                    except Exception as e:
+                        logger.warning(f"Failed loading ontology {f.name}: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to load built-in ontologies: {e}")
         # Add rdfs:seeAlso links from entity-semantic links
         try:
             from src.repositories.semantic_links_repository import entity_semantic_links_repo
