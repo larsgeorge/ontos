@@ -23,6 +23,7 @@ from src.routes import (
     business_glossary_routes,
     catalog_commander_routes,
     compliance_routes,
+    comments_routes,
     data_asset_reviews_routes,
     data_contracts_routes,
     data_domains_routes,
@@ -162,6 +163,7 @@ data_asset_reviews_routes.register_routes(app)
 catalog_commander_routes.register_routes(app)
 # Auxiliary services
 metadata_routes.register_routes(app)
+comments_routes.register_routes(app)
 notifications_routes.register_routes(app)
 search_routes.register_routes(app)
 from src.routes import metadata_routes as generic_metadata_routes

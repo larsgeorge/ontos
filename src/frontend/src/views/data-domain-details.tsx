@@ -15,6 +15,7 @@ import { RelativeDate } from '@/components/common/relative-date';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { DataDomainMiniGraph } from '@/components/data-domains/data-domain-mini-graph';
+import { CommentSidebar } from '@/components/comments';
 
 // Helper to check API response (can be moved to a shared util if used in many places)
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
@@ -57,6 +58,7 @@ export default function DataDomainDetailsView() {
   const [domain, setDomain] = useState<DataDomain | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false);
 
   // Metadata: Rich Texts, Links, Documents
   interface RichTextItem { id: string; entity_id: string; entity_type: string; title: string; short_description?: string | null; content_markdown: string; created_at?: string; }
@@ -198,9 +200,18 @@ export default function DataDomainDetailsView() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to List
         </Button>
-        <Button variant="outline" size="sm" onClick={() => alert('Edit Domain functionality to be implemented for this page')}>
-            <Edit3 className="mr-2 h-4 w-4" /> Edit Domain
-        </Button>
+        <div className="flex items-center gap-2">
+          <CommentSidebar
+            entityType="data_domain"
+            entityId={domainId!}
+            isOpen={isCommentSidebarOpen}
+            onToggle={() => setIsCommentSidebarOpen(!isCommentSidebarOpen)}
+            className="h-8"
+          />
+          <Button variant="outline" size="sm" onClick={() => alert('Edit Domain functionality to be implemented for this page')}>
+              <Edit3 className="mr-2 h-4 w-4" /> Edit Domain
+          </Button>
+        </div>
       </div>
 
       <Card>

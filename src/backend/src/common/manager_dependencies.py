@@ -19,6 +19,7 @@ from src.controller.business_glossaries_manager import BusinessGlossariesManager
 from src.controller.search_manager import SearchManager
 from src.controller.semantic_models_manager import SemanticModelsManager
 from src.controller.metadata_manager import MetadataManager
+from src.controller.comments_manager import CommentsManager
 
 # Import other dependencies needed by these providers
 from src.common.database import get_db
@@ -122,6 +123,15 @@ def get_metadata_manager(request: Request) -> MetadataManager:
         manager = MetadataManager()
         setattr(request.app.state, 'metadata_manager', manager)
         logger.info("Initialized MetadataManager and stored on app.state.metadata_manager")
+    return manager
+
+def get_comments_manager(request: Request) -> CommentsManager:
+    manager = getattr(request.app.state, 'comments_manager', None)
+    if not manager:
+        # Instantiate lazily and cache on app.state
+        manager = CommentsManager()
+        setattr(request.app.state, 'comments_manager', manager)
+        logger.info("Initialized CommentsManager and stored on app.state.comments_manager")
     return manager
 
 # Add getters for Compliance, Estate, MDM, Security, Entitlements, Catalog Commander managers when they are added

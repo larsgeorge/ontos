@@ -74,6 +74,20 @@ async def get_user_details_from_sdk(
         raise HTTPException(status_code=500, detail="An unexpected error occurred processing the user details request.")
 
 
+async def get_user_groups(user_email: str) -> List[str]:
+    """Get user groups for the given user email."""
+    # Get settings directly instead of using dependency injection
+    settings = get_settings()
+    
+    if settings.ENV.upper().startswith("LOCAL"):
+        # Return mock groups for local development
+        return LOCAL_DEV_USER.groups
+    
+    # In production, you would get groups from the user details
+    # For now, returning empty list as fallback
+    return []
+
+
 class PermissionChecker:
     """FastAPI Dependency to check user permissions for a feature."""
     def __init__(self, feature_id: str, required_level: FeatureAccessLevel):
