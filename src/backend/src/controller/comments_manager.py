@@ -6,8 +6,6 @@ from sqlalchemy.orm import Session
 from src.common.logging import get_logger
 from src.models.comments import Comment, CommentCreate, CommentUpdate, CommentListResponse
 from src.repositories.comments_repository import comments_repo, CommentsRepository
-from src.repositories.change_log_repository import change_log_repo
-from src.db_models.change_log import ChangeLogDb
 from src.db_models.comments import CommentStatus
 
 logger = get_logger(__name__)
@@ -17,26 +15,6 @@ class CommentsManager:
     def __init__(self, comments_repository: CommentsRepository = comments_repo):
         self._comments_repo = comments_repository
 
-    def _log_change(
-        self, 
-        db: Session, 
-        *, 
-        entity_type: str, 
-        entity_id: str, 
-        action: str, 
-        username: Optional[str], 
-        details_json: Optional[str] = None
-    ) -> None:
-        """Log changes to the change log."""
-        entry = ChangeLogDb(
-            entity_type=entity_type,
-            entity_id=entity_id,
-            action=action,
-            username=username,
-            details_json=details_json,
-        )
-        db.add(entry)
-        db.commit()
 
     def _convert_audience_from_json(self, comment_db) -> Optional[List[str]]:
         """Convert JSON audience string back to list."""
@@ -82,14 +60,6 @@ class CommentsManager:
         db.commit()
         db.refresh(db_obj)
         
-        # Log the action
-        self._log_change(
-            db, 
-            entity_type=f"{data.entity_type}:comment", 
-            entity_id=data.entity_id, 
-            action="CREATE", 
-            username=user_email
-        )
         
         return self._db_to_api_model(db_obj)
 
@@ -162,14 +132,6 @@ class CommentsManager:
         db.commit()
         db.refresh(updated)
         
-        # Log the action
-        self._log_change(
-            db, 
-            entity_type=f"{updated.entity_type}:comment", 
-            entity_id=updated.entity_id, 
-            action="UPDATE", 
-            username=user_email
-        )
         
         return self._db_to_api_model(updated)
 
@@ -202,13 +164,6 @@ class CommentsManager:
             removed = self._comments_repo.remove(db, id=comment_id)
             if removed:
                 db.commit()
-                self._log_change(
-                    db, 
-                    entity_type=f"{entity_type}:comment", 
-                    entity_id=entity_id, 
-                    action="HARD_DELETE", 
-                    username=user_email
-                )
                 return True
         else:
             # Soft delete - mark as deleted
@@ -217,13 +172,6 @@ class CommentsManager:
             )
             if soft_deleted:
                 db.commit()
-                self._log_change(
-                    db, 
-                    entity_type=f"{entity_type}:comment", 
-                    entity_id=entity_id, 
-                    action="SOFT_DELETE", 
-                    username=user_email
-                )
                 return True
         
         return False

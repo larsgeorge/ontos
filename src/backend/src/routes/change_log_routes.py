@@ -5,8 +5,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep, require_permission
 from src.common.features import FeatureAccessLevel
-from src.db_models.change_log import ChangeLogDb
-from src.repositories.change_log_repository import change_log_repo
+from src.controller.change_log_manager import change_log_manager
 
 router = APIRouter(prefix="/api", tags=["Change Log"]) 
 
@@ -25,15 +24,15 @@ async def create_change_log(
         details_json = payload.get('details_json')
         if not entity_type or not entity_id or not action:
             raise HTTPException(status_code=400, detail="entity_type, entity_id, and action are required")
-        entry = ChangeLogDb(
+        
+        entry = change_log_manager.log_change(
+            db,
             entity_type=entity_type,
             entity_id=entity_id,
             action=action,
             username=current_user.username if current_user else None,
             details_json=details_json,
         )
-        db.add(entry)
-        db.commit()
         return {"id": entry.id}
     except HTTPException:
         raise
@@ -57,7 +56,7 @@ async def list_change_log(
     end_time: Optional[str] = Query(None),
 ):
     try:
-        rows = change_log_repo.list_filtered(
+        rows = change_log_manager.list_filtered_changes(
             db,
             skip=skip,
             limit=limit,

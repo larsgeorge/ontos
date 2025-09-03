@@ -11,6 +11,8 @@ from src.models.data_domains import DataDomainCreate, DataDomainUpdate, DataDoma
 from src.db_models.data_domains import DataDomain
 from src.common.logging import get_logger
 from src.common.errors import ConflictError, NotFoundError, AppError # Import custom errors, AppError for validation
+from src.controller.change_log_manager import change_log_manager
+from src.controller.comments_manager import CommentsManager
 # from src.controller.audit_log_manager import AuditLogManager # Placeholder
 
 logger = get_logger(__name__)
@@ -104,6 +106,19 @@ class DataDomainManager:
             # For now, using len(db_domain.children) implicitly assumes they are accessible.
 
             logger.debug(f"Successfully created data domain '{db_domain.name}' with id: {db_domain.id}")
+            
+            # Log the change (commit will be handled by the route)
+            try:
+                change_log_manager.log_change(
+                    db,
+                    entity_type="data_domain",
+                    entity_id=str(db_domain.id),
+                    action="CREATE",
+                    username=current_user_id
+                )
+            except Exception as log_error:
+                logger.warning(f"Failed to log change for domain creation: {log_error}")
+            
             # Load parent again to ensure its name is available for the read model conversion
             # This is needed if the initial refresh didn't fully populate it or if not using joinedload in repo.
             if db_domain.parent_id and not db_domain.parent:
@@ -187,6 +202,19 @@ class DataDomainManager:
             # db.refresh(updated_db_domain, attribute_names=['children']) # if children count could change indirectly
 
             logger.debug(f"Successfully updated data domain '{updated_db_domain.name}' (id: {domain_id})")
+            
+            # Log the change (commit will be handled by the route)
+            try:
+                change_log_manager.log_change(
+                    db,
+                    entity_type="data_domain",
+                    entity_id=str(domain_id),
+                    action="UPDATE",
+                    username=current_user_id
+                )
+            except Exception as log_error:
+                logger.warning(f"Failed to log change for domain update: {log_error}")
+            
             return self._convert_db_to_read_model(updated_db_domain)
         except IntegrityError as e:
              db.rollback()
@@ -228,6 +256,19 @@ class DataDomainManager:
             # The repository.remove(db, id) should work.
             # The actual object `db_domain_to_delete` will become stale after deletion from session.
             self.repository.remove(db=db, id=domain_id)
+            
+            # Log the change before commit
+            try:
+                change_log_manager.log_change(
+                    db,
+                    entity_type="data_domain",
+                    entity_id=str(domain_id),
+                    action="DELETE",
+                    username=current_user_id
+                )
+            except Exception as log_error:
+                logger.warning(f"Failed to log change for domain deletion: {log_error}")
+            
             # db.commit() is handled by the route typically
             logger.debug(f"Successfully marked data domain '{read_model_of_deleted.name}' (id: {domain_id}) for deletion.")
             return read_model_of_deleted 
@@ -295,7 +336,7 @@ class DataDomainManager:
                     if parent_name_to_resolve:
                         domain_create_schema.parent_id = None 
                         
-                    created_domain_obj = self.create_domain_internal(db=db, domain_in=domain_create_schema, current_user_id=default_creator, perform_commit=False)
+                    created_domain_obj = self.create_domain_internal(db=db, domain_in=domain_create_schema, current_user_id=default_creator, perform_commit=False, log_change=False)
                     domains_created_map[created_domain_obj.name] = created_domain_obj.id
                     count += 1
                 except (ValueError, TypeError, ConflictError, NotFoundError, AppError) as val_err:
@@ -335,7 +376,7 @@ class DataDomainManager:
             logger.exception(f"Failed to load initial data domains from {data_file}: {e}")
             db.rollback() 
 
-    def create_domain_internal(self, db: Session, domain_in: DataDomainCreate, current_user_id: str, perform_commit: bool = True) -> DataDomain:
+    def create_domain_internal(self, db: Session, domain_in: DataDomainCreate, current_user_id: str, perform_commit: bool = True, log_change: bool = False) -> DataDomain:
         """Internal method to create domain, returns DB object, used by load_initial_data."""
         if domain_in.parent_id:
             parent_domain = self.repository.get(db, domain_in.parent_id)
@@ -358,6 +399,22 @@ class DataDomainManager:
             else:
                 db.flush() # Flush to get ID if not committing
                 db.refresh(db_domain, attribute_names=['id'])
+            
+            # Log the change if requested
+            if log_change:
+                try:
+                    change_log_manager.log_change(
+                        db,
+                        entity_type="data_domain",
+                        entity_id=str(db_domain.id),
+                        action="CREATE",
+                        username=current_user_id
+                    )
+                    if perform_commit:
+                        db.commit()  # Commit the change log entry too
+                except Exception as log_error:
+                    logger.warning(f"Failed to log change for demo domain creation: {log_error}")
+            
             return db_domain
         except IntegrityError as e:
             db.rollback()
@@ -367,3 +424,108 @@ class DataDomainManager:
         except Exception as e:
             db.rollback()
             raise 
+
+    def load_demo_timeline_entries(self, db: Session) -> None:
+        """Load demo timeline entries (comments and changes) for data domains."""
+        logger.debug("DataDomainManager: Loading demo timeline entries...")
+        
+        import yaml
+        from pathlib import Path
+        from datetime import datetime
+        from src.models.comments import CommentCreate
+        from src.db_models.change_log import ChangeLogDb
+        
+        timeline_file = Path(__file__).parent.parent / "data" / "demo_timeline.yaml"
+        if not timeline_file.exists():
+            logger.debug(f"Demo timeline file not found: {timeline_file}. Skipping timeline entries.")
+            return
+        
+        try:
+            with open(timeline_file, 'r') as f:
+                data = yaml.safe_load(f)
+            
+            if not data or 'timeline_entries' not in data:
+                logger.debug("No timeline entries found in demo data.")
+                return
+            
+            # Create a comments manager instance for loading comments
+            comments_manager = CommentsManager()
+            
+            # Create domain name to ID mapping
+            domains = self.repository.get_multi(db, limit=1000)  # Get all domains
+            domain_name_to_id = {domain.name: str(domain.id) for domain in domains}
+            
+            entries_loaded = 0
+            for entry in data['timeline_entries']:
+                try:
+                    entity_name = entry.get('entity_name')
+                    entity_type = entry.get('entity_type', 'data_domain')
+                    entry_type = entry.get('type')
+                    
+                    if not entity_name or entity_name not in domain_name_to_id:
+                        logger.warning(f"Skipping timeline entry: domain '{entity_name}' not found")
+                        continue
+                    
+                    entity_id = domain_name_to_id[entity_name]
+                    username = entry.get('username', 'demo.user@company.com')
+                    created_at_str = entry.get('created_at')
+                    
+                    # Parse timestamp
+                    created_at = None
+                    if created_at_str:
+                        try:
+                            created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                        except ValueError:
+                            logger.warning(f"Invalid timestamp in demo timeline entry: {created_at_str}")
+                    
+                    if entry_type == 'comment':
+                        # Create comment
+                        comment_data = CommentCreate(
+                            entity_id=entity_id,
+                            entity_type=entity_type,
+                            title=entry.get('title'),
+                            comment=entry.get('comment', ''),
+                            audience=entry.get('audience')
+                        )
+                        
+                        comment_obj = comments_manager.create_comment(
+                            db, 
+                            data=comment_data, 
+                            user_email=username
+                        )
+                        
+                        # Update created_at if specified
+                        if created_at:
+                            comment_db = comments_manager._comments_repo.get(db, comment_obj.id)
+                            if comment_db:
+                                comment_db.created_at = created_at
+                                comment_db.updated_at = created_at
+                                db.add(comment_db)
+                        
+                        entries_loaded += 1
+                        
+                    elif entry_type == 'change':
+                        # Create change log entry
+                        change_entry = ChangeLogDb(
+                            entity_type=entity_type,
+                            entity_id=entity_id,
+                            action=entry.get('action', 'CREATE'),
+                            username=username,
+                            details_json=entry.get('details'),
+                            timestamp=created_at or datetime.utcnow()
+                        )
+                        db.add(change_entry)
+                        entries_loaded += 1
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to load timeline entry: {e}")
+                    continue
+            
+            db.commit()
+            logger.debug(f"Successfully loaded {entries_loaded} demo timeline entries.")
+            
+        except yaml.YAMLError as ye:
+            logger.error(f"Error parsing timeline YAML file {timeline_file}: {ye}")
+        except Exception as e:
+            logger.exception(f"Failed to load demo timeline entries: {e}")
+            db.rollback()

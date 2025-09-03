@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, X, Plus, Trash2, Edit, Send, Users } from 'lucide-react';
+import { MessageSquare, X, Plus, Trash2, Edit, Send, Users, Filter, Clock, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
@@ -34,6 +34,30 @@ interface CommentFormData {
   audience: string[];
 }
 
+interface TimelineEntry {
+  id: string;
+  type: 'comment' | 'change';
+  entity_type: string;
+  entity_id: string;
+  title?: string;
+  content: string;
+  username: string;
+  timestamp: string;
+  updated_at?: string;
+  audience?: string[];
+  status?: string;
+  metadata?: {
+    updated_by?: string;
+    action?: string;
+  };
+}
+
+interface TimelineResponse {
+  timeline: TimelineEntry[];
+  total_count: number;
+  filter_type: string;
+}
+
 const CommentSidebar: React.FC<CommentSidebarProps> = ({
   entityType,
   entityId,
@@ -44,9 +68,9 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
   const { get, post, put, delete: deleteApi, loading } = useApi();
   const { toast } = useToast();
   
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [visibleCount, setVisibleCount] = useState(0);
+  const [filterType, setFilterType] = useState<'all' | 'comments' | 'changes'>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingComment, setEditingComment] = useState<Comment | null>(null);
   const [formData, setFormData] = useState<CommentFormData>({
@@ -58,23 +82,22 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
   // Available groups for audience selection (in a real app, fetch from API)
   const availableGroups = ['admin', 'data-producers', 'data-consumers', 'data-stewards'];
 
-  const fetchComments = async () => {
-    const response = await get<CommentListResponse>(
-      `/api/entities/${entityType}/${entityId}/comments`
+  const fetchTimeline = async () => {
+    const response = await get<TimelineResponse>(
+      `/api/entities/${entityType}/${entityId}/timeline?filter_type=${filterType}`
     );
     
     if (response.error) {
       toast({
         title: 'Error',
-        description: `Failed to load comments: ${response.error}`,
+        description: `Failed to load timeline: ${response.error}`,
         variant: 'destructive',
       });
       return;
     }
     
-    setComments(response.data.comments || []);
+    setTimeline(response.data.timeline || []);
     setTotalCount(response.data.total_count || 0);
-    setVisibleCount(response.data.visible_count || 0);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -143,11 +166,11 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       });
     }
     
-    // Reset form and refresh comments
+    // Reset form and refresh timeline
     setFormData({ title: '', comment: '', audience: [] });
     setEditingComment(null);
     setIsFormOpen(false);
-    await fetchComments();
+    await fetchTimeline();
   };
 
   const handleDelete = async (commentId: string) => {
@@ -171,7 +194,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       description: 'Comment deleted successfully',
     });
     
-    await fetchComments();
+    await fetchTimeline();
   };
 
   const handleEdit = (comment: Comment) => {
@@ -190,12 +213,12 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
     setIsFormOpen(false);
   };
 
-  // Fetch comments when sidebar opens
+  // Fetch timeline when sidebar opens or filter changes
   useEffect(() => {
     if (isOpen) {
-      fetchComments();
+      fetchTimeline();
     }
-  }, [isOpen, entityType, entityId]);
+  }, [isOpen, entityType, entityId, filterType]);
 
   const CommentForm = React.useMemo(() => (
     <form onSubmit={handleSubmit} className="space-y-4 p-4 border-t">
@@ -282,22 +305,35 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
     </form>
   ), [formData, editingComment, loading, availableGroups, handleSubmit, resetForm]);
 
-  const CommentItem: React.FC<{ comment: Comment; canModify: boolean }> = ({ 
-    comment, 
+  const TimelineItem: React.FC<{ entry: TimelineEntry; canModify: boolean }> = ({ 
+    entry, 
     canModify 
   }) => (
-    <div className="p-3 border rounded-lg space-y-2">
-      {comment.title && (
-        <h4 className="font-medium text-sm">{comment.title}</h4>
-      )}
+    <div className={cn(
+      "p-3 border rounded-lg space-y-2",
+      entry.type === 'change' && "border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20"
+    )}>
+      <div className="flex items-center gap-2">
+        {entry.type === 'comment' ? (
+          <MessageSquare className="w-4 h-4 text-muted-foreground" />
+        ) : (
+          <Clock className="w-4 h-4 text-blue-600" />
+        )}
+        {entry.title && (
+          <h4 className="font-medium text-sm">{entry.title}</h4>
+        )}
+        <Badge variant={entry.type === 'change' ? 'secondary' : 'outline'} className="text-xs">
+          {entry.type}
+        </Badge>
+      </div>
       
       <p className="text-sm text-foreground whitespace-pre-wrap">
-        {comment.comment}
+        {entry.content}
       </p>
       
-      {comment.audience && comment.audience.length > 0 && (
+      {entry.audience && entry.audience.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {comment.audience.map(group => (
+          {entry.audience.map(group => (
             <Badge key={group} variant="outline" className="text-xs">
               <Users className="w-3 h-3 mr-1" />
               {group}
@@ -310,23 +346,23 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
         <div className="flex items-center gap-2">
           <Avatar className="w-5 h-5">
             <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
-              {comment.created_by.charAt(0).toUpperCase()}
+              {entry.username.charAt(0).toUpperCase()}
             </div>
           </Avatar>
-          <span>{comment.created_by}</span>
-          <RelativeDate date={comment.created_at} />
-          {comment.updated_at !== comment.created_at && (
+          <span>{entry.username}</span>
+          <RelativeDate date={new Date(entry.timestamp)} />
+          {entry.updated_at && (
             <span className="italic">(edited)</span>
           )}
         </div>
         
-        {canModify && (
+        {canModify && entry.type === 'comment' && (
           <div className="flex gap-1">
             <Button
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0"
-              onClick={() => handleEdit(comment)}
+              onClick={() => handleEdit(entry as any)}
             >
               <Edit className="w-3 h-3" />
             </Button>
@@ -334,7 +370,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-              onClick={() => handleDelete(comment.id)}
+              onClick={() => handleDelete(entry.id)}
             >
               <Trash2 className="w-3 h-3" />
             </Button>
@@ -350,9 +386,9 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
         <Button variant="outline" size="sm" className={cn("relative", className)}>
           <MessageSquare className="w-4 h-4 mr-1" />
           Comments
-          {visibleCount > 0 && (
+          {totalCount > 0 && (
             <Badge variant="secondary" className="ml-2 h-5 px-1 text-xs">
-              {visibleCount}
+              {totalCount}
             </Badge>
           )}
         </Button>
@@ -362,19 +398,51 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
         <SheetHeader className="p-4 pb-2">
           <SheetTitle className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5" />
-            Comments
+            Activity Timeline
             {totalCount > 0 && (
               <Badge variant="secondary" className="h-5 px-2 text-xs">
-                {visibleCount}/{totalCount}
+                {totalCount}
               </Badge>
             )}
           </SheetTitle>
-          {totalCount !== visibleCount && (
-            <p className="text-sm text-muted-foreground">
-              Showing {visibleCount} of {totalCount} comments based on your permissions
-            </p>
-          )}
         </SheetHeader>
+        
+        {/* Filter Toolbar */}
+        <div className="px-4 pb-2">
+          <div className="flex items-center gap-2 mb-2">
+            <Filter className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-muted-foreground">Filter:</span>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant={filterType === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilterType('all')}
+              className="flex-1"
+            >
+              <FileText className="w-3 h-3 mr-1" />
+              All
+            </Button>
+            <Button
+              variant={filterType === 'comments' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilterType('comments')}
+              className="flex-1"
+            >
+              <MessageSquare className="w-3 h-3 mr-1" />
+              Comments
+            </Button>
+            <Button
+              variant={filterType === 'changes' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setFilterType('changes')}
+              className="flex-1"
+            >
+              <Clock className="w-3 h-3 mr-1" />
+              Changes
+            </Button>
+          </div>
+        </div>
         
         <div className="flex-1 flex flex-col">
           <div className="p-4 pt-0">
@@ -394,21 +462,37 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
           <Separator />
           
           <ScrollArea className="flex-1">
-            {comments.length > 0 ? (
+            {timeline.length > 0 ? (
               <div className="p-4 space-y-3">
-                {comments.map(comment => (
-                  <CommentItem
-                    key={comment.id}
-                    comment={comment}
+                {timeline.map(entry => (
+                  <TimelineItem
+                    key={entry.id}
+                    entry={entry}
                     canModify={true} // TODO: Check actual permissions
                   />
                 ))}
               </div>
             ) : (
               <div className="p-4 text-center text-muted-foreground">
-                <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No comments yet</p>
-                <p className="text-xs">Be the first to add a comment!</p>
+                {filterType === 'comments' ? (
+                  <>
+                    <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No comments yet</p>
+                    <p className="text-xs">Be the first to add a comment!</p>
+                  </>
+                ) : filterType === 'changes' ? (
+                  <>
+                    <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No changes recorded</p>
+                    <p className="text-xs">Changes will appear here when they occur</p>
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No activity yet</p>
+                    <p className="text-xs">Comments and changes will appear here</p>
+                  </>
+                )}
               </div>
             )}
           </ScrollArea>

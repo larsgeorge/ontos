@@ -209,7 +209,7 @@ export default function DataDomainDetailsView() {
             className="h-8"
           />
           <Button variant="outline" size="sm" onClick={() => alert('Edit Domain functionality to be implemented for this page')}>
-              <Edit3 className="mr-2 h-4 w-4" /> Edit Domain
+              <Edit3 className="mr-2 h-4 w-4" /> Edit
           </Button>
         </div>
       </div>

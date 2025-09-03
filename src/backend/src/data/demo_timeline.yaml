@@ -1,0 +1,261 @@
+# Demo timeline entries (comments and changes) to show timeline functionality
+# These will be loaded during system initialization to provide examples
+timeline_entries:
+  
+  # ==== CREATE EVENTS FOR ALL DOMAINS ====
+  # Manual CREATE events with historical dates to maintain proper chronology
+  - type: change
+    entity_type: data_domain
+    entity_name: Core
+    action: CREATE
+    username: system.init@company.com
+    details: "Initial system setup - foundational domain created"
+    created_at: "2024-01-01T08:00:00Z"
+    
+  - type: change
+    entity_type: data_domain
+    entity_name: Finance
+    action: CREATE
+    username: data.governance@company.com
+    details: "Created for financial reporting and accounting data"
+    created_at: "2024-01-01T08:15:00Z"
+    
+  - type: change
+    entity_type: data_domain
+    entity_name: Sales
+    action: CREATE
+    username: data.governance@company.com
+    details: "Established for CRM and sales pipeline data"
+    created_at: "2024-01-01T08:30:00Z"
+    
+  - type: change
+    entity_type: data_domain
+    entity_name: Marketing
+    action: CREATE
+    username: data.governance@company.com
+    details: "Set up for campaign and customer acquisition data"
+    created_at: "2024-01-01T08:45:00Z"
+    
+  - type: change
+    entity_type: data_domain
+    entity_name: Retail
+    action: CREATE
+    username: data.governance@company.com
+    details: "Parent domain for retail business operations"
+    created_at: "2024-01-01T09:00:00Z"
+    
+  - type: change
+    entity_type: data_domain
+    entity_name: Retail Operations
+    action: CREATE
+    username: retail.lead@company.com
+    details: "Subdomain for POS, inventory, and store operations"
+    created_at: "2024-01-01T09:15:00Z"
+    
+  - type: change
+    entity_type: data_domain
+    entity_name: Retail Analytics
+    action: CREATE
+    username: analytics.team@company.com
+    details: "Analytics layer for retail insights and forecasting"
+    created_at: "2024-01-01T09:30:00Z"
+    
+  - type: change
+    entity_type: data_domain
+    entity_name: Supply Chain
+    action: CREATE
+    username: data.governance@company.com
+    details: "Domain for logistics and supplier data"
+    created_at: "2024-01-01T09:45:00Z"
+    
+  - type: change
+    entity_type: data_domain
+    entity_name: Customer
+    action: CREATE
+    username: crm.team@company.com
+    details: "Customer profiles and interaction data"
+    created_at: "2024-01-01T10:00:00Z"
+    
+  - type: change
+    entity_type: data_domain
+    entity_name: Product
+    action: CREATE
+    username: product.management@company.com
+    details: "Product catalog and lifecycle management"
+    created_at: "2024-01-01T10:15:00Z"
+    
+  - type: change
+    entity_type: data_domain
+    entity_name: Human Resources
+    action: CREATE
+    username: hr.data@company.com
+    details: "Employee data and HR processes"
+    created_at: "2024-01-01T10:30:00Z"
+    
+  - type: change
+    entity_type: data_domain
+    entity_name: IoT
+    action: CREATE
+    username: iot.platform.team@company.com
+    details: "IoT sensors and device telemetry data"
+    created_at: "2024-01-01T10:45:00Z"
+    
+  - type: change
+    entity_type: data_domain
+    entity_name: Compliance
+    action: CREATE
+    username: compliance.office@company.com
+    details: "Regulatory and compliance tracking"
+    created_at: "2024-01-01T11:00:00Z"
+  
+  # ==== CORE DOMAIN COMMENT THREAD ====
+  # Initial setup comment from data team
+  - type: comment
+    entity_type: data_domain
+    entity_name: Core
+    title: "Domain Architecture Overview"
+    comment: "The Core domain serves as our foundational data category. All organizational domains inherit governance policies from here. We've established baseline data quality rules and access patterns that cascade down to child domains."
+    username: data.governance@company.com
+    audience: ["admin", "data-stewards", "data-consumers"]
+    created_at: "2024-01-01T12:00:00Z"
+    
+  # Question from data consumer
+  - type: comment
+    entity_type: data_domain
+    entity_name: Core
+    title: "Access Pattern Questions"
+    comment: "Hi team, I'm working on our quarterly reporting and need to understand the data retention policies for Core domain assets. Also, are there any planned changes to the schema validation rules that might affect downstream consumers?"
+    username: business.analyst@company.com
+    audience: null
+    created_at: "2024-01-02T14:20:00Z"
+    
+  # Response from data team
+  - type: comment
+    entity_type: data_domain
+    entity_name: Core
+    title: "Re: Access Pattern Questions"
+    comment: "Good questions! Current retention is 7 years for all Core assets per our regulatory requirements. Regarding schema changes: we're planning a minor update in Q2 to add optional metadata fields, but all existing fields will remain backward compatible. I'll schedule a session to walk through the changes with all consumers."
+    username: data.governance@company.com
+    audience: null
+    created_at: "2024-01-02T16:45:00Z"
+    
+  # Follow-up from consumer
+  - type: comment
+    entity_type: data_domain
+    entity_name: Core
+    title: "Schema Update Timeline"
+    comment: "Thanks for the clarification! The Q2 timeline works well for our migration planning. Could you share the draft schema changes when available? We'd like to start testing our ETL processes early."
+    username: business.analyst@company.com
+    audience: ["data-stewards"]
+    created_at: "2024-01-03T09:15:00Z"
+    
+  # Final response with action item
+  - type: comment
+    entity_type: data_domain
+    entity_name: Core
+    title: "Schema Preview Available"
+    comment: "Draft schema changes are now available in our development environment. I've granted your team access to the staging area. Please test your ETL processes and provide feedback by end of February. Documentation is linked in our data catalog."
+    username: data.governance@company.com
+    audience: ["data-consumers", "data-stewards"]
+    created_at: "2024-01-05T11:30:00Z"
+  
+  # ==== UPDATE EVENTS FOR SELECTED DOMAINS ====
+  # Finance domain update - adding new compliance requirements
+  - type: change
+    entity_type: data_domain
+    entity_name: Finance
+    action: UPDATE
+    username: compliance.office@company.com
+    details: "Updated to meet new SOX compliance requirements - added audit trail specifications"
+    created_at: "2024-01-15T13:00:00Z"
+    
+  - type: comment
+    entity_type: data_domain
+    entity_name: Finance
+    title: "Compliance Update Notification"
+    comment: "Finance domain has been updated with new SOX compliance specifications. All financial data assets must now include detailed audit trails. Please review the updated requirements document and adjust your data processing accordingly."
+    username: compliance.office@company.com
+    audience: ["finance", "admin", "data-stewards"]
+    created_at: "2024-01-15T13:15:00Z"
+    
+  # Customer domain update - GDPR enhancements
+  - type: change
+    entity_type: data_domain
+    entity_name: Customer
+    action: UPDATE
+    username: legal.team@company.com
+    details: "Enhanced GDPR compliance features - added data subject rights automation"
+    created_at: "2024-01-20T11:30:00Z"
+    
+  - type: comment
+    entity_type: data_domain
+    entity_name: Customer
+    title: "GDPR Enhancement Deployment"
+    comment: "Customer domain now includes automated data subject rights management. Customers can now request data deletion, portability, and access through our self-service portal. The system automatically handles compliance workflows."
+    username: legal.team@company.com
+    audience: ["crm", "customer-service", "legal"]
+    created_at: "2024-01-20T12:00:00Z"
+    
+  # Supply Chain domain update - new integration
+  - type: change
+    entity_type: data_domain
+    entity_name: Supply Chain
+    action: UPDATE
+    username: supply.chain.team@company.com
+    details: "Integrated with new inventory management system - enhanced real-time tracking"
+    created_at: "2024-01-25T09:00:00Z"
+    
+  - type: comment
+    entity_type: data_domain
+    entity_name: Supply Chain
+    title: "Inventory System Integration Complete"
+    comment: "Successfully integrated with our new inventory management platform. We now have real-time visibility into stock levels across all warehouses. Data quality monitoring shows 99.8% accuracy in inventory tracking. All downstream analytics have been updated to leverage the enhanced data streams."
+    username: supply.chain.team@company.com
+    audience: ["supply-chain", "analytics", "operations"]
+    created_at: "2024-01-25T14:30:00Z"
+    
+  # Product domain update - catalog restructure
+  - type: change
+    entity_type: data_domain
+    entity_name: Product
+    action: UPDATE
+    username: product.management@company.com
+    details: "Restructured product taxonomy and added lifecycle state tracking"
+    created_at: "2024-01-28T10:15:00Z"
+    
+  # IoT domain update - new sensor types
+  - type: change
+    entity_type: data_domain
+    entity_name: IoT
+    action: UPDATE
+    username: iot.platform.team@company.com
+    details: "Added support for new environmental sensors and edge computing devices"
+    created_at: "2024-02-01T08:00:00Z"
+  
+  # ==== ADDITIONAL COMMENTS FOR OTHER DOMAINS ====
+  - type: comment
+    entity_type: data_domain
+    entity_name: Sales
+    title: "CRM Integration Status"
+    comment: "Sales domain integration with our CRM platform is complete. Pipeline data flows are operational and we're seeing excellent data quality metrics. All sales reporting dashboards are now live."
+    username: sales.ops@company.com
+    audience: ["sales", "analytics"]
+    created_at: "2024-01-18T09:15:00Z"
+    
+  - type: comment
+    entity_type: data_domain
+    entity_name: Retail Analytics
+    title: "Forecasting Model Deployment"
+    comment: "New demand forecasting models are now deployed and running in production. Early results show 15% improvement in prediction accuracy. Models are automatically retrained weekly based on latest sales data."
+    username: analytics.team@company.com
+    audience: ["retail", "analytics"]
+    created_at: "2024-01-30T16:00:00Z"
+    
+  - type: comment
+    entity_type: data_domain
+    entity_name: Marketing
+    title: "Campaign Attribution Setup"
+    comment: "Marketing domain now includes comprehensive campaign attribution tracking. We can trace customer journeys across all touchpoints and measure campaign effectiveness in real-time. Integration with our ad platforms is complete."
+    username: marketing.analytics@company.com
+    audience: ["marketing", "analytics"]
+    created_at: "2024-02-05T11:45:00Z"

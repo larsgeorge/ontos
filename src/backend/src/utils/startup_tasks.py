@@ -287,6 +287,10 @@ def load_initial_data(app: FastAPI) -> None:
         if notifications_manager and hasattr(notifications_manager, 'load_initial_data'):
             notifications_manager.load_initial_data(db)
         
+        # Load demo timeline entries after all entities are created
+        if data_domain_manager and hasattr(data_domain_manager, 'load_demo_timeline_entries'):
+            data_domain_manager.load_demo_timeline_entries(db)
+        
         # No final commit needed here if managers commit internally or role creation already committed
         logger.info("Initial data loading process completed for all managers.")
 

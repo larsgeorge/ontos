@@ -5,7 +5,7 @@ import DataProductWizardDialog from '@/components/data-products/data-product-wiz
 import { useApi } from '@/hooks/use-api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, Pencil, Trash2, AlertCircle, Sparkles, CopyPlus } from 'lucide-react';
+import { Loader2, Pencil, Trash2, AlertCircle, Sparkles, CopyPlus, ArrowLeft, Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Toaster } from '@/components/ui/toaster';
@@ -19,6 +19,7 @@ import CreateVersionDialog from '@/components/data-products/create-version-dialo
 import IriPickerDialog from '@/components/semantic/iri-picker-dialog';
 import type { EntitySemanticLink } from '@/types/semantic-link';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
+import { CommentSidebar } from '@/components/comments';
 
 // Helper Function Type Definition (copied from DataProducts view for checking API responses)
 type CheckApiResponseFn = <T>(
@@ -58,6 +59,7 @@ export default function DataProductDetails() {
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false);
   const [iriDialogOpen, setIriDialogOpen] = useState(false);
   const [links, setLinks] = useState<EntitySemanticLink[]>([]);
+  const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false);
 
   // State for dropdown values needed by the dialog
   const [statuses, setStatuses] = useState<DataProductStatus[]>([]);
@@ -333,19 +335,29 @@ export default function DataProductDetails() {
 
   return (
     <div className="py-6 space-y-6">
-      <div className="flex justify-between items-start">
-        <h1 className="text-3xl font-bold mb-2">{product.info.title}</h1>
-        <div className="flex space-x-2">
-          <Button variant="outline" onClick={handleCreateGenieSpace} disabled={!product || !canWrite} title={canWrite ? "Create Genie Space" : "Create Genie Space (Permission Denied)"}>
+      <div className="flex items-center justify-between">
+        <Button variant="outline" onClick={() => navigate('/data-products')} size="sm">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to List
+        </Button>
+        <div className="flex items-center gap-2">
+          <CommentSidebar
+            entityType="data_product"
+            entityId={productId!}
+            isOpen={isCommentSidebarOpen}
+            onToggle={() => setIsCommentSidebarOpen(!isCommentSidebarOpen)}
+            className="h-8"
+          />
+          <Button variant="outline" onClick={handleCreateGenieSpace} disabled={!product || !canWrite} title={canWrite ? "Create Genie Space" : "Create Genie Space (Permission Denied)"} size="sm">
               <Sparkles className="mr-2 h-4 w-4" /> Create Genie Space
           </Button>
-          <Button variant="outline" onClick={handleCreateNewVersion} disabled={!product || !canWrite} title={canWrite ? "Create New Version" : "Create New Version (Permission Denied)"}>
+          <Button variant="outline" onClick={handleCreateNewVersion} disabled={!product || !canWrite} title={canWrite ? "Create New Version" : "Create New Version (Permission Denied)"} size="sm">
               <CopyPlus className="mr-2 h-4 w-4" /> Create New Version
           </Button>
-          <Button variant="outline" onClick={handleEdit} disabled={!product || !canWrite} title={canWrite ? "Edit" : "Edit (Permission Denied)"}>
+          <Button variant="outline" onClick={handleEdit} disabled={!product || !canWrite} title={canWrite ? "Edit" : "Edit (Permission Denied)"} size="sm">
             <Pencil className="mr-2 h-4 w-4" /> Edit
           </Button>
-          <Button variant="destructive" onClick={handleDelete} disabled={!product || !canAdmin} title={canAdmin ? "Delete" : "Delete (Permission Denied)"}>
+          <Button variant="destructive" onClick={handleDelete} disabled={!product || !canAdmin} title={canAdmin ? "Delete" : "Delete (Permission Denied)"} size="sm">
             <Trash2 className="mr-2 h-4 w-4" /> Delete
           </Button>
         </div>
@@ -354,8 +366,10 @@ export default function DataProductDetails() {
       {/* Info Card */} 
       <Card>
         <CardHeader>
-          <CardTitle>Info</CardTitle>
-          <CardDescription>Core metadata about the data product.</CardDescription>
+          <CardTitle className="text-2xl font-bold flex items-center">
+            <Package className="mr-3 h-7 w-7 text-primary" />{product.info.title}
+          </CardTitle>
+          {product.info.description && <CardDescription className="pt-1">{product.info.description}</CardDescription>}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid md:grid-cols-4 gap-4">

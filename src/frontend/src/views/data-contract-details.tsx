@@ -3,12 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Download, Pencil, Trash2, Loader2 } from 'lucide-react'
+import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import DataContractWizardDialog from '@/components/data-contracts/data-contract-wizard-dialog'
 import { useToast } from '@/hooks/use-toast'
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel'
+import { CommentSidebar } from '@/components/comments'
+import useBreadcrumbStore from '@/stores/breadcrumb-store'
 
 type Contract = {
   id: string
@@ -26,29 +28,44 @@ export default function DataContractDetails() {
   const { contractId } = useParams<{ contractId: string }>()
   const navigate = useNavigate()
   const { toast } = useToast()
+  
+  const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments)
+  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle)
 
   const [contract, setContract] = useState<Contract | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isWizardOpen, setIsWizardOpen] = useState(false)
+  const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false)
 
   const fetchDetails = async () => {
     if (!contractId) return
     setLoading(true)
     setError(null)
+    setDynamicTitle('Loading...')
     try {
       const res = await fetch(`/api/data-contracts/${contractId}`)
       if (!res.ok) throw new Error('Failed to load contract')
       const data = await res.json()
       setContract(data)
+      setDynamicTitle(data.name)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
+      setDynamicTitle('Error')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchDetails() }, [contractId])
+  useEffect(() => { 
+    setStaticSegments([{ label: 'Data Contracts', path: '/data-contracts' }])
+    fetchDetails()
+    
+    return () => {
+      setStaticSegments([])
+      setDynamicTitle(null)
+    }
+  }, [contractId, setStaticSegments, setDynamicTitle])
 
   const handleDelete = async () => {
     if (!contractId) return
@@ -117,20 +134,32 @@ export default function DataContractDetails() {
 
   return (
     <div className="py-6 space-y-6">
-      <div className="flex justify-between items-start">
-        <h1 className="text-3xl font-bold mb-2">{contract.name}</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setIsWizardOpen(true)}><Pencil className="mr-2 h-4 w-4" /> Edit</Button>
-          <Button variant="outline" onClick={exportOdcs}><Download className="mr-2 h-4 w-4" /> Export ODCS</Button>
-          <Button variant="outline" onClick={exportRaw}><Download className="mr-2 h-4 w-4" /> Export</Button>
-          <Button variant="destructive" onClick={handleDelete}><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
+      <div className="flex items-center justify-between">
+        <Button variant="outline" onClick={() => navigate('/data-contracts')} size="sm">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to List
+        </Button>
+        <div className="flex items-center gap-2">
+          <CommentSidebar
+            entityType="data_contract"
+            entityId={contractId!}
+            isOpen={isCommentSidebarOpen}
+            onToggle={() => setIsCommentSidebarOpen(!isCommentSidebarOpen)}
+            className="h-8"
+          />
+          <Button variant="outline" onClick={() => setIsWizardOpen(true)} size="sm"><Pencil className="mr-2 h-4 w-4" /> Edit</Button>
+          <Button variant="outline" onClick={exportOdcs} size="sm"><Download className="mr-2 h-4 w-4" /> Export ODCS</Button>
+          <Button variant="outline" onClick={exportRaw} size="sm"><Download className="mr-2 h-4 w-4" /> Export</Button>
+          <Button variant="destructive" onClick={handleDelete} size="sm"><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Info</CardTitle>
-          <CardDescription>Core contract metadata</CardDescription>
+          <CardTitle className="text-2xl font-bold flex items-center">
+            <FileText className="mr-3 h-7 w-7 text-primary" />{contract.name}
+          </CardTitle>
+          <CardDescription className="pt-1">Core contract metadata</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid md:grid-cols-4 gap-4">
