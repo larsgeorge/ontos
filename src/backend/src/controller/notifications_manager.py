@@ -11,7 +11,9 @@ from pydantic import ValidationError # Import for error handling
 
 from src.models.notifications import Notification, NotificationType # Import the enum too
 # Import SettingsManager for role lookups
-from src.controller.settings_manager import SettingsManager
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.controller.settings_manager import SettingsManager
 # Import UserInfo type hint
 from src.models.users import UserInfo
 # Import the repository
@@ -26,7 +28,7 @@ class NotificationNotFoundError(Exception):
     """Raised when a notification is not found."""
 
 class NotificationsManager:
-    def __init__(self, settings_manager: SettingsManager):
+    def __init__(self, settings_manager: 'SettingsManager'):
         """Initialize the notification manager.
 
         Args:
@@ -195,7 +197,6 @@ class NotificationsManager:
         type: NotificationType = NotificationType.INFO,
         action_type: Optional[str] = None,
         action_payload: Optional[Dict] = None,
-        status: Optional[str] = "info", # Keep original status field too?
         can_delete: bool = True
     ) -> Notification:
         """Creates and saves a new notification using keyword arguments."""
@@ -214,7 +215,6 @@ class NotificationsManager:
                 type=type,
                 action_type=action_type,
                 action_payload=action_payload,
-                status=status,
                 can_delete=can_delete,
                 created_at=now,
                 read=False
@@ -305,3 +305,80 @@ class NotificationsManager:
              logger.error(f"Error handling actionable notification: {e}", exc_info=True)
              db.rollback() # Rollback on error
              return False
+
+    def update_notification(self, db: Session, notification_id: str, *,
+                            title: Optional[str] = None,
+                            subtitle: Optional[str] = None,
+                            description: Optional[str] = None,
+                            link: Optional[str] = None,
+                            type: Optional[NotificationType] = None,
+                            action_type: Optional[str] = None,
+                            action_payload: Optional[Dict] = None,
+                            read: Optional[bool] = None,
+                            can_delete: Optional[bool] = None) -> Optional[Notification]:
+        """Update fields on an existing notification and return the updated API model."""
+        try:
+            db_obj = self._repo.get(db=db, id=notification_id)
+            if not db_obj:
+                return None
+
+            update_data: Dict = {}
+            if title is not None:
+                update_data['title'] = title
+            if subtitle is not None:
+                update_data['subtitle'] = subtitle
+            if description is not None:
+                update_data['description'] = description
+            if link is not None:
+                update_data['link'] = link
+            if type is not None:
+                update_data['type'] = type
+            if action_type is not None:
+                update_data['action_type'] = action_type
+            if action_payload is not None:
+                update_data['action_payload'] = action_payload
+            if read is not None:
+                update_data['read'] = read
+            if can_delete is not None:
+                update_data['can_delete'] = can_delete
+
+            updated = self._repo.update(db=db, db_obj=db_obj, obj_in=update_data)
+            return Notification.from_orm(updated)
+        except Exception as e:
+            logger.error(f"Error updating notification {notification_id}: {e}", exc_info=True)
+            db.rollback()
+            return None
+
+    def create_notification(self, notification: Notification, db: Session) -> Notification:
+        """Create a notification from a Notification object."""
+        try:
+            logger.debug(f"Creating notification: {notification.model_dump()}")
+            created_db_obj = self._repo.create(db=db, obj_in=notification)
+            return Notification.model_validate(created_db_obj)
+        except Exception as e:
+            logger.error(f"Error creating notification in DB: {e}", exc_info=True)
+            db.rollback()
+            raise
+
+    def update_notification(self, notification_id: str, update: 'NotificationUpdate', db: Session) -> Optional[Notification]:
+        """Update a notification using a NotificationUpdate object."""
+        try:
+            from src.models.notifications import NotificationUpdate
+            
+            db_obj = self._repo.get(db=db, id=notification_id)
+            if not db_obj:
+                return None
+
+            # Convert update model to dictionary, excluding None values
+            update_data = {k: v for k, v in update.model_dump(exclude_none=True).items()}
+            
+            if update_data:
+                updated = self._repo.update(db=db, db_obj=db_obj, obj_in=update_data)
+                return Notification.model_validate(updated)
+            
+            return Notification.model_validate(db_obj)
+            
+        except Exception as e:
+            logger.error(f"Error updating notification {notification_id}: {e}", exc_info=True)
+            db.rollback()
+            return None

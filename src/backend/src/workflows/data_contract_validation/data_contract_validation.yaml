@@ -1,0 +1,9 @@
+name: "Data Contract Validation"
+description: "Validate data contracts and quality rules across datasets."
+format: "MULTI_TASK"
+tasks:
+  - task_key: "data_contract_validation"
+    notebook_task:
+      notebook_path: "data_contract_validation.ipynb"
+    # existing_cluster_id will be injected from settings if not present
+

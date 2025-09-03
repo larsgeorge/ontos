@@ -1,7 +1,41 @@
 name: "Copy Table Workflow"
+description: "Copy data from a source table to a new target table in UC."
 format: "MULTI_TASK"
 tasks:
   - task_key: "copy_table"
     notebook_task:
       notebook_path: "copy_table.ipynb"
-    existing_cluster_id: "cluster-id" 
+    existing_cluster_id: "cluster-id"
+
+# Optional: Schedule to run daily at 2 AM UTC
+# schedule:
+#   quartz_cron_expression: "0 0 2 * * ?"
+#   timezone_id: "UTC"
+#   pause_status: "UNPAUSED"
+
+# Optional: Run continuously (streaming job)
+# continuous: true
+
+# Optional: Job parameters passed to tasks
+parameters:
+  source_table: "catalog.schema.source_table"
+  target_table: "catalog.schema.target_table"
+
+# Optional: Tags for organization and filtering
+tags:
+  environment: "production"
+  team: "data-engineering"
+  cost-center: "analytics"
+
+# Optional: Job timeout (in seconds) - 1 hour
+timeout_seconds: 3600
+
+# Optional: Maximum concurrent runs
+max_concurrent_runs: 1
+
+# Optional: Email notifications
+# email_notifications:
+#   on_start: ["admin@company.com"]
+#   on_success: ["data-team@company.com"]
+#   on_failure: ["admin@company.com", "data-team@company.com"]
+#   no_alert_for_skipped_runs: true 

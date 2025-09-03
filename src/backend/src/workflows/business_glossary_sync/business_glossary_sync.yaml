@@ -1,0 +1,40 @@
+name: "Business Glossary Sync"
+description: "Sync business glossary terms and relationships from source to UC."
+format: "MULTI_TASK"
+tasks:
+  - task_key: "business_glossary_sync"
+    notebook_task:
+      notebook_path: "business_glossary_sync.ipynb"
+    # existing_cluster_id will be injected from settings if not present
+
+# Schedule to run every 4 hours
+schedule:
+  quartz_cron_expression: "0 0 */4 * * ?"
+  timezone_id: "UTC"
+  pause_status: "UNPAUSED"
+
+# Job parameters for configuration
+parameters:
+  source_system: "external_glossary"
+  sync_mode: "incremental"
+  batch_size: "1000"
+
+# Tags for organization
+tags:
+  environment: "production"
+  team: "data-governance"
+  workflow-type: "sync"
+  data-source: "business-glossary"
+
+# Job timeout (in seconds) - 2 hours for large syncs
+timeout_seconds: 7200
+
+# Allow only one sync at a time
+max_concurrent_runs: 1
+
+# Email notifications for governance team
+email_notifications:
+  on_success: ["data-governance@company.com"]
+  on_failure: ["admin@company.com", "data-governance@company.com"]
+  no_alert_for_skipped_runs: false
+

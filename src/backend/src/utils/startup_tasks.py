@@ -14,6 +14,7 @@ from src.common.features import FeatureAccessLevel, APP_FEATURES, get_feature_co
 from src.models.settings import AppRoleCreate, AppRole as AppRoleApi
 from src.common.config import Settings
 from src.controller.settings_manager import SettingsManager
+from src.controller.jobs_manager import JobsManager
 
 # Import Managers needed for instantiation
 from src.controller.data_products_manager import DataProductsManager
@@ -134,6 +135,10 @@ def initialize_managers(app: FastAPI):
             settings_manager=app.state.settings_manager 
         )
         app.state.notifications_manager = NotificationsManager(settings_manager=app.state.settings_manager)
+        # Back-reference for progress notifications
+        app.state.settings_manager.set_notifications_manager(app.state.notifications_manager)
+        # Make jobs_manager accessible via app.state
+        app.state.jobs_manager = app.state.settings_manager._jobs
 
         # Feature Managers
         app.state.data_asset_review_manager = DataAssetReviewManager(

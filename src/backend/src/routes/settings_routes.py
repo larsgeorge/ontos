@@ -42,6 +42,8 @@ async def update_settings(
 ):
     """Update settings"""
     try:
+        logger.info(f"Received settings update request: {settings_payload}")
+        logger.info(f"job_cluster_id in payload: {settings_payload.get('job_cluster_id')}")
         updated = manager.update_settings(settings_payload)
         return updated.to_dict()
     except Exception as e:

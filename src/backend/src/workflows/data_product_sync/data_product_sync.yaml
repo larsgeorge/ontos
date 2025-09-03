@@ -1,0 +1,37 @@
+name: "Data Product Sync"
+description: "Continuously sync data product metadata and status updates."
+format: "MULTI_TASK"
+tasks:
+  - task_key: "data_product_sync"
+    notebook_task:
+      notebook_path: "data_product_sync.ipynb"
+    # existing_cluster_id will be injected from settings if not present
+
+# Run continuously as a streaming job
+continuous: true
+
+# Job parameters for streaming configuration
+parameters:
+  checkpoint_location: "/tmp/data_product_sync_checkpoint"
+  trigger_interval: "30 seconds"
+  max_files_per_trigger: "10"
+
+# Tags for organization
+tags:
+  environment: "production"
+  team: "data-platform"
+  workflow-type: "streaming"
+  data-source: "data-products"
+
+# No timeout for continuous jobs (runs indefinitely)
+# timeout_seconds: not applicable for continuous jobs
+
+# Allow only one continuous run
+max_concurrent_runs: 1
+
+# Email notifications for platform team
+email_notifications:
+  on_start: ["data-platform@company.com"]
+  on_failure: ["admin@company.com", "data-platform@company.com"]
+  no_alert_for_skipped_runs: true
+

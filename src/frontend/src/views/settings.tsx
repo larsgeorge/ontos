@@ -26,9 +26,21 @@ interface AppSettings {
   gitToken: string;
 }
 
+// Shape returned by /api/settings for jobs/workflows configuration
+interface SettingsApiResponse {
+  job_cluster_id?: string | null;
+  enabled_jobs?: string[];
+  available_workflows?: { id: string; name: string; description?: string }[];
+  current_settings?: {
+    job_cluster_id?: string | null;
+    enabled_jobs?: string[];
+  };
+}
+
 export default function Settings() {
   const { toast } = useToast();
-  const { get, post } = useApi();
+  const { get, post, put } = useApi();
+  // Legacy general/databricks/git settings state (kept for existing tabs)
   const [settings, setSettings] = useState<AppSettings>({
     id: '',
     name: '',
@@ -43,6 +55,10 @@ export default function Settings() {
     gitBranch: '',
     gitToken: ''
   });
+  // New jobs/workflows settings state
+  const [jobClusterId, setJobClusterId] = useState<string>('');
+  const [availableWorkflows, setAvailableWorkflows] = useState<{ id: string; name: string; description?: string }[]>([]);
+  const [enabledJobs, setEnabledJobs] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -51,8 +67,16 @@ export default function Settings() {
 
   const fetchSettings = async () => {
     try {
-      const response = await get<AppSettings>('/api/settings');
-      setSettings(response.data);
+      const response = await get<SettingsApiResponse>('/api/settings');
+      const data = response.data || {};
+      const clusterId = data.job_cluster_id ?? data.current_settings?.job_cluster_id ?? '';
+      setJobClusterId(clusterId || '');
+      const workflows = data.available_workflows || [];
+      setAvailableWorkflows(workflows);
+      const enabledSet = new Set<string>(data.enabled_jobs || data.current_settings?.enabled_jobs || []);
+      const toggles: Record<string, boolean> = {};
+      workflows.forEach(w => { toggles[w.id] = enabledSet.has(w.id); });
+      setEnabledJobs(toggles);
     } catch (error) {
       console.error('Error fetching settings:', error);
     }
@@ -61,20 +85,49 @@ export default function Settings() {
   const handleSave = async () => {
     setIsLoading(true);
     try {
-      await post('/api/settings', settings);
+      const payload = {
+        job_cluster_id: jobClusterId || null,
+        enabled_jobs: Object.entries(enabledJobs).filter(([, v]) => v).map(([k]) => k),
+      };
+      
+      const response = await put('/api/settings', payload);
+      
+      // Check if the API returned an error
+      if (response.error) {
+        toast({
+          title: 'Error',
+          description: response.error,
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      // Success case
       toast({
         title: 'Success',
         description: 'Settings saved successfully',
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Settings save error:', error);
+      
+      // Extract error message from network/other errors
+      let errorMessage = 'Failed to save settings';
+      if (error?.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: 'Error',
-        description: 'Failed to save settings',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const toggleWorkflow = (workflow: string) => {
+    setEnabledJobs(prev => ({ ...prev, [workflow]: !prev[workflow] }));
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -234,27 +287,33 @@ export default function Settings() {
               <CardDescription>Manage background jobs for data processing</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">Data Product Sync</h3>
-                  <p className="text-sm text-muted-foreground">Sync data products with Unity Catalog</p>
-                </div>
-                <Button variant="outline">Install</Button>
+              <div className="space-y-2">
+                <Label htmlFor="job-cluster-id">Job Cluster ID</Label>
+                <Input
+                  id="job-cluster-id"
+                  value={jobClusterId}
+                  onChange={(e) => setJobClusterId(e.target.value)}
+                  placeholder="cluster-xxxxxxxxxxxxxxxx"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Enter a valid Databricks cluster ID. This cluster will be used to run background workflows.
+                </p>
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">Data Contract Validation</h3>
-                  <p className="text-sm text-muted-foreground">Validate data contracts and quality rules</p>
-                </div>
-                <Button variant="outline">Install</Button>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">Business Glossary Sync</h3>
-                  <p className="text-sm text-muted-foreground">Sync business glossary terms</p>
-                </div>
-                <Button variant="outline">Install</Button>
-              </div>
+              {availableWorkflows.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No workflows found in workspace.</p>
+              ) : (
+                availableWorkflows.map((wf) => (
+                  <div key={wf.id} className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-medium">{wf.name}</h3>
+                      {wf.description && (
+                        <p className="text-sm text-muted-foreground">{wf.description}</p>
+                      )}
+                    </div>
+                    <Switch checked={!!enabledJobs[wf.id]} onCheckedChange={() => toggleWorkflow(wf.id)} />
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, TypeVar
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session as SQLAlchemySession
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import pool
@@ -433,6 +433,18 @@ def init_db() -> None:
             logger.info(f"PostgreSQL: Tables will be targeted for schema '{schema_to_create_in}' via search_path or model definitions.")
 
         # No Databricks-specific metadata modifications required
+
+        # Check if we should drop all tables first (for development)
+        if settings.APP_DB_DROP_ON_START:
+            logger.warning("APP_DB_DROP_ON_START=true: Dropping all existing tables with CASCADE...")
+            with _engine.connect() as connection:
+                # Use raw SQL to drop schema and recreate it
+                schema_name = settings.POSTGRES_DB_SCHEMA or 'public'
+                logger.warning(f"Dropping schema '{schema_name}' CASCADE and recreating...")
+                connection.execute(text(f"DROP SCHEMA IF EXISTS {schema_name} CASCADE"))
+                connection.execute(text(f"CREATE SCHEMA {schema_name}"))
+                connection.commit()
+            logger.warning("Schema dropped and recreated. This will recreate all tables from scratch.")
 
         # Now, call create_all. It will operate on the potentially modified metadata.
         logger.info("Executing Base.metadata.create_all()...")

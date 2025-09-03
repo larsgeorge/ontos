@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Bell, Info, AlertCircle, CheckCircle2, X, CheckSquare, Loader2 } from 'lucide-react';
 import { Button } from './button';
+import { Progress } from './progress';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './dropdown-menu';
 import { Badge } from './badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
@@ -62,6 +63,8 @@ export default function NotificationBell() {
         return <AlertCircle className="h-4 w-4 text-red-500" />;
       case 'action_required':
         return <AlertCircle className="h-4 w-4 text-orange-500" />;
+      case 'job_progress':
+        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
       default:
         return <Info className="h-4 w-4" />;
     }
@@ -128,9 +131,9 @@ export default function NotificationBell() {
                       {notification.subtitle}
                     </p>
                   )}
-                  {notification.description && (
+                  {(notification.description || notification.message) && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      {notification.description}
+                      {notification.description || notification.message}
                     </p>
                   )}
                   {/* Render link button if present */}
@@ -164,6 +167,21 @@ export default function NotificationBell() {
                       <CheckSquare className="h-3.5 w-3.5" />
                       {notification.read ? "View Details" : "Approve/Deny"}
                     </Button>
+                  )}
+                  {(notification.type === 'job_progress' || notification.action_type === 'job_progress') && (notification.data || notification.action_payload) && (
+                    <div className="mt-2">
+                      <Progress value={Number((notification.data || notification.action_payload)?.progress ?? 0)} />
+                      {(notification.data || notification.action_payload)?.status && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Status: {String((notification.data || notification.action_payload).status)}
+                        </p>
+                      )}
+                      {(notification.data || notification.action_payload)?.run_id && (
+                        <p className="text-xs text-muted-foreground">
+                          Run ID: {String((notification.data || notification.action_payload).run_id)}
+                        </p>
+                      )}
+                    </div>
                   )}
                   <p className="text-xs text-muted-foreground mt-1">
                     {new Date(notification.created_at).toLocaleString()}

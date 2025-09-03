@@ -1,18 +1,20 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import json
 import uuid
 
-import yaml
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service import jobs
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func
 
 from src.common.config import Settings
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.controller.notifications_manager import NotificationsManager
+from src.models.notifications import NotificationType, Notification
 from src.models.settings import JobCluster, WorkflowInstallation, AppRole, AppRoleCreate, AppRoleUpdate
 from src.common.features import get_feature_config, FeatureAccessLevel, get_all_access_levels, APP_FEATURES
 from src.common.logging import get_logger
@@ -92,15 +94,22 @@ class SettingsManager:
         self._db = db
         self._settings = settings # Store settings
         self._client = workspace_client
-        self._available_jobs = [
-            'data_contracts',
-            'business_glossaries',
-            'entitlements',
-            'mdm_jobs',
-            'catalog_commander_jobs'
-        ]
+        # Available jobs derive from workflows on disk
+        self._available_jobs: List[str] = []
         self._installations: Dict[str, WorkflowInstallation] = {}
         self.app_role_repo = app_role_repo
+        self._notifications_manager: Optional['NotificationsManager'] = None
+        # Initialize available jobs from workflow directory
+        try:
+            from src.controller.jobs_manager import JobsManager
+            self._jobs = JobsManager(db=self._db, ws_client=self._client, notifications_manager=self._notifications_manager)
+            self._available_jobs = [w["id"] for w in self._jobs.list_available_workflows()]
+        except Exception:
+            self._jobs = None
+            self._available_jobs = []
+
+    def set_notifications_manager(self, notifications_manager: 'NotificationsManager') -> None:
+        self._notifications_manager = notifications_manager
 
     def ensure_default_roles_exist(self):
         """Checks if default roles exist and creates them if necessary."""
@@ -189,7 +198,7 @@ class SettingsManager:
             raise # Re-raise other unexpected errors
 
     def get_job_clusters(self) -> List[JobCluster]:
-        """Get available job clusters"""
+        """Deprecated: listing clusters is slow; return empty list."""
         return []
         # TODO: This call is too slow and blocks the entire call to get_settings, need to fix this
         # clusters = self._client.clusters.list()
@@ -207,189 +216,90 @@ class SettingsManager:
 
     def get_settings(self) -> dict:
         """Get current settings"""
+        # Refresh available jobs from filesystem to reflect changes
+        available = self._jobs.list_available_workflows() if getattr(self, '_jobs', None) else []
+        self._available_jobs = [w["id"] if isinstance(w, dict) else w for w in available]
         return {
-            'job_clusters': self.get_job_clusters(),
+            'job_cluster_id': self._settings.job_cluster_id,
+            'enabled_jobs': self._settings.enabled_jobs or [],
+            'available_workflows': available,
             'current_settings': self._settings.to_dict(),
-            'available_jobs': self._available_jobs
         }
 
     def update_settings(self, settings: dict) -> Settings:
         """Update settings"""
-        self._settings.job_cluster_id = settings.get('job_cluster_id')
+        # Persist configured cluster ID string; do not scan clusters
+        desired_cluster_id: Optional[str] = settings.get('job_cluster_id')
+        desired_enabled: List[str] = settings.get('enabled_jobs', []) or []
+        
+        logger.info(f"SettingsManager.update_settings received cluster_id: {desired_cluster_id}")
+        logger.info(f"SettingsManager.update_settings current stored cluster_id: {self._settings.job_cluster_id}")
+
+        # Compute job enable/disable delta against current settings
+        current_enabled: List[str] = self._settings.enabled_jobs or []
+        self._available_jobs = [w["id"] for w in (self._jobs.list_available_workflows() if self._jobs else [])]
+
+        to_install = sorted(list(set(desired_enabled) - set(current_enabled)))
+        to_remove = sorted(list(set(current_enabled) - set(desired_enabled)))
+
+        # Apply changes on Databricks and collect errors
+        errors = []
+        
+        for job_id in to_install:
+            # Only process jobs that exist in workflows
+            if job_id in self._available_jobs:
+                try:
+                    if self._jobs:
+                        # Check if cluster ID is valid before installing (use the new desired value)
+                        cluster_id_to_use = desired_cluster_id or self._settings.job_cluster_id
+                        if not cluster_id_to_use or cluster_id_to_use in ['cluster-id', '']:
+                            error_msg = f"Invalid cluster ID '{cluster_id_to_use}' for workflow '{job_id}'. Please configure a valid Databricks cluster ID."
+                            errors.append(error_msg)
+                            logger.error(error_msg)
+                            continue
+                            
+                        self._jobs.install_workflow(job_id, job_cluster_id=cluster_id_to_use)
+                        logger.info(f"Successfully installed workflow '{job_id}'")
+                except Exception as e:
+                    error_msg = f"Failed to install workflow '{job_id}': {str(e)}"
+                    errors.append(error_msg)
+                    logger.error(error_msg)
+            else:
+                error_msg = f"Workflow '{job_id}' not found in available workflows"
+                errors.append(error_msg)
+                logger.warning(error_msg)
+
+        for job_id in to_remove:
+            if job_id in self._available_jobs:
+                try:
+                    if self._jobs:
+                        job = self._find_job_by_name(job_id)
+                        if job:
+                            self._jobs.remove_workflow(job.job_id)
+                            logger.info(f"Successfully removed workflow '{job_id}'")
+                        else:
+                            logger.warning(f"Job '{job_id}' not found in Databricks, may have been already deleted")
+                except Exception as e:
+                    error_msg = f"Failed to remove workflow '{job_id}': {str(e)}"
+                    errors.append(error_msg)
+                    logger.error(error_msg)
+            else:
+                error_msg = f"Workflow '{job_id}' not found in available workflows"
+                errors.append(error_msg)
+                logger.warning(error_msg)
+        
+        # If there were errors, raise an exception with all error details
+        if errors:
+            error_summary = f"Failed to update {len(errors)} workflow(s): " + "; ".join(errors)
+            raise RuntimeError(error_summary)
+
+        # Update stored settings after applying infra changes
+        self._settings.job_cluster_id = desired_cluster_id
+        self._settings.enabled_jobs = sorted(list(set(desired_enabled)))
         self._settings.sync_enabled = settings.get('sync_enabled', False)
         self._settings.sync_repository = settings.get('sync_repository')
-        self._settings.enabled_jobs = settings.get('enabled_jobs', [])
         self._settings.updated_at = datetime.utcnow()
         return self._settings
-
-    def list_available_workflows(self) -> List[str]:
-        """List all available workflow definitions from YAML files."""
-        workflow_path = Path("workflows")
-        if not workflow_path.exists():
-            return []
-
-        return [f.stem for f in workflow_path.glob("*.yaml")]
-
-    def list_installed_workflows(self) -> List[WorkflowInstallation]:
-        """List all workflows installed in the Databricks workspace."""
-        return list(self._installations.values())
-
-    def install_workflow(self, workflow_name: str) -> WorkflowInstallation:
-        """Install a workflow from YAML definition into Databricks workspace."""
-        # Load workflow definition
-        yaml_path = Path("workflows") / f"{workflow_name}.yaml"
-        if not yaml_path.exists():
-            raise ValueError(f"Workflow definition not found: {workflow_name}")
-
-        with open(yaml_path) as f:
-            workflow_def = yaml.safe_load(f)
-
-        # Create job in Databricks
-        try:
-            job_settings = jobs.JobSettings.from_dict(workflow_def)
-            response = self._client.jobs.create(
-                name=workflow_def.get('name', workflow_name),
-                settings=job_settings
-            )
-
-            # Record installation
-            installation = WorkflowInstallation(
-                id=str(response.job_id),
-                name=workflow_name,
-                installed_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
-                status="active",
-                workspace_id=self._client.config.host
-            )
-            self._installations[workflow_name] = installation
-            return installation
-
-        except Exception as e:
-            raise RuntimeError(f"Failed to install workflow: {e!s}")
-
-    def update_workflow(self, workflow_name: str) -> WorkflowInstallation:
-        """Update an existing workflow in the Databricks workspace."""
-        if workflow_name not in self._installations:
-            raise ValueError(f"Workflow not installed: {workflow_name}")
-
-        # Load updated workflow definition
-        yaml_path = Path("workflows") / f"{workflow_name}.yaml"
-        if not yaml_path.exists():
-            raise ValueError(f"Workflow definition not found: {workflow_name}")
-
-        with open(yaml_path) as f:
-            workflow_def = yaml.safe_load(f)
-
-        # Update job in Databricks
-        try:
-            job_id = int(self._installations[workflow_name].id)
-            job_settings = jobs.JobSettings.from_dict(workflow_def)
-            self._client.jobs.update(
-                job_id=job_id,
-                new_settings=job_settings
-            )
-
-            # Update installation record
-            self._installations[workflow_name].updated_at = datetime.utcnow()
-            return self._installations[workflow_name]
-
-        except Exception as e:
-            raise RuntimeError(f"Failed to update workflow: {e!s}")
-
-    def remove_workflow(self, workflow_name: str) -> bool:
-        """Remove a workflow from the Databricks workspace."""
-        if workflow_name not in self._installations:
-            return False
-
-        try:
-            job_id = int(self._installations[workflow_name].id)
-            self._client.jobs.delete(job_id=job_id)
-            del self._installations[workflow_name]
-            return True
-
-        except Exception as e:
-            raise RuntimeError(f"Failed to remove workflow: {e!s}")
-
-    def install_job(self, job_id: str) -> dict:
-        """Install and enable a background job"""
-        if job_id not in self._available_jobs:
-            raise ValueError(f"Job {job_id} not found")
-
-        try:
-            # Update settings to enable the job
-            if not self._settings.enabled_jobs:
-                self._settings.enabled_jobs = []
-            self._settings.enabled_jobs.append(job_id)
-            self._settings.updated_at = datetime.utcnow()
-
-            # Install the job in Databricks
-            workflow_def = self._get_workflow_definition(job_id)
-            job_settings = jobs.JobSettings.from_dict(workflow_def)
-            response = self._client.jobs.create(
-                name=workflow_def.get('name', job_id),
-                settings=job_settings
-            )
-
-            return {
-                'id': str(response.job_id),
-                'name': job_id,
-                'installed_at': self._settings.updated_at.isoformat(),
-                'status': 'active',
-                'workspace_id': self._client.config.host
-            }
-        except Exception as e:
-            # Remove from enabled jobs if installation fails
-            if job_id in self._settings.enabled_jobs:
-                self._settings.enabled_jobs.remove(job_id)
-            raise RuntimeError(f"Failed to install job: {e!s}")
-
-    def update_job(self, job_id: str, enabled: bool) -> dict:
-        """Enable or disable a background job"""
-        if job_id not in self._available_jobs:
-            raise ValueError(f"Job {job_id} not found")
-
-        try:
-            if enabled and job_id not in (self._settings.enabled_jobs or []):
-                return self.install_job(job_id)
-            elif not enabled and job_id in (self._settings.enabled_jobs or []):
-                return self.remove_job(job_id)
-
-            return {
-                'name': job_id,
-                'status': 'active' if enabled else 'disabled',
-                'updated_at': datetime.utcnow().isoformat()
-            }
-        except Exception as e:
-            raise RuntimeError(f"Failed to update job: {e!s}")
-
-    def remove_job(self, job_id: str) -> bool:
-        """Remove and disable a background job"""
-        if job_id not in self._available_jobs:
-            raise ValueError(f"Job {job_id} not found")
-
-        try:
-            # Remove from enabled jobs
-            if job_id in (self._settings.enabled_jobs or []):
-                self._settings.enabled_jobs.remove(job_id)
-                self._settings.updated_at = datetime.utcnow()
-
-            # Remove job from Databricks
-            job = self._find_job_by_name(job_id)
-            if job:
-                self._client.jobs.delete(job_id=job.job_id)
-            return True
-        except Exception as e:
-            raise RuntimeError(f"Failed to remove job: {e!s}")
-
-    def _get_workflow_definition(self, job_id: str) -> dict:
-        """Get the workflow definition for a job"""
-        # Implementation depends on how you store job definitions
-        # Could be from YAML files, database, etc.
-
-    def _find_job_by_name(self, job_name: str) -> Optional[jobs.Job]:
-        """Find a job in Databricks by name"""
-        all_jobs = self._client.jobs.list()
-        return next((job for job in all_jobs if job.settings.name == job_name), None)
 
     # --- RBAC Methods --- 
 
@@ -403,6 +313,23 @@ class SettingsManager:
             logger.error(f"Database error while counting roles: {e}", exc_info=True)
             self._db.rollback()
             raise RuntimeError("Failed to count application roles due to database error.")
+
+    def set_notifications_manager(self, notifications_manager: 'NotificationsManager'):
+        """Set the notifications manager and reinitialize jobs manager if needed."""
+        self._notifications_manager = notifications_manager
+        
+        # Reinitialize jobs manager with notifications support
+        if self._client:
+            try:
+                from src.controller.jobs_manager import JobsManager
+                self._jobs = JobsManager(
+                    db=self._db, 
+                    ws_client=self._client, 
+                    notifications_manager=self._notifications_manager
+                )
+                self._available_jobs = [w["id"] for w in self._jobs.list_available_workflows()]
+            except Exception as e:
+                logger.error(f"Failed to reinitialize jobs manager with notifications: {e}")
 
     def _map_db_to_api(self, role_db: AppRoleDb) -> AppRole:
         """Converts an AppRoleDb model to an AppRole API model."""

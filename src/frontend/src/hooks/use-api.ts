@@ -168,6 +168,26 @@ export const useApi = () => {
         },
         body: JSON.stringify(body),
       });
+      
+      // Check for non-OK responses first
+      if (!response.ok) {
+        let errorBody: any;
+        const contentType = response.headers.get('Content-Type');
+        try {
+          if (contentType?.includes('application/json')) {
+            errorBody = await response.json();
+          } else {
+            errorBody = await response.text();
+          }
+        } catch (parseError) {
+          errorBody = response.statusText; // Fallback
+        }
+        const errorMsg = errorBody?.detail || (typeof errorBody === 'string' ? errorBody : JSON.stringify(errorBody)) || `HTTP error! status: ${response.status}`;
+        console.error(`[useApi] PUT error response from ${url} (${response.status}):`, errorBody);
+        return { data: {} as T, error: errorMsg };
+      }
+      
+      // Handle successful response
       const data = await response.json();
       console.log(`[useApi] PUT response from ${url}:`, data);
       return { data };

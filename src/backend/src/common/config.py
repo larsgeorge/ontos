@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     GIT_PASSWORD: Optional[str] = Field(None, env='GIT_PASSWORD')
 
     # Job settings
+    # Track the Databricks job cluster ID (string). Do not scan clusters.
     job_cluster_id: Optional[str] = None
     sync_enabled: bool = False
     sync_repository: Optional[str] = None
