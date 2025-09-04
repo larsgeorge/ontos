@@ -56,6 +56,25 @@ async def prefix_search(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/semantic-models/concepts", response_model=List[dict])
+async def search_concepts(
+    q: str = "",
+    limit: int = 50,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+):
+    """Search for classes/concepts in the semantic models using SPARQL.
+    
+    Returns:
+    - RDFS classes (rdfs:Class instances or rdfs:subClassOf relationships)
+    - SKOS concepts (skos:Concept instances)
+    """
+    try:
+        return manager.search_concepts(q, limit=limit)
+    except Exception as e:
+        logger.error(f"Concept search failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/semantic-models/neighbors", response_model=List[dict])
 async def get_neighbors(
     iri: str,

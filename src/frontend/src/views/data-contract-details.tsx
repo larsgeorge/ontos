@@ -10,6 +10,8 @@ import DataContractWizardDialog from '@/components/data-contracts/data-contract-
 import { useToast } from '@/hooks/use-toast'
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel'
 import { CommentSidebar } from '@/components/comments'
+import ConceptSelectDialog from '@/components/semantic/concept-select-dialog'
+import type { EntitySemanticLink } from '@/types/semantic-link'
 import useBreadcrumbStore from '@/stores/breadcrumb-store'
 
 type Contract = {
@@ -37,6 +39,8 @@ export default function DataContractDetails() {
   const [error, setError] = useState<string | null>(null)
   const [isWizardOpen, setIsWizardOpen] = useState(false)
   const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false)
+  const [iriDialogOpen, setIriDialogOpen] = useState(false)
+  const [links, setLinks] = useState<EntitySemanticLink[]>([])
 
   const fetchDetails = async () => {
     if (!contractId) return
@@ -44,11 +48,22 @@ export default function DataContractDetails() {
     setError(null)
     setDynamicTitle('Loading...')
     try {
-      const res = await fetch(`/api/data-contracts/${contractId}`)
-      if (!res.ok) throw new Error('Failed to load contract')
-      const data = await res.json()
-      setContract(data)
-      setDynamicTitle(data.name)
+      const [contractRes, linksRes] = await Promise.all([
+        fetch(`/api/data-contracts/${contractId}`),
+        fetch(`/api/semantic-links/entity/data_contract/${contractId}`)
+      ])
+      
+      if (!contractRes.ok) throw new Error('Failed to load contract')
+      const contractData = await contractRes.json()
+      setContract(contractData)
+      setDynamicTitle(contractData.name)
+      
+      if (linksRes.ok) {
+        const linksData = await linksRes.json()
+        setLinks(Array.isArray(linksData) ? linksData : [])
+      } else {
+        setLinks([])
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
       setDynamicTitle('Error')
@@ -116,6 +131,38 @@ export default function DataContractDetails() {
     }
   }
 
+  const addIri = async (iri: string) => {
+    if (!contractId) return
+    try {
+      const res = await fetch(`/api/semantic-links/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entity_id: contractId,
+          entity_type: 'data_contract',
+          iri,
+        })
+      })
+      if (!res.ok) throw new Error('Failed to add concept')
+      await fetchDetails()
+      setIriDialogOpen(false)
+      toast({ title: 'Linked', description: 'Business concept linked to data contract.' })
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to link business concept', variant: 'destructive' })
+    }
+  }
+
+  const removeLink = async (linkId: string) => {
+    try {
+      const res = await fetch(`/api/semantic-links/${linkId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to remove concept')
+      await fetchDetails()
+      toast({ title: 'Unlinked', description: 'Business concept unlinked from data contract.' })
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to unlink business concept', variant: 'destructive' })
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -174,6 +221,22 @@ export default function DataContractDetails() {
             <Label>Contract Text</Label>
             <pre className="p-3 rounded bg-muted text-sm overflow-x-auto whitespace-pre-wrap">{contract.contract_text}</pre>
           </div>
+          <div className="space-y-1">
+            <Label>Linked Business Concepts:</Label>
+            <div className="flex flex-wrap gap-2 mt-1 items-center">
+              {links.length === 0 ? (
+                <span className="text-sm text-muted-foreground">No business concepts linked</span>
+              ) : (
+                links.map(l => (
+                  <span key={l.id} className="inline-flex items-center gap-1 border rounded px-2 py-1 text-sm max-w-[420px] truncate">
+                    <a href={`/search?startIri=${encodeURIComponent(l.iri)}`} className="hover:underline truncate" title={l.iri}>{l.iri}</a>
+                    <button aria-label="Remove concept link" className="ml-1 text-muted-foreground hover:text-foreground" onClick={(e) => { e.preventDefault(); removeLink(l.id); }}>×</button>
+                  </span>
+                ))
+              )}
+              <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add Concept</Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -211,6 +274,12 @@ export default function DataContractDetails() {
             toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
           }
         }}
+      />
+
+      <ConceptSelectDialog
+        isOpen={iriDialogOpen}
+        onOpenChange={setIriDialogOpen}
+        onSelect={addIri}
       />
     </div>
   )

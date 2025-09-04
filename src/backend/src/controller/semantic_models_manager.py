@@ -235,6 +235,62 @@ class SemanticModelsManager:
                         return results
         return results
 
+    # Search for classes/concepts with optional text filter
+    def search_concepts(self, text_filter: str = "", limit: int = 50) -> List[dict]:
+        sparql_query = f"""
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+        SELECT DISTINCT ?class_iri ?label
+        WHERE {{
+            {{
+                ?class_iri a rdfs:Class .
+            }}
+            UNION
+            {{
+                ?class_iri rdfs:subClassOf ?other .
+            }}
+            UNION
+            {{
+                ?class_iri a skos:Concept .
+            }}
+            OPTIONAL {{ ?class_iri rdfs:label ?label }}
+            OPTIONAL {{ ?class_iri skos:prefLabel ?label }}
+            {f'FILTER(CONTAINS(LCASE(STR(?class_iri)), LCASE("{text_filter}")) || CONTAINS(LCASE(STR(?label)), LCASE("{text_filter}")))' if text_filter.strip() else ''}
+        }}
+        ORDER BY ?class_iri
+        LIMIT {limit}
+        """
+        
+        try:
+            raw_results = self.query(sparql_query)
+            results = []
+            for row in raw_results:
+                class_iri = row.get('class_iri', '')
+                label = row.get('label', '')
+                
+                # Use label if available, otherwise extract last part of IRI
+                if label and label.strip():
+                    display_name = label.strip()
+                else:
+                    # Extract the last segment after # or /
+                    if '#' in class_iri:
+                        display_name = class_iri.split('#')[-1]
+                    elif '/' in class_iri:
+                        display_name = class_iri.split('/')[-1]
+                    else:
+                        display_name = class_iri
+                
+                results.append({
+                    'value': class_iri,
+                    'label': display_name,
+                    'type': 'class'
+                })
+            
+            return results
+        except Exception as e:
+            # If SPARQL fails, fall back to empty results
+            return []
+
     # Outgoing neighbors of a resource: returns distinct predicate/object pairs
     def neighbors(self, resource_iri: str, limit: int = 200) -> List[dict]:
         from rdflib import URIRef

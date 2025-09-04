@@ -16,7 +16,7 @@ import { usePermissions } from '@/stores/permissions-store'; // Import permissio
 import { FeatureAccessLevel } from '@/types/settings'; // Import FeatureAccessLevel
 import { useNotificationsStore } from '@/stores/notifications-store'; // Import notification store
 import CreateVersionDialog from '@/components/data-products/create-version-dialog';
-import IriPickerDialog from '@/components/semantic/iri-picker-dialog';
+import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
 import type { EntitySemanticLink } from '@/types/semantic-link';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { CommentSidebar } from '@/components/comments';
@@ -406,19 +406,19 @@ export default function DataProductDetails() {
             </div>
           </div>
           <div className="space-y-1">
-            <Label>Linked RDF IRIs:</Label>
+            <Label>Linked Business Concepts:</Label>
             <div className="flex flex-wrap gap-2 mt-1 items-center">
               {links.length === 0 ? (
-                <span className="text-sm text-muted-foreground">No IRIs linked</span>
+                <span className="text-sm text-muted-foreground">No business concepts linked</span>
               ) : (
                 links.map(l => (
                   <span key={l.id} className="inline-flex items-center gap-1 border rounded px-2 py-1 text-sm max-w-[420px] truncate">
                     <a href={`/search?startIri=${encodeURIComponent(l.iri)}`} className="hover:underline truncate" title={l.iri}>{l.iri}</a>
-                    <button aria-label="Remove IRI" className="ml-1 text-muted-foreground hover:text-foreground" onClick={(e) => { e.preventDefault(); removeLink(l.id); }}>×</button>
+                    <button aria-label="Remove concept link" className="ml-1 text-muted-foreground hover:text-foreground" onClick={(e) => { e.preventDefault(); removeLink(l.id); }}>×</button>
                   </span>
                 ))
               )}
-              <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add IRI</Button>
+              <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add Concept</Button>
             </div>
           </div>
         </CardContent>
@@ -495,7 +495,7 @@ export default function DataProductDetails() {
           />
       )}
 
-      <IriPickerDialog isOpen={iriDialogOpen} onOpenChange={setIriDialogOpen} onPick={addIri} />
+      <ConceptSelectDialog isOpen={iriDialogOpen} onOpenChange={setIriDialogOpen} onSelect={addIri} />
 
       <Toaster />
     </div>

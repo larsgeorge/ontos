@@ -3,12 +3,15 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 // Preview handled in EntityMetadataPanel
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Edit3, Users, Tag, Hash, CalendarDays, UserCircle, ListTree, ChevronsUpDown } from 'lucide-react';
+import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
+import type { EntitySemanticLink } from '@/types/semantic-link';
 import { DataDomain } from '@/types/data-domain';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { RelativeDate } from '@/components/common/relative-date';
@@ -49,7 +52,7 @@ const InfoItem: React.FC<InfoItemProps> = ({ label, value, icon, children, class
 export default function DataDomainDetailsView() {
   const { domainId } = useParams<{ domainId: string }>();
   const navigate = useNavigate();
-  const { get } = useApi();
+  const { get, post, del } = useApi();
   const { toast } = useToast();
   
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
@@ -59,6 +62,8 @@ export default function DataDomainDetailsView() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false);
+  const [iriDialogOpen, setIriDialogOpen] = useState(false);
+  const [semanticLinks, setSemanticLinks] = useState<EntitySemanticLink[]>([]);
 
   // Metadata: Rich Texts, Links, Documents
   interface RichTextItem { id: string; entity_id: string; entity_type: string; title: string; short_description?: string | null; content_markdown: string; created_at?: string; }
@@ -90,10 +95,20 @@ export default function DataDomainDetailsView() {
     setError(null);
     setDynamicTitle('Loading...');
     try {
-      const response = await get<DataDomain>(`/api/data-domains/${id}`);
-      const data = checkApiResponse(response, 'Data Domain Details');
+      const [domainRes, linksRes] = await Promise.all([
+        get<DataDomain>(`/api/data-domains/${id}`),
+        get<EntitySemanticLink[]>(`/api/semantic-links/entity/data_domain/${id}`)
+      ]);
+      
+      const data = checkApiResponse(domainRes, 'Data Domain Details');
       setDomain(data);
       setDynamicTitle(data.name);
+      
+      if (linksRes.data && !linksRes.error) {
+        setSemanticLinks(Array.isArray(linksRes.data) ? linksRes.data : []);
+      } else {
+        setSemanticLinks([]);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to fetch domain details.');
       toast({
@@ -112,6 +127,34 @@ export default function DataDomainDetailsView() {
   const truncate = (text?: string | null, maxLen: number = 80) => {
     if (!text) return '';
     return text.length > maxLen ? text.slice(0, maxLen - 1) + '…' : text;
+  };
+
+  const addIri = async (iri: string) => {
+    if (!domainId) return
+    try {
+      const res = await post<EntitySemanticLink>(`/api/semantic-links/`, {
+        entity_id: domainId,
+        entity_type: 'data_domain',
+        iri,
+      });
+      if (res.error) throw new Error(res.error);
+      await fetchDomainDetails(domainId);
+      setIriDialogOpen(false);
+      toast({ title: 'Linked', description: 'Business concept linked to data domain.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message || 'Failed to link business concept', variant: 'destructive' });
+    }
+  };
+
+  const removeLink = async (linkId: string) => {
+    try {
+      const res = await del(`/api/semantic-links/${linkId}`);
+      if (res.error) throw new Error(res.error);
+      await fetchDomainDetails(domainId!);
+      toast({ title: 'Unlinked', description: 'Business concept unlinked from data domain.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message || 'Failed to unlink business concept', variant: 'destructive' });
+    }
   };
 
   // Preview dialogs
@@ -256,6 +299,22 @@ export default function DataDomainDetailsView() {
             <InfoItem label="Last Updated At" icon={<CalendarDays />}>
                 {domain.updated_at ? <RelativeDate date={domain.updated_at} /> : 'N/A'}
             </InfoItem>
+            
+            <InfoItem label="Linked Business Concepts" className="col-span-full">
+              <div className="flex flex-wrap gap-2 mt-1 items-center">
+                {semanticLinks.length === 0 ? (
+                  <span className="text-sm text-muted-foreground">No business concepts linked</span>
+                ) : (
+                  semanticLinks.map(l => (
+                    <span key={l.id} className="inline-flex items-center gap-1 border rounded px-2 py-1 text-sm max-w-[420px] truncate">
+                      <a href={`/search?startIri=${encodeURIComponent(l.iri)}`} className="hover:underline truncate" title={l.iri}>{l.iri}</a>
+                      <button aria-label="Remove concept link" className="ml-1 text-muted-foreground hover:text-foreground" onClick={(e) => { e.preventDefault(); removeLink(l.id); }}>×</button>
+                    </span>
+                  ))
+                )}
+                <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add Concept</Button>
+              </div>
+            </InfoItem>
         </CardContent>
       </Card>
 
@@ -303,6 +362,11 @@ export default function DataDomainDetailsView() {
         </>
       )}
 
+      <ConceptSelectDialog
+        isOpen={iriDialogOpen}
+        onOpenChange={setIriDialogOpen}
+        onSelect={addIri}
+      />
     </div>
   );
 } 
