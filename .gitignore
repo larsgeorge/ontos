@@ -28,3 +28,5 @@ __pycache__
 
 settings.json
 audit_logs/
+
+.playwright-mcp/
