@@ -1,8 +1,8 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pathlib import Path
-from rdflib import Graph
-from rdflib.namespace import RDF, RDFS
-from rdflib import URIRef
+from rdflib import Graph, ConjunctiveGraph, Dataset
+from rdflib.namespace import RDF, RDFS, SKOS
+from rdflib import URIRef, Literal, Namespace
 from sqlalchemy.orm import Session
 
 from src.db_models.semantic_models import SemanticModelDb
@@ -11,6 +11,14 @@ from src.models.semantic_models import (
     SemanticModelCreate,
     SemanticModelUpdate,
     SemanticModelPreview,
+)
+from src.models.ontology import (
+    OntologyConcept,
+    OntologyProperty,
+    OntologyTaxonomy,
+    ConceptHierarchy,
+    TaxonomyStats,
+    ConceptSearchResult
 )
 from src.repositories.semantic_models_repository import semantic_models_repo
 from src.common.logging import get_logger
@@ -23,7 +31,14 @@ class SemanticModelsManager:
     def __init__(self, db: Session, data_dir: Optional[Path] = None):
         self._db = db
         self._data_dir = data_dir or Path(__file__).parent.parent / "data"
-        self._graph = Graph()
+        # Use ConjunctiveGraph to support named graphs/contexts
+        self._graph = ConjunctiveGraph()
+        logger.info(f"SemanticModelsManager initialized with data_dir: {self._data_dir}")
+        # Load file-based taxonomies immediately
+        try:
+            self.rebuild_graph_from_enabled()
+        except Exception as e:
+            logger.error(f"Failed to rebuild graph during initialization: {e}")
 
     def list(self) -> List[SemanticModel]:
         items = semantic_models_repo.get_multi(self._db)
@@ -159,16 +174,63 @@ class SemanticModelsManager:
             # Assume RDF/XML for RDFS
             self._graph.parse(data=content_text, format="xml")
 
+    def _parse_into_graph_context(self, content_text: str, fmt: str, context: Graph) -> None:
+        """Parse content into a specific named graph context"""
+        if fmt == "skos":
+            context.parse(data=content_text, format="turtle")
+        else:
+            # Assume RDF/XML for RDFS
+            context.parse(data=content_text, format="xml")
+    
+    def _load_database_glossaries_into_graph(self) -> None:
+        """Load database glossaries as RDF triples into named graphs"""
+        try:
+            # We'll need to import the business glossaries manager to avoid circular imports
+            # For now, we'll defer this implementation
+            logger.debug("Database glossary loading will be implemented when business glossaries manager is updated")
+        except Exception as e:
+            logger.warning(f"Failed to load database glossaries into graph: {e}")
+
     def rebuild_graph_from_enabled(self) -> None:
-        self._graph = Graph()
+        logger.info("Starting to rebuild graph from enabled models and taxonomies")
+        self._graph = ConjunctiveGraph()
+        
+        # Load database-backed semantic models into named graphs
         items = semantic_models_repo.get_multi(self._db)
         for it in items:
             if not it.enabled:
                 continue
             try:
-                self._parse_into_graph(it.content_text or "", it.format)
+                context_name = f"urn:semantic-model:{it.name}"
+                context = self._graph.get_context(context_name)
+                self._parse_into_graph_context(it.content_text or "", it.format, context)
+                logger.debug(f"Loaded semantic model '{it.name}' into context '{context_name}'")
             except Exception as e:
                 logger.warning(f"Skipping model '{it.name}' due to parse error: {e}")
+        
+        # Load file-based taxonomies into named graphs
+        try:
+            taxonomy_dir = self._data_dir / "taxonomies"
+            logger.info(f"Looking for taxonomies in directory: {taxonomy_dir}")
+            if taxonomy_dir.exists() and taxonomy_dir.is_dir():
+                taxonomy_files = list(taxonomy_dir.glob("*.ttl"))
+                logger.info(f"Found {len(taxonomy_files)} TTL files: {[f.name for f in taxonomy_files]}")
+                for f in taxonomy_files:
+                    if not f.is_file():
+                        continue
+                    try:
+                        context_name = f"urn:taxonomy:{f.stem}"
+                        context = self._graph.get_context(context_name)
+                        context.parse(f.as_posix(), format='turtle')
+                        triples_count = len(context)
+                        logger.info(f"Successfully loaded taxonomy '{f.name}' into context '{context_name}' with {triples_count} triples")
+                    except Exception as e:
+                        logger.error(f"Failed loading taxonomy {f.name}: {e}")
+            else:
+                logger.warning(f"Taxonomy directory does not exist or is not a directory: {taxonomy_dir}")
+        except Exception as e:
+            logger.error(f"Failed to load file-based taxonomies: {e}")
+        
         # Always-on ontologies from src/schemas/rdf
         try:
             rdf_dir = Path(__file__).parent.parent / "schemas" / "rdf"
@@ -178,22 +240,31 @@ class SemanticModelsManager:
                         continue
                     name = f.name.lower()
                     try:
+                        context_name = f"urn:schema:{f.stem}"
+                        context = self._graph.get_context(context_name)
                         if name.endswith('.ttl'):
-                            self._graph.parse(f.as_posix(), format='turtle')
+                            context.parse(f.as_posix(), format='turtle')
                         elif name.endswith('.rdf') or name.endswith('.xml'):
-                            self._graph.parse(f.as_posix(), format='xml')
+                            context.parse(f.as_posix(), format='xml')
+                        logger.debug(f"Loaded schema '{f.name}' into context '{context_name}'")
                     except Exception as e:
-                        logger.warning(f"Failed loading ontology {f.name}: {e}")
+                        logger.warning(f"Failed loading schema {f.name}: {e}")
         except Exception as e:
-            logger.warning(f"Failed to load built-in ontologies: {e}")
+            logger.warning(f"Failed to load built-in schemas: {e}")
+        
+        # Load database glossaries into named graphs
+        self._load_database_glossaries_into_graph()
+        
         # Add rdfs:seeAlso links from entity-semantic links
         try:
             from src.repositories.semantic_links_repository import entity_semantic_links_repo
             links = entity_semantic_links_repo.list_all(self._db)
+            context_name = "urn:semantic-links"
+            context = self._graph.get_context(context_name)
             for link in links:
                 subj = URIRef(f"urn:ucapp:{link.entity_type}:{link.entity_id}")
                 obj = URIRef(link.iri)
-                self._graph.add((subj, RDFS.seeAlso, obj))
+                context.add((subj, RDFS.seeAlso, obj))
         except Exception as e:
             logger.warning(f"Failed to incorporate semantic entity links into graph: {e}")
 
@@ -356,4 +427,404 @@ class SemanticModelsManager:
 
         return results
 
+    # --- New Ontology Methods ---
+    
+    def get_taxonomies(self) -> List[OntologyTaxonomy]:
+        """Get all available taxonomies/ontologies with their metadata"""
+        taxonomies = []
+        
+        # Check if graph has any triples at all
+        total_triples = len(self._graph)
+        context_count = len(list(self._graph.contexts()))
+        logger.info(f"Graph has {total_triples} total triples and {context_count} contexts")
+        
+        # Get contexts from the graph
+        for context in self._graph.contexts():
+            logger.debug(f"Processing context: {context} (type: {type(context)})")
+            
+            # Get the context identifier
+            if hasattr(context, 'identifier'):
+                context_id = context.identifier
+            else:
+                logger.debug(f"Context has no identifier attribute: {context}")
+                continue
+            
+            if not isinstance(context_id, URIRef):
+                logger.debug(f"Context identifier is not URIRef: {context_id} ({type(context_id)})")
+                continue
+            
+            context_str = str(context_id)
+            logger.debug(f"Processing context with identifier: {context_str}")
+            
+            # Count concepts and properties in this context
+            try:
+                concepts_count = len(list(context.subjects(RDF.type, RDFS.Class))) + \
+                               len(list(context.subjects(RDF.type, SKOS.Concept)))
+                properties_count = len(list(context.subjects(RDF.type, RDF.Property)))
+            except Exception as e:
+                logger.warning(f"Error counting concepts in context {context_str}: {e}")
+                concepts_count = 0
+                properties_count = 0
+            
+            # Determine taxonomy type and name
+            if context_str.startswith("urn:taxonomy:"):
+                source_type = "file"
+                name = context_str.replace("urn:taxonomy:", "")
+                format_str = "ttl"
+            elif context_str.startswith("urn:semantic-model:"):
+                source_type = "database" 
+                name = context_str.replace("urn:semantic-model:", "")
+                format_str = "rdfs"
+            elif context_str.startswith("urn:schema:"):
+                source_type = "schema"
+                name = context_str.replace("urn:schema:", "")
+                format_str = "ttl"
+            elif context_str.startswith("urn:glossary:"):
+                source_type = "database"
+                name = context_str.replace("urn:glossary:", "")
+                format_str = "rdfs"
+            else:
+                source_type = "external"
+                name = context_str
+                format_str = None
+            
+            taxonomies.append(OntologyTaxonomy(
+                name=name,
+                description=f"{source_type.title()} taxonomy: {name}",
+                source_type=source_type,
+                format=format_str,
+                concepts_count=concepts_count,
+                properties_count=properties_count
+            ))
+        
+        return sorted(taxonomies, key=lambda t: (t.source_type, t.name))
+    
+    def get_concepts_by_taxonomy(self, taxonomy_name: str = None) -> List[OntologyConcept]:
+        """Get concepts, optionally filtered by taxonomy"""
+        concepts = []
+        
+        # Determine which contexts to search
+        contexts_to_search = []
+        if taxonomy_name:
+            # Find the specific context
+            target_contexts = [
+                f"urn:taxonomy:{taxonomy_name}",
+                f"urn:semantic-model:{taxonomy_name}", 
+                f"urn:schema:{taxonomy_name}",
+                f"urn:glossary:{taxonomy_name}"
+            ]
+            for context in self._graph.contexts():
+                if hasattr(context, 'identifier') and str(context.identifier) in target_contexts:
+                    contexts_to_search.append((str(context.identifier), context))
+        else:
+            # Search all contexts
+            contexts_to_search = [(str(context.identifier), context) 
+                                for context in self._graph.contexts() 
+                                if hasattr(context, 'identifier')]
+        
+        for context_name, context in contexts_to_search:
+            # Find all classes and concepts in this context
+            class_query = """
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+            PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+            SELECT DISTINCT ?concept ?label ?comment WHERE {
+                {
+                    ?concept a rdfs:Class .
+                } UNION {
+                    ?concept a skos:Concept .
+                }
+                OPTIONAL { ?concept rdfs:label ?label }
+                OPTIONAL { ?concept skos:prefLabel ?label }
+                OPTIONAL { ?concept rdfs:comment ?comment }
+                OPTIONAL { ?concept skos:definition ?comment }
+            }
+            ORDER BY ?concept
+            """
+            
+            try:
+                results = context.query(class_query)
+                logger.debug(f"SPARQL query returned {len(list(results))} results for context {context_name}")
+                
+                # Re-execute query since we consumed the iterator
+                results = context.query(class_query)
+                for row in results:
+                    logger.debug(f"Processing SPARQL row: {row} (type: {type(row)}, length: {len(row) if hasattr(row, '__len__') else 'N/A'})")
+                    
+                    # Handle different ways SPARQL results can be accessed
+                    try:
+                        if hasattr(row, 'concept'):
+                            concept_iri = str(row.concept)
+                            label = str(row.label) if hasattr(row, 'label') and row.label else None
+                            comment = str(row.comment) if hasattr(row, 'comment') and row.comment else None
+                        else:
+                            # Fallback to index-based access
+                            concept_iri = str(row[0]) if len(row) > 0 else None
+                            label = str(row[1]) if len(row) > 1 and row[1] else None
+                            comment = str(row[2]) if len(row) > 2 and row[2] else None
+                    except Exception as e:
+                        logger.warning(f"Failed to parse SPARQL result row {row}: {e}")
+                        continue
+                    
+                    if not concept_iri:
+                        logger.debug("Skipping row with no concept IRI")
+                        continue
+                    
+                    concept_uri = URIRef(concept_iri)
+                    
+                    # Determine concept type
+                    if (concept_uri, RDF.type, RDFS.Class) in context:
+                        concept_type = "class"
+                    elif (concept_uri, RDF.type, SKOS.Concept) in context:
+                        concept_type = "concept"
+                    else:
+                        concept_type = "individual"
+                    
+                    # Get parent concepts
+                    parent_concepts = []
+                    for parent in context.objects(concept_uri, RDFS.subClassOf):
+                        parent_concepts.append(str(parent))
+                    for parent in context.objects(concept_uri, SKOS.broader):
+                        parent_concepts.append(str(parent))
+                    
+                    # Extract source context name
+                    source_context = None
+                    if context_name.startswith("urn:taxonomy:"):
+                        source_context = context_name.replace("urn:taxonomy:", "")
+                    elif context_name.startswith("urn:semantic-model:"):
+                        source_context = context_name.replace("urn:semantic-model:", "")
+                    elif context_name.startswith("urn:schema:"):
+                        source_context = context_name.replace("urn:schema:", "")
+                    elif context_name.startswith("urn:glossary:"):
+                        source_context = context_name.replace("urn:glossary:", "")
+                    
+                    concepts.append(OntologyConcept(
+                        iri=concept_iri,
+                        label=label,
+                        comment=comment,
+                        concept_type=concept_type,
+                        source_context=source_context,
+                        parent_concepts=parent_concepts
+                    ))
+            except Exception as e:
+                logger.warning(f"Failed to query concepts in context {context_name}: {e}")
+        
+        # Second pass: populate child_concepts
+        concept_map = {concept.iri: concept for concept in concepts}
+        for concept in concepts:
+            # Find all concepts that list this concept as a parent
+            for other_concept in concepts:
+                if concept.iri in other_concept.parent_concepts:
+                    if other_concept.iri not in concept.child_concepts:
+                        concept.child_concepts.append(other_concept.iri)
+        
+        return concepts
+    
+    def get_concept_details(self, concept_iri: str) -> Optional[OntologyConcept]:
+        """Get detailed information about a specific concept"""
+        concept = None
+        
+        # Search all contexts for this concept
+        for context in self._graph.contexts():
+            if not hasattr(context, 'identifier'):
+                continue
+            context_id = context.identifier
+            context_name = str(context_id)
+            
+            # Check if concept exists in this context
+            concept_uri = URIRef(concept_iri)
+            if (concept_uri, None, None) not in context:
+                continue
+            
+            # Get basic info
+            labels = list(context.objects(concept_uri, RDFS.label))
+            labels.extend(list(context.objects(concept_uri, SKOS.prefLabel)))
+            label = str(labels[0]) if labels else None
+            
+            comments = list(context.objects(concept_uri, RDFS.comment))  
+            comments.extend(list(context.objects(concept_uri, SKOS.definition)))
+            comment = str(comments[0]) if comments else None
+            
+            # Determine type
+            concept_type = "individual"  # default
+            if (concept_uri, RDF.type, RDFS.Class) in context:
+                concept_type = "class"
+            elif (concept_uri, RDF.type, SKOS.Concept) in context:
+                concept_type = "concept"
+            
+            # Get parent concepts
+            parent_concepts = []
+            for parent in context.objects(concept_uri, RDFS.subClassOf):
+                parent_concepts.append(str(parent))
+            for parent in context.objects(concept_uri, SKOS.broader):
+                parent_concepts.append(str(parent))
+            
+            # Get child concepts
+            child_concepts = []
+            for child in context.subjects(RDFS.subClassOf, concept_uri):
+                child_concepts.append(str(child))
+            for child in context.subjects(SKOS.broader, concept_uri):
+                child_concepts.append(str(child))
+            
+            # Extract source context
+            source_context = None
+            if context_name.startswith("urn:taxonomy:"):
+                source_context = context_name.replace("urn:taxonomy:", "")
+            elif context_name.startswith("urn:semantic-model:"):
+                source_context = context_name.replace("urn:semantic-model:", "")
+            elif context_name.startswith("urn:schema:"):
+                source_context = context_name.replace("urn:schema:", "")
+            elif context_name.startswith("urn:glossary:"):
+                source_context = context_name.replace("urn:glossary:", "")
+            
+            concept = OntologyConcept(
+                iri=concept_iri,
+                label=label,
+                comment=comment,
+                concept_type=concept_type,
+                source_context=source_context,
+                parent_concepts=parent_concepts,
+                child_concepts=child_concepts
+            )
+            break  # Found in first matching context
+        
+        return concept
+    
+    def get_concept_hierarchy(self, concept_iri: str) -> Optional[ConceptHierarchy]:
+        """Get hierarchical relationships for a concept"""
+        concept = self.get_concept_details(concept_iri)
+        if not concept:
+            return None
+        
+        # Get ancestors (recursive parent lookup)
+        ancestors = []
+        visited = set()
+        
+        def get_ancestors_recursive(iri: str):
+            if iri in visited:
+                return
+            visited.add(iri)
+            
+            parent_concept = self.get_concept_details(iri)
+            if not parent_concept:
+                return
+                
+            for parent_iri in parent_concept.parent_concepts:
+                parent = self.get_concept_details(parent_iri)
+                if parent and parent not in ancestors:
+                    ancestors.append(parent)
+                    get_ancestors_recursive(parent_iri)
+        
+        for parent_iri in concept.parent_concepts:
+            get_ancestors_recursive(parent_iri)
+        
+        # Get descendants (recursive child lookup)
+        descendants = []
+        visited = set()
+        
+        def get_descendants_recursive(iri: str):
+            if iri in visited:
+                return
+            visited.add(iri)
+            
+            child_concept = self.get_concept_details(iri)
+            if not child_concept:
+                return
+                
+            for child_iri in child_concept.child_concepts:
+                child = self.get_concept_details(child_iri)
+                if child and child not in descendants:
+                    descendants.append(child)
+                    get_descendants_recursive(child_iri)
+        
+        for child_iri in concept.child_concepts:
+            get_descendants_recursive(child_iri)
+        
+        # Get siblings (concepts that share the same parents)
+        siblings = []
+        if concept.parent_concepts:
+            for parent_iri in concept.parent_concepts:
+                parent = self.get_concept_details(parent_iri)
+                if parent:
+                    for sibling_iri in parent.child_concepts:
+                        if sibling_iri != concept_iri:
+                            sibling = self.get_concept_details(sibling_iri)
+                            if sibling and sibling not in siblings:
+                                siblings.append(sibling)
+        
+        return ConceptHierarchy(
+            concept=concept,
+            ancestors=ancestors,
+            descendants=descendants,
+            siblings=siblings
+        )
+    
+    def search_ontology_concepts(self, query: str, taxonomy_name: str = None, limit: int = 50) -> List[ConceptSearchResult]:
+        """Search for concepts by text query"""
+        results = []
+        
+        # Get concepts to search through
+        concepts = self.get_concepts_by_taxonomy(taxonomy_name)
+        
+        query_lower = query.lower()
+        
+        for concept in concepts:
+            score = 0.0
+            match_type = None
+            
+            # Check label match
+            if concept.label and query_lower in concept.label.lower():
+                score += 10.0
+                match_type = 'label'
+                # Exact match gets higher score
+                if concept.label.lower() == query_lower:
+                    score += 20.0
+            
+            # Check comment/description match
+            if concept.comment and query_lower in concept.comment.lower():
+                score += 5.0
+                if not match_type:
+                    match_type = 'comment'
+            
+            # Check IRI match
+            if query_lower in concept.iri.lower():
+                score += 3.0
+                if not match_type:
+                    match_type = 'iri'
+            
+            if score > 0:
+                results.append(ConceptSearchResult(
+                    concept=concept,
+                    relevance_score=score,
+                    match_type=match_type or 'iri'
+                ))
+        
+        # Sort by relevance score (descending)
+        results.sort(key=lambda x: x.relevance_score, reverse=True)
+        
+        return results[:limit]
+    
+    def get_taxonomy_stats(self) -> TaxonomyStats:
+        """Get statistics about loaded taxonomies"""
+        taxonomies = self.get_taxonomies()
+        
+        total_concepts = sum(t.concepts_count for t in taxonomies)
+        total_properties = sum(t.properties_count for t in taxonomies)
+        
+        # Get concepts by type
+        concepts_by_type = {}
+        all_concepts = self.get_concepts_by_taxonomy()
+        for concept in all_concepts:
+            concept_type = concept.concept_type
+            concepts_by_type[concept_type] = concepts_by_type.get(concept_type, 0) + 1
+        
+        # Count top-level concepts (those without parents)
+        top_level_concepts = sum(1 for concept in all_concepts if not concept.parent_concepts)
+        
+        return TaxonomyStats(
+            total_concepts=total_concepts,
+            total_properties=total_properties,
+            taxonomies=taxonomies,
+            concepts_by_type=concepts_by_type,
+            top_level_concepts=top_level_concepts
+        )
 

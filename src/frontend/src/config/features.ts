@@ -13,6 +13,7 @@ import {
     Info,
     ClipboardCheck, // Added icon for Data Asset Review
     BoxSelect, // Added icon for Data Domain
+    Search, // Added icon for Search
     type LucideIcon, // Import LucideIcon type
   } from 'lucide-react';
   
@@ -153,6 +154,16 @@ import {
       group: 'Tools',
       maturity: 'ga',
       showInLanding: true,
+    },
+    {
+      id: 'search',
+      name: 'Search',
+      path: '/search',
+      description: 'Search across data products, contracts, and knowledge graph.',
+      icon: Search,
+      group: 'Tools',
+      maturity: 'ga',
+      showInLanding: false,
     },
     // System
     {

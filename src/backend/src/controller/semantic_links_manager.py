@@ -25,13 +25,33 @@ class SemanticLinksManager:
         items = entity_semantic_links_repo.list_for_entity(self._db, entity_id, entity_type)
         return [self._to_api(it) for it in items]
 
+    def list_for_iri(self, iri: str) -> List[EntitySemanticLink]:
+        items = entity_semantic_links_repo.list_for_iri(self._db, iri)
+        return [self._to_api(it) for it in items]
+
+    def _link_exists(self, entity_id: str, entity_type: str, iri: str) -> bool:
+        """Check if a semantic link already exists for this entity/IRI combination"""
+        existing = entity_semantic_links_repo.get_by_entity_and_iri(self._db, entity_id, entity_type, iri)
+        return existing is not None
+
     def add(self, payload: EntitySemanticLinkCreate, created_by: str | None) -> EntitySemanticLink:
+        # Check if link already exists
+        if self._link_exists(payload.entity_id, payload.entity_type, payload.iri):
+            # Return existing link instead of creating a duplicate
+            existing = entity_semantic_links_repo.get_by_entity_and_iri(
+                self._db, payload.entity_id, payload.entity_type, payload.iri
+            )
+            logger.info(f"Semantic link already exists for {payload.entity_type}:{payload.entity_id} -> {payload.iri}")
+            return self._to_api(existing)
+        
+        # Create new link
         db_obj = entity_semantic_links_repo.create(self._db, obj_in=payload)
         if created_by:
             db_obj.created_by = created_by
             self._db.add(db_obj)
         self._db.flush()
         self._db.refresh(db_obj)
+        
         # Trigger KG refresh
         try:
             from src.controller.semantic_models_manager import SemanticModelsManager

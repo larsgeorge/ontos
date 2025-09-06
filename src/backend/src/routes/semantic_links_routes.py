@@ -21,6 +21,14 @@ async def list_links(entity_type: str, entity_id: str, manager: SemanticLinksMan
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/iri/{iri:path}", response_model=List[EntitySemanticLink])
+async def list_links_by_iri(iri: str, manager: SemanticLinksManager = Depends(get_manager)):
+    try:
+        return manager.list_for_iri(iri=iri)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/", response_model=EntitySemanticLink)
 async def add_link(current_user: AuditCurrentUserDep, payload: EntitySemanticLinkCreate = Body(...), db: DBSessionDep = None, manager: SemanticLinksManager = Depends(get_manager)):
     try:

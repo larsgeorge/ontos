@@ -215,6 +215,14 @@ The project implements a web application designed to run as a **Databricks App**
 ## Testing and Deployment
 
 - Implement **unit tests** (e.g., using `pytest` for backend, Jest/React Testing Library for frontend).
+- Use **Playwright MCP** for automated UI testing and verification:
+  - Navigate to pages using `mcp__playwright__browser_navigate`
+  - Take snapshots with `mcp__playwright__browser_snapshot` for visual verification
+  - Interact with UI elements via `mcp__playwright__browser_click`, `mcp__playwright__browser_type`, etc.
+  - Test form functionality with `mcp__playwright__browser_fill_form`
+  - Verify responsive behavior and cross-browser compatibility
+  - Capture screenshots for documentation or debugging with `mcp__playwright__browser_take_screenshot`
+  - Test user workflows end-to-end (e.g., create data product → assign permissions → verify access)
 - Ensure proper input validation (Pydantic on backend, Zod/react-hook-form on frontend) and error handling.
 - **Deployment**: Deployed as a Databricks App via `databricks bundle deploy` using `api/app.yaml`.
 

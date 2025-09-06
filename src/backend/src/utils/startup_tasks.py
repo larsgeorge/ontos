@@ -153,8 +153,8 @@ def initialize_managers(app: FastAPI):
         )
         app.state.data_domain_manager = DataDomainManager(repository=data_domain_repo)
         app.state.data_contracts_manager = DataContractsManager(data_dir=data_dir)
-        app.state.business_glossaries_manager = BusinessGlossariesManager(data_dir=data_dir)
         app.state.semantic_models_manager = SemanticModelsManager(db=db_session, data_dir=Path(__file__).parent.parent / "data")
+        app.state.business_glossaries_manager = BusinessGlossariesManager(data_dir=data_dir, semantic_models_manager=app.state.semantic_models_manager)
         notifications_manager = getattr(app.state, 'notifications_manager', None)
         # Add other managers: Compliance, Estate, MDM, Security, Entitlements, Catalog Commander...
 
@@ -284,6 +284,10 @@ def load_initial_data(app: FastAPI) -> None:
         semantic_models_manager = getattr(app.state, 'semantic_models_manager', None)
         if semantic_models_manager and hasattr(semantic_models_manager, 'load_initial_data'):
             semantic_models_manager.load_initial_data(db)
+            # After loading semantic models, make sure business glossaries manager is connected
+            business_glossaries_manager = getattr(app.state, 'business_glossaries_manager', None)
+            if business_glossaries_manager and hasattr(business_glossaries_manager, 'set_semantic_models_manager'):
+                business_glossaries_manager.set_semantic_models_manager(semantic_models_manager)
         if notifications_manager and hasattr(notifications_manager, 'load_initial_data'):
             notifications_manager.load_initial_data(db)
         

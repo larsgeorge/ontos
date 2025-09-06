@@ -4,10 +4,18 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 import os
 from pathlib import Path
+from sqlalchemy.orm import Session
 
 import yaml
 
 from src.models.business_glossary import BusinessGlossary, Domain, GlossaryTerm
+from src.models.ontology import (
+    OntologyConcept,
+    OntologyTaxonomy, 
+    ConceptHierarchy,
+    TaxonomyStats,
+    ConceptSearchResult
+)
 
 # Import Search Interfaces
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
@@ -21,10 +29,11 @@ logger = get_logger(__name__)
 # Inherit from SearchableAsset
 @searchable_asset
 class BusinessGlossariesManager(SearchableAsset):
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, semantic_models_manager=None):
         self._domains: Dict[str, Domain] = {}
         self._glossaries: Dict[str, BusinessGlossary] = {}
         self._data_dir = data_dir
+        self._semantic_models_manager = semantic_models_manager
         self._load_initial_data()
 
     def _load_initial_data(self):
@@ -38,6 +47,10 @@ class BusinessGlossariesManager(SearchableAsset):
                 logger.error(f"Error loading initial business glossary data from {yaml_path}: {e!s}")
         else:
             logger.warning(f"Initial business glossary YAML file not found at {yaml_path}")
+    
+    def set_semantic_models_manager(self, semantic_models_manager):
+        """Set the semantic models manager after initialization"""
+        self._semantic_models_manager = semantic_models_manager
 
     def create_term(self,
                    name: str,
@@ -449,3 +462,81 @@ class BusinessGlossariesManager(SearchableAsset):
         except Exception as e:
             logger.error(f"Error fetching or mapping glossary terms for search: {e}", exc_info=True)
             return [] # Return empty list on error
+
+    # --- New Ontology-based Methods ---
+    
+    def get_taxonomies(self) -> List[OntologyTaxonomy]:
+        """Get all available taxonomies from the semantic knowledge graph"""
+        if not self._semantic_models_manager:
+            logger.warning("Semantic models manager not available")
+            return []
+        
+        return self._semantic_models_manager.get_taxonomies()
+    
+    def get_concepts_by_taxonomy(self, taxonomy_name: str = None) -> List[OntologyConcept]:
+        """Get concepts from a specific taxonomy or all taxonomies"""
+        if not self._semantic_models_manager:
+            logger.warning("Semantic models manager not available")
+            return []
+        
+        return self._semantic_models_manager.get_concepts_by_taxonomy(taxonomy_name)
+    
+    def get_concept_details(self, concept_iri: str) -> Optional[OntologyConcept]:
+        """Get detailed information about a specific concept"""
+        if not self._semantic_models_manager:
+            logger.warning("Semantic models manager not available")
+            return None
+        
+        return self._semantic_models_manager.get_concept_details(concept_iri)
+    
+    def get_concept_hierarchy(self, concept_iri: str) -> Optional[ConceptHierarchy]:
+        """Get hierarchical relationships for a concept"""
+        if not self._semantic_models_manager:
+            logger.warning("Semantic models manager not available")
+            return None
+        
+        return self._semantic_models_manager.get_concept_hierarchy(concept_iri)
+    
+    def search_concepts(self, query: str, taxonomy_name: str = None, limit: int = 50) -> List[ConceptSearchResult]:
+        """Search for concepts by text query"""
+        if not self._semantic_models_manager:
+            logger.warning("Semantic models manager not available")
+            return []
+        
+        return self._semantic_models_manager.search_ontology_concepts(query, taxonomy_name, limit)
+    
+    def get_taxonomy_stats(self) -> TaxonomyStats:
+        """Get statistics about loaded taxonomies"""
+        if not self._semantic_models_manager:
+            logger.warning("Semantic models manager not available")
+            return TaxonomyStats(
+                total_concepts=0,
+                total_properties=0,
+                taxonomies=[],
+                concepts_by_type={},
+                top_level_concepts=0
+            )
+        
+        return self._semantic_models_manager.get_taxonomy_stats()
+    
+    def get_grouped_concepts(self) -> Dict[str, List[OntologyConcept]]:
+        """Get all concepts grouped by taxonomy source"""
+        concepts = self.get_concepts_by_taxonomy()
+        grouped = {}
+        
+        for concept in concepts:
+            source = concept.source_context or "Unassigned"
+            if source not in grouped:
+                grouped[source] = []
+            grouped[source].append(concept)
+        
+        # Sort concepts within each group by label or IRI
+        for source in grouped:
+            grouped[source].sort(key=lambda c: c.label or c.iri)
+        
+        return grouped
+    
+    def get_top_level_concepts_by_taxonomy(self, taxonomy_name: str = None) -> List[OntologyConcept]:
+        """Get only top-level concepts (those without parents)"""
+        all_concepts = self.get_concepts_by_taxonomy(taxonomy_name)
+        return [c for c in all_concepts if not c.parent_concepts]
