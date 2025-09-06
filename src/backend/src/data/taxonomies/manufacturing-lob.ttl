@@ -1,0 +1,207 @@
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix corp: <http://example.com/corporate/taxonomy#> .
+@prefix mfg: <http://example.com/manufacturing/taxonomy#> .
+@prefix dc: <http://purl.org/dc/terms/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+# Manufacturing LOB Taxonomy
+# Extends corporate taxonomy with manufacturing-specific terms
+
+# === LOB-SPECIFIC ROOT CLASS ===
+
+mfg:ManufacturingTerm a rdfs:Class ;
+    rdfs:subClassOf corp:CorporateTerm ;
+    rdfs:label "Manufacturing Term" ;
+    rdfs:comment "Manufacturing-specific taxonomy term" ;
+    mfg:lineOfBusiness "Manufacturing" .
+
+# === OVERRIDE: Enhanced Product Data for Manufacturing ===
+
+mfg:ProductData a corp:DataDomain ;
+    rdfs:label "Manufacturing Product Data" ;
+    rdfs:comment "Product specifications, bills of materials, quality data, and lifecycle information" ;
+    dc:created "2024-02-01" ;
+    corp:priority "Critical" ;
+    corp:retentionPeriod "Product Lifecycle + 10 years" ;  # Override: Lifecycle-based retention
+    mfg:qualityStandard "ISO 9001, Six Sigma" ;
+    mfg:traceabilityRequired "true" .
+
+# Product data subtypes
+mfg:BillOfMaterials a rdfs:Class ;
+    rdfs:subClassOf mfg:ProductData ;
+    rdfs:label "Bill of Materials" ;
+    rdfs:comment "Hierarchical list of components and materials required for production" ;
+    corp:retentionPeriod "Product Lifecycle + 15 years" ;
+    mfg:revisionControlRequired "true" .
+
+mfg:QualityData a rdfs:Class ;
+    rdfs:subClassOf mfg:ProductData ;
+    rdfs:label "Quality Data" ;
+    rdfs:comment "Quality control measurements, test results, and defect tracking" ;
+    corp:retentionPeriod "10 years" ;
+    mfg:statisticalProcessControl "true" .
+
+mfg:ProductSpecifications a rdfs:Class ;
+    rdfs:subClassOf mfg:ProductData ;
+    rdfs:label "Product Specifications" ;
+    rdfs:comment "Technical specifications, tolerances, and design requirements" ;
+    corp:retentionPeriod "Product Lifecycle + 10 years" ;
+    mfg:engineeringStandard "ASME, ASTM, DIN" .
+
+# === NEW: Manufacturing-Specific Data Domains ===
+
+mfg:ProductionData a corp:DataDomain ;
+    rdfs:label "Production Data" ;
+    rdfs:comment "Manufacturing execution, production schedules, and output data" ;
+    dc:created "2024-02-01" ;
+    corp:priority "High" ;
+    corp:retentionPeriod "7 years" ;
+    mfg:mesIntegration "true" .
+
+mfg:SupplyChainData a corp:DataDomain ;
+    rdfs:label "Supply Chain Data" ;
+    rdfs:comment "Supplier information, procurement, inventory, and logistics data" ;
+    dc:created "2024-02-01" ;
+    corp:priority "High" ;
+    corp:retentionPeriod "7 years" ;
+    mfg:supplierCertification "ISO 9001, IATF 16949" .
+
+mfg:MaintenanceData a corp:DataDomain ;
+    rdfs:label "Maintenance Data" ;
+    rdfs:comment "Equipment maintenance, repair records, and predictive maintenance data" ;
+    dc:created "2024-02-01" ;
+    corp:priority "Medium" ;
+    corp:retentionPeriod "Equipment Lifecycle + 5 years" ;
+    mfg:preventiveMaintenanceSchedule "Weekly, Monthly, Quarterly" .
+
+mfg:SafetyData a corp:DataDomain ;
+    rdfs:label "Safety Data" ;
+    rdfs:comment "Workplace safety incidents, hazard data, and safety compliance records" ;
+    dc:created "2024-02-01" ;
+    corp:priority "Critical" ;
+    corp:retentionPeriod "30 years" ;  # Extended for safety/liability
+    mfg:oshaCompliance "true" .
+
+# === OVERRIDE: Enhanced Employee Data for Manufacturing ===
+
+mfg:EmployeeData a corp:DataDomain ;
+    rdfs:label "Manufacturing Employee Data" ;
+    rdfs:comment "Employee information including certifications, training, and safety records" ;
+    corp:retentionPeriod "7 years after termination" ;
+    mfg:safetyTrainingRequired "true" ;
+    mfg:certificationTracking "true" .
+
+# === NEW: Manufacturing Business Processes ===
+
+mfg:ProductionPlanning a corp:BusinessProcess ;
+    rdfs:label "Production Planning" ;
+    rdfs:comment "Planning and scheduling of manufacturing operations" ;
+    mfg:planningHorizon "Daily, Weekly, Monthly, Quarterly" ;
+    mfg:systemIntegration "ERP, MES, SCM" .
+
+mfg:QualityControl a corp:BusinessProcess ;
+    rdfs:label "Quality Control" ;
+    rdfs:comment "Quality assurance and control processes throughout manufacturing" ;
+    mfg:qualityGates "Incoming Inspection, In-Process Control, Final Inspection" ;
+    mfg:qualityStandard "ISO 9001, Six Sigma, Lean" .
+
+mfg:InventoryManagement a corp:BusinessProcess ;
+    rdfs:label "Inventory Management" ;
+    rdfs:comment "Raw materials, work-in-process, and finished goods inventory control" ;
+    mfg:inventoryMethod "FIFO, LIFO, JIT" ;
+    mfg:cycleCounting "Daily" .
+
+mfg:SupplierQualification a corp:BusinessProcess ;
+    rdfs:label "Supplier Qualification" ;
+    rdfs:comment "Process for qualifying and certifying suppliers" ;
+    mfg:qualificationCriteria "Quality, Delivery, Cost, Service" ;
+    mfg:auditFrequency "Annual" .
+
+mfg:EquipmentMaintenance a corp:BusinessProcess ;
+    rdfs:label "Equipment Maintenance" ;
+    rdfs:comment "Preventive and corrective maintenance of manufacturing equipment" ;
+    mfg:maintenanceTypes "Preventive, Predictive, Reactive" ;
+    mfg:maintenanceSchedule "Equipment-specific" .
+
+mfg:SafetyCompliance a corp:BusinessProcess ;
+    rdfs:label "Safety Compliance" ;
+    rdfs:comment "Workplace safety monitoring and regulatory compliance" ;
+    mfg:safetyStandards "OSHA, EPA, DOT" ;
+    mfg:incidentReporting "24 hours" .
+
+# === NEW: Manufacturing Roles ===
+
+mfg:ProductionManager a corp:OrganizationalRole ;
+    rdfs:label "Production Manager" ;
+    rdfs:comment "Manager responsible for manufacturing operations" .
+
+mfg:QualityEngineer a corp:OrganizationalRole ;
+    rdfs:label "Quality Engineer" ;
+    rdfs:comment "Engineer responsible for quality systems and continuous improvement" .
+
+mfg:MaintenanceEngineer a corp:OrganizationalRole ;
+    rdfs:label "Maintenance Engineer" ;
+    rdfs:comment "Engineer responsible for equipment reliability and maintenance" .
+
+mfg:SupplyChainAnalyst a corp:OrganizationalRole ;
+    rdfs:label "Supply Chain Analyst" ;
+    rdfs:comment "Analyst responsible for supply chain optimization" .
+
+mfg:SafetyOfficer a corp:OrganizationalRole ;
+    rdfs:label "Safety Officer" ;
+    rdfs:comment "Officer responsible for workplace safety and compliance" .
+
+mfg:ProcessEngineer a corp:OrganizationalRole ;
+    rdfs:label "Process Engineer" ;
+    rdfs:comment "Engineer responsible for manufacturing process optimization" .
+
+# === Manufacturing-Specific Properties ===
+
+mfg:lineOfBusiness a rdf:Property ;
+    rdfs:label "Line of Business" ;
+    rdfs:comment "Manufacturing business unit" ;
+    rdfs:domain mfg:ManufacturingTerm ;
+    rdfs:range rdfs:Literal .
+
+mfg:qualityStandard a rdf:Property ;
+    rdfs:label "Quality Standard" ;
+    rdfs:comment "Applicable quality management standards" ;
+    rdfs:domain corp:CorporateTerm ;
+    rdfs:range rdfs:Literal .
+
+mfg:traceabilityRequired a rdf:Property ;
+    rdfs:label "Traceability Required" ;
+    rdfs:comment "Whether full product traceability is required" ;
+    rdfs:domain mfg:ProductData ;
+    rdfs:range rdfs:Literal .
+
+mfg:mesIntegration a rdf:Property ;
+    rdfs:label "MES Integration" ;
+    rdfs:comment "Manufacturing Execution System integration required" ;
+    rdfs:domain corp:CorporateTerm ;
+    rdfs:range rdfs:Literal .
+
+mfg:supplierCertification a rdf:Property ;
+    rdfs:label "Supplier Certification" ;
+    rdfs:comment "Required supplier certifications" ;
+    rdfs:domain mfg:SupplyChainData ;
+    rdfs:range rdfs:Literal .
+
+mfg:safetyTrainingRequired a rdf:Property ;
+    rdfs:label "Safety Training Required" ;
+    rdfs:comment "Whether safety training is mandatory" ;
+    rdfs:domain corp:EmployeeData ;
+    rdfs:range rdfs:Literal .
+
+mfg:oshaCompliance a rdf:Property ;
+    rdfs:label "OSHA Compliance" ;
+    rdfs:comment "Whether OSHA compliance is required" ;
+    rdfs:domain mfg:SafetyData ;
+    rdfs:range rdfs:Literal .
+
+mfg:planningHorizon a rdf:Property ;
+    rdfs:label "Planning Horizon" ;
+    rdfs:comment "Time periods for planning activities" ;
+    rdfs:domain corp:BusinessProcess ;
+    rdfs:range rdfs:Literal .

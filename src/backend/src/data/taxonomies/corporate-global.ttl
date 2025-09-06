@@ -1,0 +1,174 @@
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix corp: <http://example.com/corporate/taxonomy#> .
+@prefix dc: <http://purl.org/dc/terms/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+# Corporate Global Taxonomy - Base Level
+# Applies to all business units and subsidiaries
+
+# Root taxonomy class
+corp:CorporateTerm a rdfs:Class ;
+    rdfs:label "Corporate Term" ;
+    rdfs:comment "Base class for all corporate taxonomy terms" .
+
+# === DATA DOMAINS ===
+
+corp:DataDomain a rdfs:Class ;
+    rdfs:subClassOf corp:CorporateTerm ;
+    rdfs:label "Data Domain" ;
+    rdfs:comment "High-level categorization of business data" .
+
+corp:CustomerData a corp:DataDomain ;
+    rdfs:label "Customer Data" ;
+    rdfs:comment "Information related to customers, prospects, and client relationships" ;
+    dc:created "2024-01-01" ;
+    corp:priority "High" ;
+    corp:retentionPeriod "7 years" .
+
+corp:FinancialData a corp:DataDomain ;
+    rdfs:label "Financial Data" ;
+    rdfs:comment "Financial transactions, accounting, and monetary information" ;
+    dc:created "2024-01-01" ;
+    corp:priority "Critical" ;
+    corp:retentionPeriod "10 years" .
+
+corp:ProductData a corp:DataDomain ;
+    rdfs:label "Product Data" ;
+    rdfs:comment "Information about products, services, and offerings" ;
+    dc:created "2024-01-01" ;
+    corp:priority "Medium" ;
+    corp:retentionPeriod "5 years" .
+
+corp:EmployeeData a corp:DataDomain ;
+    rdfs:label "Employee Data" ;
+    rdfs:comment "Human resources and employee information" ;
+    dc:created "2024-01-01" ;
+    corp:priority "High" ;
+    corp:retentionPeriod "7 years" .
+
+# === DATA CLASSIFICATIONS ===
+
+corp:DataClassification a rdfs:Class ;
+    rdfs:subClassOf corp:CorporateTerm ;
+    rdfs:label "Data Classification" ;
+    rdfs:comment "Security and sensitivity classification of data" .
+
+corp:PublicData a corp:DataClassification ;
+    rdfs:label "Public Data" ;
+    rdfs:comment "Data that can be freely shared without restriction" ;
+    corp:securityLevel "0" .
+
+corp:InternalData a corp:DataClassification ;
+    rdfs:label "Internal Data" ;
+    rdfs:comment "Data for internal company use only" ;
+    corp:securityLevel "1" .
+
+corp:ConfidentialData a corp:DataClassification ;
+    rdfs:label "Confidential Data" ;
+    rdfs:comment "Sensitive data requiring restricted access" ;
+    corp:securityLevel "2" .
+
+corp:HighlyConfidentialData a corp:DataClassification ;
+    rdfs:label "Highly Confidential Data" ;
+    rdfs:comment "Extremely sensitive data with strict access controls" ;
+    corp:securityLevel "3" .
+
+# === DATA QUALITY DIMENSIONS ===
+
+corp:DataQualityDimension a rdfs:Class ;
+    rdfs:subClassOf corp:CorporateTerm ;
+    rdfs:label "Data Quality Dimension" ;
+    rdfs:comment "Aspects of data quality measurement" .
+
+corp:Accuracy a corp:DataQualityDimension ;
+    rdfs:label "Accuracy" ;
+    rdfs:comment "Correctness and precision of data values" .
+
+corp:Completeness a corp:DataQualityDimension ;
+    rdfs:label "Completeness" ;
+    rdfs:comment "Presence of all required data elements" .
+
+corp:Consistency a corp:DataQualityDimension ;
+    rdfs:label "Consistency" ;
+    rdfs:comment "Uniformity of data across systems and time" .
+
+corp:Timeliness a corp:DataQualityDimension ;
+    rdfs:label "Timeliness" ;
+    rdfs:comment "Currency and freshness of data" .
+
+corp:Validity a corp:DataQualityDimension ;
+    rdfs:label "Validity" ;
+    rdfs:comment "Conformity to defined formats and business rules" .
+
+# === BUSINESS PROCESSES ===
+
+corp:BusinessProcess a rdfs:Class ;
+    rdfs:subClassOf corp:CorporateTerm ;
+    rdfs:label "Business Process" ;
+    rdfs:comment "Standard business processes across the organization" .
+
+corp:CustomerOnboarding a corp:BusinessProcess ;
+    rdfs:label "Customer Onboarding" ;
+    rdfs:comment "Process of acquiring and setting up new customers" .
+
+corp:RiskAssessment a corp:BusinessProcess ;
+    rdfs:label "Risk Assessment" ;
+    rdfs:comment "Evaluation of potential risks and mitigation strategies" .
+
+corp:ComplianceReporting a corp:BusinessProcess ;
+    rdfs:label "Compliance Reporting" ;
+    rdfs:comment "Regular reporting to meet regulatory requirements" .
+
+corp:AuditProcess a corp:BusinessProcess ;
+    rdfs:label "Audit Process" ;
+    rdfs:comment "Internal and external audit procedures" .
+
+# === ORGANIZATIONAL ROLES ===
+
+corp:OrganizationalRole a rdfs:Class ;
+    rdfs:subClassOf corp:CorporateTerm ;
+    rdfs:label "Organizational Role" ;
+    rdfs:comment "Standard roles across the organization" .
+
+corp:DataOwner a corp:OrganizationalRole ;
+    rdfs:label "Data Owner" ;
+    rdfs:comment "Individual responsible for data governance decisions" .
+
+corp:DataSteward a corp:OrganizationalRole ;
+    rdfs:label "Data Steward" ;
+    rdfs:comment "Individual responsible for day-to-day data management" .
+
+corp:BusinessAnalyst a corp:OrganizationalRole ;
+    rdfs:label "Business Analyst" ;
+    rdfs:comment "Individual who analyzes business requirements and data needs" .
+
+corp:ComplianceOfficer a corp:OrganizationalRole ;
+    rdfs:label "Compliance Officer" ;
+    rdfs:comment "Individual responsible for ensuring regulatory compliance" .
+
+# === CUSTOM PROPERTIES ===
+
+corp:priority a rdf:Property ;
+    rdfs:label "Priority" ;
+    rdfs:comment "Business priority level" ;
+    rdfs:domain corp:CorporateTerm ;
+    rdfs:range rdfs:Literal .
+
+corp:retentionPeriod a rdf:Property ;
+    rdfs:label "Retention Period" ;
+    rdfs:comment "How long data must be retained" ;
+    rdfs:domain corp:CorporateTerm ;
+    rdfs:range rdfs:Literal .
+
+corp:securityLevel a rdf:Property ;
+    rdfs:label "Security Level" ;
+    rdfs:comment "Numeric security classification level" ;
+    rdfs:domain corp:DataClassification ;
+    rdfs:range rdfs:Literal .
+
+corp:applicableRegulation a rdf:Property ;
+    rdfs:label "Applicable Regulation" ;
+    rdfs:comment "Regulatory frameworks that apply" ;
+    rdfs:domain corp:CorporateTerm ;
+    rdfs:range rdfs:Literal .

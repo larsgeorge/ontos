@@ -1,0 +1,185 @@
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix corp: <http://example.com/corporate/taxonomy#> .
+@prefix mfg: <http://example.com/manufacturing/taxonomy#> .
+@prefix qa: <http://example.com/quality-assurance/taxonomy#> .
+@prefix dc: <http://purl.org/dc/terms/> .
+
+# Quality Assurance Department Taxonomy
+# Department within Manufacturing LOB
+# Heavily focused on quality data and processes
+
+qa:QualityAssuranceTerm a rdfs:Class ;
+    rdfs:subClassOf mfg:ManufacturingTerm ;
+    rdfs:label "Quality Assurance Term" ;
+    rdfs:comment "Quality assurance department specific taxonomy term" ;
+    qa:department "Quality Assurance" ;
+    qa:parentLOB "Manufacturing" .
+
+# === OVERRIDE: Specialized Quality Data ===
+
+qa:QualityData a mfg:QualityData ;
+    rdfs:label "QA Quality Data" ;
+    rdfs:comment "Comprehensive quality data including inspections, tests, and statistical process control" ;
+    corp:retentionPeriod "15 years" ;  # Override: Extended for quality records
+    qa:qualityManagementSystem "ISO 9001:2015" ;
+    qa:statisticalMethods "SPC, DOE, MSA, FMEA" ;
+    qa:traceabilityLevel "Full lot and serial number traceability" .
+
+# Quality data subtypes specific to QA department
+qa:InspectionData a rdfs:Class ;
+    rdfs:subClassOf qa:QualityData ;
+    rdfs:label "Inspection Data" ;
+    rdfs:comment "Incoming, in-process, and final inspection records" ;
+    qa:inspectionTypes "Incoming, In-Process, Final, Audit" ;
+    qa:inspectionStandards "Visual, Dimensional, Functional, Performance" .
+
+qa:TestResultData a rdfs:Class ;
+    rdfs:subClassOf qa:QualityData ;
+    rdfs:label "Test Result Data" ;
+    rdfs:comment "Laboratory tests, performance tests, and validation results" ;
+    qa:testTypes "Material, Performance, Environmental, Durability" ;
+    qa:testStandards "ASTM, ISO, ANSI, Customer Specifications" .
+
+qa:NonConformanceData a rdfs:Class ;
+    rdfs:subClassOf qa:QualityData ;
+    rdfs:label "Non-Conformance Data" ;
+    rdfs:comment "Records of quality issues, deviations, and corrective actions" ;
+    qa:ncCategories "Material Defect, Process Deviation, Customer Complaint" ;
+    qa:correctiveActionRequired "true" .
+
+qa:CalibrationData a rdfs:Class ;
+    rdfs:subClassOf qa:QualityData ;
+    rdfs:label "Calibration Data" ;
+    rdfs:comment "Measurement equipment calibration records and certificates" ;
+    corp:retentionPeriod "Equipment life + 5 years" ;
+    qa:calibrationFrequency "Equipment-specific" ;
+    qa:traceabilityStandard "NIST" .
+
+# === OVERRIDE: Enhanced Quality Control Process ===
+
+qa:QualityControl a mfg:QualityControl ;
+    rdfs:label "QA Quality Control" ;
+    rdfs:comment "Comprehensive quality control with statistical process control and continuous improvement" ;
+    qa:controlMethods "SPC Charts, Process Capability, Gage R&R" ;
+    qa:qualityGates "Supplier Inspection, Receiving Inspection, In-Process Control, Final Inspection, Audit" ;
+    qa:documentControl "ISO 9001 Document Control Procedures" .
+
+# === NEW: QA-Specific Processes ===
+
+qa:SupplierQualityManagement a corp:BusinessProcess ;
+    rdfs:label "Supplier Quality Management" ;
+    rdfs:comment "Supplier qualification, auditing, and performance monitoring" ;
+    qa:supplierAuditFrequency "Annual, Risk-based" ;
+    qa:supplierRating "Quality, Delivery, Cost, Service" ;
+    qa:supplierDevelopment "Continuous improvement programs" .
+
+qa:ProductQualityPlanning a corp:BusinessProcess ;
+    rdfs:label "Product Quality Planning" ;
+    rdfs:comment "Advanced product quality planning for new products" ;
+    qa:apqpPhases "Planning, Design, Process Development, Validation, Launch" ;
+    qa:qualityTools "FMEA, Control Plans, MSA, Process Capability" .
+
+qa:CustomerComplaintHandling a corp:BusinessProcess ;
+    rdfs:label "Customer Complaint Handling" ;
+    rdfs:comment "Process for handling and resolving customer quality complaints" ;
+    qa:responseTime "24 hours acknowledgment, 30 days resolution" ;
+    qa:rootCauseAnalysis "8D, 5 Why, Fishbone" ;
+    qa:preventiveAction "Required for all complaints" .
+
+qa:ContinuousImprovement a corp:BusinessProcess ;
+    rdfs:label "Continuous Improvement" ;
+    rdfs:comment "Ongoing process improvement using quality methodologies" ;
+    qa:improvementMethods "Kaizen, Six Sigma, Lean, PDCA" ;
+    qa:improvementMetrics "Cost of Quality, First Pass Yield, Customer Satisfaction" .
+
+qa:QualityAuditing a corp:BusinessProcess ;
+    rdfs:label "Quality Auditing" ;
+    rdfs:comment "Internal and external quality system audits" ;
+    qa:auditTypes "Internal, External, Supplier, Product, Process" ;
+    qa:auditStandards "ISO 19011, ISO 9001, Customer Requirements" ;
+    qa:auditFrequency "Annual internal, as required external" .
+
+qa:DocumentControl a corp:BusinessProcess ;
+    rdfs:label "Quality Document Control" ;
+    rdfs:comment "Control of quality documents and records" ;
+    qa:documentTypes "Procedures, Work Instructions, Forms, Records" ;
+    qa:documentControl "Version Control, Review Cycles, Distribution Control" ;
+    qa:recordRetention "As per quality manual and regulations" .
+
+# === NEW: QA-Specific Roles ===
+
+qa:QualityManager a corp:OrganizationalRole ;
+    rdfs:label "Quality Manager" ;
+    rdfs:comment "Manager responsible for quality system and department" ;
+    qa:responsibilities "Quality System Management, Team Leadership, Customer Interface" .
+
+qa:QualityEngineer a corp:OrganizationalRole ;
+    rdfs:label "Quality Engineer" ;
+    rdfs:comment "Engineer specializing in quality systems and improvement" ;
+    qa:responsibilities "Process Improvement, Quality Planning, Problem Solving" .
+
+qa:QualityInspector a corp:OrganizationalRole ;
+    rdfs:label "Quality Inspector" ;
+    rdfs:comment "Inspector performing quality checks and measurements" ;
+    qa:responsibilities "Product Inspection, Data Collection, Non-conformance Identification" .
+
+qa:QualityAuditor a corp:OrganizationalRole ;
+    rdfs:label "Quality Auditor" ;
+    rdfs:comment "Auditor conducting internal and supplier quality audits" ;
+    qa:responsibilities "Audit Planning, Audit Execution, Report Writing" .
+
+qa:MetrologyTechnician a corp:OrganizationalRole ;
+    rdfs:label "Metrology Technician" ;
+    rdfs:comment "Technician responsible for measurement equipment and calibration" ;
+    qa:responsibilities "Equipment Calibration, Gage R&R, Measurement System Analysis" .
+
+# === QA-Specific Properties ===
+
+qa:department a rdf:Property ;
+    rdfs:label "Department" ;
+    rdfs:comment "Quality assurance department" ;
+    rdfs:domain qa:QualityAssuranceTerm ;
+    rdfs:range rdfs:Literal .
+
+qa:parentLOB a rdf:Property ;
+    rdfs:label "Parent Line of Business" ;
+    rdfs:comment "Manufacturing LOB" ;
+    rdfs:domain qa:QualityAssuranceTerm ;
+    rdfs:range rdfs:Literal .
+
+qa:qualityManagementSystem a rdf:Property ;
+    rdfs:label "Quality Management System" ;
+    rdfs:comment "QMS standard implemented" ;
+    rdfs:domain qa:QualityData ;
+    rdfs:range rdfs:Literal .
+
+qa:statisticalMethods a rdf:Property ;
+    rdfs:label "Statistical Methods" ;
+    rdfs:comment "Statistical quality methods used" ;
+    rdfs:domain qa:QualityData ;
+    rdfs:range rdfs:Literal .
+
+qa:inspectionTypes a rdf:Property ;
+    rdfs:label "Inspection Types" ;
+    rdfs:comment "Types of inspections performed" ;
+    rdfs:domain qa:InspectionData ;
+    rdfs:range rdfs:Literal .
+
+qa:correctiveActionRequired a rdf:Property ;
+    rdfs:label "Corrective Action Required" ;
+    rdfs:comment "Whether corrective action is mandatory" ;
+    rdfs:domain qa:NonConformanceData ;
+    rdfs:range rdfs:Literal .
+
+qa:auditStandards a rdf:Property ;
+    rdfs:label "Audit Standards" ;
+    rdfs:comment "Standards used for quality auditing" ;
+    rdfs:domain corp:BusinessProcess ;
+    rdfs:range rdfs:Literal .
+
+qa:improvementMethods a rdf:Property ;
+    rdfs:label "Improvement Methods" ;
+    rdfs:comment "Methodologies used for continuous improvement" ;
+    rdfs:domain qa:ContinuousImprovement ;
+    rdfs:range rdfs:Literal .

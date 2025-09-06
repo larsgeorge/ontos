@@ -1,0 +1,164 @@
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix corp: <http://example.com/corporate/taxonomy#> .
+@prefix fs: <http://example.com/financial-services/taxonomy#> .
+@prefix rb: <http://example.com/retail-banking/taxonomy#> .
+@prefix dc: <http://purl.org/dc/terms/> .
+
+# Retail Banking Department Taxonomy
+# Department within Financial Services LOB
+# Inherits from both Corporate and Financial Services taxonomies
+
+rb:RetailBankingTerm a rdfs:Class ;
+    rdfs:subClassOf fs:FinancialServicesTerm ;
+    rdfs:label "Retail Banking Term" ;
+    rdfs:comment "Retail banking department specific taxonomy term" ;
+    rb:department "Retail Banking" ;
+    rb:parentLOB "Financial Services" .
+
+# === OVERRIDE: Specialized Customer Data for Retail Banking ===
+
+rb:CustomerData a fs:CustomerData ;
+    rdfs:label "Retail Banking Customer Data" ;
+    rdfs:comment "Individual consumer customer information for retail banking products" ;
+    corp:retentionPeriod "7 years after account closure" ;  # Override: Specific to retail
+    rb:customerSegment "Mass Market, Affluent, Private Banking" ;
+    rb:relationshipBased "true" .
+
+# Retail-specific customer data types
+rb:AccountData a rdfs:Class ;
+    rdfs:subClassOf rb:CustomerData ;
+    rdfs:label "Account Data" ;
+    rdfs:comment "Checking, savings, and deposit account information" ;
+    rb:accountTypes "Checking, Savings, CD, Money Market" ;
+    rb:fdic_insured "true" .
+
+rb:LoanApplicationData a rdfs:Class ;
+    rdfs:subClassOf fs:LoanData ;
+    rdfs:label "Consumer Loan Application Data" ;
+    rdfs:comment "Personal loans, auto loans, and mortgage applications" ;
+    rb:loanTypes "Personal, Auto, Mortgage, Home Equity" ;
+    rb:underwritingRequired "true" .
+
+# === NEW: Retail Banking Specific Data ===
+
+rb:BranchOperationsData a corp:DataDomain ;
+    rdfs:label "Branch Operations Data" ;
+    rdfs:comment "Physical branch operations, teller transactions, and customer interactions" ;
+    dc:created "2024-02-15" ;
+    corp:priority "High" ;
+    corp:retentionPeriod "7 years" ;
+    rb:branchNetwork "Regional" .
+
+rb:ATMData a corp:DataDomain ;
+    rdfs:label "ATM Data" ;
+    rdfs:comment "ATM transactions, cash management, and network data" ;
+    dc:created "2024-02-15" ;
+    corp:priority "Medium" ;
+    corp:retentionPeriod "2 years" ;
+    rb:atmNetwork "Proprietary, Third-party" .
+
+rb:DigitalBankingData a corp:DataDomain ;
+    rdfs:label "Digital Banking Data" ;
+    rdfs:comment "Online banking, mobile app usage, and digital transaction data" ;
+    dc:created "2024-02-15" ;
+    corp:priority "High" ;
+    corp:retentionPeriod "3 years" ;
+    rb:digitalChannels "Web, Mobile, Phone" .
+
+# === OVERRIDE: Specialized Business Processes ===
+
+rb:CustomerOnboarding a fs:CustomerOnboarding ;
+    rdfs:label "Retail Customer Onboarding" ;
+    rdfs:comment "Consumer account opening with simplified KYC for retail customers" ;
+    rb:onboardingChannels "Branch, Online, Mobile" ;
+    rb:documentRequirements "ID, SSN, Address Verification" ;
+    rb:approvalTime "Same day to 3 business days" .
+
+# === NEW: Retail Banking Processes ===
+
+rb:LoanOrigination a corp:BusinessProcess ;
+    rdfs:label "Consumer Loan Origination" ;
+    rdfs:comment "Process for originating consumer loans" ;
+    rb:loanTypes "Personal, Auto, Mortgage" ;
+    rb:underwritingCriteria "Income, Credit Score, DTI Ratio" ;
+    rb:approvalTime "Minutes to 30 days" .
+
+rb:DepositOperations a corp:BusinessProcess ;
+    rdfs:label "Deposit Operations" ;
+    rdfs:comment "Management of deposit accounts and transactions" ;
+    rb:accountTypes "Checking, Savings, CD" ;
+    rb:interestCalculation "Daily, Monthly" ;
+    rb:regulationD "true" .
+
+rb:CustomerService a corp:BusinessProcess ;
+    rdfs:label "Retail Customer Service" ;
+    rdfs:comment "Customer support for retail banking products and services" ;
+    rb:serviceChannels "Phone, Chat, Email, Branch" ;
+    rb:sla "Response within 24 hours" .
+
+rb:FraudMonitoring a corp:BusinessProcess ;
+    rdfs:label "Retail Fraud Monitoring" ;
+    rdfs:comment "Real-time fraud detection for retail transactions" ;
+    rb:monitoringTypes "Card Transactions, ACH, Wire Transfers" ;
+    rb:riskScoring "Real-time" .
+
+# === NEW: Retail Banking Roles ===
+
+rb:BranchManager a corp:OrganizationalRole ;
+    rdfs:label "Branch Manager" ;
+    rdfs:comment "Manager of retail banking branch operations" ;
+    rb:responsibilities "Staff Management, Customer Relations, Sales Targets" .
+
+rb:PersonalBanker a corp:OrganizationalRole ;
+    rdfs:label "Personal Banker" ;
+    rdfs:comment "Customer-facing banker for account services" ;
+    rb:responsibilities "Account Opening, Customer Service, Product Sales" .
+
+rb:LoanOfficer a corp:OrganizationalRole ;
+    rdfs:label "Consumer Loan Officer" ;
+    rdfs:comment "Specialist in consumer lending products" ;
+    rb:responsibilities "Loan Applications, Underwriting, Customer Consultation" .
+
+rb:FraudAnalyst a corp:OrganizationalRole ;
+    rdfs:label "Retail Fraud Analyst" ;
+    rdfs:comment "Analyst specializing in retail banking fraud detection" ;
+    rb:responsibilities "Transaction Monitoring, Case Investigation, Risk Assessment" .
+
+# === Retail Banking Specific Properties ===
+
+rb:department a rdf:Property ;
+    rdfs:label "Department" ;
+    rdfs:comment "Specific department within LOB" ;
+    rdfs:domain rb:RetailBankingTerm ;
+    rdfs:range rdfs:Literal .
+
+rb:parentLOB a rdf:Property ;
+    rdfs:label "Parent Line of Business" ;
+    rdfs:comment "Parent LOB this department belongs to" ;
+    rdfs:domain rb:RetailBankingTerm ;
+    rdfs:range rdfs:Literal .
+
+rb:customerSegment a rdf:Property ;
+    rdfs:label "Customer Segment" ;
+    rdfs:comment "Target customer segments" ;
+    rdfs:domain rb:CustomerData ;
+    rdfs:range rdfs:Literal .
+
+rb:accountTypes a rdf:Property ;
+    rdfs:label "Account Types" ;
+    rdfs:comment "Types of accounts supported" ;
+    rdfs:domain rb:AccountData ;
+    rdfs:range rdfs:Literal .
+
+rb:loanTypes a rdf:Property ;
+    rdfs:label "Loan Types" ;
+    rdfs:comment "Types of loans offered" ;
+    rdfs:domain corp:CorporateTerm ;
+    rdfs:range rdfs:Literal .
+
+rb:serviceChannels a rdf:Property ;
+    rdfs:label "Service Channels" ;
+    rdfs:comment "Available customer service channels" ;
+    rdfs:domain corp:BusinessProcess ;
+    rdfs:range rdfs:Literal .

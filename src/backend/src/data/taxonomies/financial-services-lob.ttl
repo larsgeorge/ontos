@@ -1,0 +1,177 @@
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix corp: <http://example.com/corporate/taxonomy#> .
+@prefix fs: <http://example.com/financial-services/taxonomy#> .
+@prefix dc: <http://purl.org/dc/terms/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+# Financial Services LOB Taxonomy
+# Extends and overrides corporate taxonomy with domain-specific terms
+
+# Import corporate taxonomy
+# (In practice, this would be done via import mechanisms)
+
+# === LOB-SPECIFIC ROOT CLASS ===
+
+fs:FinancialServicesTerm a rdfs:Class ;
+    rdfs:subClassOf corp:CorporateTerm ;
+    rdfs:label "Financial Services Term" ;
+    rdfs:comment "Financial services specific taxonomy term" ;
+    fs:lineOfBusiness "Financial Services" .
+
+# === OVERRIDE: Enhanced Financial Data with FS-specific subtypes ===
+
+fs:FinancialData a corp:DataDomain ;
+    rdfs:label "Financial Data" ;
+    rdfs:comment "Financial transactions, regulatory reporting, and risk data specific to financial services" ;
+    dc:created "2024-02-01" ;
+    corp:priority "Critical" ;
+    corp:retentionPeriod "25 years" ;  # Override: Extended retention for financial services
+    corp:applicableRegulation "SOX, GDPR, Basel III, Dodd-Frank, MiFID II" .
+
+# Financial data subtypes
+fs:TradingData a rdfs:Class ;
+    rdfs:subClassOf fs:FinancialData ;
+    rdfs:label "Trading Data" ;
+    rdfs:comment "Securities trading transactions and market data" ;
+    corp:retentionPeriod "10 years" ;
+    fs:regulatoryRequirement "MiFID II Transaction Reporting" .
+
+fs:LoanData a rdfs:Class ;
+    rdfs:subClassOf fs:FinancialData ;
+    rdfs:label "Loan Data" ;
+    rdfs:comment "Lending, credit, and mortgage information" ;
+    corp:retentionPeriod "25 years" ;
+    fs:regulatoryRequirement "Fair Credit Reporting Act" .
+
+fs:RegulatoryReportingData a rdfs:Class ;
+    rdfs:subClassOf fs:FinancialData ;
+    rdfs:label "Regulatory Reporting Data" ;
+    rdfs:comment "Data submitted to financial regulators" ;
+    corp:retentionPeriod "7 years" ;
+    fs:regulatoryRequirement "Basel III, Stress Testing" .
+
+# === OVERRIDE: Enhanced Customer Data for Financial Services ===
+
+fs:CustomerData a corp:DataDomain ;
+    rdfs:label "Financial Customer Data" ;
+    rdfs:comment "Customer information including KYC, credit profiles, and account data" ;
+    corp:retentionPeriod "10 years" ;  # Override: Extended for financial regulations
+    corp:applicableRegulation "KYC, AML, CDD, GDPR" ;
+    fs:kycRequired "true" .
+
+fs:KYCData a rdfs:Class ;
+    rdfs:subClassOf fs:CustomerData ;
+    rdfs:label "Know Your Customer Data" ;
+    rdfs:comment "Customer identification and verification information" ;
+    corp:classification corp:HighlyConfidentialData ;
+    fs:regulatoryRequirement "Bank Secrecy Act, Patriot Act" .
+
+fs:CreditData a rdfs:Class ;
+    rdfs:subClassOf fs:CustomerData ;
+    rdfs:label "Credit Data" ;
+    rdfs:comment "Credit scores, payment history, and risk assessments" ;
+    corp:classification corp:ConfidentialData ;
+    fs:regulatoryRequirement "Fair Credit Reporting Act" .
+
+# === NEW: Financial Services Specific Data Domains ===
+
+fs:RiskData a corp:DataDomain ;
+    rdfs:label "Risk Data" ;
+    rdfs:comment "Risk assessments, exposure calculations, and stress test data" ;
+    dc:created "2024-02-01" ;
+    corp:priority "Critical" ;
+    corp:retentionPeriod "10 years" ;
+    fs:riskCategory "Market, Credit, Operational, Liquidity" .
+
+fs:ComplianceData a corp:DataDomain ;
+    rdfs:label "Compliance Data" ;
+    rdfs:comment "Regulatory compliance monitoring and reporting data" ;
+    dc:created "2024-02-01" ;
+    corp:priority "Critical" ;
+    corp:retentionPeriod "7 years" ;
+    fs:regulatoryFramework "SOX, Dodd-Frank, Basel III" .
+
+# === OVERRIDE: Enhanced Business Processes ===
+
+fs:CustomerOnboarding a corp:BusinessProcess ;
+    rdfs:label "Financial Customer Onboarding" ;
+    rdfs:comment "Customer onboarding with KYC/AML verification and account setup" ;
+    fs:requiredChecks "Identity Verification, AML Screening, Credit Check, Sanctions Screening" ;
+    fs:regulatoryRequirement "Bank Secrecy Act, Customer Due Diligence Rule" .
+
+fs:RiskAssessment a corp:BusinessProcess ;
+    rdfs:label "Financial Risk Assessment" ;
+    rdfs:comment "Comprehensive risk evaluation including market, credit, and operational risk" ;
+    fs:riskTypes "Market Risk, Credit Risk, Operational Risk, Liquidity Risk, Regulatory Risk" ;
+    fs:frequency "Daily" .
+
+# === NEW: Financial Services Specific Processes ===
+
+fs:TradeSettlement a corp:BusinessProcess ;
+    rdfs:label "Trade Settlement" ;
+    rdfs:comment "Process of settling securities transactions" ;
+    fs:settlementCycle "T+2" ;
+    fs:regulatoryRequirement "Securities Exchange Act" .
+
+fs:StressTest a corp:BusinessProcess ;
+    rdfs:label "Stress Test" ;
+    rdfs:comment "Regulatory stress testing of financial positions" ;
+    fs:frequency "Quarterly, Annual" ;
+    fs:regulatoryRequirement "Dodd-Frank Act, CCAR" .
+
+fs:AMLMonitoring a corp:BusinessProcess ;
+    rdfs:label "Anti-Money Laundering Monitoring" ;
+    rdfs:comment "Continuous monitoring for suspicious activities" ;
+    fs:frequency "Real-time" ;
+    fs:regulatoryRequirement "Bank Secrecy Act, USA PATRIOT Act" .
+
+# === NEW: Financial Services Roles ===
+
+fs:RiskOfficer a corp:OrganizationalRole ;
+    rdfs:label "Chief Risk Officer" ;
+    rdfs:comment "Senior executive responsible for enterprise risk management" .
+
+fs:ComplianceAnalyst a corp:OrganizationalRole ;
+    rdfs:label "Compliance Analyst" ;
+    rdfs:comment "Specialist in regulatory compliance and reporting" .
+
+fs:QuantitativeAnalyst a corp:OrganizationalRole ;
+    rdfs:label "Quantitative Analyst" ;
+    rdfs:comment "Mathematical and statistical modeling specialist" .
+
+fs:TradingDesk a corp:OrganizationalRole ;
+    rdfs:label "Trading Desk" ;
+    rdfs:comment "Team responsible for securities trading operations" .
+
+# === FS-SPECIFIC PROPERTIES ===
+
+fs:lineOfBusiness a rdf:Property ;
+    rdfs:label "Line of Business" ;
+    rdfs:comment "Specific business unit or division" ;
+    rdfs:domain fs:FinancialServicesTerm ;
+    rdfs:range rdfs:Literal .
+
+fs:regulatoryRequirement a rdf:Property ;
+    rdfs:label "Regulatory Requirement" ;
+    rdfs:comment "Specific regulatory obligations" ;
+    rdfs:domain corp:CorporateTerm ;
+    rdfs:range rdfs:Literal .
+
+fs:riskCategory a rdf:Property ;
+    rdfs:label "Risk Category" ;
+    rdfs:comment "Type of financial risk" ;
+    rdfs:domain fs:RiskData ;
+    rdfs:range rdfs:Literal .
+
+fs:kycRequired a rdf:Property ;
+    rdfs:label "KYC Required" ;
+    rdfs:comment "Whether Know Your Customer verification is required" ;
+    rdfs:domain corp:CustomerData ;
+    rdfs:range rdfs:Literal .
+
+fs:frequency a rdf:Property ;
+    rdfs:label "Frequency" ;
+    rdfs:comment "How often a process is executed" ;
+    rdfs:domain corp:BusinessProcess ;
+    rdfs:range rdfs:Literal .
