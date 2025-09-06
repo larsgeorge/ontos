@@ -6,6 +6,7 @@ import type {
   GroupedConcepts,
   TaxonomyStats
 } from '@/types/ontology';
+import type { EntitySemanticLink } from '@/types/semantic-link';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +15,15 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { DataTable } from '@/components/ui/data-table';
+import { ColumnDef } from '@tanstack/react-table';
 import { 
   Plus, 
   Pencil, 
@@ -31,7 +40,8 @@ import {
   Globe,
   Layers,
   Zap,
-  Search
+  Search,
+  Network,
 } from 'lucide-react';
 import ReactFlow, { Node, Edge, Background, MarkerType, Controls } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -77,42 +87,178 @@ const ConceptTreeNode: React.FC<ConceptTreeNodeProps> = ({
   };
 
   return (
-    <div style={{ paddingLeft: `${level * 16}px` }} className="select-none">
+    <div className="select-none">
       <div
         className={`
-          flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer
-          hover:bg-accent hover:text-accent-foreground
+          flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer
+          hover:bg-accent hover:text-accent-foreground transition-colors
           ${isSelected ? 'bg-accent text-accent-foreground' : ''}
         `}
+        style={{ paddingLeft: `${level * 12 + 8}px` }}
         onClick={() => onSelect(concept)}
       >
-        {hasChildren && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggle();
-            }}
-            className="p-1 hover:bg-accent/50 rounded-sm transition-colors"
-          >
-            {isExpanded ? (
-              <ChevronDown className="h-4 w-4 shrink-0" />
-            ) : (
-              <ChevronRight className="h-4 w-4 shrink-0" />
-            )}
-          </button>
-        )}
-        <div className="flex items-center gap-2 min-w-0">
-          {getConceptIcon()}
-          <span className="truncate text-sm font-medium">
-            {getDisplayName()}
-          </span>
-          {concept.source_context && (
-            <Badge variant="outline" className="text-xs">
-              {concept.source_context}
-            </Badge>
+        <div className="flex items-center w-5 justify-center">
+          {hasChildren && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggle();
+              }}
+              className="p-0.5 hover:bg-accent/50 rounded-sm transition-colors"
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+              )}
+            </button>
           )}
         </div>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {getConceptIcon()}
+          <span 
+            className="truncate text-sm font-medium" 
+            title={`${getDisplayName()}${concept.source_context ? ` (${concept.source_context})` : ''}`}
+          >
+            {getDisplayName()}
+          </span>
+        </div>
       </div>
+    </div>
+  );
+};
+
+interface UnifiedConceptTreeProps {
+  concepts: OntologyConcept[];
+  selectedConcept: OntologyConcept | null;
+  onSelectConcept: (concept: OntologyConcept) => void;
+  expandedIds: Set<string>;
+  toggleExpanded: (id: string) => void;
+}
+
+const UnifiedConceptTree: React.FC<UnifiedConceptTreeProps> = ({
+  concepts,
+  selectedConcept,
+  onSelectConcept,
+  expandedIds,
+  toggleExpanded
+}) => {
+  // Build unified hierarchy with parent inclusion
+  const buildUnifiedHierarchy = (allConcepts: OntologyConcept[]) => {
+    const conceptMap = new Map<string, { concept: OntologyConcept; children: OntologyConcept[] }>();
+    const roots: OntologyConcept[] = [];
+    
+    // Helper function to find concept by IRI
+    const findConceptByIri = (iri: string): OntologyConcept | undefined => {
+      return allConcepts.find(c => c.iri === iri);
+    };
+
+    // Filter out ConceptSchemes and individuals, but keep classes and concepts
+    const baseConcepts = allConcepts.filter(concept => 
+      concept.concept_type !== 'individual' && concept.concept_type !== 'concept_scheme'
+    );
+
+    // Collect all concepts that should be included in the tree (base concepts + their parents)
+    const conceptsToInclude = new Set<string>();
+    const conceptsToAdd: OntologyConcept[] = [];
+
+    // Add base concepts
+    baseConcepts.forEach(concept => {
+      conceptsToInclude.add(concept.iri);
+      conceptsToAdd.push(concept);
+    });
+
+    // Recursively add parent concepts to ensure complete hierarchy
+    const addParentConcepts = (concept: OntologyConcept) => {
+      concept.parent_concepts.forEach(parentIri => {
+        if (!conceptsToInclude.has(parentIri)) {
+          const parentConcept = findConceptByIri(parentIri);
+          if (parentConcept) {
+            conceptsToInclude.add(parentIri);
+            conceptsToAdd.push(parentConcept);
+            // Recursively add grandparents
+            addParentConcepts(parentConcept);
+          }
+        }
+      });
+    };
+
+    // Add all parent concepts
+    baseConcepts.forEach(addParentConcepts);
+
+    // Create nodes for all included concepts
+    conceptsToAdd.forEach(concept => {
+      conceptMap.set(concept.iri, { concept, children: [] });
+    });
+
+    // Build tree structure based on parent-child relationships
+    conceptsToAdd.forEach(concept => {
+      if (concept.parent_concepts.length === 0) {
+        // Root-level concept (no parents)
+        roots.push(concept);
+      } else {
+        // Child concept - add to parent(s)
+        concept.parent_concepts.forEach(parentIri => {
+          const parentNode = conceptMap.get(parentIri);
+          if (parentNode) {
+            parentNode.children.push(concept);
+          } else {
+            // Parent not found - make this a root (should be rare now)
+            roots.push(concept);
+          }
+        });
+      }
+    });
+
+    return { conceptMap, roots };
+  };
+
+  const { conceptMap, roots } = buildUnifiedHierarchy(concepts);
+
+  const renderConceptTree = (concepts: OntologyConcept[], level: number = 0): React.ReactNode => {
+    return concepts.map(concept => {
+      const conceptNode = conceptMap.get(concept.iri);
+      const childConcepts = conceptNode ? conceptNode.children : [];
+      const hasChildren = childConcepts.length > 0;
+      const isExpanded = expandedIds.has(concept.iri);
+
+      return (
+        <div key={concept.iri}>
+          <ConceptTreeNode
+            concept={concept}
+            level={level}
+            selectedConcept={selectedConcept}
+            onSelect={onSelectConcept}
+            isExpanded={isExpanded}
+            onToggle={() => toggleExpanded(concept.iri)}
+            expandedIds={expandedIds}
+            toggleExpanded={toggleExpanded}
+          />
+          {isExpanded && hasChildren && (
+            <div>
+              {renderConceptTree(childConcepts, level + 1)}
+            </div>
+          )}
+        </div>
+      );
+    });
+  };
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2 p-2 bg-muted/30 rounded-md mb-4">
+        <Network className="h-4 w-4 text-blue-600" />
+        <span className="font-medium">Knowledge Graph</span>
+        <Badge variant="secondary" className="text-xs">
+          {conceptMap.size} concepts
+        </Badge>
+      </div>
+      {renderConceptTree(roots)}
+      {roots.length === 0 && (
+        <div className="text-center text-muted-foreground py-4">
+          No root concepts found
+        </div>
+      )}
     </div>
   );
 };
@@ -161,8 +307,8 @@ const TaxonomyGroup: React.FC<TaxonomyGroupProps> = ({
 
     // Build tree structure
     concepts.forEach(concept => {
-      if (concept.parent_concepts.length === 0) {
-        // Top-level concept
+      if (concept.parent_concepts.length === 0 || concept.concept_type === 'concept_scheme') {
+        // Top-level concept or ConceptScheme
         roots.push(concept);
       } else {
         // Child concept - add to parent(s)
@@ -178,15 +324,16 @@ const TaxonomyGroup: React.FC<TaxonomyGroupProps> = ({
     return { conceptMap, roots };
   };
 
+  const { conceptMap, roots } = buildConceptTree(concepts);
+
   const renderConceptTree = (concepts: OntologyConcept[], level: number = 1): React.ReactNode => {
     return concepts.map(concept => {
       const hasChildren = concept.child_concepts.length > 0;
       const isExpanded = expandedIds.has(concept.iri);
       
-      // Get children concepts that exist in our current concept list
-      const childConcepts = concepts.filter(c => 
-        concept.child_concepts.includes(c.iri)
-      );
+      // Get children concepts from the concept map
+      const conceptNode = conceptMap.get(concept.iri);
+      const childConcepts = conceptNode ? conceptNode.children : [];
 
       return (
         <div key={concept.iri}>
@@ -209,8 +356,6 @@ const TaxonomyGroup: React.FC<TaxonomyGroupProps> = ({
       );
     });
   };
-
-  const { roots } = buildConceptTree(concepts);
 
   return (
     <div className="mb-2">
@@ -244,9 +389,15 @@ const TaxonomyGroup: React.FC<TaxonomyGroupProps> = ({
 interface ConceptDetailsProps {
   concept: OntologyConcept;
   hierarchy?: ConceptHierarchy;
+  concepts: OntologyConcept[];
 }
 
-const ConceptDetails: React.FC<ConceptDetailsProps> = ({ concept, hierarchy }) => {
+const ConceptDetails: React.FC<ConceptDetailsProps> = ({ concept, hierarchy, concepts }) => {
+  // Helper function to resolve IRI to concept label
+  const getConceptLabel = (iri: string): string => {
+    const foundConcept = concepts.find(c => c.iri === iri);
+    return foundConcept?.label || iri.split(/[/#]/).pop() || iri;
+  };
   const DetailItem: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
     <div className="mb-4">
       <div className="text-sm text-muted-foreground mb-1">{label}</div>
@@ -272,39 +423,227 @@ const ConceptDetails: React.FC<ConceptDetailsProps> = ({ concept, hierarchy }) =
         value={<Badge variant="outline">{concept.concept_type}</Badge>} 
       />
       
-      {concept.source_context && (
-        <DetailItem label="Source Taxonomy" value={concept.source_context} />
-      )}
+      <DetailItem 
+        label="Source Taxonomy" 
+        value={
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">
+              {concept.source_context}
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              ({concept.concept_type})
+            </span>
+          </div>
+        } 
+      />
       
       {concept.comment && (
         <DetailItem label="Description" value={concept.comment} />
       )}
       
       {concept.parent_concepts.length > 0 && (
-        <div className="mb-4">
-          <div className="text-sm text-muted-foreground mb-1">Parent Concepts</div>
-          <div className="space-y-1">
-            {concept.parent_concepts.map(parentIri => (
-              <div key={parentIri} className="text-xs bg-muted p-2 rounded font-mono">
-                {parentIri.split(/[/#]/).pop() || parentIri}
-              </div>
-            ))}
-          </div>
-        </div>
+        <DetailItem 
+          label="Parent Concepts" 
+          value={
+            <div className="flex flex-wrap gap-2">
+              {concept.parent_concepts.map(parentIri => (
+                <Badge key={parentIri} variant="secondary" className="text-xs">
+                  {getConceptLabel(parentIri)}
+                </Badge>
+              ))}
+            </div>
+          } 
+        />
       )}
       
       {concept.child_concepts.length > 0 && (
-        <div className="mb-4">
-          <div className="text-sm text-muted-foreground mb-1">Child Concepts</div>
-          <div className="space-y-1">
-            {concept.child_concepts.map(childIri => (
-              <div key={childIri} className="text-xs bg-muted p-2 rounded font-mono">
-                {childIri.split(/[/#]/).pop() || childIri}
+        <DetailItem 
+          label="Child Concepts" 
+          value={
+            <div className="flex flex-wrap gap-2">
+              {concept.child_concepts.map(childIri => (
+                <Badge key={childIri} variant="outline" className="text-xs">
+                  {getConceptLabel(childIri)}
+                </Badge>
+              ))}
+            </div>
+          } 
+        />
+      )}
+    </div>
+  );
+};
+
+interface ConceptHierarchyViewProps {
+  concept: OntologyConcept;
+  concepts: OntologyConcept[];
+}
+
+const ConceptHierarchyView: React.FC<ConceptHierarchyViewProps> = ({ concept, concepts }) => {
+  // Helper function to resolve IRI to concept
+  const getConceptByIri = (iri: string): OntologyConcept | undefined => {
+    return concepts.find(c => c.iri === iri);
+  };
+
+  // Get parent concepts
+  const parentConcepts = concept.parent_concepts
+    .map(parentIri => getConceptByIri(parentIri))
+    .filter((parent): parent is OntologyConcept => parent !== undefined);
+
+  // Get child concepts  
+  const childConcepts = concept.child_concepts
+    .map(childIri => getConceptByIri(childIri))
+    .filter((child): child is OntologyConcept => child !== undefined);
+
+  return (
+    <div className="space-y-6">
+      {/* Parent Concepts */}
+      {parentConcepts.length > 0 && (
+        <div>
+          <h4 className="font-medium text-sm text-muted-foreground mb-3">Parent Concepts</h4>
+          <div className="space-y-2">
+            {parentConcepts.map(parent => (
+              <div key={parent.iri} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50">
+                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <div className="flex-1">
+                  <div className="font-medium">{parent.label}</div>
+                  <div className="text-sm text-muted-foreground">
+                    from {parent.source_context}
+                  </div>
+                  {parent.comment && (
+                    <div className="text-sm text-muted-foreground mt-1">
+                      {parent.comment}
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
+
+      {/* Current Concept */}
+      <div>
+        <h4 className="font-medium text-sm text-muted-foreground mb-3">Current Concept</h4>
+        <div className="flex items-center gap-3 p-3 border-2 border-blue-200 bg-blue-50 rounded-lg">
+          <div className="w-3 h-3 rounded-full bg-blue-500" />
+          <div className="flex-1">
+            <div className="font-semibold text-blue-900">{concept.label}</div>
+            <div className="text-sm text-blue-700">
+              from {concept.source_context}
+            </div>
+            {concept.comment && (
+              <div className="text-sm text-blue-700 mt-1">
+                {concept.comment}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Child Concepts */}
+      {childConcepts.length > 0 && (
+        <div>
+          <h4 className="font-medium text-sm text-muted-foreground mb-3">Child Concepts</h4>
+          <div className="space-y-2">
+            {childConcepts.map(child => (
+              <div key={child.iri} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50">
+                <div className="w-2 h-2 rounded-full bg-orange-500" />
+                <div className="flex-1">
+                  <div className="font-medium">{child.label}</div>
+                  <div className="text-sm text-muted-foreground">
+                    from {child.source_context}
+                  </div>
+                  {child.comment && (
+                    <div className="text-sm text-muted-foreground mt-1">
+                      {child.comment}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {parentConcepts.length === 0 && childConcepts.length === 0 && (
+        <div className="text-center text-muted-foreground py-8">
+          This concept has no immediate parent or child relationships
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface TaggedAssetsViewProps {
+  concept: OntologyConcept;
+}
+
+// Define the asset type for better type safety
+type TaggedAsset = {
+  id: string;
+  name: string;
+  type?: string;
+  path?: string;
+};
+
+const TaggedAssetsView: React.FC<TaggedAssetsViewProps> = ({ concept }) => {
+  // Define columns for the data table
+  const columns: ColumnDef<TaggedAsset>[] = [
+    {
+      accessorKey: "name",
+      header: "Asset Name",
+      cell: ({ row }) => (
+        <div className="font-medium">{row.getValue("name")}</div>
+      ),
+    },
+    {
+      accessorKey: "type",
+      header: "Type",
+      cell: ({ row }) => {
+        const type = row.getValue("type") as string;
+        return (
+          <Badge variant="outline" className="text-xs">
+            {type?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown'}
+          </Badge>
+        );
+      },
+      filterFn: (row, id, value) => {
+        return value === 'all' || row.getValue(id) === value;
+      },
+    },
+    {
+      accessorKey: "path",
+      header: "Path",
+      cell: ({ row }) => {
+        const path = row.getValue("path") as string;
+        return path ? (
+          <code className="text-sm text-muted-foreground bg-muted px-2 py-1 rounded">
+            {path}
+          </code>
+        ) : null;
+      },
+    },
+  ];
+
+  if (concept.tagged_assets.length === 0) {
+    return <div className="text-muted-foreground">No tagged assets found</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold">Tagged Assets</h3>
+        <Badge variant="secondary" className="text-xs">
+          {concept.tagged_assets.length} total
+        </Badge>
+      </div>
+
+      <DataTable
+        columns={columns}
+        data={concept.tagged_assets}
+        searchColumn="name"
+      />
     </div>
   );
 };
@@ -348,7 +687,7 @@ export default function BusinessGlossary() {
       setStaticSegments([]);
       setDynamicTitle(null);
     };
-  }, [setStaticSegments, setDynamicTitle]);
+  }, []); // Empty dependency array to run only once on mount
 
   const fetchData = async () => {
     try {
@@ -394,6 +733,28 @@ export default function BusinessGlossary() {
       }
     } catch (err) {
       console.error('Failed to fetch concept hierarchy:', err);
+    }
+
+    // Fetch semantic links (tagged assets)
+    try {
+      const response = await fetch(`/api/semantic-links/iri/${encodeURIComponent(concept.iri)}`);
+      if (response.ok) {
+        const semanticLinks: EntitySemanticLink[] = await response.json();
+        
+        // Update the concept with tagged assets
+        const updatedConcept = {
+          ...concept,
+          tagged_assets: semanticLinks.map((link) => ({
+            id: link.entity_id,
+            name: link.label || link.entity_id,
+            type: link.entity_type,
+            description: `${link.entity_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}: ${link.label || link.entity_id}`
+          }))
+        };
+        setSelectedConcept(updatedConcept);
+      }
+    } catch (err) {
+      console.error('Failed to fetch semantic links:', err);
     }
   };
 
@@ -445,75 +806,131 @@ export default function BusinessGlossary() {
   const renderLineage = (hierarchy: ConceptHierarchy) => {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
-    let yOffset = 100;
+    const allConcepts = Object.values(groupedConcepts).flat();
+    
+    // Helper function to find concept by IRI
+    const findConceptByIri = (iri: string) => allConcepts.find(c => c.iri === iri);
 
     // Add current concept as center node
+    const centerY = 250;
     nodes.push({
       id: hierarchy.concept.iri,
-      data: { label: hierarchy.concept.label || hierarchy.concept.iri.split(/[/#]/).pop() },
-      position: { x: 300, y: yOffset },
+      data: { 
+        label: hierarchy.concept.label || hierarchy.concept.iri.split(/[/#]/).pop(),
+        sourceContext: hierarchy.concept.source_context
+      },
+      position: { x: 400, y: centerY },
       type: 'default',
       style: {
         background: '#fff',
         border: '2px solid #2563eb',
         borderRadius: '8px',
-        padding: '10px',
-        fontSize: '12px',
-        fontWeight: 'bold'
+        padding: '12px',
+        fontSize: '14px',
+        fontWeight: 'bold',
+        minWidth: '140px',
+        textAlign: 'center'
       }
     });
 
-    yOffset += 120;
-
-    // Add ancestors
-    hierarchy.ancestors.forEach((ancestor, index) => {
-      const nodeId = ancestor.iri;
-      nodes.push({
-        id: nodeId,
-        data: { label: ancestor.label || ancestor.iri.split(/[/#]/).pop() },
-        position: { x: 300 - (index * 50), y: yOffset },
-        style: {
-          background: '#dbeafe',
-          border: '1px solid #93c5fd',
-          borderRadius: '6px',
-          padding: '8px',
-          fontSize: '10px'
-        }
-      });
-      
-      edges.push({
-        id: `${nodeId}-${hierarchy.concept.iri}`,
-        source: nodeId,
-        target: hierarchy.concept.iri,
-        type: 'smoothstep'
-      });
+    // Add immediate parents
+    hierarchy.concept.parent_concepts.forEach((parentIri, index) => {
+      const parent = findConceptByIri(parentIri);
+      if (parent) {
+        const nodeId = parent.iri;
+        nodes.push({
+          id: nodeId,
+          data: { 
+            label: parent.label || parent.iri.split(/[/#]/).pop(),
+            sourceContext: parent.source_context
+          },
+          position: { x: 400 + (index - hierarchy.concept.parent_concepts.length / 2 + 0.5) * 180, y: centerY - 150 },
+          style: {
+            background: '#dbeafe',
+            border: '1px solid #3b82f6',
+            borderRadius: '6px',
+            padding: '10px',
+            fontSize: '12px',
+            minWidth: '120px',
+            textAlign: 'center'
+          }
+        });
+        
+        edges.push({
+          id: `${nodeId}-${hierarchy.concept.iri}`,
+          source: nodeId,
+          target: hierarchy.concept.iri,
+          type: 'smoothstep',
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: '#64748b'
+          },
+          style: { stroke: '#64748b' }
+        });
+      }
     });
 
-    yOffset += 120;
-
-    // Add descendants
-    hierarchy.descendants.forEach((descendant, index) => {
-      const nodeId = descendant.iri;
-      nodes.push({
-        id: nodeId,
-        data: { label: descendant.label || descendant.iri.split(/[/#]/).pop() },
-        position: { x: 300 + (index * 50), y: yOffset },
-        style: {
-          background: '#dcfce7',
-          border: '1px solid #86efac',
-          borderRadius: '6px',
-          padding: '8px',
-          fontSize: '10px'
-        }
-      });
-      
-      edges.push({
-        id: `${hierarchy.concept.iri}-${nodeId}`,
-        source: hierarchy.concept.iri,
-        target: nodeId,
-        type: 'smoothstep'
-      });
+    // Add immediate children  
+    hierarchy.concept.child_concepts.forEach((childIri, index) => {
+      const child = findConceptByIri(childIri);
+      if (child) {
+        const nodeId = child.iri;
+        nodes.push({
+          id: nodeId,
+          data: { 
+            label: child.label || child.iri.split(/[/#]/).pop(),
+            sourceContext: child.source_context
+          },
+          position: { x: 400 + (index - hierarchy.concept.child_concepts.length / 2 + 0.5) * 180, y: centerY + 150 },
+          style: {
+            background: '#dcfce7',
+            border: '1px solid #16a34a',
+            borderRadius: '6px',
+            padding: '10px',
+            fontSize: '12px',
+            minWidth: '120px',
+            textAlign: 'center'
+          }
+        });
+        
+        edges.push({
+          id: `${hierarchy.concept.iri}-${nodeId}`,
+          source: hierarchy.concept.iri,
+          target: nodeId,
+          type: 'smoothstep',
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: '#64748b'
+          },
+          style: { stroke: '#64748b' }
+        });
+      }
     });
+
+    // Add siblings if available
+    if (hierarchy.siblings && hierarchy.siblings.length > 0) {
+      hierarchy.siblings.forEach((sibling, index) => {
+        const nodeId = sibling.iri;
+        nodes.push({
+          id: nodeId,
+          data: { 
+            label: sibling.label || sibling.iri.split(/[/#]/).pop(),
+            sourceContext: sibling.source_context
+          },
+          position: { x: 600 + (index * 160), y: centerY },
+          style: {
+            background: '#fef3c7',
+            border: '1px solid #f59e0b',
+            borderRadius: '6px',
+            padding: '10px',
+            fontSize: '12px',
+            minWidth: '120px',
+            textAlign: 'center',
+            opacity: 0.8
+          }
+        });
+      });
+    }
 
     return (
       <div className="h-[500px] border rounded-lg">
@@ -616,7 +1033,7 @@ export default function BusinessGlossary() {
 
       <div className="grid grid-cols-12 gap-6">
         {/* Left Panel - Taxonomy Tree */}
-        <div className="col-span-4 border rounded-lg">
+        <div className="col-span-4 border rounded-lg flex flex-col">
           <div className="p-4 border-b">
             <div className="flex gap-2">
               <Input
@@ -631,28 +1048,15 @@ export default function BusinessGlossary() {
               </Button>
             </div>
           </div>
-          <ScrollArea className="h-[calc(100vh-350px)]">
-            <div className="p-4">
-              {Object.entries(groupedConcepts).map(([taxonomyName, concepts]) => {
-                const taxonomy = taxonomies.find(t => t.name === taxonomyName) || {
-                  name: taxonomyName,
-                  source_type: 'external' as const,
-                  concepts_count: concepts.length,
-                  properties_count: 0
-                };
-                
-                return (
-                  <TaxonomyGroup
-                    key={taxonomyName}
-                    taxonomy={taxonomy}
-                    concepts={concepts}
-                    selectedConcept={selectedConcept}
-                    onSelectConcept={handleSelectConcept}
-                    expandedIds={expandedIds}
-                    toggleExpanded={toggleExpanded}
-                  />
-                );
-              })}
+          <ScrollArea className="flex-1">
+            <div className="p-4 h-full">
+              <UnifiedConceptTree
+                concepts={Object.values(groupedConcepts).flat()}
+                selectedConcept={selectedConcept}
+                onSelectConcept={handleSelectConcept}
+                expandedIds={expandedIds}
+                toggleExpanded={toggleExpanded}
+              />
               {Object.keys(groupedConcepts).length === 0 && !loading && (
                 <div className="text-center text-muted-foreground py-8">
                   No concepts found
@@ -695,7 +1099,11 @@ export default function BusinessGlossary() {
                 </TabsList>
                 
                 <TabsContent value="details">
-                  <ConceptDetails concept={selectedConcept} hierarchy={selectedHierarchy || undefined} />
+                  <ConceptDetails 
+                    concept={selectedConcept} 
+                    hierarchy={selectedHierarchy || undefined}
+                    concepts={Object.values(groupedConcepts).flat()}
+                  />
                 </TabsContent>
                 
                 <TabsContent value="hierarchy">
@@ -710,30 +1118,7 @@ export default function BusinessGlossary() {
                 </TabsContent>
                 
                 <TabsContent value="tagged">
-                  {selectedConcept.tagged_assets.length > 0 ? (
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-semibold">Tagged Assets</h3>
-                      <div className="space-y-3">
-                        {selectedConcept.tagged_assets.map(asset => (
-                          <div key={asset.id} className="p-4 border rounded-lg">
-                            <div className="font-medium">{asset.name}</div>
-                            {asset.type && (
-                              <Badge variant="outline" className="text-xs mt-1">
-                                {asset.type}
-                              </Badge>
-                            )}
-                            {asset.path && (
-                              <div className="text-sm text-muted-foreground font-mono mt-1">
-                                {asset.path}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground">No tagged assets found</div>
-                  )}
+                  <TaggedAssetsView concept={selectedConcept} />
                 </TabsContent>
               </Tabs>
             </div>

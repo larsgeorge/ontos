@@ -521,8 +521,14 @@ class BusinessGlossariesManager(SearchableAsset):
     
     def get_grouped_concepts(self) -> Dict[str, List[OntologyConcept]]:
         """Get all concepts grouped by taxonomy source"""
+        if not self._semantic_models_manager:
+            logger.warning("Semantic models manager not available")
+            return {}
+            
         concepts = self.get_concepts_by_taxonomy()
         grouped = {}
+        
+        logger.info(f"Processing {len(concepts)} total concepts from knowledge graph")
         
         for concept in concepts:
             source = concept.source_context or "Unassigned"
@@ -533,6 +539,7 @@ class BusinessGlossariesManager(SearchableAsset):
         # Sort concepts within each group by label or IRI
         for source in grouped:
             grouped[source].sort(key=lambda c: c.label or c.iri)
+            logger.info(f"Grouped taxonomy '{source}': {len(grouped[source])} concepts")
         
         return grouped
     

@@ -456,11 +456,45 @@ class SemanticModelsManager:
             context_str = str(context_id)
             logger.debug(f"Processing context with identifier: {context_str}")
             
-            # Count concepts and properties in this context
+            # Count concepts and properties in this context using comprehensive SPARQL query
             try:
-                concepts_count = len(list(context.subjects(RDF.type, RDFS.Class))) + \
-                               len(list(context.subjects(RDF.type, SKOS.Concept)))
+                # Use the same comprehensive query as in get_concepts_by_taxonomy for consistency
+                class_count_query = """
+                PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+                PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+                PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                SELECT (COUNT(DISTINCT ?concept) AS ?count) WHERE {
+                    {
+                        ?concept a rdfs:Class .
+                    } UNION {
+                        ?concept a skos:Concept .
+                    } UNION {
+                        ?concept a skos:ConceptScheme .
+                    } UNION {
+                        # Include any resource that is used as a class (has instances or subclasses)
+                        ?concept rdfs:subClassOf ?parent .
+                    } UNION {
+                        ?instance a ?concept .
+                        FILTER(?concept != rdfs:Class && ?concept != skos:Concept && ?concept != rdf:Property)
+                    } UNION {
+                        # Include resources with semantic properties that make them conceptual
+                        ?concept rdfs:label ?someLabel .
+                        ?concept rdfs:comment ?someComment .
+                    }
+                    # Filter out basic RDF/RDFS/SKOS vocabulary terms
+                    FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/1999/02/22-rdf-syntax-ns#"))
+                    FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2000/01/rdf-schema#"))
+                    FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2004/02/skos/core#"))
+                }
+                """
+                
+                count_results = list(context.query(class_count_query))
+                concepts_count = int(count_results[0][0]) if count_results and count_results[0][0] is not None else 0
+                
                 properties_count = len(list(context.subjects(RDF.type, RDF.Property)))
+                
+                logger.debug(f"Context {context_str}: {concepts_count} concepts, {properties_count} properties")
+                
             except Exception as e:
                 logger.warning(f"Error counting concepts in context {context_str}: {e}")
                 concepts_count = 0
@@ -523,30 +557,48 @@ class SemanticModelsManager:
                                 if hasattr(context, 'identifier')]
         
         for context_name, context in contexts_to_search:
-            # Find all classes and concepts in this context
+            # Find all classes and concepts in this context - expanded to catch all defined resources
             class_query = """
             PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+            PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
             SELECT DISTINCT ?concept ?label ?comment WHERE {
                 {
                     ?concept a rdfs:Class .
                 } UNION {
                     ?concept a skos:Concept .
+                } UNION {
+                    ?concept a skos:ConceptScheme .
+                } UNION {
+                    # Include any resource that is used as a class (has instances or subclasses)
+                    ?concept rdfs:subClassOf ?parent .
+                } UNION {
+                    ?instance a ?concept .
+                    FILTER(?concept != rdfs:Class && ?concept != skos:Concept && ?concept != rdf:Property)
+                } UNION {
+                    # Include resources with semantic properties that make them conceptual
+                    ?concept rdfs:label ?someLabel .
+                    ?concept rdfs:comment ?someComment .
                 }
                 OPTIONAL { ?concept rdfs:label ?label }
                 OPTIONAL { ?concept skos:prefLabel ?label }
                 OPTIONAL { ?concept rdfs:comment ?comment }
                 OPTIONAL { ?concept skos:definition ?comment }
+                # Filter out basic RDF/RDFS/SKOS vocabulary terms
+                FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/1999/02/22-rdf-syntax-ns#"))
+                FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2000/01/rdf-schema#"))
+                FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2004/02/skos/core#"))
             }
             ORDER BY ?concept
             """
             
             try:
                 results = context.query(class_query)
-                logger.debug(f"SPARQL query returned {len(list(results))} results for context {context_name}")
+                results_list = list(results)
+                logger.info(f"SPARQL query returned {len(results_list)} results for context {context_name}")
                 
-                # Re-execute query since we consumed the iterator
-                results = context.query(class_query)
+                # Process results
+                results = results_list
                 for row in results:
                     logger.debug(f"Processing SPARQL row: {row} (type: {type(row)}, length: {len(row) if hasattr(row, '__len__') else 'N/A'})")
                     
@@ -581,10 +633,22 @@ class SemanticModelsManager:
                     
                     # Get parent concepts
                     parent_concepts = []
+                    # Handle rdfs:subClassOf relationships (class-to-class)
                     for parent in context.objects(concept_uri, RDFS.subClassOf):
                         parent_concepts.append(str(parent))
+                    # Handle SKOS broader relationships
                     for parent in context.objects(concept_uri, SKOS.broader):
                         parent_concepts.append(str(parent))
+                    # Handle rdf:type relationships (instance-to-class)
+                    for parent_type in context.objects(concept_uri, RDF.type):
+                        # Only include custom types, not basic RDF/RDFS/SKOS types
+                        parent_type_str = str(parent_type)
+                        if not any(parent_type_str.startswith(prefix) for prefix in [
+                            "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+                            "http://www.w3.org/2000/01/rdf-schema#", 
+                            "http://www.w3.org/2004/02/skos/core#"
+                        ]):
+                            parent_concepts.append(parent_type_str)
                     
                     # Extract source context name
                     source_context = None
@@ -653,16 +717,33 @@ class SemanticModelsManager:
             
             # Get parent concepts
             parent_concepts = []
+            # Handle rdfs:subClassOf relationships (class-to-class)
             for parent in context.objects(concept_uri, RDFS.subClassOf):
                 parent_concepts.append(str(parent))
+            # Handle SKOS broader relationships
             for parent in context.objects(concept_uri, SKOS.broader):
                 parent_concepts.append(str(parent))
+            # Handle rdf:type relationships (instance-to-class)
+            for parent_type in context.objects(concept_uri, RDF.type):
+                # Only include custom types, not basic RDF/RDFS/SKOS types
+                parent_type_str = str(parent_type)
+                if not any(parent_type_str.startswith(prefix) for prefix in [
+                    "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+                    "http://www.w3.org/2000/01/rdf-schema#", 
+                    "http://www.w3.org/2004/02/skos/core#"
+                ]):
+                    parent_concepts.append(parent_type_str)
             
             # Get child concepts
             child_concepts = []
+            # Handle rdfs:subClassOf relationships (find classes that are subclasses of this one)
             for child in context.subjects(RDFS.subClassOf, concept_uri):
                 child_concepts.append(str(child))
+            # Handle SKOS narrower relationships
             for child in context.subjects(SKOS.broader, concept_uri):
+                child_concepts.append(str(child))
+            # Handle rdf:type relationships (find instances of this class)
+            for child in context.subjects(RDF.type, concept_uri):
                 child_concepts.append(str(child))
             
             # Extract source context

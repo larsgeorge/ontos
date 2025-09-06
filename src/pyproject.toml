@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "rucsak"
 version = "0.1.0"
 description = "Unified Catalog Application"
-readme = "../../README.md"
+readme = "../README.md"
 authors = [
     { name="larsgeorge", email="lars.george@gmail.com" }
 ]
@@ -18,7 +18,7 @@ dynamic = ["dependencies"]
 files = ["requirements.txt"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src/backend"]
 
 [tool.hatch.envs.default]
 python = "3.10"
@@ -37,24 +37,24 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "/src",
-    "/pyproject.toml",
-    "/README.md",
+    "src",
+    "pyproject.toml",
+    "../README.md",
 ]
 
 [tool.hatch.envs.dev.scripts]
 dev-frontend = "yarn dev:frontend"
-dev-backend = "uvicorn src.app:app --reload --host=0.0.0.0 --port=8000"
+dev-backend = "uvicorn --app-dir backend src.app:app --reload --host=0.0.0.0 --port=8000"
 deploy-and-run = [
   'databricks bundle deploy --var="catalog=app_data" --var="schema=app_ucsak"',
   "databricks bundle run app_ucsak",
 ]
 
 [tool.hatch.envs.dev.env]
-PYTHONPATH = "src"
+PYTHONPATH = "./backend"
 
 [tool.pytest.ini_options]
 pythonpath = [
   ".",
-  "src"
+  "src/backend"
 ]
