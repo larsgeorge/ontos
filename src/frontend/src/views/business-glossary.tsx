@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { 
   OntologyTaxonomy, 
   OntologyConcept, 
@@ -7,6 +7,13 @@ import type {
   TaxonomyStats
 } from '@/types/ontology';
 import type { EntitySemanticLink } from '@/types/semantic-link';
+import { useTree } from '@headless-tree/react';
+import { 
+  syncDataLoaderFeature,
+  selectionFeature,
+  hotkeysCoreFeature,
+  searchFeature
+} from '@headless-tree/core';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,35 +49,32 @@ import {
   Zap,
   Search,
   Network,
+  TreePine,
 } from 'lucide-react';
 import ReactFlow, { Node, Edge, Background, MarkerType, Controls } from 'reactflow';
 import 'reactflow/dist/style.css';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import { cn } from '@/lib/utils';
 
-interface ConceptTreeNodeProps {
+// Define concept item type for Headless Tree
+type ConceptTreeItem = {
+  id: string;
   concept: OntologyConcept;
-  level: number;
+  name: string;
+  children: ConceptTreeItem[];
+};
+
+interface ConceptTreeItemProps {
+  item: any;
   selectedConcept: OntologyConcept | null;
-  onSelect: (concept: OntologyConcept) => void;
-  isExpanded: boolean;
-  onToggle: () => void;
-  expandedIds: Set<string>;
-  toggleExpanded: (id: string) => void;
+  onSelectConcept: (concept: OntologyConcept) => void;
 }
 
-const ConceptTreeNode: React.FC<ConceptTreeNodeProps> = ({
-  concept,
-  level,
-  selectedConcept,
-  onSelect,
-  isExpanded,
-  onToggle,
-  expandedIds,
-  toggleExpanded
-}) => {
-  const hasChildren = concept.child_concepts.length > 0;
+const ConceptTreeItem: React.FC<ConceptTreeItemProps> = ({ item, selectedConcept, onSelectConcept }) => {
+  const concept = item.getItemData() as OntologyConcept;
   const isSelected = selectedConcept?.iri === concept.iri;
-
+  const level = item.getItemMeta().level;
+  
   const getConceptIcon = () => {
     switch (concept.concept_type) {
       case 'class':
@@ -87,42 +91,45 @@ const ConceptTreeNode: React.FC<ConceptTreeNodeProps> = ({
   };
 
   return (
-    <div className="select-none">
-      <div
-        className={`
-          flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer
-          hover:bg-accent hover:text-accent-foreground transition-colors
-          ${isSelected ? 'bg-accent text-accent-foreground' : ''}
-        `}
-        style={{ paddingLeft: `${level * 12 + 8}px` }}
-        onClick={() => onSelect(concept)}
-      >
-        <div className="flex items-center w-5 justify-center">
-          {hasChildren && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggle();
-              }}
-              className="p-0.5 hover:bg-accent/50 rounded-sm transition-colors"
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-              ) : (
-                <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-              )}
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          {getConceptIcon()}
-          <span 
-            className="truncate text-sm font-medium" 
-            title={`${getDisplayName()}${concept.source_context ? ` (${concept.source_context})` : ''}`}
+    <div
+      {...item.getProps()}
+      className={cn(
+        "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer w-full text-left",
+        "hover:bg-accent hover:text-accent-foreground transition-colors",
+        isSelected && "bg-accent text-accent-foreground"
+      )}
+      style={{ paddingLeft: `${level * 12 + 8}px` }}
+      onClick={() => onSelectConcept(concept)}
+    >
+      <div className="flex items-center w-5 justify-center">
+        {item.isFolder() && (
+          <button
+            className="p-0.5 hover:bg-muted rounded"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (item.isExpanded()) {
+                item.collapse();
+              } else {
+                item.expand();
+              }
+            }}
           >
-            {getDisplayName()}
-          </span>
-        </div>
+            {item.isExpanded() ? (
+              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+            )}
+          </button>
+        )}
+      </div>
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        {getConceptIcon()}
+        <span 
+          className="truncate text-sm font-medium" 
+          title={`${getDisplayName()}${concept.source_context ? ` (${concept.source_context})` : ''}`}
+        >
+          {getDisplayName()}
+        </span>
       </div>
     </div>
   );
@@ -132,153 +139,165 @@ interface UnifiedConceptTreeProps {
   concepts: OntologyConcept[];
   selectedConcept: OntologyConcept | null;
   onSelectConcept: (concept: OntologyConcept) => void;
-  expandedIds: Set<string>;
-  toggleExpanded: (id: string) => void;
+  searchQuery: string;
+  onShowKnowledgeGraph?: () => void;
 }
 
 const UnifiedConceptTree: React.FC<UnifiedConceptTreeProps> = ({
   concepts,
   selectedConcept,
   onSelectConcept,
-  expandedIds,
-  toggleExpanded
+  searchQuery,
+  onShowKnowledgeGraph
 }) => {
-  // Build unified hierarchy with parent inclusion
-  const buildUnifiedHierarchy = (allConcepts: OntologyConcept[]) => {
-    const conceptMap = new Map<string, { concept: OntologyConcept; children: OntologyConcept[] }>();
-    const roots: OntologyConcept[] = [];
+  // Build hierarchical data structure for Headless Tree
+  const treeData = useMemo(() => {
+    const conceptMap = new Map<string, OntologyConcept>();
+    const hierarchy = new Map<string, string[]>();
     
-    // Helper function to find concept by IRI
-    const findConceptByIri = (iri: string): OntologyConcept | undefined => {
-      return allConcepts.find(c => c.iri === iri);
-    };
-
     // Filter out ConceptSchemes and individuals, but keep classes and concepts
-    const baseConcepts = allConcepts.filter(concept => 
+    const baseConcepts = concepts.filter(concept => 
       concept.concept_type !== 'individual' && concept.concept_type !== 'concept_scheme'
     );
-
-    // Collect all concepts that should be included in the tree (base concepts + their parents)
-    const conceptsToInclude = new Set<string>();
-    const conceptsToAdd: OntologyConcept[] = [];
-
-    // Add base concepts
+    
+    // Build concept map and hierarchy
     baseConcepts.forEach(concept => {
-      conceptsToInclude.add(concept.iri);
-      conceptsToAdd.push(concept);
-    });
-
-    // Recursively add parent concepts to ensure complete hierarchy
-    const addParentConcepts = (concept: OntologyConcept) => {
-      concept.parent_concepts.forEach(parentIri => {
-        if (!conceptsToInclude.has(parentIri)) {
-          const parentConcept = findConceptByIri(parentIri);
-          if (parentConcept) {
-            conceptsToInclude.add(parentIri);
-            conceptsToAdd.push(parentConcept);
-            // Recursively add grandparents
-            addParentConcepts(parentConcept);
-          }
-        }
-      });
-    };
-
-    // Add all parent concepts
-    baseConcepts.forEach(addParentConcepts);
-
-    // Create nodes for all included concepts
-    conceptsToAdd.forEach(concept => {
-      conceptMap.set(concept.iri, { concept, children: [] });
-    });
-
-    // Build tree structure based on parent-child relationships
-    conceptsToAdd.forEach(concept => {
-      if (concept.parent_concepts.length === 0) {
-        // Root-level concept (no parents)
-        roots.push(concept);
-      } else {
-        // Child concept - add to parent(s)
-        concept.parent_concepts.forEach(parentIri => {
-          const parentNode = conceptMap.get(parentIri);
-          if (parentNode) {
-            parentNode.children.push(concept);
-          } else {
-            // Parent not found - make this a root (should be rare now)
-            roots.push(concept);
-          }
+      conceptMap.set(concept.iri, concept);
+      
+      // Debug key concepts to understand the hierarchy structure
+      if (concept.iri.includes('Quality')) {
+        console.log('[DEBUG Quality concept]:', {
+          iri: concept.iri,
+          label: concept.label,
+          parent_concepts: concept.parent_concepts,
+          child_concepts: concept.child_concepts
         });
       }
+      
+      
+      // Build parent-child relationships from parent_concepts
+      concept.parent_concepts.forEach(parentIri => {
+        if (!hierarchy.has(parentIri)) {
+          hierarchy.set(parentIri, []);
+        }
+        // Only add if not already present to avoid duplicates
+        const parentChildren = hierarchy.get(parentIri)!;
+        if (!parentChildren.includes(concept.iri)) {
+          parentChildren.push(concept.iri);
+        }
+      });
+      
+      // Ensure concept is in the map even if it has no children
+      if (!hierarchy.has(concept.iri)) {
+        hierarchy.set(concept.iri, []);
+      }
     });
-
-    return { conceptMap, roots };
-  };
-
-  const { conceptMap, roots } = buildUnifiedHierarchy(concepts);
-
-  const renderConceptTree = (concepts: OntologyConcept[], level: number = 0): React.ReactNode => {
-    return concepts.map(concept => {
-      const conceptNode = conceptMap.get(concept.iri);
-      const childConcepts = conceptNode ? conceptNode.children : [];
-      const hasChildren = childConcepts.length > 0;
-      const isExpanded = expandedIds.has(concept.iri);
-
-      return (
-        <div key={concept.iri}>
-          <ConceptTreeNode
-            concept={concept}
-            level={level}
-            selectedConcept={selectedConcept}
-            onSelect={onSelectConcept}
-            isExpanded={isExpanded}
-            onToggle={() => toggleExpanded(concept.iri)}
-            expandedIds={expandedIds}
-            toggleExpanded={toggleExpanded}
-          />
-          {isExpanded && hasChildren && (
-            <div>
-              {renderConceptTree(childConcepts, level + 1)}
-            </div>
-          )}
-        </div>
-      );
-    });
-  };
+    
+    return { conceptMap, hierarchy };
+  }, [concepts]);
+  
+  const tree = useTree<OntologyConcept>({
+    rootItemId: 'root',
+    getItemName: (item) => {
+      const concept = item.getItemData();
+      return concept.label || concept.iri.split(/[/#]/).pop() || concept.iri;
+    },
+    isItemFolder: (item) => {
+      const concept = item.getItemData();
+      const children = treeData.hierarchy.get(concept.iri) || [];
+      const hasChildConcepts = concept.child_concepts && concept.child_concepts.length > 0;
+      return children.length > 0 || hasChildConcepts;
+    },
+    dataLoader: {
+      getItem: (itemId: string) => {
+        if (itemId === 'root') {
+          return { iri: 'root', label: 'Root', concept_type: 'root' } as OntologyConcept;
+        }
+        return treeData.conceptMap.get(itemId) || null;
+      },
+      getChildren: (itemId: string) => {
+        if (itemId === 'root') {
+          // Return root-level concepts (those with no parents or parents not in our dataset)
+          const rootConcepts = Array.from(treeData.conceptMap.values())
+            .filter(concept => {
+              return concept.parent_concepts.length === 0 || 
+                     !concept.parent_concepts.some(parentIri => treeData.conceptMap.has(parentIri));
+            })
+            .map(concept => concept.iri);
+          return rootConcepts;
+        }
+        return treeData.hierarchy.get(itemId) || [];
+      },
+    },
+    initialState: {
+      expandedItems: ['root'],
+    },
+    features: [
+      syncDataLoaderFeature,
+      selectionFeature,
+      hotkeysCoreFeature,
+      ...(searchQuery ? [searchFeature] : [])
+    ],
+  });
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-2 p-2 bg-muted/30 rounded-md mb-4">
+      <div 
+        className="flex items-center gap-2 p-2 bg-muted/30 rounded-md mb-4 cursor-pointer hover:bg-muted/50 transition-colors"
+        onClick={() => {
+          if (onShowKnowledgeGraph) {
+            onShowKnowledgeGraph();
+          }
+        }}
+      >
         <Network className="h-4 w-4 text-blue-600" />
         <span className="font-medium">Knowledge Graph</span>
         <Badge variant="secondary" className="text-xs">
-          {conceptMap.size} concepts
+          {treeData.conceptMap.size} concepts
         </Badge>
       </div>
-      {renderConceptTree(roots)}
-      {roots.length === 0 && (
-        <div className="text-center text-muted-foreground py-4">
-          No root concepts found
-        </div>
-      )}
+      
+      <div {...tree.getContainerProps()} className="space-y-1" key={treeData.conceptMap.size}>
+        {tree.getItems().map((item) => {
+          // Skip rendering the root item
+          if (item.getId() === 'root') {
+            return null;
+          }
+          
+          return (
+            <ConceptTreeItem
+              key={item.getId()}
+              item={item}
+              selectedConcept={selectedConcept}
+              onSelectConcept={onSelectConcept}
+            />
+          );
+        })}
+        
+        {tree.getItems().filter(item => item.getId() !== 'root').length === 0 && (
+          <div className="text-center text-muted-foreground py-4">
+            No concepts found
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
+// Note: TaxonomyGroup component is kept for potential future use but not currently used in the main UI
+// The UnifiedConceptTree now handles all concept display
 interface TaxonomyGroupProps {
   taxonomy: OntologyTaxonomy;
   concepts: OntologyConcept[];
   selectedConcept: OntologyConcept | null;
   onSelectConcept: (concept: OntologyConcept) => void;
-  expandedIds: Set<string>;
-  toggleExpanded: (id: string) => void;
 }
 
 const TaxonomyGroup: React.FC<TaxonomyGroupProps> = ({
   taxonomy,
   concepts,
   selectedConcept,
-  onSelectConcept,
-  expandedIds,
-  toggleExpanded
+  onSelectConcept
 }) => {
   const [isGroupExpanded, setIsGroupExpanded] = useState(true);
 
@@ -293,68 +312,6 @@ const TaxonomyGroup: React.FC<TaxonomyGroupProps> = ({
       default:
         return <Globe className="h-4 w-4 text-gray-600" />;
     }
-  };
-
-  // Build concept hierarchy
-  const buildConceptTree = (concepts: OntologyConcept[]) => {
-    const conceptMap = new Map<string, { concept: OntologyConcept; children: OntologyConcept[] }>();
-    const roots: OntologyConcept[] = [];
-
-    // Create nodes for all concepts
-    concepts.forEach(concept => {
-      conceptMap.set(concept.iri, { concept, children: [] });
-    });
-
-    // Build tree structure
-    concepts.forEach(concept => {
-      if (concept.parent_concepts.length === 0 || concept.concept_type === 'concept_scheme') {
-        // Top-level concept or ConceptScheme
-        roots.push(concept);
-      } else {
-        // Child concept - add to parent(s)
-        concept.parent_concepts.forEach(parentIri => {
-          const parentNode = conceptMap.get(parentIri);
-          if (parentNode) {
-            parentNode.children.push(concept);
-          }
-        });
-      }
-    });
-
-    return { conceptMap, roots };
-  };
-
-  const { conceptMap, roots } = buildConceptTree(concepts);
-
-  const renderConceptTree = (concepts: OntologyConcept[], level: number = 1): React.ReactNode => {
-    return concepts.map(concept => {
-      const hasChildren = concept.child_concepts.length > 0;
-      const isExpanded = expandedIds.has(concept.iri);
-      
-      // Get children concepts from the concept map
-      const conceptNode = conceptMap.get(concept.iri);
-      const childConcepts = conceptNode ? conceptNode.children : [];
-
-      return (
-        <div key={concept.iri}>
-          <ConceptTreeNode
-            concept={concept}
-            level={level}
-            selectedConcept={selectedConcept}
-            onSelect={onSelectConcept}
-            isExpanded={isExpanded}
-            onToggle={() => toggleExpanded(concept.iri)}
-            expandedIds={expandedIds}
-            toggleExpanded={toggleExpanded}
-          />
-          {isExpanded && childConcepts.length > 0 && (
-            <div>
-              {renderConceptTree(childConcepts, level + 1)}
-            </div>
-          )}
-        </div>
-      );
-    });
   };
 
   return (
@@ -379,7 +336,12 @@ const TaxonomyGroup: React.FC<TaxonomyGroupProps> = ({
       </div>
       {isGroupExpanded && (
         <div className="mt-2">
-          {renderConceptTree(roots)}
+          <UnifiedConceptTree
+            concepts={concepts}
+            selectedConcept={selectedConcept}
+            onSelectConcept={onSelectConcept}
+            searchQuery=""
+          />
         </div>
       )}
     </div>
@@ -388,11 +350,10 @@ const TaxonomyGroup: React.FC<TaxonomyGroupProps> = ({
 
 interface ConceptDetailsProps {
   concept: OntologyConcept;
-  hierarchy?: ConceptHierarchy;
   concepts: OntologyConcept[];
 }
 
-const ConceptDetails: React.FC<ConceptDetailsProps> = ({ concept, hierarchy, concepts }) => {
+const ConceptDetails: React.FC<ConceptDetailsProps> = ({ concept, concepts }) => {
   // Helper function to resolve IRI to concept label
   const getConceptLabel = (iri: string): string => {
     const foundConcept = concepts.find(c => c.iri === iri);
@@ -653,12 +614,13 @@ export default function BusinessGlossary() {
   const [groupedConcepts, setGroupedConcepts] = useState<GroupedConcepts>({});
   const [selectedConcept, setSelectedConcept] = useState<OntologyConcept | null>(null);
   const [selectedHierarchy, setSelectedHierarchy] = useState<ConceptHierarchy | null>(null);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [treeExpandedIds, setTreeExpandedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('details');
   const [stats, setStats] = useState<TaxonomyStats | null>(null);
+  const [showKnowledgeGraph, setShowKnowledgeGraph] = useState(false);
 
   // Legacy form state (for backwards compatibility)
   const [openDialog, setOpenDialog] = useState(false);
@@ -722,6 +684,7 @@ export default function BusinessGlossary() {
 
   const handleSelectConcept = async (concept: OntologyConcept) => {
     setSelectedConcept(concept);
+    setShowKnowledgeGraph(false);
     setActiveTab('details');
     
     // Fetch hierarchy information
@@ -758,6 +721,12 @@ export default function BusinessGlossary() {
     }
   };
 
+  const handleShowKnowledgeGraph = () => {
+    setShowKnowledgeGraph(true);
+    setSelectedConcept(null);
+    setActiveTab('knowledge-graph');
+  };
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
       fetchData();
@@ -791,8 +760,8 @@ export default function BusinessGlossary() {
     }
   };
 
-  const toggleExpanded = (id: string) => {
-    setExpandedIds(prev => {
+  const toggleTreeExpanded = (id: string) => {
+    setTreeExpandedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -801,6 +770,121 @@ export default function BusinessGlossary() {
       }
       return next;
     });
+  };
+
+  const renderKnowledgeGraph = (concepts: OntologyConcept[]) => {
+    const nodes: Node[] = [];
+    const edges: Edge[] = [];
+    
+    // Position configuration
+    const nodeWidth = 140;
+    const nodeHeight = 80;
+    const horizontalSpacing = 200;
+    const verticalSpacing = 120;
+    const columnsPerRow = 6;
+    
+    // Create nodes for all concepts
+    concepts.forEach((concept, index) => {
+      const row = Math.floor(index / columnsPerRow);
+      const col = index % columnsPerRow;
+      
+      nodes.push({
+        id: concept.iri,
+        data: { 
+          label: concept.label || concept.iri.split(/[/#]/).pop(),
+          sourceContext: concept.source_context
+        },
+        position: { 
+          x: col * horizontalSpacing, 
+          y: row * verticalSpacing 
+        },
+        type: 'default',
+        style: {
+          background: '#f8fafc',
+          border: '1px solid #cbd5e1',
+          borderRadius: '8px',
+          padding: '8px',
+          fontSize: '11px',
+          minWidth: nodeWidth + 'px',
+          minHeight: nodeHeight + 'px',
+          textAlign: 'center',
+          cursor: 'pointer'
+        }
+      });
+    });
+    
+    // Create edges for hierarchical relationships
+    concepts.forEach(concept => {
+      concept.child_concepts.forEach(childIri => {
+        const childExists = concepts.find(c => c.iri === childIri);
+        if (childExists) {
+          edges.push({
+            id: `${concept.iri}-${childIri}`,
+            source: concept.iri,
+            target: childIri,
+            type: 'smoothstep',
+            style: { 
+              stroke: '#94a3b8', 
+              strokeWidth: 1,
+              opacity: 0.7
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: '#94a3b8'
+            }
+          });
+        }
+      });
+    });
+
+    return (
+      <div className="h-[600px] border rounded-lg">
+        <style>
+          {`
+            .react-flow__handle {
+              opacity: 0 !important;
+              pointer-events: none !important;
+              width: 1px !important;
+              height: 1px !important;
+            }
+            .react-flow__node {
+              cursor: pointer;
+            }
+            .react-flow__node:hover {
+              transform: scale(1.05);
+              transition: transform 0.2s ease;
+              z-index: 1000;
+            }
+          `}
+        </style>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          fitView
+          minZoom={0.3}
+          maxZoom={1.5}
+          style={{ background: '#F7F9FB' }}
+          defaultEdgeOptions={{
+            style: { strokeWidth: 1 },
+            markerEnd: { type: MarkerType.ArrowClosed }
+          }}
+          nodesDraggable={true}
+          nodesConnectable={false}
+          elementsSelectable={true}
+          onNodeClick={(event, node) => {
+            // Find and select the concept in the tree
+            const concept = concepts.find(c => c.iri === node.id);
+            if (concept) {
+              handleSelectConcept(concept);
+            }
+          }}
+          connectionMode="strict"
+        >
+          <Controls />
+          <Background />
+        </ReactFlow>
+      </div>
+    );
   };
 
   const renderLineage = (hierarchy: ConceptHierarchy) => {
@@ -919,14 +1003,33 @@ export default function BusinessGlossary() {
           },
           position: { x: 600 + (index * 160), y: centerY },
           style: {
-            background: '#fef3c7',
-            border: '1px solid #f59e0b',
+            background: '#f5f5f5',
+            border: '1px solid #d1d5db',
             borderRadius: '6px',
             padding: '10px',
             fontSize: '12px',
             minWidth: '120px',
             textAlign: 'center',
-            opacity: 0.8
+            opacity: 0.6,
+            color: '#9ca3af'
+          }
+        });
+        
+        // Add muted connecting line from center to sibling
+        edges.push({
+          id: `${hierarchy.concept.iri}-${nodeId}`,
+          source: hierarchy.concept.iri,
+          target: nodeId,
+          type: 'smoothstep',
+          style: { 
+            stroke: '#d1d5db', 
+            strokeWidth: 1, 
+            opacity: 0.5,
+            strokeDasharray: '5,5'
+          },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: '#d1d5db'
           }
         });
       });
@@ -934,6 +1037,23 @@ export default function BusinessGlossary() {
 
     return (
       <div className="h-[500px] border rounded-lg">
+        <style>
+          {`
+            .react-flow__handle {
+              opacity: 0 !important;
+              pointer-events: none !important;
+              width: 1px !important;
+              height: 1px !important;
+            }
+            .react-flow__node {
+              cursor: pointer;
+            }
+            .react-flow__node:hover {
+              transform: scale(1.05);
+              transition: transform 0.2s ease;
+            }
+          `}
+        </style>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -947,7 +1067,16 @@ export default function BusinessGlossary() {
           }}
           nodesDraggable={false}
           nodesConnectable={false}
-          elementsSelectable={false}
+          elementsSelectable={true}
+          onNodeClick={(event, node) => {
+            // Find and select the concept in the tree
+            const allConcepts = Object.values(groupedConcepts).flat();
+            const concept = allConcepts.find(c => c.iri === node.id);
+            if (concept) {
+              handleSelectConcept(concept);
+            }
+          }}
+          connectionMode="strict"
         >
           <Controls />
           <Background />
@@ -1041,7 +1170,7 @@ export default function BusinessGlossary() {
                 placeholder="Search concepts and terms..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               />
               <Button onClick={handleSearch} size="sm">
                 <Search className="h-4 w-4" />
@@ -1051,11 +1180,12 @@ export default function BusinessGlossary() {
           <ScrollArea className="flex-1">
             <div className="p-4 h-full">
               <UnifiedConceptTree
+                key={Object.values(groupedConcepts).flat().length}
                 concepts={Object.values(groupedConcepts).flat()}
                 selectedConcept={selectedConcept}
                 onSelectConcept={handleSelectConcept}
-                expandedIds={expandedIds}
-                toggleExpanded={toggleExpanded}
+                onShowKnowledgeGraph={handleShowKnowledgeGraph}
+                searchQuery={searchQuery}
               />
               {Object.keys(groupedConcepts).length === 0 && !loading && (
                 <div className="text-center text-muted-foreground py-8">
@@ -1066,9 +1196,28 @@ export default function BusinessGlossary() {
           </ScrollArea>
         </div>
 
-        {/* Right Panel - Concept Details */}
+        {/* Right Panel - Concept Details or Knowledge Graph */}
         <div className="col-span-8 border rounded-lg">
-          {selectedConcept ? (
+          {showKnowledgeGraph ? (
+            <div className="h-full">
+              <div className="p-6 border-b">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold mb-2 flex items-center gap-2">
+                      <Network className="h-6 w-6" />
+                      Knowledge Graph
+                    </h2>
+                    <p className="text-muted-foreground">
+                      Interactive visualization of all concepts and their relationships
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6">
+                {renderKnowledgeGraph(Object.values(groupedConcepts).flat())}
+              </div>
+            </div>
+          ) : selectedConcept ? (
             <div className="h-full">
               <div className="p-6 border-b">
                 <div className="flex justify-between items-start mb-4">
@@ -1101,7 +1250,6 @@ export default function BusinessGlossary() {
                 <TabsContent value="details">
                   <ConceptDetails 
                     concept={selectedConcept} 
-                    hierarchy={selectedHierarchy || undefined}
                     concepts={Object.values(groupedConcepts).flat()}
                   />
                 </TabsContent>
@@ -1124,7 +1272,10 @@ export default function BusinessGlossary() {
             </div>
           ) : (
             <div className="h-full flex items-center justify-center text-muted-foreground">
-              Select a concept or term to view details
+              <div className="text-center">
+                <Network className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Select a concept or click Knowledge Graph to view details</p>
+              </div>
             </div>
           )}
         </div>

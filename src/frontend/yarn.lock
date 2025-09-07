@@ -463,6 +463,16 @@
   resolved "https://registry.yarnpkg.com/@floating-ui/utils/-/utils-0.2.9.tgz#50dea3616bc8191fb8e112283b49eaff03e78429"
   integrity sha512-MDWhGtE+eHw5JW7lq4qhc5yRLS11ERl1c7Z6Xd0a58DozHES6EnNNwUWbMiG4J9Cgj053Bhk8zvlhFYKVhULwg==
 
+"@headless-tree/core@^1.4.0":
+  version "1.4.0"
+  resolved "https://registry.yarnpkg.com/@headless-tree/core/-/core-1.4.0.tgz#fbc78869b2fa43832a5cb0579a27249cbe1c895f"
+  integrity sha512-xBDYr9WJb7CuWuWzAAHfCfYfYUdCknsHa6OkdsLqeOc4JuwYuSlQ+TcDjeeImmgF6hVSAbeBBubOwotk5pmiMw==
+
+"@headless-tree/react@^1.4.0":
+  version "1.4.0"
+  resolved "https://registry.yarnpkg.com/@headless-tree/react/-/react-1.4.0.tgz#0b95ecbe318b9490c32cbd25ebc79b772c8e1698"
+  integrity sha512-B62Ku6E3u0JPrz2Sm3cKqTCRMltmhgo5mgkuOvfYbrVILsDSZ6ct2yX56/1GQlipPkVF3mEhlwiIVKNOQKWnqA==
+
 "@hookform/resolvers@^5.0.1":
   version "5.0.1"
   resolved "https://registry.yarnpkg.com/@hookform/resolvers/-/resolvers-5.0.1.tgz#0a5e90310149e3ac5b017efcb5beb9bdbb711f38"
