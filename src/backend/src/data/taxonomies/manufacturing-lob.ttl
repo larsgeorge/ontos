@@ -18,7 +18,8 @@ mfg:ManufacturingTerm a rdfs:Class ;
 
 # === OVERRIDE: Enhanced Product Data for Manufacturing ===
 
-mfg:ProductData a corp:DataDomain ;
+mfg:ProductData a rdfs:Class ;
+    rdfs:subClassOf corp:ProductData ;
     rdfs:label "Manufacturing Product Data" ;
     rdfs:comment "Product specifications, bills of materials, quality data, and lifecycle information" ;
     dc:created "2024-02-01" ;
@@ -51,7 +52,8 @@ mfg:ProductSpecifications a rdfs:Class ;
 
 # === NEW: Manufacturing-Specific Data Domains ===
 
-mfg:ProductionData a corp:DataDomain ;
+mfg:ProductionData a rdfs:Class ;
+    rdfs:subClassOf corp:DataDomain ;
     rdfs:label "Production Data" ;
     rdfs:comment "Manufacturing execution, production schedules, and output data" ;
     dc:created "2024-02-01" ;
@@ -59,7 +61,8 @@ mfg:ProductionData a corp:DataDomain ;
     corp:retentionPeriod "7 years" ;
     mfg:mesIntegration "true" .
 
-mfg:SupplyChainData a corp:DataDomain ;
+mfg:SupplyChainData a rdfs:Class ;
+    rdfs:subClassOf corp:DataDomain ;
     rdfs:label "Supply Chain Data" ;
     rdfs:comment "Supplier information, procurement, inventory, and logistics data" ;
     dc:created "2024-02-01" ;
@@ -67,7 +70,8 @@ mfg:SupplyChainData a corp:DataDomain ;
     corp:retentionPeriod "7 years" ;
     mfg:supplierCertification "ISO 9001, IATF 16949" .
 
-mfg:MaintenanceData a corp:DataDomain ;
+mfg:MaintenanceData a rdfs:Class ;
+    rdfs:subClassOf corp:DataDomain ;
     rdfs:label "Maintenance Data" ;
     rdfs:comment "Equipment maintenance, repair records, and predictive maintenance data" ;
     dc:created "2024-02-01" ;
@@ -75,7 +79,8 @@ mfg:MaintenanceData a corp:DataDomain ;
     corp:retentionPeriod "Equipment Lifecycle + 5 years" ;
     mfg:preventiveMaintenanceSchedule "Weekly, Monthly, Quarterly" .
 
-mfg:SafetyData a corp:DataDomain ;
+mfg:SafetyData a rdfs:Class ;
+    rdfs:subClassOf corp:DataDomain ;
     rdfs:label "Safety Data" ;
     rdfs:comment "Workplace safety incidents, hazard data, and safety compliance records" ;
     dc:created "2024-02-01" ;
@@ -85,7 +90,8 @@ mfg:SafetyData a corp:DataDomain ;
 
 # === OVERRIDE: Enhanced Employee Data for Manufacturing ===
 
-mfg:EmployeeData a corp:DataDomain ;
+mfg:EmployeeData a rdfs:Class ;
+    rdfs:subClassOf corp:EmployeeData ;
     rdfs:label "Manufacturing Employee Data" ;
     rdfs:comment "Employee information including certifications, training, and safety records" ;
     corp:retentionPeriod "7 years after termination" ;
@@ -94,37 +100,43 @@ mfg:EmployeeData a corp:DataDomain ;
 
 # === NEW: Manufacturing Business Processes ===
 
-mfg:ProductionPlanning a corp:BusinessProcess ;
+mfg:ProductionPlanning a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Production Planning" ;
     rdfs:comment "Planning and scheduling of manufacturing operations" ;
     mfg:planningHorizon "Daily, Weekly, Monthly, Quarterly" ;
     mfg:systemIntegration "ERP, MES, SCM" .
 
-mfg:QualityControl a corp:BusinessProcess ;
+mfg:QualityControl a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Quality Control" ;
     rdfs:comment "Quality assurance and control processes throughout manufacturing" ;
     mfg:qualityGates "Incoming Inspection, In-Process Control, Final Inspection" ;
     mfg:qualityStandard "ISO 9001, Six Sigma, Lean" .
 
-mfg:InventoryManagement a corp:BusinessProcess ;
+mfg:InventoryManagement a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Inventory Management" ;
     rdfs:comment "Raw materials, work-in-process, and finished goods inventory control" ;
     mfg:inventoryMethod "FIFO, LIFO, JIT" ;
     mfg:cycleCounting "Daily" .
 
-mfg:SupplierQualification a corp:BusinessProcess ;
+mfg:SupplierQualification a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Supplier Qualification" ;
     rdfs:comment "Process for qualifying and certifying suppliers" ;
     mfg:qualificationCriteria "Quality, Delivery, Cost, Service" ;
     mfg:auditFrequency "Annual" .
 
-mfg:EquipmentMaintenance a corp:BusinessProcess ;
+mfg:EquipmentMaintenance a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Equipment Maintenance" ;
     rdfs:comment "Preventive and corrective maintenance of manufacturing equipment" ;
     mfg:maintenanceTypes "Preventive, Predictive, Reactive" ;
     mfg:maintenanceSchedule "Equipment-specific" .
 
-mfg:SafetyCompliance a corp:BusinessProcess ;
+mfg:SafetyCompliance a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Safety Compliance" ;
     rdfs:comment "Workplace safety monitoring and regulatory compliance" ;
     mfg:safetyStandards "OSHA, EPA, DOT" ;
@@ -132,27 +144,33 @@ mfg:SafetyCompliance a corp:BusinessProcess ;
 
 # === NEW: Manufacturing Roles ===
 
-mfg:ProductionManager a corp:OrganizationalRole ;
+mfg:ProductionManager a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Production Manager" ;
     rdfs:comment "Manager responsible for manufacturing operations" .
 
-mfg:QualityEngineer a corp:OrganizationalRole ;
+mfg:QualityEngineer a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Quality Engineer" ;
     rdfs:comment "Engineer responsible for quality systems and continuous improvement" .
 
-mfg:MaintenanceEngineer a corp:OrganizationalRole ;
+mfg:MaintenanceEngineer a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Maintenance Engineer" ;
     rdfs:comment "Engineer responsible for equipment reliability and maintenance" .
 
-mfg:SupplyChainAnalyst a corp:OrganizationalRole ;
+mfg:SupplyChainAnalyst a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Supply Chain Analyst" ;
     rdfs:comment "Analyst responsible for supply chain optimization" .
 
-mfg:SafetyOfficer a corp:OrganizationalRole ;
+mfg:SafetyOfficer a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Safety Officer" ;
     rdfs:comment "Officer responsible for workplace safety and compliance" .
 
-mfg:ProcessEngineer a corp:OrganizationalRole ;
+mfg:ProcessEngineer a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Process Engineer" ;
     rdfs:comment "Engineer responsible for manufacturing process optimization" .
 

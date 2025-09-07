@@ -19,28 +19,32 @@ corp:DataDomain a rdfs:Class ;
     rdfs:label "Data Domain" ;
     rdfs:comment "High-level categorization of business data" .
 
-corp:CustomerData a corp:DataDomain ;
+corp:CustomerData a rdfs:Class ;
+    rdfs:subClassOf corp:DataDomain ;
     rdfs:label "Customer Data" ;
     rdfs:comment "Information related to customers, prospects, and client relationships" ;
     dc:created "2024-01-01" ;
     corp:priority "High" ;
     corp:retentionPeriod "7 years" .
 
-corp:FinancialData a corp:DataDomain ;
+corp:FinancialData a rdfs:Class ;
+    rdfs:subClassOf corp:DataDomain ;
     rdfs:label "Financial Data" ;
     rdfs:comment "Financial transactions, accounting, and monetary information" ;
     dc:created "2024-01-01" ;
     corp:priority "Critical" ;
     corp:retentionPeriod "10 years" .
 
-corp:ProductData a corp:DataDomain ;
+corp:ProductData a rdfs:Class ;
+    rdfs:subClassOf corp:DataDomain ;
     rdfs:label "Product Data" ;
     rdfs:comment "Information about products, services, and offerings" ;
     dc:created "2024-01-01" ;
     corp:priority "Medium" ;
     corp:retentionPeriod "5 years" .
 
-corp:EmployeeData a corp:DataDomain ;
+corp:EmployeeData a rdfs:Class ;
+    rdfs:subClassOf corp:DataDomain ;
     rdfs:label "Employee Data" ;
     rdfs:comment "Human resources and employee information" ;
     dc:created "2024-01-01" ;
@@ -108,19 +112,23 @@ corp:BusinessProcess a rdfs:Class ;
     rdfs:label "Business Process" ;
     rdfs:comment "Standard business processes across the organization" .
 
-corp:CustomerOnboarding a corp:BusinessProcess ;
+corp:CustomerOnboarding a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Customer Onboarding" ;
     rdfs:comment "Process of acquiring and setting up new customers" .
 
-corp:RiskAssessment a corp:BusinessProcess ;
+corp:RiskAssessment a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Risk Assessment" ;
     rdfs:comment "Evaluation of potential risks and mitigation strategies" .
 
-corp:ComplianceReporting a corp:BusinessProcess ;
+corp:ComplianceReporting a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Compliance Reporting" ;
     rdfs:comment "Regular reporting to meet regulatory requirements" .
 
-corp:AuditProcess a corp:BusinessProcess ;
+corp:AuditProcess a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Audit Process" ;
     rdfs:comment "Internal and external audit procedures" .
 
@@ -131,19 +139,23 @@ corp:OrganizationalRole a rdfs:Class ;
     rdfs:label "Organizational Role" ;
     rdfs:comment "Standard roles across the organization" .
 
-corp:DataOwner a corp:OrganizationalRole ;
+corp:DataOwner a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Data Owner" ;
     rdfs:comment "Individual responsible for data governance decisions" .
 
-corp:DataSteward a corp:OrganizationalRole ;
+corp:DataSteward a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Data Steward" ;
     rdfs:comment "Individual responsible for day-to-day data management" .
 
-corp:BusinessAnalyst a corp:OrganizationalRole ;
+corp:BusinessAnalyst a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Business Analyst" ;
     rdfs:comment "Individual who analyzes business requirements and data needs" .
 
-corp:ComplianceOfficer a corp:OrganizationalRole ;
+corp:ComplianceOfficer a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Compliance Officer" ;
     rdfs:comment "Individual responsible for ensuring regulatory compliance" .
 

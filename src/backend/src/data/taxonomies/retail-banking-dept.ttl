@@ -18,7 +18,8 @@ rb:RetailBankingTerm a rdfs:Class ;
 
 # === OVERRIDE: Specialized Customer Data for Retail Banking ===
 
-rb:CustomerData a fs:CustomerData ;
+rb:CustomerData a rdfs:Class ;
+    rdfs:subClassOf fs:CustomerData ;
     rdfs:label "Retail Banking Customer Data" ;
     rdfs:comment "Individual consumer customer information for retail banking products" ;
     corp:retentionPeriod "7 years after account closure" ;  # Override: Specific to retail
@@ -42,7 +43,8 @@ rb:LoanApplicationData a rdfs:Class ;
 
 # === NEW: Retail Banking Specific Data ===
 
-rb:BranchOperationsData a corp:DataDomain ;
+rb:BranchOperationsData a rdfs:Class ;
+    rdfs:subClassOf corp:DataDomain ;
     rdfs:label "Branch Operations Data" ;
     rdfs:comment "Physical branch operations, teller transactions, and customer interactions" ;
     dc:created "2024-02-15" ;
@@ -50,7 +52,8 @@ rb:BranchOperationsData a corp:DataDomain ;
     corp:retentionPeriod "7 years" ;
     rb:branchNetwork "Regional" .
 
-rb:ATMData a corp:DataDomain ;
+rb:ATMData a rdfs:Class ;
+    rdfs:subClassOf corp:DataDomain ;
     rdfs:label "ATM Data" ;
     rdfs:comment "ATM transactions, cash management, and network data" ;
     dc:created "2024-02-15" ;
@@ -58,7 +61,8 @@ rb:ATMData a corp:DataDomain ;
     corp:retentionPeriod "2 years" ;
     rb:atmNetwork "Proprietary, Third-party" .
 
-rb:DigitalBankingData a corp:DataDomain ;
+rb:DigitalBankingData a rdfs:Class ;
+    rdfs:subClassOf corp:DataDomain ;
     rdfs:label "Digital Banking Data" ;
     rdfs:comment "Online banking, mobile app usage, and digital transaction data" ;
     dc:created "2024-02-15" ;
@@ -68,7 +72,8 @@ rb:DigitalBankingData a corp:DataDomain ;
 
 # === OVERRIDE: Specialized Business Processes ===
 
-rb:CustomerOnboarding a fs:CustomerOnboarding ;
+rb:CustomerOnboarding a rdfs:Class ;
+    rdfs:subClassOf fs:CustomerOnboarding ;
     rdfs:label "Retail Customer Onboarding" ;
     rdfs:comment "Consumer account opening with simplified KYC for retail customers" ;
     rb:onboardingChannels "Branch, Online, Mobile" ;
@@ -77,27 +82,31 @@ rb:CustomerOnboarding a fs:CustomerOnboarding ;
 
 # === NEW: Retail Banking Processes ===
 
-rb:LoanOrigination a corp:BusinessProcess ;
+rb:LoanOrigination a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Consumer Loan Origination" ;
     rdfs:comment "Process for originating consumer loans" ;
     rb:loanTypes "Personal, Auto, Mortgage" ;
     rb:underwritingCriteria "Income, Credit Score, DTI Ratio" ;
     rb:approvalTime "Minutes to 30 days" .
 
-rb:DepositOperations a corp:BusinessProcess ;
+rb:DepositOperations a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Deposit Operations" ;
     rdfs:comment "Management of deposit accounts and transactions" ;
     rb:accountTypes "Checking, Savings, CD" ;
     rb:interestCalculation "Daily, Monthly" ;
     rb:regulationD "true" .
 
-rb:CustomerService a corp:BusinessProcess ;
+rb:CustomerService a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Retail Customer Service" ;
     rdfs:comment "Customer support for retail banking products and services" ;
     rb:serviceChannels "Phone, Chat, Email, Branch" ;
     rb:sla "Response within 24 hours" .
 
-rb:FraudMonitoring a corp:BusinessProcess ;
+rb:FraudMonitoring a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Retail Fraud Monitoring" ;
     rdfs:comment "Real-time fraud detection for retail transactions" ;
     rb:monitoringTypes "Card Transactions, ACH, Wire Transfers" ;
@@ -105,22 +114,26 @@ rb:FraudMonitoring a corp:BusinessProcess ;
 
 # === NEW: Retail Banking Roles ===
 
-rb:BranchManager a corp:OrganizationalRole ;
+rb:BranchManager a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Branch Manager" ;
     rdfs:comment "Manager of retail banking branch operations" ;
     rb:responsibilities "Staff Management, Customer Relations, Sales Targets" .
 
-rb:PersonalBanker a corp:OrganizationalRole ;
+rb:PersonalBanker a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Personal Banker" ;
     rdfs:comment "Customer-facing banker for account services" ;
     rb:responsibilities "Account Opening, Customer Service, Product Sales" .
 
-rb:LoanOfficer a corp:OrganizationalRole ;
+rb:LoanOfficer a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Consumer Loan Officer" ;
     rdfs:comment "Specialist in consumer lending products" ;
     rb:responsibilities "Loan Applications, Underwriting, Customer Consultation" .
 
-rb:FraudAnalyst a corp:OrganizationalRole ;
+rb:FraudAnalyst a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Retail Fraud Analyst" ;
     rdfs:comment "Analyst specializing in retail banking fraud detection" ;
     rb:responsibilities "Transaction Monitoring, Case Investigation, Risk Assessment" .

@@ -18,7 +18,8 @@ qa:QualityAssuranceTerm a rdfs:Class ;
 
 # === OVERRIDE: Specialized Quality Data ===
 
-qa:QualityData a mfg:QualityData ;
+qa:QualityData a rdfs:Class ;
+    rdfs:subClassOf mfg:QualityData ;
     rdfs:label "QA Quality Data" ;
     rdfs:comment "Comprehensive quality data including inspections, tests, and statistical process control" ;
     corp:retentionPeriod "15 years" ;  # Override: Extended for quality records
@@ -58,7 +59,8 @@ qa:CalibrationData a rdfs:Class ;
 
 # === OVERRIDE: Enhanced Quality Control Process ===
 
-qa:QualityControl a mfg:QualityControl ;
+qa:QualityControl a rdfs:Class ;
+    rdfs:subClassOf mfg:QualityControl ;
     rdfs:label "QA Quality Control" ;
     rdfs:comment "Comprehensive quality control with statistical process control and continuous improvement" ;
     qa:controlMethods "SPC Charts, Process Capability, Gage R&R" ;
@@ -67,40 +69,46 @@ qa:QualityControl a mfg:QualityControl ;
 
 # === NEW: QA-Specific Processes ===
 
-qa:SupplierQualityManagement a corp:BusinessProcess ;
+qa:SupplierQualityManagement a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Supplier Quality Management" ;
     rdfs:comment "Supplier qualification, auditing, and performance monitoring" ;
     qa:supplierAuditFrequency "Annual, Risk-based" ;
     qa:supplierRating "Quality, Delivery, Cost, Service" ;
     qa:supplierDevelopment "Continuous improvement programs" .
 
-qa:ProductQualityPlanning a corp:BusinessProcess ;
+qa:ProductQualityPlanning a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Product Quality Planning" ;
     rdfs:comment "Advanced product quality planning for new products" ;
     qa:apqpPhases "Planning, Design, Process Development, Validation, Launch" ;
     qa:qualityTools "FMEA, Control Plans, MSA, Process Capability" .
 
-qa:CustomerComplaintHandling a corp:BusinessProcess ;
+qa:CustomerComplaintHandling a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Customer Complaint Handling" ;
     rdfs:comment "Process for handling and resolving customer quality complaints" ;
     qa:responseTime "24 hours acknowledgment, 30 days resolution" ;
     qa:rootCauseAnalysis "8D, 5 Why, Fishbone" ;
     qa:preventiveAction "Required for all complaints" .
 
-qa:ContinuousImprovement a corp:BusinessProcess ;
+qa:ContinuousImprovement a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Continuous Improvement" ;
     rdfs:comment "Ongoing process improvement using quality methodologies" ;
     qa:improvementMethods "Kaizen, Six Sigma, Lean, PDCA" ;
     qa:improvementMetrics "Cost of Quality, First Pass Yield, Customer Satisfaction" .
 
-qa:QualityAuditing a corp:BusinessProcess ;
+qa:QualityAuditing a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Quality Auditing" ;
     rdfs:comment "Internal and external quality system audits" ;
     qa:auditTypes "Internal, External, Supplier, Product, Process" ;
     qa:auditStandards "ISO 19011, ISO 9001, Customer Requirements" ;
     qa:auditFrequency "Annual internal, as required external" .
 
-qa:DocumentControl a corp:BusinessProcess ;
+qa:DocumentControl a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Quality Document Control" ;
     rdfs:comment "Control of quality documents and records" ;
     qa:documentTypes "Procedures, Work Instructions, Forms, Records" ;
@@ -109,27 +117,32 @@ qa:DocumentControl a corp:BusinessProcess ;
 
 # === NEW: QA-Specific Roles ===
 
-qa:QualityManager a corp:OrganizationalRole ;
+qa:QualityManager a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Quality Manager" ;
     rdfs:comment "Manager responsible for quality system and department" ;
     qa:responsibilities "Quality System Management, Team Leadership, Customer Interface" .
 
-qa:QualityEngineer a corp:OrganizationalRole ;
+qa:QualityEngineer a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Quality Engineer" ;
     rdfs:comment "Engineer specializing in quality systems and improvement" ;
     qa:responsibilities "Process Improvement, Quality Planning, Problem Solving" .
 
-qa:QualityInspector a corp:OrganizationalRole ;
+qa:QualityInspector a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Quality Inspector" ;
     rdfs:comment "Inspector performing quality checks and measurements" ;
     qa:responsibilities "Product Inspection, Data Collection, Non-conformance Identification" .
 
-qa:QualityAuditor a corp:OrganizationalRole ;
+qa:QualityAuditor a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Quality Auditor" ;
     rdfs:comment "Auditor conducting internal and supplier quality audits" ;
     qa:responsibilities "Audit Planning, Audit Execution, Report Writing" .
 
-qa:MetrologyTechnician a corp:OrganizationalRole ;
+qa:MetrologyTechnician a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Metrology Technician" ;
     rdfs:comment "Technician responsible for measurement equipment and calibration" ;
     qa:responsibilities "Equipment Calibration, Gage R&R, Measurement System Analysis" .

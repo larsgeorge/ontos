@@ -21,7 +21,8 @@ fs:FinancialServicesTerm a rdfs:Class ;
 
 # === OVERRIDE: Enhanced Financial Data with FS-specific subtypes ===
 
-fs:FinancialData a corp:DataDomain ;
+fs:FinancialData a rdfs:Class ;
+    rdfs:subClassOf corp:FinancialData ;
     rdfs:label "Financial Data" ;
     rdfs:comment "Financial transactions, regulatory reporting, and risk data specific to financial services" ;
     dc:created "2024-02-01" ;
@@ -53,7 +54,8 @@ fs:RegulatoryReportingData a rdfs:Class ;
 
 # === OVERRIDE: Enhanced Customer Data for Financial Services ===
 
-fs:CustomerData a corp:DataDomain ;
+fs:CustomerData a rdfs:Class ;
+    rdfs:subClassOf corp:CustomerData ;
     rdfs:label "Financial Customer Data" ;
     rdfs:comment "Customer information including KYC, credit profiles, and account data" ;
     corp:retentionPeriod "10 years" ;  # Override: Extended for financial regulations
@@ -76,7 +78,8 @@ fs:CreditData a rdfs:Class ;
 
 # === NEW: Financial Services Specific Data Domains ===
 
-fs:RiskData a corp:DataDomain ;
+fs:RiskData a rdfs:Class ;
+    rdfs:subClassOf corp:DataDomain ;
     rdfs:label "Risk Data" ;
     rdfs:comment "Risk assessments, exposure calculations, and stress test data" ;
     dc:created "2024-02-01" ;
@@ -84,7 +87,8 @@ fs:RiskData a corp:DataDomain ;
     corp:retentionPeriod "10 years" ;
     fs:riskCategory "Market, Credit, Operational, Liquidity" .
 
-fs:ComplianceData a corp:DataDomain ;
+fs:ComplianceData a rdfs:Class ;
+    rdfs:subClassOf corp:DataDomain ;
     rdfs:label "Compliance Data" ;
     rdfs:comment "Regulatory compliance monitoring and reporting data" ;
     dc:created "2024-02-01" ;
@@ -94,13 +98,15 @@ fs:ComplianceData a corp:DataDomain ;
 
 # === OVERRIDE: Enhanced Business Processes ===
 
-fs:CustomerOnboarding a corp:BusinessProcess ;
+fs:CustomerOnboarding a rdfs:Class ;
+    rdfs:subClassOf corp:CustomerOnboarding ;
     rdfs:label "Financial Customer Onboarding" ;
     rdfs:comment "Customer onboarding with KYC/AML verification and account setup" ;
     fs:requiredChecks "Identity Verification, AML Screening, Credit Check, Sanctions Screening" ;
     fs:regulatoryRequirement "Bank Secrecy Act, Customer Due Diligence Rule" .
 
-fs:RiskAssessment a corp:BusinessProcess ;
+fs:RiskAssessment a rdfs:Class ;
+    rdfs:subClassOf corp:RiskAssessment ;
     rdfs:label "Financial Risk Assessment" ;
     rdfs:comment "Comprehensive risk evaluation including market, credit, and operational risk" ;
     fs:riskTypes "Market Risk, Credit Risk, Operational Risk, Liquidity Risk, Regulatory Risk" ;
@@ -108,19 +114,22 @@ fs:RiskAssessment a corp:BusinessProcess ;
 
 # === NEW: Financial Services Specific Processes ===
 
-fs:TradeSettlement a corp:BusinessProcess ;
+fs:TradeSettlement a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Trade Settlement" ;
     rdfs:comment "Process of settling securities transactions" ;
     fs:settlementCycle "T+2" ;
     fs:regulatoryRequirement "Securities Exchange Act" .
 
-fs:StressTest a corp:BusinessProcess ;
+fs:StressTest a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Stress Test" ;
     rdfs:comment "Regulatory stress testing of financial positions" ;
     fs:frequency "Quarterly, Annual" ;
     fs:regulatoryRequirement "Dodd-Frank Act, CCAR" .
 
-fs:AMLMonitoring a corp:BusinessProcess ;
+fs:AMLMonitoring a rdfs:Class ;
+    rdfs:subClassOf corp:BusinessProcess ;
     rdfs:label "Anti-Money Laundering Monitoring" ;
     rdfs:comment "Continuous monitoring for suspicious activities" ;
     fs:frequency "Real-time" ;
@@ -128,19 +137,23 @@ fs:AMLMonitoring a corp:BusinessProcess ;
 
 # === NEW: Financial Services Roles ===
 
-fs:RiskOfficer a corp:OrganizationalRole ;
+fs:RiskOfficer a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Chief Risk Officer" ;
     rdfs:comment "Senior executive responsible for enterprise risk management" .
 
-fs:ComplianceAnalyst a corp:OrganizationalRole ;
+fs:ComplianceAnalyst a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Compliance Analyst" ;
     rdfs:comment "Specialist in regulatory compliance and reporting" .
 
-fs:QuantitativeAnalyst a corp:OrganizationalRole ;
+fs:QuantitativeAnalyst a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Quantitative Analyst" ;
     rdfs:comment "Mathematical and statistical modeling specialist" .
 
-fs:TradingDesk a corp:OrganizationalRole ;
+fs:TradingDesk a rdfs:Class ;
+    rdfs:subClassOf corp:OrganizationalRole ;
     rdfs:label "Trading Desk" ;
     rdfs:comment "Team responsible for securities trading operations" .
 
