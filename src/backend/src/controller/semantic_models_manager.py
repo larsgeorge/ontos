@@ -388,14 +388,39 @@ class SemanticModelsManager:
             logger.error(f"Failed to get child concepts for {parent_iri}: {e}")
             return []
 
-    def search_concepts_with_suggestions(self, text_filter: str = "", parent_iri: str = "", limit: int = 50) -> dict:
-        """Search for concepts with suggested child concepts first if parent_iri is provided."""
+    def find_best_ancestor_concept_iri(self, parent_iris: List[str]) -> str:
+        """Find the first parent IRI in the hierarchy that has child concepts available."""
+        if not parent_iris:
+            return ""
+        
+        for parent_iri in parent_iris:
+            if parent_iri:
+                try:
+                    child_concepts = self.get_child_concepts(parent_iri, limit=1)
+                    if child_concepts:
+                        return parent_iri
+                except Exception as e:
+                    logger.debug(f"Failed to get child concepts for {parent_iri}: {e}")
+                    continue
+        
+        return ""
+
+    def search_concepts_with_suggestions(self, text_filter: str = "", parent_iris: List[str] = None, limit: int = 50) -> dict:
+        """Search for concepts with suggested child concepts first if parent_iris is provided.
+        
+        Args:
+            text_filter: Text filter for concept search
+            parent_iris: List of parent concept IRIs in hierarchy order (nearest first)
+            limit: Maximum number of results to return
+        """
         suggested = []
         other_results = []
         
-        # If parent_iri is provided, get child concepts as suggestions
-        if parent_iri:
-            suggested = self.get_child_concepts(parent_iri, limit=10)
+        # Find the best parent concept from the hierarchy
+        if parent_iris:
+            best_parent_iri = self.find_best_ancestor_concept_iri(parent_iris)
+            if best_parent_iri:
+                suggested = self.get_child_concepts(best_parent_iri, limit=10)
         
         # Get all matching concepts
         all_results = self.search_concepts(text_filter, limit=limit)

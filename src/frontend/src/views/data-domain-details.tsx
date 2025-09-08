@@ -65,6 +65,7 @@ export default function DataDomainDetailsView() {
   const [iriDialogOpen, setIriDialogOpen] = useState(false);
   const [semanticLinks, setSemanticLinks] = useState<EntitySemanticLink[]>([]);
   const [parentSemanticLinks, setParentSemanticLinks] = useState<EntitySemanticLink[]>([]);
+  const [hierarchyConceptIris, setHierarchyConceptIris] = useState<string[]>([]);
 
   // Metadata: Rich Texts, Links, Documents
   interface RichTextItem { id: string; entity_id: string; entity_type: string; title: string; short_description?: string | null; content_markdown: string; created_at?: string; }
@@ -91,6 +92,42 @@ export default function DataDomainDetailsView() {
   const [docDesc, setDocDesc] = useState('');
   const [docFile, setDocFile] = useState<File | null>(null);
 
+  const fetchDomainHierarchyConceptIris = useCallback(async (domainId: string): Promise<string[]> => {
+    const conceptIris: string[] = [];
+    let currentDomainId = domainId;
+    const visited = new Set<string>(); // Prevent infinite loops
+    
+    while (currentDomainId && !visited.has(currentDomainId)) {
+      visited.add(currentDomainId);
+      
+      try {
+        // Fetch domain details and semantic links for current domain
+        const [domainRes, linksRes] = await Promise.all([
+          get<DataDomain>(`/api/data-domains/${currentDomainId}`),
+          get<EntitySemanticLink[]>(`/api/semantic-links/entity/data_domain/${currentDomainId}`)
+        ]);
+        
+        const domainData = checkApiResponse(domainRes, 'Domain Details');
+        
+        // If this domain has semantic links, add the first IRI to our list
+        if (linksRes.data && !linksRes.error && Array.isArray(linksRes.data) && linksRes.data.length > 0) {
+          const firstConceptIri = linksRes.data[0].iri;
+          if (firstConceptIri && !conceptIris.includes(firstConceptIri)) {
+            conceptIris.push(firstConceptIri);
+          }
+        }
+        
+        // Move to parent domain
+        currentDomainId = domainData.parent_id || '';
+      } catch (error) {
+        // If we can't fetch a domain in the hierarchy, break the chain
+        break;
+      }
+    }
+    
+    return conceptIris;
+  }, [get]);
+
   const fetchDomainDetails = useCallback(async (id: string) => {
     setIsLoading(true);
     setError(null);
@@ -111,19 +148,29 @@ export default function DataDomainDetailsView() {
         setSemanticLinks([]);
       }
 
-      // Fetch parent semantic links if domain has a parent
+      // Fetch hierarchy concept IRIs (starts from parent, then walks up)
       if (data.parent_id) {
         try {
-          const parentLinksRes = await get<EntitySemanticLink[]>(`/api/semantic-links/entity/data_domain/${data.parent_id}`);
-          if (parentLinksRes.data && !parentLinksRes.error) {
-            setParentSemanticLinks(Array.isArray(parentLinksRes.data) ? parentLinksRes.data : []);
+          const conceptIris = await fetchDomainHierarchyConceptIris(data.parent_id);
+          setHierarchyConceptIris(conceptIris);
+          
+          // Also set parent semantic links for backward compatibility
+          if (conceptIris.length > 0) {
+            const parentLinksRes = await get<EntitySemanticLink[]>(`/api/semantic-links/entity/data_domain/${data.parent_id}`);
+            if (parentLinksRes.data && !parentLinksRes.error) {
+              setParentSemanticLinks(Array.isArray(parentLinksRes.data) ? parentLinksRes.data : []);
+            } else {
+              setParentSemanticLinks([]);
+            }
           } else {
             setParentSemanticLinks([]);
           }
         } catch {
+          setHierarchyConceptIris([]);
           setParentSemanticLinks([]);
         }
       } else {
+        setHierarchyConceptIris([]);
         setParentSemanticLinks([]);
       }
     } catch (err: any) {
@@ -137,7 +184,7 @@ export default function DataDomainDetailsView() {
       setDynamicTitle('Error');
     }
     setIsLoading(false);
-  }, [get, toast, setDynamicTitle]);
+  }, [get, toast, setDynamicTitle, fetchDomainHierarchyConceptIris]);
 
   const entityType = 'data_domain';
 
@@ -383,7 +430,7 @@ export default function DataDomainDetailsView() {
         isOpen={iriDialogOpen}
         onOpenChange={setIriDialogOpen}
         onSelect={addIri}
-        parentConceptIri={parentSemanticLinks[0]?.iri}
+        parentConceptIris={hierarchyConceptIris}
       />
     </div>
   );

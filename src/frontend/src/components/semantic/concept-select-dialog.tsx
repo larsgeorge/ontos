@@ -11,10 +11,10 @@ interface Props {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (iri: string) => void;
-  parentConceptIri?: string;
+  parentConceptIris?: string[];
 }
 
-export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, parentConceptIri }: Props) {
+export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, parentConceptIris }: Props) {
   const { get } = useApi();
   const [q, setQ] = useState('');
   const [suggested, setSuggested] = useState<ConceptItem[]>([]);
@@ -27,8 +27,8 @@ export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, pa
         limit: '50'
       });
       
-      if (parentConceptIri) {
-        params.set('parent_iri', parentConceptIri);
+      if (parentConceptIris && parentConceptIris.length > 0) {
+        params.set('parent_iris', parentConceptIris.join(','));
         const res = await get<{suggested: ConceptItem[], other: ConceptItem[]}>(`/api/semantic-models/concepts/suggestions?${params}`);
         setSuggested(res.data?.suggested || []);
         setOther(res.data?.other || []);
@@ -40,7 +40,7 @@ export default function ConceptSelectDialog({ isOpen, onOpenChange, onSelect, pa
     };
     const t = setTimeout(run, 250);
     return () => clearTimeout(t);
-  }, [q, parentConceptIri]);
+  }, [q, parentConceptIris]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
