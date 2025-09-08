@@ -64,6 +64,7 @@ export default function DataDomainDetailsView() {
   const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false);
   const [iriDialogOpen, setIriDialogOpen] = useState(false);
   const [semanticLinks, setSemanticLinks] = useState<EntitySemanticLink[]>([]);
+  const [parentSemanticLinks, setParentSemanticLinks] = useState<EntitySemanticLink[]>([]);
 
   // Metadata: Rich Texts, Links, Documents
   interface RichTextItem { id: string; entity_id: string; entity_type: string; title: string; short_description?: string | null; content_markdown: string; created_at?: string; }
@@ -108,6 +109,22 @@ export default function DataDomainDetailsView() {
         setSemanticLinks(Array.isArray(linksRes.data) ? linksRes.data : []);
       } else {
         setSemanticLinks([]);
+      }
+
+      // Fetch parent semantic links if domain has a parent
+      if (data.parent_id) {
+        try {
+          const parentLinksRes = await get<EntitySemanticLink[]>(`/api/semantic-links/entity/data_domain/${data.parent_id}`);
+          if (parentLinksRes.data && !parentLinksRes.error) {
+            setParentSemanticLinks(Array.isArray(parentLinksRes.data) ? parentLinksRes.data : []);
+          } else {
+            setParentSemanticLinks([]);
+          }
+        } catch {
+          setParentSemanticLinks([]);
+        }
+      } else {
+        setParentSemanticLinks([]);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to fetch domain details.');
@@ -366,6 +383,7 @@ export default function DataDomainDetailsView() {
         isOpen={iriDialogOpen}
         onOpenChange={setIriDialogOpen}
         onSelect={addIri}
+        parentConceptIri={parentSemanticLinks[0]?.iri}
       />
     </div>
   );

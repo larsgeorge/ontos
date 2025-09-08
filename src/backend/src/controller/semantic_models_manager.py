@@ -362,6 +362,53 @@ class SemanticModelsManager:
             # If SPARQL fails, fall back to empty results
             return []
 
+    def get_child_concepts(self, parent_iri: str, limit: int = 10) -> List[dict]:
+        """Get child concepts of a given parent concept for suggestions."""
+        if not parent_iri:
+            return []
+            
+        try:
+            parent_concept = self.get_concept_details(parent_iri)
+            if not parent_concept or not parent_concept.child_concepts:
+                return []
+            
+            # Convert child concept IRIs to the format expected by the dialog
+            results = []
+            for child_iri in parent_concept.child_concepts[:limit]:
+                child_concept = self.get_concept_details(child_iri)
+                if child_concept:
+                    results.append({
+                        'value': child_iri,
+                        'label': child_concept.label,
+                        'type': 'class'
+                    })
+            
+            return results
+        except Exception as e:
+            logger.error(f"Failed to get child concepts for {parent_iri}: {e}")
+            return []
+
+    def search_concepts_with_suggestions(self, text_filter: str = "", parent_iri: str = "", limit: int = 50) -> dict:
+        """Search for concepts with suggested child concepts first if parent_iri is provided."""
+        suggested = []
+        other_results = []
+        
+        # If parent_iri is provided, get child concepts as suggestions
+        if parent_iri:
+            suggested = self.get_child_concepts(parent_iri, limit=10)
+        
+        # Get all matching concepts
+        all_results = self.search_concepts(text_filter, limit=limit)
+        
+        # Filter out suggested concepts from other results
+        suggested_iris = {result['value'] for result in suggested}
+        other_results = [result for result in all_results if result['value'] not in suggested_iris]
+        
+        return {
+            'suggested': suggested,
+            'other': other_results
+        }
+
     # Outgoing neighbors of a resource: returns distinct predicate/object pairs
     def neighbors(self, resource_iri: str, limit: int = 200) -> List[dict]:
         from rdflib import URIRef

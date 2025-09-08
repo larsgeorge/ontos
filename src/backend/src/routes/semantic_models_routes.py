@@ -75,6 +75,26 @@ async def search_concepts(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/semantic-models/concepts/suggestions", response_model=dict)
+async def search_concepts_with_suggestions(
+    q: str = "",
+    parent_iri: str = "",
+    limit: int = 50,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+):
+    """Search for classes/concepts with suggested child concepts first if parent_iri is provided.
+    
+    Returns:
+    - suggested: List of child concepts of the parent (if parent_iri provided)
+    - other: All other matching concepts
+    """
+    try:
+        return manager.search_concepts_with_suggestions(q, parent_iri=parent_iri, limit=limit)
+    except Exception as e:
+        logger.error(f"Concept search with suggestions failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/semantic-models/neighbors", response_model=List[dict])
 async def get_neighbors(
     iri: str,
