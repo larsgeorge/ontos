@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { 
   OntologyTaxonomy, 
   OntologyConcept, 
@@ -78,7 +79,7 @@ const ConceptTreeItem: React.FC<ConceptTreeItemProps> = ({ item, selectedConcept
       case 'class':
         return <Layers className="h-4 w-4 shrink-0 text-blue-500" />;
       case 'concept':
-        return <FileText className="h-4 w-4 shrink-0 text-green-500" />;
+        return <Layers className="h-4 w-4 shrink-0 text-green-500" />;
       default:
         return <Zap className="h-4 w-4 shrink-0 text-yellow-500" />;
     }
@@ -148,6 +149,33 @@ const UnifiedConceptTree: React.FC<UnifiedConceptTreeProps> = ({
   searchQuery,
   onShowKnowledgeGraph
 }) => {
+  // Helper function to find the path from root to a specific concept
+  const findPathToConcept = useCallback((targetIri: string, conceptMap: Map<string, OntologyConcept>, hierarchy: Map<string, string[]>): string[] => {
+    const visited = new Set<string>();
+    
+    const findPath = (currentIri: string, path: string[]): string[] | null => {
+      if (visited.has(currentIri)) return null;
+      visited.add(currentIri);
+      
+      if (currentIri === targetIri) {
+        return [...path, currentIri];
+      }
+      
+      // Check children
+      const children = hierarchy.get(currentIri) || [];
+      for (const childIri of children) {
+        const result = findPath(childIri, [...path, currentIri]);
+        if (result) return result;
+      }
+      
+      return null;
+    };
+    
+    // Start from root
+    const result = findPath('root', []);
+    return result || [];
+  }, []);
+
   // Build hierarchical data structure for Headless Tree
   const treeData = useMemo(() => {
     const conceptMap = new Map<string, OntologyConcept>();
@@ -253,6 +281,40 @@ const UnifiedConceptTree: React.FC<UnifiedConceptTreeProps> = ({
     ],
   });
 
+  // Effect to expand tree path when selected concept changes
+  useEffect(() => {
+    if (selectedConcept && treeData.conceptMap.has(selectedConcept.iri)) {
+      // Use a timeout to ensure tree is fully loaded
+      const expandPath = () => {
+        // Find parent concepts and expand them in the tree
+        selectedConcept.parent_concepts.forEach(parentIri => {
+          if (treeData.conceptMap.has(parentIri)) {
+            // Find the tree item by iterating through all items
+            const items = tree.getItems();
+            const parentItem = items.find(item => item.getId() === parentIri);
+            if (parentItem && !parentItem.isExpanded()) {
+              parentItem.expand();
+            }
+          }
+        });
+        
+        // Also expand Corporate Term if it contains our selected concept
+        const items = tree.getItems();
+        const corporateTermItem = items.find(item => 
+          item.getId() === 'http://example.com/corporate/taxonomy#CorporateTerm'
+        );
+        if (corporateTermItem && !corporateTermItem.isExpanded()) {
+          corporateTermItem.expand();
+        }
+      };
+      
+      // Execute immediately and also with a small delay to handle async tree loading
+      expandPath();
+      setTimeout(expandPath, 100);
+      setTimeout(expandPath, 500);
+    }
+  }, [selectedConcept, treeData, tree]);
+
   return (
     <div className="space-y-1">
       <div 
@@ -306,9 +368,10 @@ const UnifiedConceptTree: React.FC<UnifiedConceptTreeProps> = ({
 interface ConceptDetailsProps {
   concept: OntologyConcept;
   concepts: OntologyConcept[];
+  onSelectConcept: (concept: OntologyConcept) => void;
 }
 
-const ConceptDetails: React.FC<ConceptDetailsProps> = ({ concept, concepts }) => {
+const ConceptDetails: React.FC<ConceptDetailsProps> = ({ concept, concepts, onSelectConcept }) => {
   // Helper function to resolve IRI to concept label
   const getConceptLabel = (iri: string): string => {
     const foundConcept = concepts.find(c => c.iri === iri);
@@ -362,11 +425,23 @@ const ConceptDetails: React.FC<ConceptDetailsProps> = ({ concept, concepts }) =>
           label="Parent Concepts" 
           value={
             <div className="flex flex-wrap gap-2">
-              {concept.parent_concepts.map(parentIri => (
-                <Badge key={parentIri} variant="secondary" className="text-xs">
-                  {getConceptLabel(parentIri)}
-                </Badge>
-              ))}
+              {concept.parent_concepts.map(parentIri => {
+                const parentConcept = concepts.find(c => c.iri === parentIri);
+                return (
+                  <Badge 
+                    key={parentIri} 
+                    variant="secondary" 
+                    className="text-xs cursor-pointer hover:bg-secondary/80 transition-colors"
+                    onClick={() => {
+                      if (parentConcept) {
+                        onSelectConcept(parentConcept);
+                      }
+                    }}
+                  >
+                    {getConceptLabel(parentIri)}
+                  </Badge>
+                );
+              })}
             </div>
           } 
         />
@@ -377,11 +452,23 @@ const ConceptDetails: React.FC<ConceptDetailsProps> = ({ concept, concepts }) =>
           label="Child Concepts" 
           value={
             <div className="flex flex-wrap gap-2">
-              {concept.child_concepts.map(childIri => (
-                <Badge key={childIri} variant="outline" className="text-xs">
-                  {getConceptLabel(childIri)}
-                </Badge>
-              ))}
+              {concept.child_concepts.map(childIri => {
+                const childConcept = concepts.find(c => c.iri === childIri);
+                return (
+                  <Badge 
+                    key={childIri} 
+                    variant="outline" 
+                    className="text-xs cursor-pointer hover:bg-accent/80 transition-colors"
+                    onClick={() => {
+                      if (childConcept) {
+                        onSelectConcept(childConcept);
+                      }
+                    }}
+                  >
+                    {getConceptLabel(childIri)}
+                  </Badge>
+                );
+              })}
             </div>
           } 
         />
@@ -466,6 +553,7 @@ const TaggedAssetsView: React.FC<TaggedAssetsViewProps> = ({ concept }) => {
 };
 
 export default function BusinessGlossary() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [taxonomies, setTaxonomies] = useState<OntologyTaxonomy[]>([]);
   const [groupedConcepts, setGroupedConcepts] = useState<GroupedConcepts>({});
   const [selectedConcept, setSelectedConcept] = useState<OntologyConcept | null>(null);
@@ -549,6 +637,28 @@ export default function BusinessGlossary() {
     };
   }, []); // Empty dependency array to run only once on mount
 
+  // Handle URL parameters to select concept on load or URL change
+  useEffect(() => {
+    const conceptParam = searchParams.get('concept');
+    if (conceptParam && Object.keys(groupedConcepts).length > 0) {
+      const decodedIri = decodeURIComponent(conceptParam);
+      const allConcepts = Object.values(groupedConcepts).flat();
+      const conceptToSelect = allConcepts.find(c => c.iri === decodedIri);
+      
+      if (conceptToSelect && conceptToSelect.iri !== selectedConcept?.iri) {
+        // Use a timeout to avoid updating state during render
+        setTimeout(() => {
+          handleSelectConcept(conceptToSelect);
+        }, 0);
+      }
+    } else if (!conceptParam && selectedConcept) {
+      // Clear selection if no concept in URL
+      setSelectedConcept(null);
+      setSelectedHierarchy(null);
+      setShowKnowledgeGraph(false);
+    }
+  }, [searchParams, groupedConcepts]); // React to changes in URL params and loaded concepts
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -583,6 +693,11 @@ export default function BusinessGlossary() {
   const handleSelectConcept = async (concept: OntologyConcept) => {
     setSelectedConcept(concept);
     setShowKnowledgeGraph(false);
+    
+    // Update URL with the selected concept IRI
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('concept', encodeURIComponent(concept.iri));
+    setSearchParams(newParams);
     
     // Fetch hierarchy information
     try {
@@ -621,6 +736,11 @@ export default function BusinessGlossary() {
   const handleShowKnowledgeGraph = () => {
     setShowKnowledgeGraph(true);
     setSelectedConcept(null);
+    
+    // Clear concept from URL
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('concept');
+    setSearchParams(newParams);
   };
 
   const handleSearch = async (query?: string) => {
@@ -701,46 +821,10 @@ export default function BusinessGlossary() {
     };
 
     return (
-      <div className="h-[800px] border rounded-lg bg-white overflow-hidden">
-        <div className="h-full flex flex-col">
-          <div className="p-4 border-b bg-slate-50">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-lg">Knowledge Graph</h3>
-              <div className="text-sm text-muted-foreground">
-                {visibleConcepts.length} concepts, {graphLinks.length} relationships
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-3 text-xs">
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: sourceColors['corporate-global'] }}></div>
-                <span>Corporate Global</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: sourceColors['manufacturing-lob'] }}></div>
-                <span>Manufacturing LOB</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: sourceColors['financial-services-lob'] }}></div>
-                <span>Financial Services LOB</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: sourceColors['retail-banking-dept'] }}></div>
-                <span>Retail Banking Dept</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: sourceColors['quality-assurance-dept'] }}></div>
-                <span>Quality Assurance Dept</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-                <span>Other Taxonomies</span>
-              </div>
-            </div>
-          </div>
-          <div className="flex-1">
-            <ForceGraph2D
+      <div className="h-full border rounded-lg bg-white overflow-hidden">
+        <ForceGraph2D
               width={800}
-              height={720}
+              height={800}
               graphData={{
                 nodes: graphNodes,
                 links: graphLinks
@@ -864,19 +948,47 @@ export default function BusinessGlossary() {
               minZoom={0.1}
               maxZoom={8}
             />
-          </div>
-        </div>
       </div>
     );
   };
 
-  const renderLineage = (hierarchy: ConceptHierarchy) => {
+  const renderLineage = (hierarchy: ConceptHierarchy, selectedConcept: OntologyConcept | null = null) => {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
     const allConcepts = Object.values(groupedConcepts).flat();
     
-    // Helper function to find concept by IRI
-    const findConceptByIri = (iri: string) => allConcepts.find(c => c.iri === iri);
+    // Helper function to find concept by IRI or create a minimal concept object
+    const findConceptByIri = (iri: string): OntologyConcept | null => {
+      // First, check if it's the current concept
+      if (hierarchy.concept.iri === iri) {
+        return hierarchy.concept;
+      }
+      
+      // Try to find in grouped concepts first
+      const foundInGrouped = allConcepts.find(c => c.iri === iri);
+      if (foundInGrouped) {
+        return foundInGrouped;
+      }
+      
+      // If not found, create a minimal concept object with the IRI
+      // Extract label from IRI (last part after # or /)
+      const label = iri.split(/[/#]/).pop() || iri;
+      
+      return {
+        iri,
+        label,
+        concept_type: 'class', // Default to class
+        parent_concepts: [],
+        child_concepts: [],
+        source_context: '', // Will be empty for missing concepts
+        description: '',
+        comment: '',
+        status: 'published',
+        owner: '',
+        created_at: '',
+        updated_at: ''
+      } as OntologyConcept;
+    };
 
     // Add current concept as center node
     const centerY = 250;
@@ -900,10 +1012,11 @@ export default function BusinessGlossary() {
       }
     });
 
-    // Add immediate parents
-    hierarchy.concept.parent_concepts.forEach((parentIri, index) => {
+    // Add ALL parent concepts (not just immediate ones)
+    const allParentIris = [...new Set([...hierarchy.concept.parent_concepts, ...(hierarchy.parents || [])])]; 
+    allParentIris.forEach((parentIri, index) => {
       const parent = findConceptByIri(parentIri);
-      if (parent) {
+      if (parent && parent.iri !== hierarchy.concept.iri) {
         const nodeId = parent.iri;
         nodes.push({
           id: nodeId,
@@ -911,7 +1024,7 @@ export default function BusinessGlossary() {
             label: parent.label || parent.iri.split(/[/#]/).pop(),
             sourceContext: parent.source_context
           },
-          position: { x: 400 + (index - hierarchy.concept.parent_concepts.length / 2 + 0.5) * 180, y: centerY - 150 },
+          position: { x: 400 + (index - allParentIris.length / 2 + 0.5) * 160, y: centerY - 150 },
           style: {
             background: '#dbeafe',
             border: '1px solid #3b82f6',
@@ -937,10 +1050,13 @@ export default function BusinessGlossary() {
       }
     });
 
-    // Add immediate children  
-    hierarchy.concept.child_concepts.forEach((childIri, index) => {
+    // Add ALL child concepts - use selectedConcept if available, fallback to hierarchy.concept
+    const conceptForChildren = selectedConcept?.iri === hierarchy.concept.iri ? selectedConcept : hierarchy.concept;
+    const allChildIris = [...new Set([...conceptForChildren.child_concepts, ...(hierarchy.children || [])])]; 
+    
+    allChildIris.forEach((childIri, index) => {
       const child = findConceptByIri(childIri);
-      if (child) {
+      if (child && child.iri !== hierarchy.concept.iri) {
         const nodeId = child.iri;
         nodes.push({
           id: nodeId,
@@ -948,7 +1064,7 @@ export default function BusinessGlossary() {
             label: child.label || child.iri.split(/[/#]/).pop(),
             sourceContext: child.source_context
           },
-          position: { x: 400 + (index - hierarchy.concept.child_concepts.length / 2 + 0.5) * 180, y: centerY + 150 },
+          position: { x: 400 + (index - allChildIris.length / 2 + 0.5) * 160, y: centerY + 150 },
           style: {
             background: '#dcfce7',
             border: '1px solid #16a34a',
@@ -974,9 +1090,12 @@ export default function BusinessGlossary() {
       }
     });
 
-    // Add siblings if available
+    // Add siblings if available (dashed lines FROM selected concept TO siblings)
     if (hierarchy.siblings && hierarchy.siblings.length > 0) {
       hierarchy.siblings.forEach((sibling, index) => {
+        // Don't add the selected concept as its own sibling
+        if (sibling.iri === hierarchy.concept.iri) return;
+        
         const nodeId = sibling.iri;
         nodes.push({
           id: nodeId,
@@ -984,7 +1103,7 @@ export default function BusinessGlossary() {
             label: sibling.label || sibling.iri.split(/[/#]/).pop(),
             sourceContext: sibling.source_context
           },
-          position: { x: 600 + (index * 160), y: centerY },
+          position: { x: 700 + (index * 180), y: centerY },
           style: {
             background: '#f5f5f5',
             border: '1px solid #d1d5db',
@@ -998,23 +1117,30 @@ export default function BusinessGlossary() {
           }
         });
         
-        // Add muted connecting line from center to sibling
-        edges.push({
-          id: `${hierarchy.concept.iri}-${nodeId}`,
-          source: hierarchy.concept.iri,
-          target: nodeId,
-          type: 'smoothstep',
-          style: { 
-            stroke: '#d1d5db', 
-            strokeWidth: 1, 
-            opacity: 0.5,
-            strokeDasharray: '5,5'
-          },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: '#d1d5db'
-          }
-        });
+        // Find shared parent for sibling relationships
+        const sharedParent = allParentIris.find(parentIri => 
+          sibling.parent_concepts && sibling.parent_concepts.includes(parentIri)
+        ) || allParentIris[0]; // Fallback to first parent if no shared parent found
+        
+        if (sharedParent) {
+          // Add muted connecting line FROM shared parent TO sibling
+          edges.push({
+            id: `${sharedParent}-sibling-${nodeId}`,
+            source: sharedParent,
+            target: nodeId,
+            type: 'smoothstep',
+            style: { 
+              stroke: '#d1d5db', 
+              strokeWidth: 1, 
+              opacity: 0.5,
+              strokeDasharray: '5,5'
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: '#d1d5db'
+            }
+          });
+        }
       });
     }
 
@@ -1041,9 +1167,20 @@ export default function BusinessGlossary() {
           nodes={nodes}
           edges={edges}
           fitView
+          onInit={(reactFlowInstance) => {
+            // Enhanced fit view on initialization
+            setTimeout(() => {
+              reactFlowInstance.fitView({ 
+                padding: 0.15,
+                includeHiddenNodes: false,
+                minZoom: 0.5,
+                maxZoom: 1.2
+              });
+            }, 100);
+          }}
           minZoom={0.5}
           maxZoom={1.5}
-          style={{ background: '#F7F9FB' }}
+          style={{ background: '#ffffff' }}
           defaultEdgeOptions={{
             style: { strokeWidth: 1.5 },
             markerEnd: { type: MarkerType.ArrowClosed }
@@ -1223,7 +1360,7 @@ export default function BusinessGlossary() {
         {/* Right Panel - Concept Details or Knowledge Graph */}
         <div className="col-span-8 border rounded-lg">
           {showKnowledgeGraph ? (
-            <div className="h-full">
+            <div className="h-full flex flex-col">
               <div className="p-6 border-b">
                 <div className="flex justify-between items-start mb-4">
                   <div>
@@ -1235,9 +1372,38 @@ export default function BusinessGlossary() {
                       Interactive visualization of all concepts and their relationships
                     </p>
                   </div>
+                  <div className="text-sm text-muted-foreground">
+                    {Object.values(groupedConcepts).flat().length} concepts
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3 text-xs">
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                    <span>Corporate Global</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span>Manufacturing LOB</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                    <span>Financial Services LOB</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                    <span>Retail Banking Dept</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                    <span>Quality Assurance Dept</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+                    <span>Other Taxonomies</span>
+                  </div>
                 </div>
               </div>
-              <div className="p-6">
+              <div className="flex-1">
                 {renderKnowledgeGraph(Object.values(groupedConcepts).flat())}
               </div>
             </div>
@@ -1246,7 +1412,17 @@ export default function BusinessGlossary() {
               <div className="p-6 border-b">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h2 className="text-2xl font-semibold mb-2">
+                    <h2 className="text-2xl font-semibold mb-2 flex items-center gap-2">
+                      {(() => {
+                        switch (selectedConcept.concept_type) {
+                          case 'class':
+                            return <Layers className="h-6 w-6 shrink-0 text-blue-500" />;
+                          case 'concept':
+                            return <Layers className="h-6 w-6 shrink-0 text-green-500" />;
+                          default:
+                            return <Zap className="h-6 w-6 shrink-0 text-yellow-500" />;
+                        }
+                      })()}
                       {selectedConcept.label || selectedConcept.iri.split(/[/#]/).pop()}
                     </h2>
                     <p className="text-muted-foreground">
@@ -1270,6 +1446,7 @@ export default function BusinessGlossary() {
                   <ConceptDetails 
                     concept={selectedConcept} 
                     concepts={Object.values(groupedConcepts).flat()}
+                    onSelectConcept={handleSelectConcept}
                   />
                 </div>
 
@@ -1278,7 +1455,7 @@ export default function BusinessGlossary() {
                   {selectedHierarchy ? (
                     <div className="space-y-4">
                       <h3 className="text-lg font-semibold">Concept Hierarchy</h3>
-                      {renderLineage(selectedHierarchy)}
+                      {renderLineage(selectedHierarchy, selectedConcept)}
                     </div>
                   ) : (
                     <div className="text-muted-foreground">Loading hierarchy...</div>
