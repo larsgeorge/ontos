@@ -50,6 +50,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-dropzone": "^14.3.8",
+    "react-force-graph-2d": "^1.29.0",
     "react-hook-form": "^7.56.1",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^6.22.0",

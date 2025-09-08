@@ -58,22 +58,26 @@ corp:DataClassification a rdfs:Class ;
     rdfs:label "Data Classification" ;
     rdfs:comment "Security and sensitivity classification of data" .
 
-corp:PublicData a corp:DataClassification ;
+corp:PublicData a rdfs:Class ;
+    rdfs:subClassOf corp:DataClassification ;
     rdfs:label "Public Data" ;
     rdfs:comment "Data that can be freely shared without restriction" ;
     corp:securityLevel "0" .
 
-corp:InternalData a corp:DataClassification ;
+corp:InternalData a rdfs:Class ;
+    rdfs:subClassOf corp:DataClassification ;
     rdfs:label "Internal Data" ;
     rdfs:comment "Data for internal company use only" ;
     corp:securityLevel "1" .
 
-corp:ConfidentialData a corp:DataClassification ;
+corp:ConfidentialData a rdfs:Class ;
+    rdfs:subClassOf corp:DataClassification ;
     rdfs:label "Confidential Data" ;
     rdfs:comment "Sensitive data requiring restricted access" ;
     corp:securityLevel "2" .
 
-corp:HighlyConfidentialData a corp:DataClassification ;
+corp:HighlyConfidentialData a rdfs:Class ;
+    rdfs:subClassOf corp:DataClassification ;
     rdfs:label "Highly Confidential Data" ;
     rdfs:comment "Extremely sensitive data with strict access controls" ;
     corp:securityLevel "3" .
@@ -85,23 +89,28 @@ corp:DataQualityDimension a rdfs:Class ;
     rdfs:label "Data Quality Dimension" ;
     rdfs:comment "Aspects of data quality measurement" .
 
-corp:Accuracy a corp:DataQualityDimension ;
+corp:Accuracy a rdfs:Class ;
+    rdfs:subClassOf corp:DataQualityDimension ;
     rdfs:label "Accuracy" ;
     rdfs:comment "Correctness and precision of data values" .
 
-corp:Completeness a corp:DataQualityDimension ;
+corp:Completeness a rdfs:Class ;
+    rdfs:subClassOf corp:DataQualityDimension ;
     rdfs:label "Completeness" ;
     rdfs:comment "Presence of all required data elements" .
 
-corp:Consistency a corp:DataQualityDimension ;
+corp:Consistency a rdfs:Class ;
+    rdfs:subClassOf corp:DataQualityDimension ;
     rdfs:label "Consistency" ;
     rdfs:comment "Uniformity of data across systems and time" .
 
-corp:Timeliness a corp:DataQualityDimension ;
+corp:Timeliness a rdfs:Class ;
+    rdfs:subClassOf corp:DataQualityDimension ;
     rdfs:label "Timeliness" ;
     rdfs:comment "Currency and freshness of data" .
 
-corp:Validity a corp:DataQualityDimension ;
+corp:Validity a rdfs:Class ;
+    rdfs:subClassOf corp:DataQualityDimension ;
     rdfs:label "Validity" ;
     rdfs:comment "Conformity to defined formats and business rules" .
 

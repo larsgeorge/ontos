@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { 
   OntologyTaxonomy, 
   OntologyConcept, 
@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+// Tabs removed; sections are now displayed together
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   Select,
@@ -33,28 +33,26 @@ import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { 
   Plus, 
+  Minus,
   Pencil, 
   Trash2, 
   AlertCircle, 
   FileText, 
   ChevronRight, 
   ChevronDown, 
-  Folder,
-  FolderOpen,
   Book,
-  Database,
-  HardDrive,
-  Globe,
   Layers,
   Zap,
   Search,
   Network,
-  TreePine,
 } from 'lucide-react';
-import ReactFlow, { Node, Edge, Background, MarkerType, Controls } from 'reactflow';
+import ReactFlow, { Node, Edge, Background, MarkerType, Controls, ConnectionMode, MiniMap, Position } from 'reactflow';
+import ForceGraph2D from 'react-force-graph-2d';
+import dagre from 'dagre';
 import 'reactflow/dist/style.css';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { cn } from '@/lib/utils';
+
 
 // Define concept item type for Headless Tree
 type ConceptTreeItem = {
@@ -156,25 +154,16 @@ const UnifiedConceptTree: React.FC<UnifiedConceptTreeProps> = ({
     const hierarchy = new Map<string, string[]>();
     
     // Filter out ConceptSchemes and individuals, but keep classes and concepts
-    const baseConcepts = concepts.filter(concept => 
-      concept.concept_type !== 'individual' && concept.concept_type !== 'concept_scheme'
-    );
+    const baseConcepts = concepts.filter(concept => {
+      const conceptType = (concept as any).concept_type as string;
+      return conceptType !== 'individual' && conceptType !== 'concept_scheme';
+    });
     
     // Build concept map and hierarchy
     baseConcepts.forEach(concept => {
       conceptMap.set(concept.iri, concept);
       
-      // Debug key concepts to understand the hierarchy structure
-      if (concept.iri.includes('Quality')) {
-        console.log('[DEBUG Quality concept]:', {
-          iri: concept.iri,
-          label: concept.label,
-          parent_concepts: concept.parent_concepts,
-          child_concepts: concept.child_concepts
-        });
-      }
-      
-      
+
       // Build parent-child relationships from parent_concepts
       concept.parent_concepts.forEach(parentIri => {
         if (!hierarchy.has(parentIri)) {
@@ -211,9 +200,33 @@ const UnifiedConceptTree: React.FC<UnifiedConceptTreeProps> = ({
     dataLoader: {
       getItem: (itemId: string) => {
         if (itemId === 'root') {
-          return { iri: 'root', label: 'Root', concept_type: 'root' } as OntologyConcept;
+          // Provide a minimal object satisfying OntologyConcept shape
+          return {
+            iri: 'root',
+            label: 'Root',
+            concept_type: 'root' as any,
+            parent_concepts: [],
+            child_concepts: [],
+            properties: {},
+            tagged_assets: [],
+            source_context: 'root'
+          } as unknown as OntologyConcept;
         }
-        return treeData.conceptMap.get(itemId) || null;
+        const found = treeData.conceptMap.get(itemId);
+        if (!found) {
+          // Fallback to a minimal placeholder to satisfy return type
+          return {
+            iri: itemId,
+            label: itemId.split(/[/#]/).pop() || itemId,
+            concept_type: 'concept' as any,
+            parent_concepts: [],
+            child_concepts: [],
+            properties: {},
+            tagged_assets: [],
+            source_context: 'unknown'
+          } as unknown as OntologyConcept;
+        }
+        return found;
       },
       getChildren: (itemId: string) => {
         if (itemId === 'root') {
@@ -286,67 +299,9 @@ const UnifiedConceptTree: React.FC<UnifiedConceptTreeProps> = ({
 
 // Note: TaxonomyGroup component is kept for potential future use but not currently used in the main UI
 // The UnifiedConceptTree now handles all concept display
-interface TaxonomyGroupProps {
-  taxonomy: OntologyTaxonomy;
-  concepts: OntologyConcept[];
-  selectedConcept: OntologyConcept | null;
-  onSelectConcept: (concept: OntologyConcept) => void;
-}
+// Deprecated: TaxonomyGroupProps unused after removing TaxonomyGroup
 
-const TaxonomyGroup: React.FC<TaxonomyGroupProps> = ({
-  taxonomy,
-  concepts,
-  selectedConcept,
-  onSelectConcept
-}) => {
-  const [isGroupExpanded, setIsGroupExpanded] = useState(true);
-
-  const getTaxonomyIcon = () => {
-    switch (taxonomy.source_type) {
-      case 'file':
-        return <HardDrive className="h-4 w-4 text-blue-600" />;
-      case 'database':
-        return <Database className="h-4 w-4 text-green-600" />;
-      case 'schema':
-        return <Layers className="h-4 w-4 text-purple-600" />;
-      default:
-        return <Globe className="h-4 w-4 text-gray-600" />;
-    }
-  };
-
-  return (
-    <div className="mb-2">
-      <div
-        className="flex items-center gap-2 p-2 bg-muted/50 rounded-md cursor-pointer hover:bg-muted/70"
-        onClick={() => setIsGroupExpanded(!isGroupExpanded)}
-      >
-        {isGroupExpanded ? (
-          <FolderOpen className="h-4 w-4 shrink-0" />
-        ) : (
-          <Folder className="h-4 w-4 shrink-0" />
-        )}
-        {getTaxonomyIcon()}
-        <span className="font-medium">{taxonomy.name}</span>
-        <Badge variant="secondary" className="text-xs">
-          {concepts.length}
-        </Badge>
-        <Badge variant="outline" className="text-xs">
-          {taxonomy.source_type}
-        </Badge>
-      </div>
-      {isGroupExpanded && (
-        <div className="mt-2">
-          <UnifiedConceptTree
-            concepts={concepts}
-            selectedConcept={selectedConcept}
-            onSelectConcept={onSelectConcept}
-            searchQuery=""
-          />
-        </div>
-      )}
-    </div>
-  );
-};
+// Deprecated: TaxonomyGroup is currently unused and removed to avoid lints
 
 interface ConceptDetailsProps {
   concept: OntologyConcept;
@@ -435,106 +390,7 @@ const ConceptDetails: React.FC<ConceptDetailsProps> = ({ concept, concepts }) =>
   );
 };
 
-interface ConceptHierarchyViewProps {
-  concept: OntologyConcept;
-  concepts: OntologyConcept[];
-}
-
-const ConceptHierarchyView: React.FC<ConceptHierarchyViewProps> = ({ concept, concepts }) => {
-  // Helper function to resolve IRI to concept
-  const getConceptByIri = (iri: string): OntologyConcept | undefined => {
-    return concepts.find(c => c.iri === iri);
-  };
-
-  // Get parent concepts
-  const parentConcepts = concept.parent_concepts
-    .map(parentIri => getConceptByIri(parentIri))
-    .filter((parent): parent is OntologyConcept => parent !== undefined);
-
-  // Get child concepts  
-  const childConcepts = concept.child_concepts
-    .map(childIri => getConceptByIri(childIri))
-    .filter((child): child is OntologyConcept => child !== undefined);
-
-  return (
-    <div className="space-y-6">
-      {/* Parent Concepts */}
-      {parentConcepts.length > 0 && (
-        <div>
-          <h4 className="font-medium text-sm text-muted-foreground mb-3">Parent Concepts</h4>
-          <div className="space-y-2">
-            {parentConcepts.map(parent => (
-              <div key={parent.iri} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50">
-                <div className="w-2 h-2 rounded-full bg-green-500" />
-                <div className="flex-1">
-                  <div className="font-medium">{parent.label}</div>
-                  <div className="text-sm text-muted-foreground">
-                    from {parent.source_context}
-                  </div>
-                  {parent.comment && (
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {parent.comment}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Current Concept */}
-      <div>
-        <h4 className="font-medium text-sm text-muted-foreground mb-3">Current Concept</h4>
-        <div className="flex items-center gap-3 p-3 border-2 border-blue-200 bg-blue-50 rounded-lg">
-          <div className="w-3 h-3 rounded-full bg-blue-500" />
-          <div className="flex-1">
-            <div className="font-semibold text-blue-900">{concept.label}</div>
-            <div className="text-sm text-blue-700">
-              from {concept.source_context}
-            </div>
-            {concept.comment && (
-              <div className="text-sm text-blue-700 mt-1">
-                {concept.comment}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Child Concepts */}
-      {childConcepts.length > 0 && (
-        <div>
-          <h4 className="font-medium text-sm text-muted-foreground mb-3">Child Concepts</h4>
-          <div className="space-y-2">
-            {childConcepts.map(child => (
-              <div key={child.iri} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50">
-                <div className="w-2 h-2 rounded-full bg-orange-500" />
-                <div className="flex-1">
-                  <div className="font-medium">{child.label}</div>
-                  <div className="text-sm text-muted-foreground">
-                    from {child.source_context}
-                  </div>
-                  {child.comment && (
-                    <div className="text-sm text-muted-foreground mt-1">
-                      {child.comment}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {parentConcepts.length === 0 && childConcepts.length === 0 && (
-        <div className="text-center text-muted-foreground py-8">
-          This concept has no immediate parent or child relationships
-        </div>
-      )}
-    </div>
-  );
-};
+// Deprecated: ConceptHierarchyView is unused and removed to avoid lints
 
 interface TaggedAssetsViewProps {
   concept: OntologyConcept;
@@ -614,13 +470,52 @@ export default function BusinessGlossary() {
   const [groupedConcepts, setGroupedConcepts] = useState<GroupedConcepts>({});
   const [selectedConcept, setSelectedConcept] = useState<OntologyConcept | null>(null);
   const [selectedHierarchy, setSelectedHierarchy] = useState<ConceptHierarchy | null>(null);
-  const [treeExpandedIds, setTreeExpandedIds] = useState<Set<string>>(new Set());
+  // Removed unused treeExpandedIds state
+
+  // Override ForceGraph2D tooltip shadows
+  useEffect(() => {
+    const styleId = 'force-graph-tooltip-override';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = `
+        /* Override all possible tooltip shadow sources in ForceGraph2D */
+        .graph-tooltip,
+        .graph-info-tooltip,
+        [data-tip],
+        .d3-tip,
+        .tooltip,
+        .node-tooltip,
+        .force-graph-tooltip {
+          box-shadow: none !important;
+          -webkit-box-shadow: none !important;
+          -moz-box-shadow: none !important;
+          filter: none !important;
+          -webkit-filter: none !important;
+          text-shadow: none !important;
+          border: none !important;
+        }
+        
+        /* Target any div with tooltip-like styling */
+        div[style*="position: absolute"][style*="pointer-events: none"] {
+          box-shadow: none !important;
+          -webkit-box-shadow: none !important;
+          -moz-box-shadow: none !important;
+          filter: none !important;
+          -webkit-filter: none !important;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('details');
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Tabs removed; show sections in a single view
   const [stats, setStats] = useState<TaxonomyStats | null>(null);
   const [showKnowledgeGraph, setShowKnowledgeGraph] = useState(false);
+  const [graphExpanded, setGraphExpanded] = useState<Set<string>>(new Set());
 
   // Legacy form state (for backwards compatibility)
   const [openDialog, setOpenDialog] = useState(false);
@@ -644,10 +539,13 @@ export default function BusinessGlossary() {
     setStaticSegments([]);
     setDynamicTitle('Business Glossary');
 
-    // Cleanup breadcrumbs on unmount
+    // Cleanup breadcrumbs and search timeout on unmount
     return () => {
       setStaticSegments([]);
       setDynamicTitle(null);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
     };
   }, []); // Empty dependency array to run only once on mount
 
@@ -685,7 +583,6 @@ export default function BusinessGlossary() {
   const handleSelectConcept = async (concept: OntologyConcept) => {
     setSelectedConcept(concept);
     setShowKnowledgeGraph(false);
-    setActiveTab('details');
     
     // Fetch hierarchy information
     try {
@@ -724,11 +621,11 @@ export default function BusinessGlossary() {
   const handleShowKnowledgeGraph = () => {
     setShowKnowledgeGraph(true);
     setSelectedConcept(null);
-    setActiveTab('knowledge-graph');
   };
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
+  const handleSearch = async (query?: string) => {
+    const searchTerm = query !== undefined ? query : searchQuery;
+    if (!searchTerm.trim()) {
       fetchData();
       return;
     }
@@ -736,7 +633,7 @@ export default function BusinessGlossary() {
     try {
       setLoading(true);
       const response = await fetch(
-        `/api/business-glossaries/search?q=${encodeURIComponent(searchQuery)}`
+        `/api/business-glossaries/search?q=${encodeURIComponent(searchTerm)}`
       );
       if (!response.ok) throw new Error('Search failed');
       const data = await response.json();
@@ -760,129 +657,215 @@ export default function BusinessGlossary() {
     }
   };
 
-  const toggleTreeExpanded = (id: string) => {
-    setTreeExpandedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
+  // Removed unused toggleTreeExpanded
 
   const renderKnowledgeGraph = (concepts: OntologyConcept[]) => {
-    const nodes: Node[] = [];
-    const edges: Edge[] = [];
-    
-    // Position configuration
-    const nodeWidth = 140;
-    const nodeHeight = 80;
-    const horizontalSpacing = 200;
-    const verticalSpacing = 120;
-    const columnsPerRow = 6;
-    
-    // Create nodes for all concepts
-    concepts.forEach((concept, index) => {
-      const row = Math.floor(index / columnsPerRow);
-      const col = index % columnsPerRow;
-      
-      nodes.push({
-        id: concept.iri,
-        data: { 
-          label: concept.label || concept.iri.split(/[/#]/).pop(),
-          sourceContext: concept.source_context
-        },
-        position: { 
-          x: col * horizontalSpacing, 
-          y: row * verticalSpacing 
-        },
-        type: 'default',
-        style: {
-          background: '#f8fafc',
-          border: '1px solid #cbd5e1',
-          borderRadius: '8px',
-          padding: '8px',
-          fontSize: '11px',
-          minWidth: nodeWidth + 'px',
-          minHeight: nodeHeight + 'px',
-          textAlign: 'center',
-          cursor: 'pointer'
-        }
-      });
-    });
-    
-    // Create edges for hierarchical relationships
-    concepts.forEach(concept => {
+    // Only include classes and concepts, to match the tree
+    const visibleConcepts = concepts.filter(
+      (c) => c.concept_type === 'class' || c.concept_type === 'concept'
+    );
+
+    // Transform concepts to graph data
+    const graphNodes = visibleConcepts.map(concept => ({
+      id: concept.iri,
+      label: concept.label || concept.iri.split(/[/#]/).pop() || 'Unknown',
+      sourceContext: concept.source_context,
+      concept: concept,
+      childCount: concept.child_concepts?.length || 0,
+      parentCount: concept.parent_concepts?.length || 0
+    }));
+
+    const graphLinks: any[] = [];
+    visibleConcepts.forEach(concept => {
       concept.child_concepts.forEach(childIri => {
-        const childExists = concepts.find(c => c.iri === childIri);
+        const childExists = visibleConcepts.some(c => c.iri === childIri);
         if (childExists) {
-          edges.push({
-            id: `${concept.iri}-${childIri}`,
+          graphLinks.push({
             source: concept.iri,
-            target: childIri,
-            type: 'smoothstep',
-            style: { 
-              stroke: '#94a3b8', 
-              strokeWidth: 1,
-              opacity: 0.7
-            },
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              color: '#94a3b8'
-            }
+            target: childIri
           });
         }
       });
     });
 
+    const sourceColors = {
+      'corporate-global': '#3b82f6',
+      'manufacturing-lob': '#10b981', 
+      'retail-banking-dept': '#f59e0b',
+      'quality-assurance-dept': '#8b5cf6',
+      'financial-services-lob': '#ef4444',
+      'sporting_goods_skos.ttl': '#06b6d4',
+      'banking_skos.ttl': '#84cc16',
+      'health_science_rdfs.rdf': '#ec4899',
+      'banking_rdfs.rdf': '#f97316'
+    };
+
     return (
-      <div className="h-[600px] border rounded-lg">
-        <style>
-          {`
-            .react-flow__handle {
-              opacity: 0 !important;
-              pointer-events: none !important;
-              width: 1px !important;
-              height: 1px !important;
-            }
-            .react-flow__node {
-              cursor: pointer;
-            }
-            .react-flow__node:hover {
-              transform: scale(1.05);
-              transition: transform 0.2s ease;
-              z-index: 1000;
-            }
-          `}
-        </style>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          fitView
-          minZoom={0.3}
-          maxZoom={1.5}
-          style={{ background: '#F7F9FB' }}
-          defaultEdgeOptions={{
-            style: { strokeWidth: 1 },
-            markerEnd: { type: MarkerType.ArrowClosed }
-          }}
-          nodesDraggable={true}
-          nodesConnectable={false}
-          elementsSelectable={true}
-          onNodeClick={(event, node) => {
-            // Find and select the concept in the tree
-            const concept = concepts.find(c => c.iri === node.id);
-            if (concept) {
-              handleSelectConcept(concept);
-            }
-          }}
-          connectionMode="strict"
-        >
-          <Controls />
-          <Background />
-        </ReactFlow>
+      <div className="h-[800px] border rounded-lg bg-white overflow-hidden">
+        <div className="h-full flex flex-col">
+          <div className="p-4 border-b bg-slate-50">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-lg">Knowledge Graph</h3>
+              <div className="text-sm text-muted-foreground">
+                {visibleConcepts.length} concepts, {graphLinks.length} relationships
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 text-xs">
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: sourceColors['corporate-global'] }}></div>
+                <span>Corporate Global</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: sourceColors['manufacturing-lob'] }}></div>
+                <span>Manufacturing LOB</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: sourceColors['financial-services-lob'] }}></div>
+                <span>Financial Services LOB</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: sourceColors['retail-banking-dept'] }}></div>
+                <span>Retail Banking Dept</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: sourceColors['quality-assurance-dept'] }}></div>
+                <span>Quality Assurance Dept</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+                <span>Other Taxonomies</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex-1">
+            <ForceGraph2D
+              width={800}
+              height={720}
+              graphData={{
+                nodes: graphNodes,
+                links: graphLinks
+              }}
+              nodeAutoColorBy="sourceContext"
+              nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+                const label = node.label;
+                const fontSize = Math.max(8, Math.min(14, 12 / globalScale));
+                const nodeRadius = Math.max(4, Math.min(12, 8 / globalScale));
+                
+                // Get color based on source context
+                const color = sourceColors[node.sourceContext as keyof typeof sourceColors] || '#64748b';
+                
+                // Draw node circle
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, nodeRadius, 0, 2 * Math.PI);
+                ctx.fillStyle = color;
+                ctx.fill();
+                
+                // Add white border
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2 / globalScale;
+                ctx.stroke();
+                
+                // Only show label on actual hover (not zoom)
+                if (node.__isHovered) {
+                  ctx.font = `${fontSize}px Inter, system-ui, sans-serif`;
+                  ctx.textAlign = 'center';
+                  ctx.textBaseline = 'middle';
+                  ctx.fillStyle = '#1f2937';
+                  
+                  // Add text background for better readability
+                  const textWidth = ctx.measureText(label).width;
+                  const textHeight = fontSize;
+                  const padding = 4;
+                  
+                  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+                  ctx.fillRect(
+                    node.x - textWidth / 2 - padding,
+                    node.y + nodeRadius + 4,
+                    textWidth + padding * 2,
+                    textHeight + padding
+                  );
+                  
+                  // Add subtle border to text background
+                  ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+                  ctx.lineWidth = 1 / globalScale;
+                  ctx.strokeRect(
+                    node.x - textWidth / 2 - padding,
+                    node.y + nodeRadius + 4,
+                    textWidth + padding * 2,
+                    textHeight + padding
+                  );
+                  
+                  // Draw text
+                  ctx.fillStyle = '#1f2937';
+                  ctx.fillText(label, node.x, node.y + nodeRadius + textHeight / 2 + 6);
+                }
+              }}
+              linkDirectionalArrowLength={6}
+              linkDirectionalArrowRelPos={1}
+              linkColor={() => '#64748b'}
+              linkWidth={2}
+              linkDirectionalParticles={0}
+              onNodeHover={(node: any) => {
+                // Clear all previous hover states
+                graphNodes.forEach(n => {
+                  delete (n as any).__isHovered;
+                });
+                
+                // Set hover state for current node
+                if (node) {
+                  node.__isHovered = true;
+                }
+              }}
+              onNodeClick={(node: any) => {
+                if (node && node.concept) {
+                  handleSelectConcept(node.concept);
+                }
+              }}
+              nodeLabel={(node: any) => {
+                const concept = node.concept as OntologyConcept;
+                const color = sourceColors[node.sourceContext as keyof typeof sourceColors] || '#64748b';
+                return `<div style="
+                  background: ${color} !important; 
+                  color: white !important; 
+                  padding: 10px 14px !important; 
+                  border-radius: 8px !important; 
+                  max-width: 250px !important;
+                  font-family: Inter, system-ui, sans-serif !important;
+                  border: none !important;
+                  box-shadow: none !important;
+                  outline: none !important;
+                  filter: none !important;
+                  -webkit-filter: none !important;
+                  -webkit-box-shadow: none !important;
+                  -moz-box-shadow: none !important;
+                ">
+                  <div style="font-weight: 600; margin-bottom: 6px; font-size: 14px;">${node.label}</div>
+                  ${concept.comment ? `<div style="font-size: 12px; margin-bottom: 6px; opacity: 0.95; line-height: 1.4;">${concept.comment}</div>` : ''}
+                  <div style="font-size: 11px; opacity: 0.85; line-height: 1.3;">
+                    <div style="margin-bottom: 2px;"><strong>Source:</strong> ${concept.source_context}</div>
+                    <div><strong>Connections:</strong> ${node.childCount} children, ${node.parentCount} parents</div>
+                  </div>
+                </div>`;
+              }}
+              d3AlphaDecay={0.05}
+              d3VelocityDecay={0.3}
+              d3ReheatDecay={0.1}
+              warmupTicks={100}
+              cooldownTicks={200}
+              d3ForceConfig={{
+                charge: { strength: -120, distanceMax: 400 },
+                link: { distance: 50, iterations: 2 },
+                center: { x: 0.5, y: 0.5 }
+              }}
+              enablePointerInteraction={true}
+              enableNodeDrag={true}
+              enableZoomInteraction={true}
+              enablePanInteraction={true}
+              minZoom={0.1}
+              maxZoom={8}
+            />
+          </div>
+        </div>
       </div>
     );
   };
@@ -1068,7 +1051,7 @@ export default function BusinessGlossary() {
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={true}
-          onNodeClick={(event, node) => {
+          onNodeClick={(_, node) => {
             // Find and select the concept in the tree
             const allConcepts = Object.values(groupedConcepts).flat();
             const concept = allConcepts.find(c => c.iri === node.id);
@@ -1076,7 +1059,7 @@ export default function BusinessGlossary() {
               handleSelectConcept(concept);
             }
           }}
-          connectionMode="strict"
+          connectionMode={ConnectionMode.Strict}
         >
           <Controls />
           <Background />
@@ -1165,14 +1148,55 @@ export default function BusinessGlossary() {
         <div className="col-span-4 border rounded-lg flex flex-col">
           <div className="p-4 border-b">
             <div className="flex gap-2">
-              <Input
-                type="search"
-                placeholder="Search concepts and terms..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              />
-              <Button onClick={handleSearch} size="sm">
+              <div className="relative flex-1">
+                <Input
+                  type="search"
+                  placeholder="Search concepts and terms..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSearchQuery(value);
+                    // Debounced search as user types
+                    if (searchTimeoutRef.current) {
+                      clearTimeout(searchTimeoutRef.current);
+                    }
+                    searchTimeoutRef.current = setTimeout(() => {
+                      handleSearch(value);
+                    }, 300);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (searchTimeoutRef.current) {
+                        clearTimeout(searchTimeoutRef.current);
+                      }
+                      handleSearch();
+                    } else if (e.key === 'Escape') {
+                      setSearchQuery('');
+                      if (searchTimeoutRef.current) {
+                        clearTimeout(searchTimeoutRef.current);
+                      }
+                      handleSearch('');
+                    }
+                  }}
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
+                    onClick={() => {
+                      setSearchQuery('');
+                      if (searchTimeoutRef.current) {
+                        clearTimeout(searchTimeoutRef.current);
+                      }
+                      handleSearch('');
+                    }}
+                  >
+                    ×
+                  </Button>
+                )}
+              </div>
+              <Button onClick={() => handleSearch()} size="sm">
                 <Search className="h-4 w-4" />
               </Button>
             </div>
@@ -1240,21 +1264,17 @@ export default function BusinessGlossary() {
                 </div>
               </div>
 
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="p-6">
-                <TabsList>
-                  <TabsTrigger value="details">Details</TabsTrigger>
-                  <TabsTrigger value="hierarchy">Hierarchy</TabsTrigger>
-                  <TabsTrigger value="tagged">Tagged Assets</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="details">
+              <div className="p-6 space-y-6">
+                {/* Details Section */}
+                <div className="border rounded-lg p-4">
                   <ConceptDetails 
                     concept={selectedConcept} 
                     concepts={Object.values(groupedConcepts).flat()}
                   />
-                </TabsContent>
-                
-                <TabsContent value="hierarchy">
+                </div>
+
+                {/* Hierarchy Section */}
+                <div className="border rounded-lg p-4">
                   {selectedHierarchy ? (
                     <div className="space-y-4">
                       <h3 className="text-lg font-semibold">Concept Hierarchy</h3>
@@ -1263,12 +1283,13 @@ export default function BusinessGlossary() {
                   ) : (
                     <div className="text-muted-foreground">Loading hierarchy...</div>
                   )}
-                </TabsContent>
-                
-                <TabsContent value="tagged">
+                </div>
+
+                {/* Tagged Assets Section */}
+                <div className="border rounded-lg p-4">
                   <TaggedAssetsView concept={selectedConcept} />
-                </TabsContent>
-              </Tabs>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="h-full flex items-center justify-center text-muted-foreground">

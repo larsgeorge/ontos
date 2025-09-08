@@ -595,7 +595,7 @@ class SemanticModelsManager:
             try:
                 results = context.query(class_query)
                 results_list = list(results)
-                logger.info(f"SPARQL query returned {len(results_list)} results for context {context_name}")
+                logger.debug(f"SPARQL query returned {len(results_list)} results for context {context_name}")
                 
                 # Process results
                 results = results_list
