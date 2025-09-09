@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast'
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel'
 import { CommentSidebar } from '@/components/comments'
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog'
+import { useDomains } from '@/hooks/use-domains'
 import type { EntitySemanticLink } from '@/types/semantic-link'
 import type { DataContract } from '@/types/data-contract'
 import useBreadcrumbStore from '@/stores/breadcrumb-store'
@@ -78,6 +79,7 @@ export default function DataContractDetails() {
   const { contractId } = useParams<{ contractId: string }>()
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { getDomainName } = useDomains()
   
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments)
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle)
@@ -104,6 +106,9 @@ export default function DataContractDetails() {
       let contractData: DataContract | null = null
       if (contractRes.ok) {
         contractData = await contractRes.json()
+        console.log('Contract data from API:', contractData)
+        console.log('Contract domainId field:', contractData?.domainId)
+        console.log('Contract domain field:', contractData?.domain)
       } else {
         // Fallback: try list endpoint and hydrate a minimal model
         const listRes = await fetch('/api/data-contracts')
@@ -283,7 +288,7 @@ export default function DataContractDetails() {
             <div className="space-y-1"><Label>Status:</Label> <Badge variant="secondary" className="ml-1">{contract.status}</Badge></div>
             <div className="space-y-1"><Label>Version:</Label> <Badge variant="outline" className="ml-1">{contract.version}</Badge></div>
             <div className="space-y-1"><Label>API Version:</Label> <span className="text-sm block">{contract.apiVersion}</span></div>
-            <div className="space-y-1"><Label>Domain:</Label> <span className="text-sm block">{contract.domain || 'N/A'}</span></div>
+            <div className="space-y-1"><Label>Domain:</Label> <span className="text-sm block">{getDomainName(contract.domainId || contract.domain) || contract.domain || 'N/A'}</span></div>
             <div className="space-y-1"><Label>Tenant:</Label> <span className="text-sm block">{contract.tenant || 'N/A'}</span></div>
             <div className="space-y-1"><Label>Data Product:</Label> <span className="text-sm block">{contract.dataProduct || 'N/A'}</span></div>
             <div className="space-y-1"><Label>Kind:</Label> <span className="text-sm block">{contract.kind}</span></div>
@@ -566,12 +571,13 @@ export default function DataContractDetails() {
               apiVersion: payload.apiVersion,
               tenant: payload.tenant,
               dataProduct: payload.dataProduct,
-              domainId: payload.domain, // Domain selector now sends domain ID
+              domain_id: payload.domain, // Backend expects domain_id (with underscore)
               // Flatten description object
               descriptionUsage: payload.description?.usage,
               descriptionPurpose: payload.description?.purpose,
               descriptionLimitations: payload.description?.limitations,
             }
+            
             
             const res = await fetch(`/api/data-contracts/${contract.id}`, {
               method: 'PUT',

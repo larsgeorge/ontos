@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import DatasetLookupDialog from './dataset-lookup-dialog'
-import type { DataDomain } from '@/types/data-domain'
+import { useDomains } from '@/hooks/use-domains'
 
 type WizardProps = {
   isOpen: boolean
@@ -18,6 +18,7 @@ type WizardProps = {
 const statuses = ['draft', 'active', 'deprecated', 'archived']
 
 export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmit, initial }: WizardProps) {
+  const { domains, loading: domainsLoading } = useDomains()
   const [step, setStep] = useState(1)
   const totalSteps = 5
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -40,36 +41,6 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const [schemaObjects, setSchemaObjects] = useState<SchemaObject[]>(initial?.schemaObjects || [])
   const [lookupOpen, setLookupOpen] = useState(false)
 
-  // Domain selector state
-  const [domains, setDomains] = useState<DataDomain[]>([])
-  const [domainsLoading, setDomainsLoading] = useState(false)
-
-  // Fetch available domains when wizard opens
-  useEffect(() => {
-    if (isOpen) {
-      fetchDomains()
-    }
-  }, [isOpen])
-
-  const fetchDomains = async () => {
-    setDomainsLoading(true)
-    try {
-      const response = await fetch('/api/data-domains')
-      if (response.ok) {
-        const data = await response.json()
-        setDomains(data || [])
-      } else {
-        console.error('Failed to fetch domains:', response.statusText)
-        setDomains([])
-      }
-    } catch (error) {
-      console.error('Error fetching domains:', error)
-      setDomains([])
-    } finally {
-      setDomainsLoading(false)
-    }
-  }
-
   // Reset wizard state when opening for new contract
   useEffect(() => {
     if (isOpen && !initial) {
@@ -89,6 +60,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       setIsSubmitting(false)
     } else if (isOpen && initial) {
       // Initialize from provided data for editing
+      console.log('Wizard initializing with data:', initial)
+      console.log('Initial domain value:', initial.domain)
       setStep(1)
       setName(initial.name || '')
       setVersion(initial.version || 'v1.0')
@@ -101,6 +74,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       setDescriptionPurpose(initial.descriptionPurpose || '')
       setDescriptionLimitations(initial.descriptionLimitations || '')
       setSchemaObjects(initial.schemaObjects || [])
+      console.log('Domain state set to:', initial.domain || '')
       setIsSubmitting(false)
     }
   }, [isOpen, initial])
@@ -119,9 +93,10 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const handlePrev = () => { if (step > 1) setStep(step - 1) }
 
   const handleSubmit = async () => {
+    console.log('HandleSubmit called - domain state:', domain)
     setIsSubmitting(true)
     try {
-      await onSubmit({
+      const payload = {
         name,
         version,
         status: 'active', // Final submission should be active
@@ -131,7 +106,9 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         dataProduct,
         description: { usage: descriptionUsage, purpose: descriptionPurpose, limitations: descriptionLimitations },
         schema: schemaObjects.map((o) => ({ name: o.name, physicalName: o.physicalName, properties: o.properties })),
-      })
+      }
+      console.log('Submitting payload from wizard:', payload)
+      await onSubmit(payload)
       // Don't close here - let the parent component handle closing on success
     } catch (error) {
       // Error handling - stay open on error so user can retry
@@ -152,9 +129,10 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       return
     }
 
+    console.log('HandleSaveDraft called - domain state:', domain)
     setIsSavingDraft(true)
     try {
-      await onSubmit({
+      const payload = {
         name,
         version,
         status: 'draft', // Draft status for partial saves
@@ -164,7 +142,9 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         dataProduct,
         description: { usage: descriptionUsage, purpose: descriptionPurpose, limitations: descriptionLimitations },
         schema: schemaObjects.map((o) => ({ name: o.name, physicalName: o.physicalName, properties: o.properties })),
-      })
+      }
+      console.log('Submitting draft payload from wizard:', payload)
+      await onSubmit(payload)
       // Don't close here - let the parent component handle closing on success
     } catch (error) {
       // Error handling - stay open on error so user can retry

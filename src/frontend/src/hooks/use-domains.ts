@@ -1,0 +1,126 @@
+import { useState, useEffect, useCallback, useMemo } from 'react'
+
+export interface DataDomain {
+  id: string
+  name: string
+  description?: string
+}
+
+interface DomainsState {
+  domains: DataDomain[]
+  loading: boolean
+  error: string | null
+}
+
+let globalDomainsCache: DataDomain[] | null = null
+let globalCachePromise: Promise<DataDomain[]> | null = null
+
+export const useDomains = () => {
+  const [state, setState] = useState<DomainsState>({
+    domains: globalDomainsCache || [],
+    loading: globalDomainsCache === null,
+    error: null,
+  })
+
+  const fetchDomains = useCallback(async (): Promise<DataDomain[]> => {
+    // Return existing promise if fetch is already in progress
+    if (globalCachePromise) {
+      return globalCachePromise
+    }
+
+    // Return cached data if available
+    if (globalDomainsCache) {
+      return globalDomainsCache
+    }
+
+    // Create new fetch promise
+    globalCachePromise = (async () => {
+      try {
+        const response = await fetch('/api/data-domains')
+        if (!response.ok) {
+          throw new Error(`Failed to fetch domains: ${response.status} ${response.statusText}`)
+        }
+        const data = await response.json()
+        const domains = data || []
+        
+        // Cache the result
+        globalDomainsCache = domains
+        return domains
+      } catch (error) {
+        // Clear the promise on error so next call can retry
+        globalCachePromise = null
+        throw error
+      } finally {
+        // Clear the promise when done
+        globalCachePromise = null
+      }
+    })()
+
+    return globalCachePromise
+  }, [])
+
+  const loadDomains = useCallback(async () => {
+    if (globalDomainsCache) {
+      // Use cached data immediately
+      setState({
+        domains: globalDomainsCache,
+        loading: false,
+        error: null,
+      })
+      return
+    }
+
+    setState(prev => ({ ...prev, loading: true, error: null }))
+
+    try {
+      const domains = await fetchDomains()
+      setState({
+        domains,
+        loading: false,
+        error: null,
+      })
+    } catch (error) {
+      setState({
+        domains: [],
+        loading: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch domains',
+      })
+    }
+  }, [fetchDomains])
+
+  // Load domains on first use
+  useEffect(() => {
+    if (!globalDomainsCache) {
+      loadDomains()
+    }
+  }, [loadDomains])
+
+  // Memoized domain lookup function
+  const getDomainName = useMemo(() => {
+    const domainMap = new Map(state.domains.map(domain => [domain.id, domain.name]))
+    
+    return (domainId: string | undefined | null): string | null => {
+      if (!domainId) return null
+      return domainMap.get(domainId) || null
+    }
+  }, [state.domains])
+
+  // Memoized domain lookup by name function
+  const getDomainById = useMemo(() => {
+    const domainMap = new Map(state.domains.map(domain => [domain.id, domain]))
+    
+    return (domainId: string | undefined | null): DataDomain | null => {
+      if (!domainId) return null
+      return domainMap.get(domainId) || null
+    }
+  }, [state.domains])
+
+  return {
+    domains: state.domains,
+    loading: state.loading,
+    error: state.error,
+    getDomainName,
+    getDomainById,
+    refetch: loadDomains,
+  }
+}

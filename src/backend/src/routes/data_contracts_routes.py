@@ -270,6 +270,8 @@ async def update_contract(
         db_obj = data_contract_repo.get(db, id=contract_id)
         if not db_obj:
             raise HTTPException(status_code=404, detail="Contract not found")
+        
+        
         update_payload = {}
         payload_map = {
             'name': contract_data.name,
