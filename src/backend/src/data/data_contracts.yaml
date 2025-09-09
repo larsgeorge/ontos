@@ -1,200 +1,954 @@
 contracts:
 - id: 1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p
   name: Customer Data Contract
-  contract_text: "{\n  \"name\": \"Customer Data Contract\",\n  \"version\": \"1.0\"\
-    ,\n  \"domain\": \"customer\",\n  \"owner\": \"data.team@company.com\",\n  \"\
-    description\": \"Core customer data contract defining customer profile\",\n  \"\
-    datasets\": [\n    {\n      \"name\": \"customer_profile\",\n      \"type\": \"\
-    table\",\n      \"schema\": {\n        \"columns\": [\n          {\n         \
-    \   \"name\": \"customer_id\",\n            \"type\": \"string\",\n          \
-    \  \"description\": \"Unique customer identifier\",\n            \"nullable\"\
-    : false,\n            \"unique\": true\n          },\n          {\n          \
-    \  \"name\": \"email\",\n            \"type\": \"string\",\n            \"description\"\
-    : \"Customer email address\",\n            \"nullable\": false\n          }\n\
-    \        ],\n        \"primaryKey\": [\"customer_id\"]\n      }\n    }\n  ]\n\
-    }\n"
-  format: json
   version: '1.0'
   owner: data.team@company.com
-  description: Core customer data contract
   status: active
-  created_at: '2023-06-15T10:30:00+00:00'
-  updated_at: '2024-01-01T08:15:00+00:00'
+  kind: DataContract
+  apiVersion: v3.0.2
+  description:
+    purpose: Core customer data contract defining customer profile, preferences, and transaction history
+    usage: Customer master data to power user-facing apps, analytics, and marketing campaigns
+    limitations: Emails must be validated; PII must be encrypted at rest; data retention 7 years max
+  schema:
+  - name: customers
+    physicalName: crm.customers_v2
+    properties:
+    - name: customer_id
+      logicalType: string
+      required: true
+      unique: true
+      description: Unique customer identifier (UUID format)
+    - name: email
+      logicalType: string
+      required: true
+      unique: true
+      description: Customer email address (primary contact)
+    - name: first_name
+      logicalType: string
+      required: true
+      unique: false
+      description: Customer first name
+    - name: last_name
+      logicalType: string
+      required: true
+      unique: false
+      description: Customer last name
+    - name: date_of_birth
+      logicalType: date
+      required: false
+      unique: false
+      description: Customer date of birth (YYYY-MM-DD)
+    - name: phone_number
+      logicalType: string
+      required: false
+      unique: false
+      description: Primary phone number (E.164 format)
+    - name: country_code
+      logicalType: string
+      required: true
+      unique: false
+      description: ISO 3166-1 alpha-2 country code
+    - name: registration_date
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Account registration timestamp (UTC)
+    - name: last_login_at
+      logicalType: timestamp
+      required: false
+      unique: false
+      description: Last successful login timestamp (UTC)
+    - name: account_status
+      logicalType: string
+      required: true
+      unique: false
+      description: Account status (active, suspended, closed, pending_verification)
+    - name: email_verified
+      logicalType: boolean
+      required: true
+      unique: false
+      description: Whether email address has been verified
+    - name: marketing_consent
+      logicalType: boolean
+      required: true
+      unique: false
+      description: Customer consent for marketing communications
+    - name: created_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Record creation timestamp (UTC)
+    - name: updated_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Record last update timestamp (UTC)
+  - name: customer_preferences
+    physicalName: crm.customer_preferences
+    properties:
+    - name: customer_id
+      logicalType: string
+      required: true
+      unique: false
+      description: Reference to customers.customer_id
+    - name: preference_type
+      logicalType: string
+      required: true
+      unique: false
+      description: Type of preference (notification, privacy, communication)
+    - name: preference_key
+      logicalType: string
+      required: true
+      unique: false
+      description: Specific preference key identifier
+    - name: preference_value
+      logicalType: string
+      required: true
+      unique: false
+      description: Preference value (JSON string or simple value)
+    - name: created_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Preference creation timestamp (UTC)
+    - name: updated_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Preference last update timestamp (UTC)
+  - name: customer_addresses
+    physicalName: crm.customer_addresses
+    properties:
+    - name: address_id
+      logicalType: string
+      required: true
+      unique: true
+      description: Unique address identifier
+    - name: customer_id
+      logicalType: string
+      required: true
+      unique: false
+      description: Reference to customers.customer_id
+    - name: address_type
+      logicalType: string
+      required: true
+      unique: false
+      description: Address type (billing, shipping, home, work)
+    - name: street_address
+      logicalType: string
+      required: true
+      unique: false
+      description: Street address line 1
+    - name: street_address_2
+      logicalType: string
+      required: false
+      unique: false
+      description: Street address line 2 (apartment, suite, etc.)
+    - name: city
+      logicalType: string
+      required: true
+      unique: false
+      description: City name
+    - name: state_province
+      logicalType: string
+      required: false
+      unique: false
+      description: State or province name
+    - name: postal_code
+      logicalType: string
+      required: true
+      unique: false
+      description: Postal or ZIP code
+    - name: country_code
+      logicalType: string
+      required: true
+      unique: false
+      description: ISO 3166-1 alpha-2 country code
+    - name: is_primary
+      logicalType: boolean
+      required: true
+      unique: false
+      description: Whether this is the primary address for this type
+    - name: is_verified
+      logicalType: boolean
+      required: true
+      unique: false
+      description: Whether the address has been verified
+    - name: created_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Address creation timestamp (UTC)
+    - name: updated_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Address last update timestamp (UTC)
+
 - id: 2b3c4d5e-6f7g-8h9i-0j1k-2l3m4n5o6p7q
   name: Product Catalog Contract
-  contract_text: "name: Product Catalog Contract\nversion: 1.0\ndomain: product\n\
-    owner: product.team@company.com\ndescription: Product catalog and inventory data\n\
-    datasets:\n  - name: product_catalog\n    type: table\n    schema:\n      columns:\n\
-    \        - name: product_id\n          type: string\n          description: Unique\
-    \ product identifier\n          nullable: false\n          unique: true\n    \
-    \    - name: name\n          type: string\n          description: Product name\n\
-    \          nullable: false\n        - name: price\n          type: number\n  \
-    \        description: Current product price\n          nullable: false\n     \
-    \ primaryKey:\n        - product_id\n"
-  format: yaml
   version: '1.0'
   owner: product.team@company.com
-  description: Product catalog data contract
   status: deprecated
-  created_at: '2023-03-20T14:45:00+00:00'
-  updated_at: '2024-02-28T16:20:00+00:00'
+  kind: DataContract
+  apiVersion: v3.0.2
+  description:
+    purpose: Complete product catalog with categories, inventory, pricing, and vendor information
+    usage: Power e-commerce platform, merchandising experiences, and inventory management
+    limitations: Price values must be non-negative; SKUs must be unique; inventory counts must be integers
+  schema:
+  - name: products
+    physicalName: ecommerce.products_v3
+    properties:
+    - name: product_id
+      logicalType: string
+      required: true
+      unique: true
+      description: Unique product identifier (UUID format)
+    - name: sku
+      logicalType: string
+      required: true
+      unique: true
+      description: Stock Keeping Unit - unique product code
+    - name: name
+      logicalType: string
+      required: true
+      unique: false
+      description: Product display name
+    - name: description
+      logicalType: string
+      required: false
+      unique: false
+      description: Detailed product description (HTML allowed)
+    - name: short_description
+      logicalType: string
+      required: false
+      unique: false
+      description: Brief product summary (max 255 chars)
+    - name: category_id
+      logicalType: string
+      required: true
+      unique: false
+      description: Reference to product_categories.category_id
+    - name: brand
+      logicalType: string
+      required: false
+      unique: false
+      description: Product brand name
+    - name: model
+      logicalType: string
+      required: false
+      unique: false
+      description: Product model identifier
+    - name: base_price
+      logicalType: number
+      required: true
+      unique: false
+      description: Base product price in USD (before discounts)
+    - name: sale_price
+      logicalType: number
+      required: false
+      unique: false
+      description: Current sale price in USD (null if not on sale)
+    - name: cost_price
+      logicalType: number
+      required: false
+      unique: false
+      description: Product cost price for margin calculation
+    - name: weight_kg
+      logicalType: number
+      required: false
+      unique: false
+      description: Product weight in kilograms
+    - name: dimensions_cm
+      logicalType: string
+      required: false
+      unique: false
+      description: Product dimensions as "length x width x height" in cm
+    - name: color
+      logicalType: string
+      required: false
+      unique: false
+      description: Primary product color
+    - name: size
+      logicalType: string
+      required: false
+      unique: false
+      description: Product size (S/M/L/XL or numeric)
+    - name: material
+      logicalType: string
+      required: false
+      unique: false
+      description: Primary material composition
+    - name: status
+      logicalType: string
+      required: true
+      unique: false
+      description: Product status (active, discontinued, out_of_stock, pending)
+    - name: is_digital
+      logicalType: boolean
+      required: true
+      unique: false
+      description: Whether product is digital (no physical shipping)
+    - name: requires_shipping
+      logicalType: boolean
+      required: true
+      unique: false
+      description: Whether product requires physical shipping
+    - name: created_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Product creation timestamp (UTC)
+    - name: updated_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Product last update timestamp (UTC)
+  - name: product_categories
+    physicalName: ecommerce.product_categories
+    properties:
+    - name: category_id
+      logicalType: string
+      required: true
+      unique: true
+      description: Unique category identifier
+    - name: parent_category_id
+      logicalType: string
+      required: false
+      unique: false
+      description: Reference to parent category (null for root categories)
+    - name: name
+      logicalType: string
+      required: true
+      unique: false
+      description: Category display name
+    - name: slug
+      logicalType: string
+      required: true
+      unique: true
+      description: URL-friendly category identifier
+    - name: description
+      logicalType: string
+      required: false
+      unique: false
+      description: Category description
+    - name: sort_order
+      logicalType: integer
+      required: true
+      unique: false
+      description: Display sort order within parent category
+    - name: is_active
+      logicalType: boolean
+      required: true
+      unique: false
+      description: Whether category is visible on storefront
+    - name: seo_title
+      logicalType: string
+      required: false
+      unique: false
+      description: SEO meta title for category page
+    - name: seo_description
+      logicalType: string
+      required: false
+      unique: false
+      description: SEO meta description for category page
+    - name: created_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Category creation timestamp (UTC)
+    - name: updated_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Category last update timestamp (UTC)
+  - name: product_inventory
+    physicalName: ecommerce.product_inventory
+    properties:
+    - name: product_id
+      logicalType: string
+      required: true
+      unique: false
+      description: Reference to products.product_id
+    - name: warehouse_id
+      logicalType: string
+      required: true
+      unique: false
+      description: Warehouse location identifier
+    - name: quantity_available
+      logicalType: integer
+      required: true
+      unique: false
+      description: Current available inventory count
+    - name: quantity_reserved
+      logicalType: integer
+      required: true
+      unique: false
+      description: Quantity reserved for pending orders
+    - name: quantity_on_order
+      logicalType: integer
+      required: true
+      unique: false
+      description: Quantity ordered from suppliers
+    - name: reorder_point
+      logicalType: integer
+      required: true
+      unique: false
+      description: Minimum quantity before reordering
+    - name: max_stock_level
+      logicalType: integer
+      required: true
+      unique: false
+      description: Maximum stock level for this location
+    - name: last_counted_at
+      logicalType: timestamp
+      required: false
+      unique: false
+      description: Last physical inventory count timestamp
+    - name: created_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Inventory record creation timestamp (UTC)
+    - name: updated_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Inventory last update timestamp (UTC)
+  - name: product_variants
+    physicalName: ecommerce.product_variants
+    properties:
+    - name: variant_id
+      logicalType: string
+      required: true
+      unique: true
+      description: Unique variant identifier
+    - name: product_id
+      logicalType: string
+      required: true
+      unique: false
+      description: Reference to products.product_id (parent product)
+    - name: sku
+      logicalType: string
+      required: true
+      unique: true
+      description: Unique SKU for this specific variant
+    - name: variant_name
+      logicalType: string
+      required: true
+      unique: false
+      description: Display name for this variant
+    - name: color
+      logicalType: string
+      required: false
+      unique: false
+      description: Variant-specific color
+    - name: size
+      logicalType: string
+      required: false
+      unique: false
+      description: Variant-specific size
+    - name: material
+      logicalType: string
+      required: false
+      unique: false
+      description: Variant-specific material
+    - name: price_adjustment
+      logicalType: number
+      required: false
+      unique: false
+      description: Price difference from base product (+/-)
+    - name: weight_adjustment_kg
+      logicalType: number
+      required: false
+      unique: false
+      description: Weight difference from base product (+/-)
+    - name: image_url
+      logicalType: string
+      required: false
+      unique: false
+      description: Primary image URL for this variant
+    - name: status
+      logicalType: string
+      required: true
+      unique: false
+      description: Variant status (active, discontinued, out_of_stock)
+    - name: created_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Variant creation timestamp (UTC)
+    - name: updated_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Variant last update timestamp (UTC)
+
 - id: 3c4d5e6f-7g8h-9i0j-1k2l-3m4n5o6p7q8r
   name: Data Sharing Agreement
-  contract_text: 'DATA SHARING AGREEMENT
-
-
-    1. PARTIES
-
-    Data Provider: Analytics Team
-
-    Data Consumer: Marketing Team
-
-
-    2. PURPOSE
-
-    This agreement governs the sharing of customer analytics data
-
-    for marketing campaign optimization.
-
-
-    3. DATA ELEMENTS
-
-    - Customer Segment ID
-
-    - Engagement Score
-
-    - Last Purchase Date
-
-    - Product Categories
-
-
-    4. USAGE RESTRICTIONS
-
-    - Data must not be shared with external parties
-
-    - Personal identifiers must be masked
-
-    - Data must be deleted after 90 days
-
-
-    5. SECURITY REQUIREMENTS
-
-    - Data must be encrypted in transit and at rest
-
-    - Access limited to authorized marketing team members
-
-    - All access must be logged and auditable
-
-    '
-  format: text
   version: '2.0'
   owner: legal.team@company.com
-  description: Legal agreement for data sharing between teams
   status: active
-  created_at: '2024-02-01T09:00:00+00:00'
-  updated_at: '2024-02-01T09:00:00+00:00'
+  kind: DataContract
+  apiVersion: v3.0.2
+  description:
+    purpose: Legal agreement for data sharing between Analytics and Marketing
+    usage: Enables sharing of aggregated analytics for campaign optimization
+    limitations: No external sharing; PII must be masked; delete after 90 days
+
 - id: 4d5e6f7g-8h9i-0j1k-2l3m-4n5o6p7q8r9s
   name: IoT Device Data Contract
-  contract_text: "name: IoT Device Data Contract\nversion: 1.1\ndomain: iot\nowner:\
-    \ iot.team@company.com\ndescription: IoT device telemetry data specification\n\
-    sla:\n  freshness: 5 minutes\n  availability: 99.99%\nschema:\n  device_readings:\n\
-    \    columns:\n      - name: device_id\n        type: string\n        required:\
-    \ true\n      - name: timestamp\n        type: datetime\n        required: true\n\
-    \      - name: temperature\n        type: float\n        unit: celsius\n     \
-    \ - name: humidity\n        type: float\n        unit: percentage\n      - name:\
-    \ battery\n        type: integer\n        unit: percentage\n    partitionBy:\n\
-    \      - timestamp\n    clusterBy:\n      - device_id\n"
-  format: yaml
   version: '1.1'
   owner: iot.team@company.com
-  description: IoT device telemetry specification
   status: active
-  created_at: '2023-08-15T11:30:00+00:00'
-  updated_at: '2024-03-10T15:45:00+00:00'
+  kind: DataContract
+  apiVersion: v3.0.2
+  description:
+    purpose: Comprehensive IoT device management and telemetry data for smart building systems
+    usage: Monitor device health, performance, and environmental data in near real-time for predictive maintenance and energy optimization
+    limitations: Timestamps must be UTC; numeric telemetry must be within calibrated device ranges; data retention 2 years max
+  schema:
+  - name: devices
+    physicalName: iot.devices_master
+    properties:
+    - name: device_id
+      logicalType: string
+      required: true
+      unique: true
+      description: Unique device identifier (UUID format)
+    - name: device_serial
+      logicalType: string
+      required: true
+      unique: true
+      description: Manufacturer serial number
+    - name: device_type
+      logicalType: string
+      required: true
+      unique: false
+      description: Device type (sensor, actuator, gateway, controller)
+    - name: device_model
+      logicalType: string
+      required: true
+      unique: false
+      description: Device model identifier
+    - name: manufacturer
+      logicalType: string
+      required: true
+      unique: false
+      description: Device manufacturer name
+    - name: firmware_version
+      logicalType: string
+      required: true
+      unique: false
+      description: Current firmware version
+    - name: location_id
+      logicalType: string
+      required: true
+      unique: false
+      description: Physical location identifier
+    - name: building_id
+      logicalType: string
+      required: true
+      unique: false
+      description: Building identifier where device is located
+    - name: floor_level
+      logicalType: integer
+      required: false
+      unique: false
+      description: Floor level number
+    - name: room_number
+      logicalType: string
+      required: false
+      unique: false
+      description: Room or zone identifier
+    - name: installation_date
+      logicalType: date
+      required: true
+      unique: false
+      description: Device installation date
+    - name: last_maintenance_date
+      logicalType: date
+      required: false
+      unique: false
+      description: Last maintenance performed date
+    - name: next_maintenance_due
+      logicalType: date
+      required: false
+      unique: false
+      description: Next scheduled maintenance date
+    - name: status
+      logicalType: string
+      required: true
+      unique: false
+      description: Device status (active, inactive, maintenance, faulty, decommissioned)
+    - name: is_online
+      logicalType: boolean
+      required: true
+      unique: false
+      description: Current connectivity status
+    - name: last_seen_at
+      logicalType: timestamp
+      required: false
+      unique: false
+      description: Last successful communication timestamp (UTC)
+    - name: created_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Device registration timestamp (UTC)
+    - name: updated_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Device record last update timestamp (UTC)
+  - name: device_telemetry
+    physicalName: iot.device_telemetry_live
+    properties:
+    - name: reading_id
+      logicalType: string
+      required: true
+      unique: true
+      description: Unique reading identifier
+    - name: device_id
+      logicalType: string
+      required: true
+      unique: false
+      description: Reference to devices.device_id
+    - name: timestamp
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Telemetry reading timestamp (UTC)
+    - name: temperature_celsius
+      logicalType: number
+      required: false
+      unique: false
+      description: Temperature reading in Celsius (-40 to 85°C range)
+    - name: humidity_percent
+      logicalType: number
+      required: false
+      unique: false
+      description: Relative humidity percentage (0-100%)
+    - name: pressure_hpa
+      logicalType: number
+      required: false
+      unique: false
+      description: Atmospheric pressure in hectopascals
+    - name: light_lux
+      logicalType: number
+      required: false
+      unique: false
+      description: Light intensity in lux
+    - name: sound_level_db
+      logicalType: number
+      required: false
+      unique: false
+      description: Sound level in decibels
+    - name: co2_ppm
+      logicalType: integer
+      required: false
+      unique: false
+      description: CO2 concentration in parts per million
+    - name: voc_ppb
+      logicalType: integer
+      required: false
+      unique: false
+      description: Volatile organic compounds in parts per billion
+    - name: pm25_ugm3
+      logicalType: number
+      required: false
+      unique: false
+      description: PM2.5 particulate matter in μg/m³
+    - name: pm10_ugm3
+      logicalType: number
+      required: false
+      unique: false
+      description: PM10 particulate matter in μg/m³
+    - name: battery_level_percent
+      logicalType: integer
+      required: false
+      unique: false
+      description: Battery charge level percentage (0-100)
+    - name: battery_voltage_mv
+      logicalType: integer
+      required: false
+      unique: false
+      description: Battery voltage in millivolts
+    - name: signal_strength_rssi
+      logicalType: integer
+      required: false
+      unique: false
+      description: Signal strength in RSSI (dBm)
+    - name: cpu_usage_percent
+      logicalType: number
+      required: false
+      unique: false
+      description: CPU utilization percentage
+    - name: memory_usage_percent
+      logicalType: number
+      required: false
+      unique: false
+      description: Memory utilization percentage
+    - name: uptime_seconds
+      logicalType: integer
+      required: false
+      unique: false
+      description: Device uptime in seconds since last restart
+    - name: data_quality_score
+      logicalType: number
+      required: true
+      unique: false
+      description: Data quality confidence score (0.0-1.0)
+    - name: created_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Reading ingestion timestamp (UTC)
+  - name: device_events
+    physicalName: iot.device_events_log
+    properties:
+    - name: event_id
+      logicalType: string
+      required: true
+      unique: true
+      description: Unique event identifier
+    - name: device_id
+      logicalType: string
+      required: true
+      unique: false
+      description: Reference to devices.device_id
+    - name: event_type
+      logicalType: string
+      required: true
+      unique: false
+      description: Event type (startup, shutdown, error, warning, maintenance, calibration)
+    - name: event_code
+      logicalType: string
+      required: false
+      unique: false
+      description: Specific event or error code
+    - name: severity
+      logicalType: string
+      required: true
+      unique: false
+      description: Event severity (info, warning, error, critical)
+    - name: message
+      logicalType: string
+      required: true
+      unique: false
+      description: Human-readable event message
+    - name: metadata_json
+      logicalType: string
+      required: false
+      unique: false
+      description: Additional event metadata as JSON string
+    - name: acknowledged
+      logicalType: boolean
+      required: true
+      unique: false
+      description: Whether event has been acknowledged by operator
+    - name: acknowledged_by
+      logicalType: string
+      required: false
+      unique: false
+      description: Username who acknowledged the event
+    - name: acknowledged_at
+      logicalType: timestamp
+      required: false
+      unique: false
+      description: Event acknowledgment timestamp (UTC)
+    - name: resolved
+      logicalType: boolean
+      required: true
+      unique: false
+      description: Whether event has been resolved
+    - name: resolution_notes
+      logicalType: string
+      required: false
+      unique: false
+      description: Resolution notes or actions taken
+    - name: timestamp
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Event occurrence timestamp (UTC)
+    - name: created_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Event record creation timestamp (UTC)
+  - name: device_configurations
+    physicalName: iot.device_configurations
+    properties:
+    - name: config_id
+      logicalType: string
+      required: true
+      unique: true
+      description: Unique configuration identifier
+    - name: device_id
+      logicalType: string
+      required: true
+      unique: false
+      description: Reference to devices.device_id
+    - name: config_key
+      logicalType: string
+      required: true
+      unique: false
+      description: Configuration parameter key
+    - name: config_value
+      logicalType: string
+      required: true
+      unique: false
+      description: Configuration parameter value
+    - name: config_type
+      logicalType: string
+      required: true
+      unique: false
+      description: Value type (string, integer, float, boolean, json)
+    - name: is_sensitive
+      logicalType: boolean
+      required: true
+      unique: false
+      description: Whether this configuration contains sensitive data
+    - name: applied_at
+      logicalType: timestamp
+      required: false
+      unique: false
+      description: When configuration was applied to device (UTC)
+    - name: applied_by
+      logicalType: string
+      required: false
+      unique: false
+      description: Username who applied the configuration
+    - name: version
+      logicalType: integer
+      required: true
+      unique: false
+      description: Configuration version number
+    - name: is_active
+      logicalType: boolean
+      required: true
+      unique: false
+      description: Whether this configuration version is currently active
+    - name: created_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Configuration creation timestamp (UTC)
+    - name: updated_at
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Configuration last update timestamp (UTC)
+
 - id: 5e6f7g8h-9i0j-1k2l-3m4n-5o6p7q8r9s0t
   name: IoT Sensor Data Contract
-  contract_text: "{\n  \"name\": \"IoT Sensor Data Contract\",\n  \"version\": \"\
-    2.0\",\n  \"domain\": \"operations\",\n  \"owner\": \"iot.team@company.com\",\n\
-    \  \"description\": \"Real-time IoT sensor data from manufacturing floor\",\n\
-    \  \"datasets\": [\n    {\n      \"name\": \"sensor_readings\",\n      \"type\"\
-    : \"stream\",\n      \"description\": \"Real-time sensor measurements\",\n   \
-    \   \"schema\": {\n        \"columns\": [\n          {\n            \"name\":\
-    \ \"sensor_id\",\n            \"type\": \"string\",\n            \"description\"\
-    : \"Unique sensor identifier\",\n            \"nullable\": false\n          },\n\
-    \          {\n            \"name\": \"timestamp\",\n            \"type\": \"timestamp\"\
-    ,\n            \"description\": \"Reading timestamp\",\n            \"nullable\"\
-    : false\n          },\n          {\n            \"name\": \"temperature\",\n \
-    \           \"type\": \"number\",\n            \"description\": \"Temperature\
-    \ reading in Celsius\",\n            \"nullable\": false\n          },\n     \
-    \     {\n            \"name\": \"pressure\",\n            \"type\": \"number\"\
-    ,\n            \"description\": \"Pressure reading in kPa\",\n            \"nullable\"\
-    : false\n          }\n        ],\n        \"primaryKey\": [\"sensor_id\", \"timestamp\"\
-    ],\n        \"version\": \"2.0\"\n      },\n      \"security\": {\n        \"\
-    classification\": \"internal\",\n        \"containsPII\": false,\n        \"complianceLabels\"\
-    : [\"operational-data\"]\n      }\n    }\n  ],\n  \"sla\": {\n    \"latency\"\
-    : \"< 500ms\",\n    \"availability\": \"99.99%\"\n  }\n}\n"
-  format: json
   version: '2.0'
   owner: iot.team@company.com
-  description: Real-time IoT sensor data contract
   status: archived
-  created_at: '2023-01-05T08:00:00+00:00'
-  updated_at: '2024-01-15T10:20:00+00:00'
+  kind: DataContract
+  apiVersion: v3.0.2
+  description:
+    purpose: Real-time IoT sensor data from manufacturing floor
+    usage: Stream analytics and anomaly detection
+    limitations: Primary key is (sensor_id, timestamp)
+  schema:
+  - name: sensor_readings
+    physicalName: sensor_readings
+    properties:
+    - name: sensor_id
+      logicalType: string
+      required: true
+      unique: false
+      description: Unique sensor identifier
+    - name: timestamp
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Reading timestamp
+    - name: temperature
+      logicalType: number
+      required: true
+      unique: false
+      description: Temperature reading in Celsius
+    - name: pressure
+      logicalType: number
+      required: true
+      unique: false
+      description: Pressure reading in kPa
+
 - id: 6f7g8h9i-0j1k-2l3m-4n5o-6p7q8r9s0t1u
   name: Financial Transactions Contract
-  contract_text: "{\n  \"name\": \"Financial Transactions Contract\",\n  \"version\"\
-    : \"1.0\",\n  \"domain\": \"finance\",\n  \"owner\": \"finance.team@company.com\"\
-    ,\n  \"description\": \"Daily financial transaction data\",\n  \"datasets\": [\n\
-    \    {\n      \"name\": \"transactions\",\n      \"type\": \"table\",\n      \"\
-    description\": \"Financial transaction records\",\n      \"schema\": {\n     \
-    \   \"columns\": [\n          {\n            \"name\": \"transaction_id\",\n \
-    \           \"type\": \"string\",\n            \"description\": \"Unique transaction\
-    \ identifier\",\n            \"nullable\": false,\n            \"unique\": true\n\
-    \          },\n          {\n            \"name\": \"amount\",\n            \"\
-    type\": \"number\",\n            \"description\": \"Transaction amount\",\n  \
-    \          \"nullable\": false\n          },\n          {\n            \"name\"\
-    : \"currency\",\n            \"type\": \"string\",\n            \"description\"\
-    : \"Transaction currency code\",\n            \"nullable\": false\n          },\n\
-    \          {\n            \"name\": \"timestamp\",\n            \"type\": \"timestamp\"\
-    ,\n            \"description\": \"Transaction timestamp\",\n            \"nullable\"\
-    : false\n          }\n        ],\n        \"primaryKey\": [\"transaction_id\"\
-    ],\n        \"version\": \"1.0\"\n      },\n      \"security\": {\n        \"\
-    classification\": \"restricted\",\n        \"containsPII\": false,\n        \"\
-    complianceLabels\": [\"sox\", \"pci\"]\n      }\n    }\n  ]\n}\n"
-  format: json
   version: '1.0'
   owner: finance.team@company.com
-  description: Financial transaction data contract
   status: draft
-  created_at: '2024-03-01T13:15:00+00:00'
-  updated_at: '2024-03-05T16:30:00+00:00'
+  kind: DataContract
+  apiVersion: v3.0.2
+  description:
+    purpose: Daily financial transaction data
+    usage: Reconciliation, accounting, and reporting
+    limitations: Amount must be >= 0; currency must be ISO-4217
+  schema:
+  - name: transactions
+    physicalName: transactions
+    properties:
+    - name: transaction_id
+      logicalType: string
+      required: true
+      unique: true
+      description: Unique transaction identifier
+    - name: amount
+      logicalType: number
+      required: true
+      unique: false
+      description: Transaction amount
+    - name: currency
+      logicalType: string
+      required: true
+      unique: false
+      description: Transaction currency code
+    - name: timestamp
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Transaction timestamp
+
 - id: 7g8h9i0j-1k2l-3m4n-5o6p-7q8r9s0t1u2v
   name: Inventory Management Contract
-  contract_text: "{\n  \"name\": \"Inventory Management Contract\",\n  \"version\"\
-    : \"1.2\",\n  \"domain\": \"logistics\",\n  \"owner\": \"logistics.team@company.com\"\
-    ,\n  \"description\": \"Real-time inventory levels and movements\",\n  \"datasets\"\
-    : [\n    {\n      \"name\": \"inventory_levels\",\n      \"type\": \"table\",\n\
-    \      \"description\": \"Current inventory levels by location\",\n      \"schema\"\
-    : {\n        \"columns\": [\n          {\n            \"name\": \"product_id\"\
-    ,\n            \"type\": \"string\",\n            \"description\": \"Product identifier\"\
-    ,\n            \"nullable\": false\n          },\n          {\n            \"\
-    name\": \"location_id\",\n            \"type\": \"string\",\n            \"description\"\
-    : \"Warehouse location identifier\",\n            \"nullable\": false\n      \
-    \    },\n          {\n            \"name\": \"quantity\",\n            \"type\"\
-    : \"integer\",\n            \"description\": \"Current quantity in stock\",\n\
-    \            \"nullable\": false\n          },\n          {\n            \"name\"\
-    : \"last_updated\",\n            \"type\": \"timestamp\",\n            \"description\"\
-    : \"Last update timestamp\",\n            \"nullable\": false\n          }\n \
-    \       ],\n        \"primaryKey\": [\"product_id\", \"location_id\"],\n     \
-    \   \"version\": \"1.2\"\n      },\n      \"security\": {\n        \"classification\"\
-    : \"internal\",\n        \"containsPII\": false,\n        \"complianceLabels\"\
-    : [\"inventory-control\"]\n      }\n    }\n  ],\n  \"sla\": {\n    \"freshness\"\
-    : \"5 minutes\",\n    \"availability\": \"99.95%\"\n  }\n}\n"
-  format: json
   version: '1.2'
   owner: logistics.team@company.com
-  description: Inventory management data contract
   status: deprecated
-  created_at: '2023-02-10T09:45:00+00:00'
-  updated_at: '2023-12-20T14:10:00+00:00'
+  kind: DataContract
+  apiVersion: v3.0.2
+  description:
+    purpose: Real-time inventory levels and movements
+    usage: Track stock levels across warehouses
+    limitations: Quantity must be integer >= 0
+  schema:
+  - name: inventory_levels
+    physicalName: inventory_levels
+    properties:
+    - name: product_id
+      logicalType: string
+      required: true
+      unique: false
+      description: Product identifier
+    - name: location_id
+      logicalType: string
+      required: true
+      unique: false
+      description: Warehouse location identifier
+    - name: quantity
+      logicalType: integer
+      required: true
+      unique: false
+      description: Current quantity in stock
+    - name: last_updated
+      logicalType: timestamp
+      required: true
+      unique: false
+      description: Last update timestamp
+
 

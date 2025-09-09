@@ -119,15 +119,21 @@ class DataContractBase(BaseModel):
 
 
 class DataContractCreate(DataContractBase):
-    format: str = Field('json')
-    contract_text: Optional[str] = None  # Allow empty for wizard creation
-    
     # Additional ODCS fields for wizard
     domain: Optional[str] = None
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None
     schema: Optional[List[SchemaObject]] = Field(None)
+    
+    # Full ODCS structure fields
+    quality_rules: Optional[List[QualityRule]] = Field(None, alias='qualityRules')
+    team: Optional[List[TeamMember]] = Field(None)
+    access_control: Optional[AccessControl] = Field(None, alias='accessControl')
+    support: Optional[SupportChannels] = None
+    sla: Optional[SLARequirements] = None
+    servers: Optional[ServerConfig] = None
+    custom_properties: Optional[Dict[str, Any]] = Field(None, alias='customProperties')
     
     def to_odcs_contract(self) -> ODCSContract:
         """Convert to full ODCS contract structure"""
@@ -157,8 +163,6 @@ class DataContractUpdate(BaseModel):
     descriptionUsage: Optional[str] = Field(None, alias='description_usage')
     descriptionPurpose: Optional[str] = Field(None, alias='description_purpose')
     descriptionLimitations: Optional[str] = Field(None, alias='description_limitations')
-    format: Optional[str] = None
-    contract_text: Optional[str] = None
 
 
 class DataContractRead(BaseModel):
@@ -167,10 +171,22 @@ class DataContractRead(BaseModel):
     version: str
     status: str
     owner: str
-    format: Optional[str] = None
+    kind: Optional[str] = 'DataContract'
+    apiVersion: Optional[str] = Field('v3.0.2', alias='api_version')
+    tenant: Optional[str] = None
+    domain: Optional[str] = None
+    dataProduct: Optional[str] = Field(None, alias='data_product')
+    description: Optional[ContractDescription] = None
+    schema: List[SchemaObject] = Field(default_factory=list)
+    quality_rules: List[QualityRule] = Field(default_factory=list, alias='qualityRules')
+    team: List[TeamMember] = Field(default_factory=list)
+    access_control: Optional[AccessControl] = Field(None, alias='accessControl')
+    support: Optional[SupportChannels] = None
+    sla: Optional[SLARequirements] = None
+    servers: Optional[ServerConfig] = None
+    custom_properties: Dict[str, Any] = Field(default_factory=dict, alias='customProperties')
     created: Optional[str] = None
     updated: Optional[str] = None
-    contract_text: Optional[str] = None
 
 
 class DataContractCommentCreate(BaseModel):

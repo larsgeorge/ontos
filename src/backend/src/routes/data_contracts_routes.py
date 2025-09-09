@@ -11,10 +11,23 @@ from src.common.dependencies import (
     DBSessionDep,
     AuditManagerDep,
     CurrentUserDep,
+    AuditCurrentUserDep,
 )
 from src.common.audit_logging import audit_action
 from src.repositories.data_contracts_repository import data_contract_repo
-from src.db_models.data_contracts import DataContractDb, DataContractCommentDb, DataContractTagDb, DataContractRoleDb
+from src.db_models.data_contracts import (
+    DataContractDb, 
+    DataContractCommentDb, 
+    DataContractTagDb, 
+    DataContractRoleDb,
+    SchemaObjectDb,
+    SchemaPropertyDb,
+    DataContractTeamDb,
+    DataContractSupportDb,
+    DataContractCustomPropertyDb,
+    DataContractSlaPropertyDb,
+    DataQualityCheckDb
+)
 from src.models.data_contracts_api import (
     DataContractCreate,
     DataContractUpdate,
@@ -46,7 +59,7 @@ def get_data_contracts_manager(request: Request) -> DataContractsManager:
 
 @router.get('/data-contracts', response_model=list[DataContractRead])
 async def get_contracts(db: DBSessionDep, _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))):
-    """Get all data contracts"""
+    """Get all data contracts with basic ODCS structure"""
     try:
         contracts = data_contract_repo.get_multi(db)
         return [
@@ -56,7 +69,10 @@ async def get_contracts(db: DBSessionDep, _: bool = Depends(PermissionChecker('d
                 version=c.version,
                 status=c.status,
                 owner=c.owner,
-                format=c.raw_format,
+                kind=c.kind,
+                apiVersion=c.api_version,
+                tenant=c.tenant,
+                dataProduct=c.data_product,
                 created=c.created_at.isoformat() if c.created_at else None,
                 updated=c.updated_at.isoformat() if c.updated_at else None,
             )
@@ -69,25 +85,112 @@ async def get_contracts(db: DBSessionDep, _: bool = Depends(PermissionChecker('d
 
 @router.get('/data-contracts/{contract_id}', response_model=DataContractRead)
 async def get_contract(contract_id: str, db: DBSessionDep, _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))):
-    """Get a specific data contract"""
+    """Get a specific data contract with full ODCS structure"""
     try:
         contract = data_contract_repo.get_with_all(db, id=contract_id)
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
 
-        return DataContractRead(
-            id=contract.id,
-            name=contract.name,
-            version=contract.version,
-            status=contract.status,
-            owner=contract.owner,
-            format=contract.raw_format,
-            contract_text=contract.raw_text,
-            created=contract.created_at.isoformat() if contract.created_at else None,
-            updated=contract.updated_at.isoformat() if contract.updated_at else None,
-        )
+        return _build_contract_read_from_db(contract)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+def _build_contract_read_from_db(db_contract) -> DataContractRead:
+    """Build DataContractRead from normalized database models"""
+    from src.models.data_contracts_api import ContractDescription, SchemaObject, ColumnProperty
+    
+    # Build description
+    description = None
+    if db_contract.description_usage or db_contract.description_purpose or db_contract.description_limitations:
+        description = ContractDescription(
+            usage=db_contract.description_usage,
+            purpose=db_contract.description_purpose,
+            limitations=db_contract.description_limitations
+        )
+    
+    # Build schema objects
+    schema_objects = []
+    for schema_obj in db_contract.schema_objects:
+        properties = []
+        for prop in schema_obj.properties:
+            properties.append(ColumnProperty(
+                name=prop.name,
+                logical_type=prop.logical_type or 'string',
+                required=prop.required,
+                unique=prop.unique,
+                description=prop.transform_description
+            ))
+        
+        schema_objects.append(SchemaObject(
+            name=schema_obj.name,
+            physicalName=schema_obj.physical_name,
+            properties=properties
+        ))
+
+    # Build team (legacy minimal)
+    team = []
+    if getattr(db_contract, 'team', None):
+        for member in db_contract.team:
+            team.append({
+                'role': member.role or 'member',
+                'email': member.username,
+                'name': None,
+            })
+
+    # Build support channels (legacy minimal)
+    support = None
+    if getattr(db_contract, 'support', None):
+        support = {}
+        for ch in db_contract.support:
+            if ch.channel and ch.url:
+                support[ch.channel] = ch.url
+
+    # Custom properties
+    custom_properties = {}
+    if getattr(db_contract, 'custom_properties', None):
+        for cp in db_contract.custom_properties:
+            custom_properties[cp.property] = cp.value
+
+    # SLA properties (flatten basic key/value)
+    sla = None
+    if getattr(db_contract, 'sla_properties', None):
+        sla = {}
+        for sp in db_contract.sla_properties:
+            if sp.property and sp.value is not None:
+                sla[sp.property] = sp.value
+
+    # Servers (minimal mapping)
+    servers = None
+    if getattr(db_contract, 'servers', None):
+        servers = []
+        for s in db_contract.servers:
+            servers.append({
+                'serverType': s.type,
+                'connectionString': s.server,
+                'environment': s.environment,
+            })
+
+    return DataContractRead(
+        id=db_contract.id,
+        name=db_contract.name,
+        version=db_contract.version,
+        status=db_contract.status,
+        owner=db_contract.owner,
+        kind=db_contract.kind,
+        apiVersion=db_contract.api_version,
+        tenant=db_contract.tenant,
+        dataProduct=db_contract.data_product,
+        description=description,
+        schema=schema_objects,
+        team=team,
+        support=support,
+        customProperties=custom_properties,
+        sla=sla,
+        servers=servers,
+        created=db_contract.created_at.isoformat() if db_contract.created_at else None,
+        updated=db_contract.updated_at.isoformat() if db_contract.updated_at else None,
+    )
+
 
 @router.post('/data-contracts', response_model=DataContractRead)
 async def create_contract(
@@ -97,34 +200,59 @@ async def create_contract(
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Create a new data contract"""
+    """Create a new data contract with normalized ODCS structure"""
     try:
-        # Persist as DB entity (normalized fields minimal for now)
+        # Create main contract record
         db_obj = DataContractDb(
             name=contract_data.name,
             version=contract_data.version or 'v1.0',
             status=contract_data.status or 'draft',
             owner=contract_data.owner or (current_user.username if current_user else 'unknown'),
             kind=contract_data.kind or 'DataContract',
-            api_version=contract_data.apiVersion or 'v3.0.1',
-            raw_format=contract_data.format or 'json',
-            raw_text=contract_data.contract_text or '',
+            api_version=contract_data.apiVersion or 'v3.0.2',
+            tenant=contract_data.tenant,
+            data_product=contract_data.dataProduct,
+            description_usage=contract_data.description.usage if contract_data.description else None,
+            description_purpose=contract_data.description.purpose if contract_data.description else None,
+            description_limitations=contract_data.description.limitations if contract_data.description else None,
             created_by=current_user.username if current_user else None,
             updated_by=current_user.username if current_user else None,
         )
-        created = data_contract_repo.create(db=db, obj_in=db_obj)  # type: ignore[arg-type]
+        created = data_contract_repo.create(db=db, obj_in=db_obj)
+        
+        # Create schema objects and properties if provided
+        if contract_data.schema:
+            from src.db_models.data_contracts import SchemaObjectDb, SchemaPropertyDb
+            for schema_obj_data in contract_data.schema:
+                schema_obj = SchemaObjectDb(
+                    contract_id=created.id,
+                    name=schema_obj_data.name,
+                    physical_name=schema_obj_data.physicalName,
+                    logical_type='object'
+                )
+                db.add(schema_obj)
+                db.flush()  # Get ID for properties
+                
+                # Add properties
+                for prop_data in schema_obj_data.properties:
+                    prop = SchemaPropertyDb(
+                        object_id=schema_obj.id,
+                        name=prop_data.name,
+                        logical_type=prop_data.logicalType,
+                        required=prop_data.required or False,
+                        unique=prop_data.unique or False,
+                        transform_description=prop_data.description
+                    )
+                    db.add(prop)
+        
         db.commit()
-        return DataContractRead(
-            id=created.id,
-            name=created.name,
-            version=created.version,
-            status=created.status,
-            owner=created.owner,
-            format=created.raw_format,
-            created=created.created_at.isoformat() if created.created_at else None,
-            updated=created.updated_at.isoformat() if created.updated_at else None,
-        )
+        
+        # Load with relationships for response
+        created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
+        return _build_contract_read_from_db(created_with_relations)
+        
     except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put('/data-contracts/{contract_id}', response_model=DataContractRead)
@@ -134,7 +262,7 @@ async def update_contract(
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
-    current_user: CurrentUserDep,
+    current_user: AuditCurrentUserDep,
     contract_data: DataContractUpdate = Body(...),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
@@ -155,8 +283,6 @@ async def update_contract(
             'description_usage': contract_data.descriptionUsage,
             'description_purpose': contract_data.descriptionPurpose,
             'description_limitations': contract_data.descriptionLimitations,
-            'raw_format': contract_data.format,
-            'raw_text': contract_data.contract_text,
             'api_version': contract_data.apiVersion,
             'kind': contract_data.kind,
             'domain_id': contract_data.domainId,
@@ -173,7 +299,6 @@ async def update_contract(
             version=updated.version,
             status=updated.status,
             owner=updated.owner,
-            format=updated.raw_format,
             created=updated.created_at.isoformat() if updated.created_at else None,
             updated=updated.updated_at.isoformat() if updated.updated_at else None,
         )
@@ -189,7 +314,7 @@ async def delete_contract(
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
-    current_user: CurrentUserDep,
+    current_user: AuditCurrentUserDep,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
@@ -212,15 +337,15 @@ async def upload_contract(
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
-    current_user: CurrentUserDep,
+    current_user: AuditCurrentUserDep,
     file: UploadFile = File(...),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Upload a contract file"""
+    """Upload a contract file and parse it into normalized ODCS structure"""
     try:
         content_type = file.content_type
-        filename = file.filename or ''
+        filename = file.filename or 'uploaded_contract'
 
         # Determine format from content type or extension
         format = 'json'  # default
@@ -232,71 +357,189 @@ async def upload_contract(
         # Read file content
         contract_text = (await file.read()).decode('utf-8')
 
-        # Parse if JSON/YAML to extract name/version/tags/roles when possible
+        # Parse structured content (JSON/YAML) or handle text
         parsed: dict | None = None
         try:
             if format == 'yaml':
                 parsed = yaml.safe_load(contract_text) or None
             elif format == 'json':
                 parsed = json.loads(contract_text) or None
+            elif format == 'text':
+                # For text format, create a minimal structure
+                parsed = {
+                    "name": filename.replace('.txt', '').replace('.', '_'),
+                    "version": "v1.0",
+                    "status": "draft", 
+                    "owner": current_user.username if current_user else 'unknown',
+                    "description": {
+                        "purpose": contract_text[:500] + "..." if len(contract_text) > 500 else contract_text
+                    }
+                }
         except Exception:
-            parsed = None
+            # If parsing fails, treat as text
+            parsed = {
+                "name": filename.replace('.', '_'),
+                "version": "v1.0", 
+                "status": "draft",
+                "owner": current_user.username if current_user else 'unknown',
+                "description": {
+                    "purpose": contract_text[:500] + "..." if len(contract_text) > 500 else contract_text
+                }
+            }
 
-        name_val = (parsed.get('name') if isinstance(parsed, dict) else None) or filename
-        version_val = (parsed.get('version') if isinstance(parsed, dict) else None) or 'v1.0'
-        owner_val = (parsed.get('owner') if isinstance(parsed, dict) else None) or (current_user.username if current_user else 'unknown')
-        api_version_val = (parsed.get('apiVersion') if isinstance(parsed, dict) else None) or 'v3.0.1'
-        kind_val = (parsed.get('kind') if isinstance(parsed, dict) else None) or 'DataContract'
+        if not isinstance(parsed, dict):
+            raise HTTPException(status_code=400, detail="Could not parse uploaded file")
 
-        created = data_contract_repo.create(db=db, obj_in=DataContractDb(
+        # Extract core contract fields
+        name_val = parsed.get('name') or filename.replace('.', '_')
+        version_val = parsed.get('version') or 'v1.0'
+        status_val = parsed.get('status') or 'draft'
+        owner_val = parsed.get('owner') or (current_user.username if current_user else 'unknown')
+        kind_val = parsed.get('kind') or 'DataContract'
+        api_version_val = parsed.get('apiVersion') or parsed.get('api_version') or 'v3.0.2'
+        
+        # Extract description fields
+        description = parsed.get('description', {})
+        if isinstance(description, str):
+            description = {"purpose": description}
+        elif not isinstance(description, dict):
+            description = {}
+
+        # Create main contract record
+        db_obj = DataContractDb(
             name=name_val,
             version=version_val,
-            status='draft',
+            status=status_val,
             owner=owner_val,
             kind=kind_val,
             api_version=api_version_val,
-            raw_format=format,
-            raw_text=contract_text,
+            tenant=parsed.get('tenant'),
+            data_product=parsed.get('dataProduct') or parsed.get('data_product'),
+            description_usage=description.get('usage'),
+            description_purpose=description.get('purpose'),
+            description_limitations=description.get('limitations'),
             created_by=current_user.username if current_user else None,
             updated_by=current_user.username if current_user else None,
-        ))
+        )
+        created = data_contract_repo.create(db=db, obj_in=db_obj)
+        
+        # Parse and create schema objects if present
+        schema_data = parsed.get('schema', [])
+        if isinstance(schema_data, list):
+            for schema_obj_data in schema_data:
+                if not isinstance(schema_obj_data, dict):
+                    continue
+                    
+                schema_obj = SchemaObjectDb(
+                    contract_id=created.id,
+                    name=schema_obj_data.get('name', 'table'),
+                    physical_name=schema_obj_data.get('physicalName') or schema_obj_data.get('physical_name'),
+                    logical_type='object'
+                )
+                db.add(schema_obj)
+                db.flush()  # Get ID for properties
+                
+                # Add properties
+                properties = schema_obj_data.get('properties', [])
+                if isinstance(properties, list):
+                    for prop_data in properties:
+                        if not isinstance(prop_data, dict):
+                            continue
+                        prop = SchemaPropertyDb(
+                            object_id=schema_obj.id,
+                            name=prop_data.get('name', 'column'),
+                            logical_type=prop_data.get('logicalType') or prop_data.get('logical_type', 'string'),
+                            required=prop_data.get('required', False),
+                            unique=prop_data.get('unique', False),
+                            transform_description=prop_data.get('description')
+                        )
+                        db.add(prop)
 
-        # Extract simple arrays
-        if isinstance(parsed, dict):
-            tags = parsed.get('tags')
-            if isinstance(tags, list):
-                for t in tags:
-                    if isinstance(t, str):
-                        db.add(DataContractTagDb(contract_id=created.id, name=t))
-            roles = parsed.get('roles')
-            if isinstance(roles, list):
-                for r in roles:
-                    if isinstance(r, dict) and r.get('role'):
-                        db.add(DataContractRoleDb(contract_id=created.id, role=r.get('role'), description=r.get('description'), access=r.get('access'), first_level_approvers=r.get('firstLevelApprovers'), second_level_approvers=r.get('secondLevelApprovers')))
+        # Parse team members
+        team_data = parsed.get('team', [])
+        if isinstance(team_data, list):
+            for member_data in team_data:
+                if not isinstance(member_data, dict):
+                    continue
+                team_member = DataContractTeamDb(
+                    contract_id=created.id,
+                    username=member_data.get('email', member_data.get('username', 'unknown')),
+                    role=member_data.get('role', 'member'),
+                    date_in=member_data.get('dateIn') or member_data.get('date_in'),
+                    date_out=member_data.get('dateOut') or member_data.get('date_out'),
+                )
+                db.add(team_member)
+
+        # Parse support channels
+        support_data = parsed.get('support', {})
+        if isinstance(support_data, dict):
+            for channel, url in support_data.items():
+                if url and isinstance(url, str):
+                    support_channel = DataContractSupportDb(
+                        contract_id=created.id,
+                        channel=channel,
+                        url=url,
+                        description=f"{channel.title()} support channel"
+                    )
+                    db.add(support_channel)
+
+        # Parse custom properties
+        custom_props = parsed.get('customProperties') or parsed.get('custom_properties', {})
+        if isinstance(custom_props, dict):
+            for key, value in custom_props.items():
+                custom_prop = DataContractCustomPropertyDb(
+                    contract_id=created.id,
+                    property=key,
+                    value=str(value) if value is not None else None
+                )
+                db.add(custom_prop)
+
+        # Parse SLA properties
+        sla_data = parsed.get('sla', {})
+        if isinstance(sla_data, dict):
+            for key, value in sla_data.items():
+                if value is not None:
+                    sla_prop = DataContractSlaPropertyDb(
+                        contract_id=created.id,
+                        property=key,
+                        value=str(value)
+                    )
+                    db.add(sla_prop)
+
+        # Parse tags (legacy support)
+        tags = parsed.get('tags', [])
+        if isinstance(tags, list):
+            for tag in tags:
+                if isinstance(tag, str):
+                    db.add(DataContractTagDb(contract_id=created.id, name=tag))
+
+        # Parse roles (legacy support)
+        roles = parsed.get('roles', [])
+        if isinstance(roles, list):
+            for role_data in roles:
+                if isinstance(role_data, dict) and role_data.get('role'):
+                    db.add(DataContractRoleDb(
+                        contract_id=created.id,
+                        role=role_data.get('role'),
+                        description=role_data.get('description'),
+                        access=role_data.get('access'),
+                        first_level_approvers=role_data.get('firstLevelApprovers'),
+                        second_level_approvers=role_data.get('secondLevelApprovers')
+                    ))
 
         db.commit()
-        return {"id": created.id, "name": created.name, "version": created.version, "status": created.status, "owner": created.owner, "format": created.raw_format, "created": str(created.created_at), "updated": str(created.updated_at)}
+        
+        # Load with relationships for response
+        created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
+        return _build_contract_read_from_db(created_with_relations)
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-@router.get('/data-contracts/{contract_id}/export')
-async def export_contract(contract_id: str, db: DBSessionDep, manager: DataContractsManager = Depends(get_data_contracts_manager), _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))):
-    """Export a contract as JSON"""
-    try:
-        db_obj = data_contract_repo.get(db, id=contract_id)
-        if not db_obj:
-            raise HTTPException(status_code=404, detail="Contract not found")
-        media = 'application/json' if (db_obj.raw_format or 'json') == 'json' else 'text/plain'
-        content = db_obj.raw_text or ''
-        if (db_obj.raw_format or 'json') == 'json':
-            try:
-                content = json.loads(content)
-            except Exception:
-                # keep as string if not valid JSON
-                media = 'text/plain'
-        return JSONResponse(content=content, media_type=media, headers={'Content-Disposition': f'attachment; filename="{(db_obj.name or "contract").lower().replace(" ", "_")}.{db_obj.raw_format or "json"}"'})
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# Old document-based export removed - use /data-contracts/{contract_id}/odcs/export instead
 
 
 @router.get('/data-contracts/schema/odcs')
@@ -311,32 +554,7 @@ async def get_odcs_schema(_perm: bool = Depends(PermissionChecker('data-contract
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post('/data-contracts/odcs/import')
-@audit_action(feature="data-contracts", action="IMPORT")
-async def import_odcs(
-    request: Request,
-    db: DBSessionDep,
-    audit_manager: AuditManagerDep,
-    current_user: CurrentUserDep,
-    payload: dict = Body(...),
-    manager: DataContractsManager = Depends(get_data_contracts_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
-):
-    try:
-        created = manager.create_from_odcs_dict(db, payload, current_user.username if current_user else None)
-        db.commit()
-        return DataContractRead(
-            id=created.id,
-            name=created.name,
-            version=created.version,
-            status=created.status,
-            owner=created.owner,
-            format=created.raw_format,
-            created=created.created_at.isoformat() if created.created_at else None,
-            updated=created.updated_at.isoformat() if created.updated_at else None,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# ODCS import functionality now handled by /data-contracts/upload endpoint
 
 
 @router.get('/data-contracts/{contract_id}/odcs/export')
@@ -357,7 +575,7 @@ async def add_comment(
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
-    current_user: CurrentUserDep,
+    current_user: AuditCurrentUserDep,
     payload: DataContractCommentCreate = Body(...),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
@@ -400,7 +618,7 @@ async def create_version(
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
-    current_user: CurrentUserDep,
+    current_user: AuditCurrentUserDep,
     payload: dict = Body(...),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
@@ -418,8 +636,11 @@ async def create_version(
             owner=original.owner,
             kind=original.kind,
             api_version=original.api_version,
-            raw_format=original.raw_format,
-            raw_text=original.raw_text,
+            tenant=original.tenant,
+            data_product=original.data_product,
+            description_usage=original.description_usage,
+            description_purpose=original.description_purpose,
+            description_limitations=original.description_limitations,
             domain_id=original.domain_id,
             created_by=current_user.username if current_user else None,
             updated_by=current_user.username if current_user else None,

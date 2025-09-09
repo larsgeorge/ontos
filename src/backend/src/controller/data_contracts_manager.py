@@ -17,6 +17,8 @@ from src.models.data_contracts import (
     Metadata,
     Quality,
     SecurityClassification,
+    Security,
+    DatasetLifecycle,
 )
 
 # Import Search Interfaces
@@ -30,6 +32,8 @@ from src.db_models.data_contracts import (
     DataContractTagDb,
     DataContractRoleDb,
     DataContractServerDb,
+    SchemaObjectDb,
+    SchemaPropertyDb,
 )
 from src.repositories.data_contracts_repository import data_contract_repo
 
@@ -510,13 +514,26 @@ class DataContractsManager(SearchableAsset):
 
     def build_odcs_from_db(self, db_obj: DataContractDb) -> Dict[str, Any]:
         odcs: Dict[str, Any] = {
-            'version': db_obj.version,
-            'kind': db_obj.kind or 'DataContract',
-            'apiVersion': db_obj.api_version or 'v3.0.1',
             'id': db_obj.id,
-            'name': db_obj.name,
+            'kind': db_obj.kind or 'DataContract',
+            'apiVersion': db_obj.api_version or 'v3.0.2',
+            'version': db_obj.version,
             'status': db_obj.status,
+            'name': db_obj.name,
+            'owner': db_obj.owner,
+            'created': db_obj.created_at.isoformat() if db_obj.created_at else None,
+            'updated': db_obj.updated_at.isoformat() if db_obj.updated_at else None,
         }
+        
+        # Add optional top-level fields
+        if db_obj.tenant:
+            odcs['tenant'] = db_obj.tenant
+        if db_obj.domain:
+            odcs['domain'] = db_obj.domain
+        if db_obj.data_product:
+            odcs['dataProduct'] = db_obj.data_product
+            
+        # Build description object
         description: Dict[str, Any] = {}
         if db_obj.description_usage:
             description['usage'] = db_obj.description_usage
@@ -526,9 +543,100 @@ class DataContractsManager(SearchableAsset):
             description['limitations'] = db_obj.description_limitations
         if description:
             odcs['description'] = description
-        if db_obj.tags:
+            
+        # Build schema array from relationships
+        if hasattr(db_obj, 'schema_objects') and db_obj.schema_objects:
+            schema = []
+            for schema_obj in db_obj.schema_objects:
+                schema_dict = {
+                    'name': schema_obj.name,
+                    'properties': []
+                }
+                if schema_obj.physical_name:
+                    schema_dict['physicalName'] = schema_obj.physical_name
+                    
+                # Add properties
+                if hasattr(schema_obj, 'properties') and schema_obj.properties:
+                    for prop in schema_obj.properties:
+                        prop_dict = {
+                            'name': prop.name,
+                            'logicalType': prop.logical_type,
+                        }
+                        if prop.required is not None:
+                            prop_dict['required'] = prop.required
+                        if prop.unique is not None:
+                            prop_dict['unique'] = prop.unique
+                        if prop.transform_description:
+                            prop_dict['description'] = prop.transform_description
+                        schema_dict['properties'].append(prop_dict)
+                        
+                schema.append(schema_dict)
+            odcs['schema'] = schema
+            
+        # Build team array from relationships
+        if hasattr(db_obj, 'team_members') and db_obj.team_members:
+            team = []
+            for member in db_obj.team_members:
+                member_dict = {
+                    'role': member.role,
+                    'email': member.username,
+                }
+                if member.date_in:
+                    member_dict['dateIn'] = member.date_in
+                if member.date_out:
+                    member_dict['dateOut'] = member.date_out
+                team.append(member_dict)
+            odcs['team'] = team
+            
+        # Build access control from quality checks (this is a simplified mapping)
+        if hasattr(db_obj, 'quality_checks') and db_obj.quality_checks:
+            quality_rules = []
+            for check in db_obj.quality_checks:
+                rule_dict = {
+                    'type': check.check_type,
+                    'enabled': check.enabled,
+                }
+                if check.threshold is not None:
+                    rule_dict['threshold'] = check.threshold
+                if check.query:
+                    rule_dict['query'] = check.query
+                quality_rules.append(rule_dict)
+            odcs['qualityRules'] = quality_rules
+            
+        # Build support channels
+        if hasattr(db_obj, 'support_channels') and db_obj.support_channels:
+            support = {}
+            for channel in db_obj.support_channels:
+                support[channel.channel] = channel.url
+            odcs['support'] = support
+            
+        # Build SLA properties
+        if hasattr(db_obj, 'sla_properties') and db_obj.sla_properties:
+            sla = {}
+            for prop in db_obj.sla_properties:
+                # Try to convert numeric values
+                value = prop.value
+                try:
+                    if '.' in value:
+                        sla[prop.property] = float(value)
+                    else:
+                        sla[prop.property] = int(value)
+                except (ValueError, TypeError):
+                    sla[prop.property] = value
+            odcs['sla'] = sla
+            
+        # Build custom properties
+        if hasattr(db_obj, 'custom_properties') and db_obj.custom_properties:
+            custom_props = {}
+            for prop in db_obj.custom_properties:
+                custom_props[prop.property] = prop.value
+            odcs['customProperties'] = custom_props
+            
+        # Legacy support for tags and roles
+        if hasattr(db_obj, 'tags') and db_obj.tags:
             odcs['tags'] = [t.name for t in db_obj.tags]
-        if db_obj.roles:
+            
+        if hasattr(db_obj, 'roles') and db_obj.roles:
             odcs['roles'] = [
                 {
                     'role': r.role,
@@ -539,21 +647,16 @@ class DataContractsManager(SearchableAsset):
                 }
                 for r in db_obj.roles
             ]
-        if db_obj.servers:
-            odcs['servers'] = [
-                {
-                    'server': s.server,
-                    'type': s.type,
-                    'description': s.description,
-                    'environment': s.environment,
-                }
-                for s in db_obj.servers
-            ]
+            
         return odcs
 
     # --- App startup data loader ---
     def load_initial_data(self, db) -> None:
-        """Load example contracts from YAML into the database if not present."""
+        """Load example contracts from YAML into the database if not present.
+
+        Supports both legacy entries (with embedded contract_text) and the new
+        normalized ODCS-like structure (top-level fields + schema list).
+        """
         try:
             yaml_path = self._data_dir / 'data_contracts.yaml'
             if not yaml_path.exists():
@@ -568,27 +671,137 @@ class DataContractsManager(SearchableAsset):
                 version = c.get('version') or 'v1.0'
                 if not name:
                     continue
-                # Skip if exists
+
+                # If an entry with same name+version exists, enrich if needed
                 existing = db.query(DataContractDb).filter(
                     DataContractDb.name == name,
                     DataContractDb.version == version
                 ).first()
                 if existing:
+                    try:
+                        updated_any = False
+                        # Enrich description fields if present in YAML but missing in DB
+                        if description:
+                            if (not existing.description_usage) and description.get('usage'):
+                                existing.description_usage = description.get('usage')
+                                updated_any = True
+                            if (not existing.description_purpose) and description.get('purpose'):
+                                existing.description_purpose = description.get('purpose')
+                                updated_any = True
+                            if (not existing.description_limitations) and description.get('limitations'):
+                                existing.description_limitations = description.get('limitations')
+                                updated_any = True
+
+                        # Enrich schema if none present
+                        schema_list = c.get('schema') or []
+                        if (not getattr(existing, 'schema_objects', None) or len(existing.schema_objects) == 0) and isinstance(schema_list, list):
+                            for obj in schema_list:
+                                if not isinstance(obj, dict):
+                                    continue
+                                so = SchemaObjectDb(
+                                    contract_id=existing.id,
+                                    name=obj.get('name') or 'object',
+                                    physical_name=obj.get('physicalName') or obj.get('physical_name'),
+                                    logical_type='object',
+                                )
+                                db.add(so)
+                                db.flush()
+                                props = obj.get('properties') or []
+                                if isinstance(props, list):
+                                    for p in props:
+                                        if not isinstance(p, dict):
+                                            continue
+                                        db.add(SchemaPropertyDb(
+                                            object_id=so.id,
+                                            name=p.get('name') or 'column',
+                                            logical_type=p.get('logicalType') or p.get('logical_type') or 'string',
+                                            required=bool(p.get('required', False)),
+                                            unique=bool(p.get('unique', False)),
+                                            transform_description=p.get('description'),
+                                        ))
+                            updated_any = True
+
+                        if updated_any:
+                            existing.updated_by = 'system@startup'
+                            db.add(existing)
+                            created_count += 1  # Count as processed/enriched
+                        continue
+                    except Exception:
+                        continue
+
+                # Determine if entry is legacy (embedded doc) or normalized (ODCS-like)
+                contract_text = c.get('contract_text')
+                format_val = c.get('format')
+                description = c.get('description') or {}
+
+                if contract_text is not None or format_val is not None:
+                    # Legacy path present; create minimal top-level record without raw_* storage
+                    db_obj = DataContractDb(
+                        name=name,
+                        version=version,
+                        status=c.get('status') or 'draft',
+                        owner=c.get('owner') or 'unknown@local',
+                        kind=c.get('kind') or 'DataContract',
+                        api_version=c.get('apiVersion') or 'v3.0.2',
+                        description_usage=description.get('usage'),
+                        description_purpose=description.get('purpose'),
+                        description_limitations=description.get('limitations'),
+                        created_by='system@startup',
+                        updated_by='system@startup',
+                    )
+                    created = data_contract_repo.create(db=db, obj_in=db_obj)  # type: ignore[arg-type]
+                    # If legacy content had schema-like info, it's ignored here by design (no raw docs)
+                    created_count += 1
                     continue
+
+                # Normalized path: create top-level record + schema objects/properties
                 db_obj = DataContractDb(
                     name=name,
                     version=version,
                     status=c.get('status') or 'draft',
                     owner=c.get('owner') or 'unknown@local',
-                    kind='DataContract',
-                    api_version='v3.0.1',
-                    raw_format=c.get('format') or 'json',
-                    raw_text=c.get('contract_text') or '',
+                    kind=c.get('kind') or 'DataContract',
+                    api_version=c.get('apiVersion') or 'v3.0.2',
+                    description_usage=description.get('usage'),
+                    description_purpose=description.get('purpose'),
+                    description_limitations=description.get('limitations'),
                     created_by='system@startup',
                     updated_by='system@startup',
                 )
-                data_contract_repo.create(db=db, obj_in=db_obj)  # type: ignore[arg-type]
+                created = data_contract_repo.create(db=db, obj_in=db_obj)  # type: ignore[arg-type]
+
+                # Schema objects
+                schema_list = c.get('schema') or []
+                if isinstance(schema_list, list):
+                    for obj in schema_list:
+                        if not isinstance(obj, dict):
+                            continue
+                        so = SchemaObjectDb(
+                            contract_id=created.id,
+                            name=obj.get('name') or 'object',
+                            physical_name=obj.get('physicalName') or obj.get('physical_name'),
+                            logical_type='object',
+                        )
+                        db.add(so)
+                        db.flush()
+
+                        # Properties
+                        props = obj.get('properties') or []
+                        if isinstance(props, list):
+                            for p in props:
+                                if not isinstance(p, dict):
+                                    continue
+                                db.add(SchemaPropertyDb(
+                                    object_id=so.id,
+                                    name=p.get('name') or 'column',
+                                    logical_type=p.get('logicalType') or p.get('logical_type') or 'string',
+                                    required=bool(p.get('required', False)),
+                                    unique=bool(p.get('unique', False)),
+                                    transform_description=p.get('description'),
+                                ))
+
                 created_count += 1
+
             if created_count:
                 db.commit()
                 logger.info(f"Loaded {created_count} data contracts from YAML into DB.")

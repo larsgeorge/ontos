@@ -34,10 +34,6 @@ class DataContractDb(Base):
     description_purpose = Column(Text, nullable=True)
     description_limitations = Column(Text, nullable=True)
 
-    # Raw contract for round-trip import/export
-    raw_format = Column(String, nullable=True)  # json|yaml|text
-    raw_text = Column(Text, nullable=True)
-
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     created_by = Column(String, nullable=True)

@@ -284,21 +284,6 @@ export default function DataContracts() {
       cell: ({ row }) => <div>{row.getValue("version")}</div>,
     },
     {
-      accessorKey: "format",
-      header: ({ column }) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Format
-            <ChevronDown className="ml-2 h-4 w-4" />
-          </Button>
-        );
-      },
-      cell: ({ row }) => <div>{row.getValue("format")}</div>,
-    },
-    {
       accessorKey: "status",
       header: ({ column }) => {
         return (
