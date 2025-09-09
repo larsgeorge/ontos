@@ -74,7 +74,8 @@ export interface DataContract {
   status: string
   name: string
   tenant?: string
-  domain?: string
+  domain?: string // Legacy field (domain name)
+  domainId?: string // Domain ID for backend API
   dataProduct?: string
   owner: string
   description?: ContractDescription

@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import DatasetLookupDialog from './dataset-lookup-dialog'
+import type { DataDomain } from '@/types/data-domain'
 
 type WizardProps = {
   isOpen: boolean
@@ -38,6 +39,36 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   type SchemaObject = { name: string; physicalName?: string; properties: Column[] }
   const [schemaObjects, setSchemaObjects] = useState<SchemaObject[]>(initial?.schemaObjects || [])
   const [lookupOpen, setLookupOpen] = useState(false)
+
+  // Domain selector state
+  const [domains, setDomains] = useState<DataDomain[]>([])
+  const [domainsLoading, setDomainsLoading] = useState(false)
+
+  // Fetch available domains when wizard opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchDomains()
+    }
+  }, [isOpen])
+
+  const fetchDomains = async () => {
+    setDomainsLoading(true)
+    try {
+      const response = await fetch('/api/data-domains')
+      if (response.ok) {
+        const data = await response.json()
+        setDomains(data || [])
+      } else {
+        console.error('Failed to fetch domains:', response.statusText)
+        setDomains([])
+      }
+    } catch (error) {
+      console.error('Error fetching domains:', error)
+      setDomains([])
+    } finally {
+      setDomainsLoading(false)
+    }
+  }
 
   // Reset wizard state when opening for new contract
   useEffect(() => {
@@ -229,12 +260,21 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
               <div className="space-y-4">
                 <div>
                   <Label className="text-sm font-medium">Domain</Label>
-                  <Input 
-                    placeholder="e.g., customer, finance, operations" 
-                    value={domain}
-                    onChange={(e) => setDomain(e.target.value)}
-                    className="mt-1"
-                  />
+                  <Select value={domain} onValueChange={setDomain} disabled={domainsLoading}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder={domainsLoading ? "Loading domains..." : "Select a data domain"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {domains.length === 0 && !domainsLoading && (
+                        <SelectItem value="no-domains" disabled>No domains available</SelectItem>
+                      )}
+                      {domains.map((domainOption) => (
+                        <SelectItem key={domainOption.id} value={domainOption.id}>
+                          {domainOption.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Tenant</Label>
@@ -938,7 +978,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                 disabled={isSavingDraft || isSubmitting}
                 className="flex items-center gap-2"
               >
-                {isSavingDraft ? 'Saving Draft...' : 'Save Draft'}
+                {isSavingDraft ? 'Saving...' : (initial ? 'Save' : 'Save Draft')}
               </Button>
             </div>
             <div className="flex gap-2">

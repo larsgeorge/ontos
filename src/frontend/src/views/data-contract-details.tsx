@@ -458,8 +458,8 @@ export default function DataContractDetails() {
       {contract.schema && contract.schema.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              Schema
+            <CardTitle className="text-xl flex items-center gap-2">
+              Schemas
             </CardTitle>
             <CardDescription>
               Database schema definitions for this contract ({contract.schema.length} table{contract.schema.length !== 1 ? 's' : ''})
@@ -538,11 +538,15 @@ export default function DataContractDetails() {
           version: contract.version,
           status: contract.status,
           owner: contract.owner,
-          domain: contract.domain,
+          domain: contract.domainId || contract.domain, // Use domainId if available, fallback to domain
           tenant: contract.tenant,
           dataProduct: contract.dataProduct,
-          description: contract.description,
-          schema: contract.schema,
+          // Flatten description for wizard compatibility
+          descriptionUsage: contract.description?.usage,
+          descriptionPurpose: contract.description?.purpose,
+          descriptionLimitations: contract.description?.limitations,
+          // Rename schema to schemaObjects for wizard compatibility
+          schemaObjects: contract.schema,
           team: contract.team,
           accessControl: contract.accessControl,
           support: contract.support,
@@ -552,15 +556,27 @@ export default function DataContractDetails() {
         }}
         onSubmit={async (payload) => {
           try {
+            // Transform payload to match backend expectations
+            const transformedPayload = {
+              name: payload.name,
+              version: payload.version,
+              status: payload.status,
+              owner: payload.owner,
+              kind: payload.kind,
+              apiVersion: payload.apiVersion,
+              tenant: payload.tenant,
+              dataProduct: payload.dataProduct,
+              domainId: payload.domain, // Domain selector now sends domain ID
+              // Flatten description object
+              descriptionUsage: payload.description?.usage,
+              descriptionPurpose: payload.description?.purpose,
+              descriptionLimitations: payload.description?.limitations,
+            }
+            
             const res = await fetch(`/api/data-contracts/${contract.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                name: payload.name,
-                version: payload.version,
-                status: payload.status,
-                owner: payload.owner,
-              })
+              body: JSON.stringify(transformedPayload)
             })
             if (!res.ok) throw new Error('Update failed')
             setIsWizardOpen(false)

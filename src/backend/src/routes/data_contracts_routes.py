@@ -179,6 +179,7 @@ def _build_contract_read_from_db(db_contract) -> DataContractRead:
         kind=db_contract.kind,
         apiVersion=db_contract.api_version,
         tenant=db_contract.tenant,
+        domain=db_contract.domain_id,  # Include domain_id as domain
         dataProduct=db_contract.data_product,
         description=description,
         schema=schema_objects,
@@ -256,13 +257,10 @@ async def create_contract(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put('/data-contracts/{contract_id}', response_model=DataContractRead)
-@audit_action(feature="data-contracts", action="UPDATE")
 async def update_contract(
     contract_id: str,
-    request: Request,
     db: DBSessionDep,
-    audit_manager: AuditManagerDep,
-    current_user: AuditCurrentUserDep,
+    current_user: CurrentUserDep,
     contract_data: DataContractUpdate = Body(...),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
@@ -293,15 +291,10 @@ async def update_contract(
         update_payload["updated_by"] = current_user.username if current_user else None
         updated = data_contract_repo.update(db=db, db_obj=db_obj, obj_in=update_payload)
         db.commit()
-        return DataContractRead(
-            id=updated.id,
-            name=updated.name,
-            version=updated.version,
-            status=updated.status,
-            owner=updated.owner,
-            created=updated.created_at.isoformat() if updated.created_at else None,
-            updated=updated.updated_at.isoformat() if updated.updated_at else None,
-        )
+        
+        # Load with relationships for full response
+        updated_with_relations = data_contract_repo.get_with_all(db, id=contract_id)
+        return _build_contract_read_from_db(updated_with_relations)
     except Exception as e:
         error_msg = f"Error updating data contract {contract_id}: {e!s}"
         logger.error(error_msg)
