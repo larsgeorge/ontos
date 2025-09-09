@@ -105,10 +105,25 @@ export default function DataContracts() {
         },
         body: JSON.stringify(formData),
       });
-      if (!response.ok) throw new Error('Failed to create contract');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to create contract: ${errorText}`);
+      }
       await fetchContracts();
+      toast({ 
+        title: 'Success', 
+        description: 'Data contract created successfully' 
+      });
+      setOpenWizard(false); // Close the wizard on success
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create contract');
+      const message = err instanceof Error ? err.message : 'Failed to create contract';
+      setError(message);
+      toast({ 
+        title: 'Error', 
+        description: message, 
+        variant: 'destructive' 
+      });
+      throw err; // Re-throw so wizard can handle it
     }
   };
 
@@ -656,24 +671,33 @@ export default function DataContracts() {
         onOpenChange={setOpenWizard}
         initial={null}
         onSubmit={async (payload) => {
+          const odcsContract = {
+            kind: 'DataContract',
+            apiVersion: 'v3.0.2',
+            name: payload.name,
+            version: payload.version,
+            status: payload.status,
+            owner: payload.owner,
+            domain: payload.domain,
+            tenant: payload.tenant,
+            dataProduct: payload.dataProduct,
+            description: payload.description,
+            schema: payload.schema || [],
+          }
+          
           await createContract({
             name: payload.name,
             version: payload.version,
             status: payload.status,
             owner: payload.owner,
+            domain: payload.domain,
+            tenant: payload.tenant,
+            dataProduct: payload.dataProduct,
+            description: payload.description,
+            schema: payload.schema,
             format: 'json',
-            contract_text: JSON.stringify({
-              kind: 'DataContract',
-              apiVersion: 'v3.0.1',
-              name: payload.name,
-              version: payload.version,
-              status: payload.status,
-              owner: payload.owner,
-              description: { usage: payload.description?.usage, purpose: payload.description?.purpose, limitations: payload.description?.limitations },
-              schema: payload.schema || [],
-            }, null, 2),
+            contract_text: JSON.stringify(odcsContract, null, 2),
           })
-          await fetchContracts()
         }}
       />
     </div>

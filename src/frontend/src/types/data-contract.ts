@@ -18,8 +18,27 @@ export type DataContractDraft = {
   kind?: string
   apiVersion?: string
   domainId?: string
+  domain?: string
+  tenant?: string
+  dataProduct?: string
   contract_text: string
   format: 'json' | 'yaml' | 'text'
+  description?: {
+    usage?: string
+    purpose?: string  
+    limitations?: string
+  }
+  schema?: Array<{
+    name: string
+    physicalName?: string
+    properties: Array<{
+      name: string
+      logicalType: string
+      required?: boolean
+      unique?: boolean
+      description?: string
+    }>
+  }>
 }
 
 export interface DataContract {

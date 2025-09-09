@@ -90,15 +90,12 @@ async def get_contract(contract_id: str, db: DBSessionDep, _: bool = Depends(Per
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post('/data-contracts', response_model=DataContractRead)
-@audit_action(feature="data-contracts", action="CREATE")
 async def create_contract(
-    request: Request,
     db: DBSessionDep,
-    audit_manager: AuditManagerDep,
     current_user: CurrentUserDep,
     contract_data: DataContractCreate = Body(...),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
-    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
     """Create a new data contract"""
     try:
