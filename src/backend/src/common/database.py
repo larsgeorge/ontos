@@ -238,7 +238,7 @@ def get_db_url(settings: Settings) -> str:
 
     query_params = {}
     if settings.POSTGRES_DB_SCHEMA:
-        query_params["options"] = f"-csearch_path={settings.POSTGRES_DB_SCHEMA},public"
+        query_params["options"] = f"-csearch_path={settings.POSTGRES_DB_SCHEMA}"
         logger.info(f"PostgreSQL schema will be set via options: {settings.POSTGRES_DB_SCHEMA}")
     else:
         logger.info("No specific PostgreSQL schema configured, using default (public).")
@@ -369,7 +369,7 @@ def init_db() -> None:
             def set_search_path(dbapi_connection, connection_record):
                 try:
                     with dbapi_connection.cursor() as cursor:
-                        cursor.execute(f'SET search_path TO "{target_schema}", public')
+                        cursor.execute(f'SET search_path TO "{target_schema}"')
                 except Exception as e:
                     # Log and continue; the app can still operate using default schema if necessary
                     logger.warning(f"Failed to set search_path to '{target_schema}': {e}")
