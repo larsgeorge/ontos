@@ -1,4 +1,4 @@
-# Unity Catalog Swiss Army Knife
+# Ontos
 
 A comprehensive tool for managing Databricks Unity Catalog resources, featuring a React frontend with Tailwind CSS and Shadcn UI, powered by a FastAPI backend.
 
@@ -6,7 +6,7 @@ A comprehensive tool for managing Databricks Unity Catalog resources, featuring 
 
 ## Overview
 
-The Unity Catalog Swiss Army Knife provides a unified interface for managing various aspects of Databricks Unity Catalog, including:
+Ontos provides a unified interface for managing various aspects of Databricks Unity Catalog, including:
 
 - Data Products management
 - Data Contracts handling

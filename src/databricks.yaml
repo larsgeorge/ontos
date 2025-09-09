@@ -17,7 +17,7 @@ variables:
     default: "app_files"
   app_config:
     type: complex
-    description: "Configuration for the Unity Catalog Swiss Army Knife App"
+    description: "Configuration for Ontos"
     default:
       command:
         - "uvicorn"
@@ -40,7 +40,7 @@ resources:
   apps:
     rucsak:
       name: "rucsak"
-      description: "Unity Catalog Swiss Army Knife App"
+      description: "Ontos"
       source_code_path: "."
       config: ${var.app_config}
       resources:

@@ -112,7 +112,7 @@ logger.info(f"STATIC_ASSETS_PATH: {STATIC_ASSETS_PATH}")
 
 # Create single FastAPI app with settings dependency
 app = FastAPI(
-    title="Unity Catalog Swiss Army Knife",
+    title="Ontos",
     description="A Databricks App for managing data products, contracts, and more",
     version="1.0.0",
     dependencies=[Depends(get_settings)],

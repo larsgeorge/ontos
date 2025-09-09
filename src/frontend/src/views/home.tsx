@@ -314,7 +314,7 @@ export default function Home() {
         <div className="flex items-center justify-center mb-4">
           <UnityCatalogLogo />
           <h1 className="text-4xl font-bold ml-2">
-            Unity Catalog Swiss Army Knife
+            Ontos
           </h1>
         </div>
         <p className="text-lg text-muted-foreground mb-6">
