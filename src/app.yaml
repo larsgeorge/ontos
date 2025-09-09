@@ -31,6 +31,8 @@ env:
 
   - name: "APP_DEMO_MODE"
     value: "true"
+  - name: "APP_DB_DROP_ON_START"
+    value: "true"
 
   - name: "APP_ADMIN_DEFAULT_GROUPS"
     value: '["admins"]'

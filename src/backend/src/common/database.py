@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, TypeVar
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, event
 from sqlalchemy.orm import sessionmaker, Session as SQLAlchemySession
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import pool
@@ -360,11 +360,19 @@ def init_db() -> None:
                                 pool_pre_ping=True)
         engine = _engine # Assign to public variable
 
-        # def refresh_connection(dbapi_connection, connection_record):
-        #     if dbapi_connection.is_closed() or not dbapi_connection.is_valid():
-        #         connection_record.invalidate()
+        # Explicitly enforce search_path at connection time to ensure correct schema usage in environments
+        # where connection options may be ignored.
+        if settings.POSTGRES_DB_SCHEMA:
+            target_schema = settings.POSTGRES_DB_SCHEMA
 
-        # event.listen(engine, "engine_connect", refresh_connection)
+            @event.listens_for(_engine, "connect")
+            def set_search_path(dbapi_connection, connection_record):
+                try:
+                    with dbapi_connection.cursor() as cursor:
+                        cursor.execute(f'SET search_path TO "{target_schema}", public')
+                except Exception as e:
+                    # Log and continue; the app can still operate using default schema if necessary
+                    logger.warning(f"Failed to set search_path to '{target_schema}': {e}")
 
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
         logger.info("Database engine and session factory initialized.")
