@@ -52,7 +52,7 @@ const InfoItem: React.FC<InfoItemProps> = ({ label, value, icon, children, class
 export default function DataDomainDetailsView() {
   const { domainId } = useParams<{ domainId: string }>();
   const navigate = useNavigate();
-  const { get, post, del } = useApi();
+  const { get, post, delete: del } = useApi();
   const { toast } = useToast();
   
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
