@@ -18,7 +18,7 @@ import {
   } from 'lucide-react';
   
   export type FeatureMaturity = 'ga' | 'beta' | 'alpha';
-  export type FeatureGroup = 'Data Management' | 'Security' | 'Tools' | 'System';
+  export type FeatureGroup = 'Data Products' | 'Governance' | 'Operations' | 'Security' | 'System';
   
   export interface FeatureConfig {
     id: string; // Unique identifier, e.g., 'data-products'
@@ -32,14 +32,14 @@ import {
   }
   
   export const features: FeatureConfig[] = [
-    // Data Management
+    // Data Products - Core product development lifecycle
     {
       id: 'data-domains',
       name: 'Data Domains',
       path: '/data-domains',
       description: 'Organize data products and assets into logical domains.',
       icon: BoxSelect,
-      group: 'Data Management',
+      group: 'Data Products',
       maturity: 'ga',
       showInLanding: true,
     },
@@ -49,7 +49,7 @@ import {
       path: '/data-contracts',
       description: 'Define and enforce technical metadata standards.',
       icon: FileTextIcon,
-      group: 'Data Management',
+      group: 'Data Products',
       maturity: 'ga',
       showInLanding: true,
     },
@@ -59,27 +59,39 @@ import {
       path: '/data-products',
       description: 'Group and manage related Databricks assets with tags.',
       icon: Database,
-      group: 'Data Management',
+      group: 'Data Products',
       maturity: 'ga',
       showInLanding: true,
     },
+    // Governance - Standards definition and approval workflows
     {
       id: 'business-glossary',
       name: 'Business Glossary',
       path: '/business-glossary',
       description: 'Create and manage business terms and definitions.',
       icon: BookOpen,
-      group: 'Data Management',
+      group: 'Governance',
       maturity: 'ga',
       showInLanding: true,
     },
+    {
+      id: 'data-asset-reviews',
+      name: 'Data Asset Review',
+      path: '/data-asset-reviews',
+      description: 'Review and approve Databricks assets like tables, views, and functions.',
+      icon: ClipboardCheck,
+      group: 'Governance',
+      maturity: 'alpha',
+      showInLanding: true,
+    },
+    // Operations - Ongoing monitoring and technical management
     {
       id: 'compliance',
       name: 'Compliance',
       path: '/compliance',
       description: 'Create, verify compliance rules, and calculate scores.',
       icon: CheckCircle,
-      group: 'Data Management',
+      group: 'Operations',
       maturity: 'beta',
       showInLanding: true,
     },
@@ -89,7 +101,7 @@ import {
       path: '/estate-manager',
       description: 'Manage multiple Databricks instances across regions and clouds.',
       icon: Globe,
-      group: 'Data Management',
+      group: 'Operations',
       maturity: 'alpha',
       showInLanding: true,
     },
@@ -99,8 +111,18 @@ import {
       path: '/master-data',
       description: 'Build a golden record of your data.',
       icon: Users,
-      group: 'Data Management',
+      group: 'Operations',
       maturity: 'alpha', // Requires external setup
+      showInLanding: true,
+    },
+    {
+      id: 'catalog-commander',
+      name: 'Catalog Commander',
+      path: '/catalog-commander',
+      description: 'Side-by-side catalog explorer for asset management.',
+      icon: GitBranch,
+      group: 'Operations',
+      maturity: 'ga',
       showInLanding: true,
     },
     // Security
@@ -134,38 +156,17 @@ import {
       maturity: 'alpha',
       showInLanding: true,
     },
-    {
-      id: 'data-asset-reviews',
-      name: 'Data Asset Review',
-      path: '/data-asset-reviews',
-      description: 'Review and approve Databricks assets like tables, views, and functions.',
-      icon: ClipboardCheck, // Use the imported icon
-      group: 'Security',
-      maturity: 'alpha',
-      showInLanding: true,
-    },
-    // Tools
-    {
-      id: 'catalog-commander',
-      name: 'Catalog Commander',
-      path: '/catalog-commander',
-      description: 'Side-by-side catalog explorer for asset management.',
-      icon: GitBranch,
-      group: 'Tools',
-      maturity: 'ga',
-      showInLanding: true,
-    },
+    // System - Application utilities and configuration
     {
       id: 'search',
       name: 'Search',
       path: '/search',
       description: 'Search across data products, contracts, and knowledge graph.',
       icon: Search,
-      group: 'Tools',
+      group: 'System',
       maturity: 'ga',
       showInLanding: false,
     },
-    // System
     {
       id: 'settings',
       name: 'Settings',
@@ -215,7 +216,7 @@ import {
         });
   
       // Define the desired order of groups
-      const groupOrder: FeatureGroup[] = ['Data Management', 'Security', 'Tools', 'System'];
+      const groupOrder: FeatureGroup[] = ['Data Products', 'Governance', 'Operations', 'Security', 'System'];
   
       // Sort groups according to the defined order
       return groupOrder
