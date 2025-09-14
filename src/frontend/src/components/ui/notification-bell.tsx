@@ -7,6 +7,7 @@ import { Badge } from './badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 import { ScrollArea } from './scroll-area';
 import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request-dialog';
+import ConfirmAccessRequestDialog from '@/components/access/confirm-access-request-dialog';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { NotificationType } from '@/types/notification';
 
@@ -23,6 +24,8 @@ export default function NotificationBell() {
 
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [selectedNotificationPayload, setSelectedNotificationPayload] = useState<Record<string, any> | null>(null);
+  const [isAccessDialogOpen, setIsAccessDialogOpen] = useState(false);
+  const [selectedAccessPayload, setSelectedAccessPayload] = useState<Record<string, any> | null>(null);
 
   useEffect(() => {
     fetchNotifications();
@@ -42,6 +45,15 @@ export default function NotificationBell() {
       setIsConfirmDialogOpen(true);
     } else {
       console.error("Cannot open confirmation dialog: payload is missing.");
+    }
+  };
+
+  const handleOpenAccessDialog = (payload: Record<string, any> | undefined | null) => {
+    if (payload) {
+      setSelectedAccessPayload(payload);
+      setIsAccessDialogOpen(true);
+    } else {
+      console.error("Cannot open access request dialog: payload is missing.");
     }
   };
 
@@ -168,6 +180,20 @@ export default function NotificationBell() {
                       {notification.read ? "View Details" : "Approve/Deny"}
                     </Button>
                   )}
+                  {notification.action_type === 'handle_access_request' && notification.action_payload && (
+                    <Button
+                      variant={notification.read ? "outline" : "default"}
+                      size="sm"
+                      className="mt-2 h-7 px-2 text-xs gap-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenAccessDialog(notification.action_payload);
+                      }}
+                    >
+                      <CheckSquare className="h-3.5 w-3.5" />
+                      {notification.read ? "View Details" : "Handle Request"}
+                    </Button>
+                  )}
                   {(notification.type === 'job_progress' || notification.action_type === 'job_progress') && (notification.data || notification.action_payload) && (
                     <div className="mt-2">
                       <Progress value={Number((notification.data || notification.action_payload)?.progress ?? 0)} />
@@ -216,6 +242,16 @@ export default function NotificationBell() {
         requesterEmail={selectedNotificationPayload?.requester_email ?? 'Unknown User'}
         roleId={selectedNotificationPayload?.role_id ?? 'Unknown Role ID'}
         roleName={selectedNotificationPayload?.role_name ?? 'Unknown Role Name'}
+        onDecisionMade={handleDecisionMade}
+      />
+    )}
+    {isAccessDialogOpen && selectedAccessPayload && (
+      <ConfirmAccessRequestDialog
+        isOpen={isAccessDialogOpen}
+        onOpenChange={setIsAccessDialogOpen}
+        requesterEmail={selectedAccessPayload?.requester_email ?? 'Unknown User'}
+        entityType={(selectedAccessPayload?.entity_type ?? 'data_product') as 'data_product' | 'data_contract'}
+        entityId={selectedAccessPayload?.entity_id ?? 'Unknown ID'}
         onDecisionMade={handleDecisionMade}
       />
     )}

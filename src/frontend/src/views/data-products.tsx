@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, AlertCircle, Database, ChevronDown, Upload, X, Loader2, Sparkles, Table, Workflow } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertCircle, Database, ChevronDown, Upload, X, Loader2, Sparkles, Table, Workflow, KeyRound } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Column,
@@ -234,6 +234,25 @@ export default function DataProducts() {
           });
       }
       fetchProducts();
+  };
+
+  // Bulk Request Access
+  const handleBulkRequestAccess = async (selectedRows: DataProduct[]) => {
+      const selectedIds = selectedRows.map(r => r.id).filter((id): id is string => !!id);
+      if (selectedIds.length === 0) return;
+      try {
+          toast({ title: 'Submitting', description: `Requesting access for ${selectedIds.length} item(s)...` });
+          const res = await fetch('/api/access-requests', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ entity_type: 'data_product', entity_ids: selectedIds })
+          });
+          if (!res.ok) throw new Error('Failed to submit access requests');
+          toast({ title: 'Request Sent', description: 'Access request submitted. You will be notified.' });
+          refreshNotifications();
+      } catch (e: any) {
+          toast({ title: 'Error', description: e.message || 'Failed to submit access requests', variant: 'destructive' });
+      }
   };
 
   // Keep File Upload Handlers
@@ -565,6 +584,17 @@ export default function DataProducts() {
               // Remove view toggle logic from here
               return (
                 <>
+                  <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 gap-1"
+                      onClick={() => handleBulkRequestAccess(selectedRows)}
+                      disabled={selectedRows.length === 0}
+                      title="Request access for selected"
+                  >
+                      <KeyRound className="w-4 h-4 mr-1" />
+                      Request Access ({selectedRows.length})
+                  </Button>
                   <Button
                       variant="outline"
                       size="sm"

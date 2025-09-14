@@ -70,6 +70,7 @@ class CommentsManager:
         entity_type: str, 
         entity_id: str,
         user_groups: Optional[List[str]] = None,
+        user_email: Optional[str] = None,
         include_deleted: bool = False
     ) -> CommentListResponse:
         """List comments for an entity, filtered by user's group membership."""
@@ -85,7 +86,7 @@ class CommentsManager:
         )
         total_count = len(all_comments)
         
-        # Get visible comments
+        # Get visible comments by group
         visible_comments = self._comments_repo.list_for_entity(
             db,
             entity_type=entity_type,
@@ -93,6 +94,17 @@ class CommentsManager:
             user_groups=user_groups,
             include_deleted=include_deleted
         )
+
+        # Additionally include comments targeted directly to the user's email via audience token
+        if user_email:
+            try:
+                email_token = f"user:{user_email}"
+                for c in all_comments:
+                    aud = getattr(c, 'audience', None)
+                    if aud and email_token in aud and c not in visible_comments:
+                        visible_comments.append(c)
+            except Exception:
+                pass
         visible_count = len(visible_comments)
         
         # Convert to API models

@@ -308,77 +308,130 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
   const TimelineItem: React.FC<{ entry: TimelineEntry; canModify: boolean }> = ({ 
     entry, 
     canModify 
-  }) => (
-    <div className={cn(
-      "p-3 border rounded-lg space-y-2",
-      entry.type === 'change' && "border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20"
-    )}>
-      <div className="flex items-center gap-2">
-        {entry.type === 'comment' ? (
-          <MessageSquare className="w-4 h-4 text-muted-foreground" />
-        ) : (
-          <Clock className="w-4 h-4 text-blue-600" />
-        )}
-        {entry.title && (
-          <h4 className="font-medium text-sm">{entry.title}</h4>
-        )}
-        <Badge variant={entry.type === 'change' ? 'secondary' : 'outline'} className="text-xs">
-          {entry.type}
-        </Badge>
-      </div>
-      
-      <p className="text-sm text-foreground whitespace-pre-wrap">
-        {entry.content}
-      </p>
-      
-      {entry.audience && entry.audience.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {entry.audience.map(group => (
-            <Badge key={group} variant="outline" className="text-xs">
-              <Users className="w-3 h-3 mr-1" />
-              {group}
-            </Badge>
+  }) => {
+    const parsed = React.useMemo(() => {
+      if (entry.type !== 'change') return null;
+      try {
+        const trimmed = (entry.content || '').trim();
+        if (!trimmed || (trimmed[0] !== '{' && trimmed[0] !== '[')) return null;
+        return JSON.parse(trimmed);
+      } catch {
+        return null;
+      }
+    }, [entry]);
+
+    const renderParsedObject = (obj: any) => {
+      // Special formatting for access_request_* actions
+      const action = entry.metadata?.action || '';
+      if (action.startsWith('access_request_')) {
+        return (
+          <div className="text-sm space-y-1">
+            {obj.requester_email && (
+              <div><span className="text-muted-foreground">Requester:</span> {obj.requester_email}</div>
+            )}
+            {obj.decision && (
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground">Decision:</span>
+                <Badge variant={obj.decision === 'approve' ? 'secondary' : obj.decision === 'deny' ? 'destructive' : 'outline'} className="text-xs">
+                  {String(obj.decision)}
+                </Badge>
+              </div>
+            )}
+            {obj.message && (
+              <div><span className="text-muted-foreground">Message:</span> {String(obj.message)}</div>
+            )}
+          </div>
+        );
+      }
+      // Generic key/value renderer
+      return (
+        <div className="text-sm space-y-1">
+          {Object.entries(obj).map(([k, v]) => (
+            <div key={k} className="flex gap-1">
+              <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}:</span>
+              <span>{typeof v === 'string' ? v : JSON.stringify(v)}</span>
+            </div>
           ))}
         </div>
-      )}
-      
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
+      );
+    };
+
+    return (
+      <div className={cn(
+        "p-3 border rounded-lg space-y-2",
+        entry.type === 'change' && "border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20"
+      )}>
         <div className="flex items-center gap-2">
-          <Avatar className="w-5 h-5">
-            <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
-              {entry.username.charAt(0).toUpperCase()}
-            </div>
-          </Avatar>
-          <span>{entry.username}</span>
-          <RelativeDate date={new Date(entry.timestamp)} />
-          {entry.updated_at && (
-            <span className="italic">(edited)</span>
+          {entry.type === 'comment' ? (
+            <MessageSquare className="w-4 h-4 text-muted-foreground" />
+          ) : (
+            <Clock className="w-4 h-4 text-blue-600" />
           )}
+          {entry.title && (
+            <h4 className="font-medium text-sm">{entry.title}</h4>
+          )}
+          <Badge variant={entry.type === 'change' ? 'secondary' : 'outline'} className="text-xs">
+            {entry.type}
+          </Badge>
         </div>
-        
-        {canModify && entry.type === 'comment' && (
-          <div className="flex gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0"
-              onClick={() => handleEdit(entry as any)}
-            >
-              <Edit className="w-3 h-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-              onClick={() => handleDelete(entry.id)}
-            >
-              <Trash2 className="w-3 h-3" />
-            </Button>
+
+        {parsed ? (
+          renderParsedObject(parsed)
+        ) : (
+          <p className="text-sm text-foreground whitespace-pre-wrap">
+            {entry.content}
+          </p>
+        )}
+
+        {entry.audience && entry.audience.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {entry.audience.map(group => (
+              <Badge key={group} variant="outline" className="text-xs">
+                <Users className="w-3 h-3 mr-1" />
+                {group}
+              </Badge>
+            ))}
           </div>
         )}
+
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <Avatar className="w-5 h-5">
+              <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
+                {entry.username.charAt(0).toUpperCase()}
+              </div>
+            </Avatar>
+            <span>{entry.username}</span>
+            <RelativeDate date={new Date(entry.timestamp)} />
+            {entry.updated_at && (
+              <span className="italic">(edited)</span>
+            )}
+          </div>
+
+          {canModify && entry.type === 'comment' && (
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => handleEdit(entry as any)}
+              >
+                <Edit className="w-3 h-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                onClick={() => handleDelete(entry.id)}
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <Sheet open={isOpen} onOpenChange={onToggle}>

@@ -37,6 +37,7 @@ from src.routes import (
     search_routes,
     security_features_routes,
     settings_routes,
+    access_requests_routes,
     semantic_models_routes,
     semantic_links_routes,
     user_routes,
@@ -169,6 +170,7 @@ search_routes.register_routes(app)
 from src.routes import metadata_routes as generic_metadata_routes
 generic_metadata_routes.register_routes(app)
 settings_routes.register_routes(app)
+access_requests_routes.register_routes(app)
 semantic_models_routes.register_routes(app)
 semantic_links_routes.register_routes(app)
 user_routes.register_routes(app)

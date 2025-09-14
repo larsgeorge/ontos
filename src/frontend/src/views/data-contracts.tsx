@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Pencil, Trash2, AlertCircle, Upload, ChevronDown, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertCircle, Upload, ChevronDown, Loader2, KeyRound } from 'lucide-react';
 // Removed Ajv and draft store imports with modal removal
 import DataContractWizardDialog from '@/components/data-contracts/data-contract-wizard-dialog'
 import { useDropzone } from 'react-dropzone';
@@ -139,6 +139,45 @@ export default function DataContracts() {
     }
   };
 
+  const handleBulkDelete = async (selectedIds: string[]) => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected contract(s)?`)) return;
+    try {
+      const results = await Promise.allSettled(selectedIds.map(async (id) => {
+        const res = await fetch(`/api/data-contracts/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`ID ${id}: delete failed`);
+        return id;
+      }));
+      const successes = results.filter(r => r.status === 'fulfilled').length;
+      const failures = results.filter(r => r.status === 'rejected').length;
+      if (successes > 0) {
+        toast({ title: 'Bulk Delete Success', description: `${successes} contract(s) deleted.` });
+      }
+      if (failures > 0) {
+        const firstError = (results.find(r => r.status === 'rejected') as PromiseRejectedResult)?.reason?.message || 'Unknown error';
+        toast({ title: 'Bulk Delete Error', description: `${failures} contract(s) could not be deleted. First error: ${firstError}`, variant: 'destructive' });
+      }
+      await fetchContracts();
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to bulk delete', variant: 'destructive' });
+    }
+  };
+
+  const handleBulkRequestAccess = async (selectedIds: string[]) => {
+    if (selectedIds.length === 0) return;
+    try {
+      const res = await fetch('/api/access-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity_type: 'data_contract', entity_ids: selectedIds })
+      });
+      if (!res.ok) throw new Error('Failed to submit access requests');
+      toast({ title: 'Request Sent', description: 'Access request submitted. You will be notified.' });
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to submit', variant: 'destructive' });
+    }
+  };
+
   const handleDeleteContract = async (id: string) => {
     if (!confirm('Are you sure you want to delete this contract?')) return;
     await deleteContract(id);
@@ -240,6 +279,7 @@ export default function DataContracts() {
         <Checkbox
           checked={table.getIsAllPageRowsSelected()}
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          onClick={(e) => e.stopPropagation()}
           aria-label="Select all"
         />
       ),
@@ -247,6 +287,7 @@ export default function DataContracts() {
         <Checkbox
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
+          onClick={(e) => e.stopPropagation()}
           aria-label="Select row"
         />
       ),
@@ -450,6 +491,39 @@ export default function DataContracts() {
               </Button>
             </div>
           </div>
+
+          {Object.keys(rowSelection).length > 0 && (() => {
+            const selectedIds = Object.keys(rowSelection).map((k) => contracts[Number(k)].id!).filter(Boolean);
+            const count = selectedIds.length;
+            return (
+              <div className="flex items-center justify-end py-2">
+                <div className="text-sm text-muted-foreground mr-3">{count} selected</div>
+                <div className="mx-2 h-6 w-px bg-muted-foreground/25" />
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 gap-1"
+                    onClick={() => handleBulkRequestAccess(selectedIds)}
+                    title="Request access for selected"
+                  >
+                    <KeyRound className="w-4 h-4 mr-1" />
+                    Request Access ({count})
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-9 gap-1"
+                    onClick={() => handleBulkDelete(selectedIds)}
+                    title="Delete selected"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Delete Selected ({count})
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
 
           <Card>
             <CardContent className="p-0">

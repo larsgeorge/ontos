@@ -26,6 +26,9 @@ from src.common.dependencies import (
 from src.common.audit_logging import _extract_details_default
 
 from src.common.logging import get_logger
+from src.controller.change_log_manager import change_log_manager
+from src.models.notifications import NotificationType
+from src.common.dependencies import NotificationsManagerDep, CurrentUserDep, DBSessionDep
 
 logger = get_logger(__name__)
 

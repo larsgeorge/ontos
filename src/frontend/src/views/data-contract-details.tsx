@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText } from 'lucide-react'
+import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -234,6 +234,21 @@ export default function DataContractDetails() {
     }
   }
 
+  const requestAccess = async () => {
+    if (!contractId || !contract) return
+    try {
+      const res = await fetch(`/api/access-requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity_type: 'data_contract', entity_ids: [contractId] })
+      })
+      if (!res.ok) throw new Error('Failed to submit access request')
+      toast({ title: 'Request Sent', description: 'Access request submitted. You will be notified.' })
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to submit request', variant: 'destructive' })
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -265,6 +280,7 @@ export default function DataContractDetails() {
             onToggle={() => setIsCommentSidebarOpen(!isCommentSidebarOpen)}
             className="h-8"
           />
+          <Button variant="outline" onClick={requestAccess} size="sm"><KeyRound className="mr-2 h-4 w-4" /> Request Access</Button>
           <Button variant="outline" onClick={() => setIsWizardOpen(true)} size="sm"><Pencil className="mr-2 h-4 w-4" /> Edit</Button>
           <Button variant="outline" onClick={exportOdcs} size="sm"><Download className="mr-2 h-4 w-4" /> Export ODCS</Button>
           <Button variant="destructive" onClick={handleDelete} size="sm"><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>

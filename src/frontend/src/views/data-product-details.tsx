@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { DataProduct, InputPort, OutputPort, DataProductStatus, DataProductArchetype, DataProductOwner, DataProductType } from '@/types/data-product'; // Import Port types
+import { DataProduct, InputPort, OutputPort, DataProductStatus, DataProductOwner, DataProductType } from '@/types/data-product'; // Import Port types
 import DataProductWizardDialog from '@/components/data-products/data-product-wizard-dialog';
 import { useApi } from '@/hooks/use-api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, Pencil, Trash2, AlertCircle, Sparkles, CopyPlus, ArrowLeft, Package } from 'lucide-react';
+import { Loader2, Pencil, Trash2, AlertCircle, Sparkles, CopyPlus, ArrowLeft, Package, KeyRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Toaster } from '@/components/ui/toaster';
@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import useBreadcrumbStore from '@/stores/breadcrumb-store'; // Import Zustand store
 import { usePermissions } from '@/stores/permissions-store'; // Import permissions hook
-import { FeatureAccessLevel } from '@/types/settings'; // Import FeatureAccessLevel
+import * as Settings from '@/types/settings'; // Import FeatureAccessLevel enum as value
 import { useNotificationsStore } from '@/stores/notifications-store'; // Import notification store
 import CreateVersionDialog from '@/components/data-products/create-version-dialog';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
@@ -68,9 +68,9 @@ export default function DataProductDetails() {
 
   // Permissions
   const featureId = 'data-products';
-  const canRead = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_ONLY);
-  const canWrite = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_WRITE);
-  const canAdmin = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.ADMIN);
+  const canRead = !permissionsLoading && hasPermission(featureId, 'Read-only');
+  const canWrite = !permissionsLoading && hasPermission(featureId, 'Read/Write');
+  const canAdmin = !permissionsLoading && hasPermission(featureId, 'Admin');
 
   // Helper to format dates safely
   const formatDate = (dateString: string | undefined): string => {
@@ -197,6 +197,23 @@ export default function DataProductDetails() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete product';
       toast({ title: 'Error', description: `Failed to delete: ${errorMessage}`, variant: 'destructive' });
+    }
+  };
+
+  // --- Request Access ---
+  const handleRequestAccess = async () => {
+    if (!productId || !product) return;
+    try {
+      toast({ title: 'Submitting', description: 'Sending access request...' });
+      const res = await post(`/api/access-requests`, {
+        entity_type: 'data_product',
+        entity_ids: [productId],
+      });
+      if (res.error) throw new Error(res.error);
+      toast({ title: 'Request Sent', description: 'Access request submitted. You will be notified.' });
+      refreshNotifications();
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message || 'Failed to submit access request', variant: 'destructive' });
     }
   };
 
@@ -339,6 +356,9 @@ export default function DataProductDetails() {
           Back to List
         </Button>
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleRequestAccess} disabled={!product} size="sm" title="Request Access">
+            <KeyRound className="mr-2 h-4 w-4" /> Request Access
+          </Button>
           <CommentSidebar
             entityType="data_product"
             entityId={productId!}
@@ -450,10 +470,15 @@ export default function DataProductDetails() {
             ) : (
               product.outputPorts.map((port: OutputPort, index: number) => (
                  <div key={`output-${index}-${port.id}`} className="border p-3 rounded mb-2 space-y-1">
-                  <p className="font-semibold text-sm">{port.name} <span className="text-xs text-muted-foreground">(ID: {port.id})</span></p>
-                  {port.description && <p className="text-xs"><span className="text-muted-foreground">Description:</span> {port.description}</p>}
-                   {port.status && <p className="text-xs"><span className="text-muted-foreground">Status:</span> <Badge variant={getStatusColor(port.status)} className="ml-1">{port.status}</Badge></p>}
-                   {port.dataContractId && <p className="text-xs"><span className="text-muted-foreground">Data Contract ID:</span> {port.dataContractId}</p>}
+                  <div className="font-semibold text-sm">{port.name} <span className="text-xs text-muted-foreground">(ID: {port.id})</span></div>
+                  {port.description && <div className="text-xs"><span className="text-muted-foreground">Description:</span> {port.description}</div>}
+                   {port.status && (
+                     <div className="text-xs flex items-center">
+                       <span className="text-muted-foreground">Status:</span>
+                       <Badge variant={getStatusColor(port.status)} className="ml-1">{port.status}</Badge>
+                     </div>
+                   )}
+                   {port.dataContractId && <div className="text-xs"><span className="text-muted-foreground">Data Contract ID:</span> {port.dataContractId}</div>}
                    {/* TODO: Display output port server info, containsPii, autoApprove, tags, links, custom? */}
                 </div>
               ))
