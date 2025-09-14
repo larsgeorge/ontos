@@ -26,3 +26,4 @@ psycopg2-binary>=2.9.10
 openai>=1.79.0
 mlflow==2.12.2
 rdflib>=6.3.2
+jsonschema>=4.22.0

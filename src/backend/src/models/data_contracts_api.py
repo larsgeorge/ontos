@@ -10,7 +10,14 @@ class ColumnProperty(BaseModel):
     logicalType: str = Field(alias='logical_type')
     required: Optional[bool] = False
     unique: Optional[bool] = False
+    primaryKey: Optional[bool] = Field(False, alias='primary_key')
+    primaryKeyPosition: Optional[int] = Field(-1, alias='primary_key_position')
+    partitioned: Optional[bool] = False
+    partitionKeyPosition: Optional[int] = Field(-1, alias='partition_key_position')
     description: Optional[str] = None
+    physicalType: Optional[str] = Field(None, alias='physical_type')
+    classification: Optional[str] = None
+    logicalTypeOptions: Optional[Dict[str, Any]] = Field(None, alias='logical_type_options')
 
     class Config:
         # Accept both JSON keys: "logicalType" (field name) and "logical_type" (alias)
@@ -61,6 +68,11 @@ class SupportChannels(BaseModel):
     documentation: Optional[str] = None
 
 
+class AuthoritativeDefinition(BaseModel):
+    url: str
+    type: str  # businessDefinition, transformationImplementation, videoTutorial, tutorial, implementation
+
+
 class SLARequirements(BaseModel):
     uptime_target: Optional[float] = Field(None, alias='uptimeTarget')  # percentage
     max_downtime_minutes: Optional[int] = Field(None, alias='maxDowntimeMinutes')
@@ -68,10 +80,36 @@ class SLARequirements(BaseModel):
     data_freshness_minutes: Optional[int] = Field(None, alias='dataFreshnessMinutes')
 
 
+# ODCS v3.0.2 Server Types
+ODCS_SERVER_TYPES = [
+    "api", "athena", "azure", "bigquery", "clickhouse", "databricks", "denodo", "dremio",
+    "duckdb", "glue", "cloudsql", "db2", "informix", "kafka", "kinesis", "local",
+    "mysql", "oracle", "postgresql", "postgres", "presto", "pubsub",
+    "redshift", "s3", "sftp", "snowflake", "sqlserver", "synapse", "trino", "vertica", "custom"
+]
+
 class ServerConfig(BaseModel):
-    server_type: Optional[str] = Field(None, alias='serverType')
-    connection_string: Optional[str] = Field(None, alias='connectionString')
-    environment: Optional[str] = None
+    server: Optional[str] = None  # identifier
+    type: str  # ODCS server type
+    description: Optional[str] = None
+    environment: Optional[str] = None  # prod, dev, staging, test
+
+    # Common server properties (stored as key-value pairs)
+    host: Optional[str] = None
+    port: Optional[int] = None
+    database: Optional[str] = None
+    schema: Optional[str] = None
+    catalog: Optional[str] = None
+    project: Optional[str] = None
+    account: Optional[str] = None
+    region: Optional[str] = None
+    location: Optional[str] = None
+
+    # Additional properties for specific server types
+    properties: Dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 # Full ODCS Contract Structure
@@ -106,7 +144,10 @@ class ODCSContract(BaseModel):
     # SLA section
     sla: Optional[SLARequirements] = None
     servers: Optional[ServerConfig] = None
-    
+
+    # Authoritative definitions
+    authoritative_definitions: List[AuthoritativeDefinition] = Field(default_factory=list, alias='authoritativeDefinitions')
+
     # Custom properties
     custom_properties: Dict[str, Any] = Field(default_factory=dict, alias='customProperties')
 
@@ -141,6 +182,7 @@ class DataContractCreate(DataContractBase):
     support: Optional[SupportChannels] = None
     sla: Optional[SLARequirements] = None
     servers: Optional[ServerConfig] = None
+    authoritative_definitions: Optional[List[AuthoritativeDefinition]] = Field(None, alias='authoritativeDefinitions')
     custom_properties: Optional[Dict[str, Any]] = Field(None, alias='customProperties')
     
     def to_odcs_contract(self) -> ODCSContract:
@@ -194,6 +236,7 @@ class DataContractRead(BaseModel):
     support: Optional[SupportChannels] = None
     sla: Optional[SLARequirements] = None
     servers: Optional[ServerConfig] = None
+    authoritative_definitions: List[AuthoritativeDefinition] = Field(default_factory=list, alias='authoritativeDefinitions')
     custom_properties: Dict[str, Any] = Field(default_factory=dict, alias='customProperties')
     created: Optional[str] = None
     updated: Optional[str] = None

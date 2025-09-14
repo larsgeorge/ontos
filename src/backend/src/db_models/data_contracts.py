@@ -195,6 +195,8 @@ class SchemaPropertyDb(Base):
     required = Column(Boolean, nullable=False, default=False)
     unique = Column(Boolean, nullable=False, default=False)
     partitioned = Column(Boolean, nullable=False, default=False)
+    primary_key_position = Column(Integer, nullable=False, default=-1)
+    partition_key_position = Column(Integer, nullable=False, default=-1)
     classification = Column(String, nullable=True)
     encrypted_name = Column(String, nullable=True)
     transform_source_objects = Column(Text, nullable=True)  # comma-separated
@@ -202,7 +204,7 @@ class SchemaPropertyDb(Base):
     transform_description = Column(Text, nullable=True)
     examples = Column(Text, nullable=True)  # comma-separated or JSON-like string
     critical_data_element = Column(Boolean, nullable=False, default=False)
-    logical_type_options_json = Column(Text, nullable=True)  # JSON string of options depending on type
+    logical_type_options_json = Column(Text, nullable=True)  # JSON string of ODCS type-specific options
     items_logical_type = Column(String, nullable=True)  # for arrays
     schema_object = relationship("SchemaObjectDb", back_populates="properties")
     parent_property = relationship("SchemaPropertyDb", remote_side=[id])
@@ -215,11 +217,12 @@ class DataQualityCheckDb(Base):
     level = Column(String, nullable=True)  # optional, e.g., object/property
     name = Column(String, nullable=True)
     description = Column(Text, nullable=True)
-    dimension = Column(String, nullable=True)
+    dimension = Column(String, nullable=True)  # ODCS quality dimensions: accuracy, completeness, conformity, consistency, coverage, timeliness, uniqueness
+    business_impact = Column(String, nullable=True)  # ODCS business impact: operational, regulatory
     method = Column(String, nullable=True)
     schedule = Column(String, nullable=True)
     scheduler = Column(String, nullable=True)
-    severity = Column(String, nullable=True)
+    severity = Column(String, nullable=True)  # ODCS severity: info, warning, error
     type = Column(String, nullable=False, default="library")  # text|library|sql|custom
     unit = Column(String, nullable=True)
     tags = Column(Text, nullable=True)

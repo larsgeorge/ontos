@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +17,31 @@ type WizardProps = {
 }
 
 const statuses = ['draft', 'active', 'deprecated', 'archived']
+// ODCS v3.0.2 compliant logical types (exact match with spec)
+const LOGICAL_TYPES = [
+  'string',
+  'date',
+  'number',
+  'integer',
+  'object',
+  'array',
+  'boolean'
+]
+
+// ODCS v3.0.2 quality framework constants
+const QUALITY_DIMENSIONS = ['accuracy', 'completeness', 'conformity', 'consistency', 'coverage', 'timeliness', 'uniqueness']
+const QUALITY_TYPES = ['text', 'library', 'sql', 'custom']
+const QUALITY_SEVERITIES = ['info', 'warning', 'error']
+const BUSINESS_IMPACTS = ['operational', 'regulatory']
+
+// ODCS v3.0.2 server types
+const ODCS_SERVER_TYPES = [
+  'api', 'athena', 'azure', 'bigquery', 'clickhouse', 'databricks', 'denodo', 'dremio',
+  'duckdb', 'glue', 'cloudsql', 'db2', 'informix', 'kafka', 'kinesis', 'local',
+  'mysql', 'oracle', 'postgresql', 'postgres', 'presto', 'pubsub',
+  'redshift', 's3', 'sftp', 'snowflake', 'sqlserver', 'synapse', 'trino', 'vertica', 'custom'
+]
+const ENVIRONMENTS = ['production', 'staging', 'development', 'test']
 
 export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmit, initial }: WizardProps) {
   const { domains, loading: domainsLoading } = useDomains()
@@ -38,9 +63,58 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const [descriptionPurpose, setDescriptionPurpose] = useState(initial?.descriptionPurpose || '')
   const [descriptionLimitations, setDescriptionLimitations] = useState(initial?.descriptionLimitations || '')
 
-  type Column = { name: string; logicalType: string; required?: boolean; unique?: boolean; description?: string }
+  type Column = {
+    name: string;
+    physicalType?: string;
+    logicalType: string;
+    required?: boolean;
+    unique?: boolean;
+    primaryKey?: boolean;
+    primaryKeyPosition?: number;
+    partitioned?: boolean;
+    partitionKeyPosition?: number;
+    description?: string;
+    classification?: string;
+    examples?: string;
+  }
   type SchemaObject = { name: string; physicalName?: string; properties: Column[] }
   const [schemaObjects, setSchemaObjects] = useState<SchemaObject[]>(initial?.schemaObjects || [])
+
+  type QualityRule = {
+    name: string;
+    dimension: string;
+    type: string;
+    severity: string;
+    businessImpact: string;
+    description?: string;
+    query?: string; // for SQL-based rules
+  }
+  const [qualityRules, setQualityRules] = useState<QualityRule[]>(initial?.qualityRules || [])
+
+  type ServerConfig = {
+    server: string;
+    type: string;
+    description?: string;
+    environment: string;
+    host?: string;
+    port?: number;
+    database?: string;
+    schema?: string;
+    location?: string;
+    properties?: Record<string, string>;
+  }
+  const [serverConfigs, setServerConfigs] = useState<ServerConfig[]>(initial?.serverConfigs || [])
+
+  // SLA Requirements state
+  const [slaRequirements, setSlaRequirements] = useState({
+    uptimeTarget: initial?.sla?.uptimeTarget || 0,
+    maxDowntimeMinutes: initial?.sla?.maxDowntimeMinutes || 0,
+    queryResponseTimeMs: initial?.sla?.queryResponseTimeMs || 0,
+    dataFreshnessMinutes: initial?.sla?.dataFreshnessMinutes || 0,
+    queryResponseTimeUnit: 'seconds',
+    dataFreshnessUnit: 'minutes'
+  })
+
   const [lookupOpen, setLookupOpen] = useState(false)
   const wasOpenRef = useRef(false)
 
@@ -62,6 +136,16 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         setDescriptionPurpose('')
         setDescriptionLimitations('')
         setSchemaObjects([])
+        setQualityRules([])
+        setServerConfigs([])
+        setSlaRequirements({
+          uptimeTarget: 0,
+          maxDowntimeMinutes: 0,
+          queryResponseTimeMs: 0,
+          dataFreshnessMinutes: 0,
+          queryResponseTimeUnit: 'seconds',
+          dataFreshnessUnit: 'minutes'
+        })
         setIsSubmitting(false)
       } else {
         // Initialize from provided data for editing
@@ -77,6 +161,16 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         setDescriptionPurpose(initial.descriptionPurpose || '')
         setDescriptionLimitations(initial.descriptionLimitations || '')
         setSchemaObjects(initial.schemaObjects || [])
+        setQualityRules(initial.qualityRules || [])
+        setServerConfigs(initial.serverConfigs || [])
+        setSlaRequirements({
+          uptimeTarget: initial.sla?.uptimeTarget || 0,
+          maxDowntimeMinutes: initial.sla?.maxDowntimeMinutes || 0,
+          queryResponseTimeMs: initial.sla?.queryResponseTimeMs || 0,
+          dataFreshnessMinutes: initial.sla?.dataFreshnessMinutes || 0,
+          queryResponseTimeUnit: 'seconds',
+          dataFreshnessUnit: 'minutes'
+        })
         setIsSubmitting(false)
       }
     } else if (!isOpen && wasOpenRef.current) {
@@ -87,8 +181,14 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
   const addObject = () => setSchemaObjects((prev) => [...prev, { name: '', properties: [] }])
   const removeObject = (idx: number) => setSchemaObjects((prev) => prev.filter((_, i) => i !== idx))
-  const addColumn = (objIdx: number) => setSchemaObjects((prev) => prev.map((o, i) => i === objIdx ? { ...o, properties: [...o.properties, { name: '', logicalType: 'string' }] } : o))
+  const addColumn = (objIdx: number) => setSchemaObjects((prev) => prev.map((o, i) => i === objIdx ? { ...o, properties: [...o.properties, { name: '', physicalType: '', logicalType: 'string', classification: '', examples: '' }] } : o))
   const removeColumn = (objIdx: number, colIdx: number) => setSchemaObjects((prev) => prev.map((o, i) => i === objIdx ? { ...o, properties: o.properties.filter((_, j) => j !== colIdx) } : o))
+
+  const addQualityRule = () => setQualityRules((prev) => [...prev, { name: '', dimension: 'completeness', type: 'library', severity: 'warning', businessImpact: 'operational' }])
+  const removeQualityRule = (idx: number) => setQualityRules((prev) => prev.filter((_, i) => i !== idx))
+
+  const addServerConfig = () => setServerConfigs((prev) => [...prev, { server: '', type: 'postgresql', environment: 'production' }])
+  const removeServerConfig = (idx: number) => setServerConfigs((prev) => prev.filter((_, i) => i !== idx))
 
   const handleInferFromDataset = async (table: { full_name: string }) => {
     const datasetPath = table.full_name
@@ -131,7 +231,6 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const handlePrev = () => { if (step > 1) setStep(step - 1) }
 
   const handleSubmit = async () => {
-    console.log('HandleSubmit called - domain state:', domain)
     setIsSubmitting(true)
     try {
       const payload = {
@@ -144,8 +243,15 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         dataProduct,
         description: { usage: descriptionUsage, purpose: descriptionPurpose, limitations: descriptionLimitations },
         schema: schemaObjects.map((o) => ({ name: o.name, physicalName: o.physicalName, properties: o.properties })),
+        qualityRules: qualityRules,
+        serverConfigs: serverConfigs,
+        sla: {
+          uptimeTarget: slaRequirements.uptimeTarget,
+          maxDowntimeMinutes: slaRequirements.maxDowntimeMinutes,
+          queryResponseTimeMs: slaRequirements.queryResponseTimeMs,
+          dataFreshnessMinutes: slaRequirements.dataFreshnessMinutes
+        },
       }
-      console.log('Submitting payload from wizard:', payload)
       await onSubmit(payload)
       // Don't close here - let the parent component handle closing on success
     } catch (error) {
@@ -167,7 +273,6 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       return
     }
 
-    console.log('HandleSaveDraft called - domain state:', domain)
     setIsSavingDraft(true)
     try {
       const payload = {
@@ -180,8 +285,15 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         dataProduct,
         description: { usage: descriptionUsage, purpose: descriptionPurpose, limitations: descriptionLimitations },
         schema: schemaObjects.map((o) => ({ name: o.name, physicalName: o.physicalName, properties: o.properties })),
+        qualityRules: qualityRules,
+        serverConfigs: serverConfigs,
+        sla: {
+          uptimeTarget: slaRequirements.uptimeTarget,
+          maxDowntimeMinutes: slaRequirements.maxDowntimeMinutes,
+          queryResponseTimeMs: slaRequirements.queryResponseTimeMs,
+          dataFreshnessMinutes: slaRequirements.dataFreshnessMinutes
+        },
       }
-      console.log('Submitting draft payload from wizard:', payload)
       await onSubmit(payload)
       // Don't close here - let the parent component handle closing on success
     } catch (error) {
@@ -351,7 +463,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
           </div>
 
           {/* Step 2: Schema Definition */}
-          <div className={step === 2 ? 'block space-y-6' : 'hidden'}>
+          <div className={step === 2 ? 'block space-y-4' : 'hidden'}>
             <div className="text-lg font-semibold text-foreground mb-4">Data Schema Definition</div>
             
             <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
@@ -417,8 +529,8 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                     {/* Columns Section */}
                     <div className="border-t pt-4">
                       <div className="flex justify-between items-center mb-4">
-                        <div className="font-medium">Columns ({obj.properties.length})</div>
-                        <Button type="button" variant="outline" size="sm" onClick={() => addColumn(objIndex)} className="gap-2">
+                        <div className="font-medium text-sm">Columns ({obj.properties.length})</div>
+                        <Button type="button" variant="outline" size="sm" onClick={() => addColumn(objIndex)} className="gap-1 h-8 px-2 text-xs">
                           ➕ Add Column
                         </Button>
                       </div>
@@ -428,64 +540,127 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                           <div className="text-sm text-muted-foreground">No columns defined</div>
                         </div>
                       ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                           {obj.properties.map((col, colIndex) => (
-                            <div key={colIndex} className="grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 border rounded bg-muted/30">
-                              <div className="lg:col-span-3">
-                                <Label className="text-xs">Column Name *</Label>
-                                <Input 
-                                  placeholder="column_name" 
-                                  value={col.name} 
-                                  onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, name: e.target.value } : y) } : x))}
-                                  className="mt-1 text-sm"
-                                />
-                              </div>
-                              <div className="lg:col-span-2">
-                                <Label className="text-xs">Type *</Label>
-                                <Input 
-                                  placeholder="string" 
-                                  value={col.logicalType} 
-                                  onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, logicalType: e.target.value } : y) } : x))}
-                                  className="mt-1 text-sm"
-                                />
-                              </div>
-                              <div className="lg:col-span-4">
-                                <Label className="text-xs">Description</Label>
-                                <Input 
-                                  placeholder="Column description..." 
-                                  value={col.description || ''} 
-                                  onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, description: e.target.value } : y) } : x))}
-                                  className="mt-1 text-sm"
-                                />
-                              </div>
-                              <div className="lg:col-span-2 flex items-end gap-2">
-                                <label className="flex items-center gap-1 text-xs">
-                                  <input 
-                                    type="checkbox" 
-                                    checked={!!col.required} 
-                                    onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, required: e.target.checked } : y) } : x))} 
-                                  /> 
-                                  Required
-                                </label>
-                                <label className="flex items-center gap-1 text-xs">
-                                  <input 
-                                    type="checkbox" 
-                                    checked={!!col.unique} 
-                                    onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, unique: e.target.checked } : y) } : x))} 
-                                  /> 
-                                  Unique
-                                </label>
-                              </div>
-                              <div className="lg:col-span-1 flex items-end">
-                                <Button 
-                                  type="button" 
-                                  variant="ghost" 
-                                  size="sm"
-                                  onClick={() => removeColumn(objIndex, colIndex)}
-                                  className="text-destructive hover:text-destructive p-2"
-                                >
-                                  🗑️
-                                </Button>
+                            <div key={colIndex} className="space-y-2">
+                              <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 p-2 border rounded bg-muted/30">
+                                <div className="lg:col-span-3">
+                                  <Label className="text-[11px]">Column Name *</Label>
+                                  <div className="mt-0.5 flex items-center gap-[3px]">
+                                    <span className="text-[11px] text-muted-foreground select-none">#{colIndex + 1}</span>
+                                    <Input 
+                                      placeholder="column_name" 
+                                      value={col.name} 
+                                      onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, name: e.target.value } : y) } : x))}
+                                      className="h-8 text-xs w-full flex-1"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="lg:col-span-3">
+                                  <Label className="text-[11px]">Physical Type</Label>
+                                  <Input 
+                                    placeholder="e.g., VARCHAR(255), BIGINT" 
+                                    value={(col as any).physicalType || ''}
+                                    onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, physicalType: e.target.value } : y) } : x))}
+                                    className="mt-0.5 h-8 text-xs"
+                                  />
+                                </div>
+                                <div className="lg:col-span-3">
+                                  <Label className="text-[11px]">Logical Type *</Label>
+                                  <Select value={(col as any).logicalType} onValueChange={(v) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, logicalType: v } : y) } : x))}>
+                                    <SelectTrigger className="mt-0.5 h-8 text-xs">
+                                      <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {LOGICAL_TYPES.map((t) => (
+                                        <SelectItem key={t} value={t} className="text-xs h-7">{t}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="lg:col-span-2 flex items-end justify-end">
+                                  <Button 
+                                    type="button" 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => removeColumn(objIndex, colIndex)}
+                                    className="text-destructive hover:text-destructive p-1 h-8"
+                                  >
+                                    🗑️
+                                  </Button>
+                                </div>
+
+                                {/* Row 2: Description + Flags */}
+                                <div className="lg:col-span-8">
+                                  <Label className="text-[11px]">Description</Label>
+                                  <Input 
+                                    placeholder="Column description..." 
+                                    value={col.description || ''} 
+                                    onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, description: e.target.value } : y) } : x))}
+                                    className="mt-0.5 h-8 text-xs"
+                                  />
+                                </div>
+                                <div className="lg:col-span-4 flex items-end gap-2">
+                                  <label className="flex items-center gap-1 text-[11px]">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!col.required}
+                                      onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, required: e.target.checked } : y) } : x))}
+                                    />
+                                    Required
+                                  </label>
+                                  <label className="flex items-center gap-1 text-[11px]">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!col.unique}
+                                      onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, unique: e.target.checked } : y) } : x))}
+                                    />
+                                    Unique
+                                  </label>
+                                  <label className="flex items-center gap-1 text-[11px]">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!col.primaryKey}
+                                      onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, primaryKey: e.target.checked, primaryKeyPosition: e.target.checked ? j + 1 : -1 } : y) } : x))}
+                                    />
+                                    Primary Key
+                                  </label>
+                                  <label className="flex items-center gap-1 text-[11px]">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!col.partitioned}
+                                      onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, partitioned: e.target.checked, partitionKeyPosition: e.target.checked ? j + 1 : -1 } : y) } : x))}
+                                    />
+                                    Partition Key
+                                  </label>
+                                </div>
+
+                                {/* Row 3: Advanced */}
+                                <div className="lg:col-span-12 col-span-1 pt-1">
+                                  <details>
+                                    <summary className="text-[11px] text-muted-foreground cursor-pointer select-none">Advanced</summary>
+                                    <div className="mt-2 grid grid-cols-1 lg:grid-cols-12 gap-2">
+                                      <div className="lg:col-span-3">
+                                        <Label className="text-[11px]">Classification</Label>
+                                        <Input 
+                                          placeholder="confidential, pii, internal" 
+                                          value={(col as any).classification || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, classification: e.target.value } : y) } : x))}
+                                          className="mt-0.5 h-8 text-xs"
+                                        />
+                                      </div>
+                                      <div className="lg:col-span-9">
+                                        <Label className="text-[11px]">Examples (comma-separated)</Label>
+                                        <Input 
+                                          placeholder="123, 456, 789" 
+                                          value={(col as any).examples || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, examples: e.target.value } : y) } : x))}
+                                          className="mt-0.5 h-8 text-xs"
+                                        />
+                                      </div>
+                                    </div>
+                                  </details>
+                                </div>
                               </div>
                             </div>
                           ))}
@@ -499,149 +674,144 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
           </div>
 
           {/* Step 3: Data Quality */}
-          <div className={step === 3 ? 'block space-y-6' : 'hidden'}>
+          <div className={step === 3 ? 'block space-y-4' : 'hidden'}>
             <div className="text-lg font-semibold text-foreground mb-4">Data Quality & Validation</div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Quality Rules */}
-              <div className="space-y-4">
-                <div className="font-medium">Quality Rules</div>
-                <div className="space-y-3">
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-medium text-sm">Completeness Checks</div>
-                      <div className="text-xs text-muted-foreground">Required</div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" className="rounded" />
-                        Non-null validation for required fields
-                      </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" className="rounded" />
-                        Empty string validation
-                      </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" className="rounded" />
-                        Missing value detection
-                      </label>
-                    </div>
-                  </div>
 
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-medium text-sm">Accuracy Checks</div>
-                      <div className="text-xs text-muted-foreground">Optional</div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" className="rounded" />
-                        Data format validation (emails, phone numbers, etc.)
-                      </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" className="rounded" />
-                        Range and boundary checks
-                      </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" className="rounded" />
-                        Business rule validation
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-medium text-sm">Consistency Checks</div>
-                      <div className="text-xs text-muted-foreground">Optional</div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" className="rounded" />
-                        Cross-field validation
-                      </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" className="rounded" />
-                        Referential integrity checks
-                      </label>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input type="checkbox" className="rounded" />
-                        Duplicate detection
-                      </label>
-                    </div>
-                  </div>
-                </div>
+            <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
+              <div>
+                <div className="font-medium">ODCS Quality Framework</div>
+                <div className="text-sm text-muted-foreground">Define quality rules using ODCS v3.0.2 dimensions and types</div>
               </div>
-
-              {/* Quality Thresholds & Metrics */}
-              <div className="space-y-4">
-                <div className="font-medium">Quality Thresholds</div>
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-sm font-medium">Minimum Data Quality Score</Label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Input type="number" placeholder="85" className="w-20" />
-                      <span className="text-sm text-muted-foreground">% (0-100)</span>
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Completeness Threshold</Label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Input type="number" placeholder="95" className="w-20" />
-                      <span className="text-sm text-muted-foreground">% (0-100)</span>
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Accuracy Threshold</Label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Input type="number" placeholder="90" className="w-20" />
-                      <span className="text-sm text-muted-foreground">% (0-100)</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-t pt-4">
-                  <div className="font-medium mb-3">Monitoring & Alerts</div>
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="text-sm font-medium">Validation Frequency</Label>
-                      <Select>
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Select frequency" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="realtime">Real-time</SelectItem>
-                          <SelectItem value="hourly">Hourly</SelectItem>
-                          <SelectItem value="daily">Daily</SelectItem>
-                          <SelectItem value="weekly">Weekly</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium">Alert Recipients</Label>
-                      <Input placeholder="team@company.com, alerts@company.com" className="mt-1" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input type="checkbox" className="rounded" />
-                      <Label className="text-sm">Send alerts on quality threshold violations</Label>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <Button type="button" variant="default" onClick={addQualityRule} className="gap-2">
+                <span>➕</span> Add Quality Rule
+              </Button>
             </div>
 
-            {/* Custom Quality Rules */}
-            <div className="border-t pt-6">
-              <div className="font-medium mb-4">Custom Quality Rules</div>
-              <div className="space-y-3">
-                <Textarea 
-                  placeholder="Define custom quality rules or SQL-based validation queries..."
-                  className="min-h-[100px]"
-                />
-                <div className="text-xs text-muted-foreground">
-                  Example: SELECT COUNT(*) FROM table WHERE email NOT LIKE '%@%.%' -- Invalid email format
-                </div>
+            {qualityRules.length === 0 ? (
+              <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
+                <div className="text-muted-foreground mb-2">No quality rules defined yet</div>
+                <div className="text-sm text-muted-foreground">Start by adding quality rules to ensure data integrity</div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-4">
+                {qualityRules.map((rule, index) => (
+                  <div key={index} className="border rounded-lg p-4 bg-card">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-base font-medium">Quality Rule {index + 1}</div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeQualityRule(index)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        Remove Rule
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium">Rule Name *</Label>
+                        <Input
+                          placeholder="e.g., Email Format Validation"
+                          value={rule.name}
+                          onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, name: e.target.value } : r))}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Quality Dimension *</Label>
+                        <Select
+                          value={rule.dimension}
+                          onValueChange={(v) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, dimension: v } : r))}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select dimension" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {QUALITY_DIMENSIONS.map((dim) => (
+                              <SelectItem key={dim} value={dim}>{dim}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Rule Type *</Label>
+                        <Select
+                          value={rule.type}
+                          onValueChange={(v) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, type: v } : r))}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {QUALITY_TYPES.map((type) => (
+                              <SelectItem key={type} value={type}>{type}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Severity *</Label>
+                        <Select
+                          value={rule.severity}
+                          onValueChange={(v) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, severity: v } : r))}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select severity" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {QUALITY_SEVERITIES.map((sev) => (
+                              <SelectItem key={sev} value={sev}>{sev}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Business Impact *</Label>
+                        <Select
+                          value={rule.businessImpact}
+                          onValueChange={(v) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, businessImpact: v } : r))}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select impact" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {BUSINESS_IMPACTS.map((impact) => (
+                              <SelectItem key={impact} value={impact}>{impact}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Description</Label>
+                        <Input
+                          placeholder="Describe the quality rule..."
+                          value={rule.description || ''}
+                          onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, description: e.target.value } : r))}
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+
+                    {rule.type === 'sql' && (
+                      <div className="mt-4">
+                        <Label className="text-sm font-medium">SQL Query *</Label>
+                        <Textarea
+                          placeholder="SELECT COUNT(*) FROM table WHERE condition..."
+                          value={rule.query || ''}
+                          onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, query: e.target.value } : r))}
+                          className="mt-1 min-h-[80px]"
+                        />
+                        <div className="text-xs text-muted-foreground mt-1">
+                          SQL query should return a numeric result for validation
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Step 4: Team & Roles */}
@@ -798,14 +968,26 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                       <div>
                         <Label className="text-sm font-medium">Uptime Target</Label>
                         <div className="flex items-center gap-2 mt-1">
-                          <Input type="number" placeholder="99.9" className="w-20" />
+                          <Input
+                            type="number"
+                            placeholder="99.9"
+                            className="w-20"
+                            value={slaRequirements.uptimeTarget || ''}
+                            onChange={(e) => setSlaRequirements(prev => ({ ...prev, uptimeTarget: parseFloat(e.target.value) || 0 }))}
+                          />
                           <span className="text-sm text-muted-foreground">% availability</span>
                         </div>
                       </div>
                       <div>
                         <Label className="text-sm font-medium">Maximum Downtime per Month</Label>
                         <div className="flex items-center gap-2 mt-1">
-                          <Input type="number" placeholder="43" className="w-20" />
+                          <Input
+                            type="number"
+                            placeholder="43"
+                            className="w-20"
+                            value={slaRequirements.maxDowntimeMinutes || ''}
+                            onChange={(e) => setSlaRequirements(prev => ({ ...prev, maxDowntimeMinutes: parseInt(e.target.value) || 0 }))}
+                          />
                           <span className="text-sm text-muted-foreground">minutes</span>
                         </div>
                       </div>
@@ -818,8 +1000,28 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                       <div>
                         <Label className="text-sm font-medium">Query Response Time (P95)</Label>
                         <div className="flex items-center gap-2 mt-1">
-                          <Input type="number" placeholder="2" className="w-20" />
-                          <Select>
+                          <Input
+                            type="number"
+                            placeholder="2"
+                            className="w-20"
+                            value={slaRequirements.queryResponseTimeMs ? (
+                              slaRequirements.queryResponseTimeUnit === 'ms' ? slaRequirements.queryResponseTimeMs :
+                              slaRequirements.queryResponseTimeUnit === 'seconds' ? Math.round(slaRequirements.queryResponseTimeMs / 1000) :
+                              Math.round(slaRequirements.queryResponseTimeMs / 60000)
+                            ) : ''}
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value) || 0
+                              // Convert to milliseconds based on unit
+                              let ms = value
+                              if (slaRequirements.queryResponseTimeUnit === 'seconds') ms = value * 1000
+                              else if (slaRequirements.queryResponseTimeUnit === 'minutes') ms = value * 60000
+                              setSlaRequirements(prev => ({ ...prev, queryResponseTimeMs: ms }))
+                            }}
+                          />
+                          <Select
+                            value={slaRequirements.queryResponseTimeUnit}
+                            onValueChange={(value) => setSlaRequirements(prev => ({ ...prev, queryResponseTimeUnit: value }))}
+                          >
                             <SelectTrigger className="w-24">
                               <SelectValue placeholder="seconds" />
                             </SelectTrigger>
@@ -834,8 +1036,28 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                       <div>
                         <Label className="text-sm font-medium">Data Freshness</Label>
                         <div className="flex items-center gap-2 mt-1">
-                          <Input type="number" placeholder="15" className="w-20" />
-                          <Select>
+                          <Input
+                            type="number"
+                            placeholder="15"
+                            className="w-20"
+                            value={slaRequirements.dataFreshnessMinutes ? (
+                              slaRequirements.dataFreshnessUnit === 'minutes' ? slaRequirements.dataFreshnessMinutes :
+                              slaRequirements.dataFreshnessUnit === 'hours' ? Math.round(slaRequirements.dataFreshnessMinutes / 60) :
+                              Math.round(slaRequirements.dataFreshnessMinutes / 1440)
+                            ) : ''}
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value) || 0
+                              // Convert to minutes based on unit
+                              let minutes = value
+                              if (slaRequirements.dataFreshnessUnit === 'hours') minutes = value * 60
+                              else if (slaRequirements.dataFreshnessUnit === 'days') minutes = value * 1440
+                              setSlaRequirements(prev => ({ ...prev, dataFreshnessMinutes: minutes }))
+                            }}
+                          />
+                          <Select
+                            value={slaRequirements.dataFreshnessUnit}
+                            onValueChange={(value) => setSlaRequirements(prev => ({ ...prev, dataFreshnessUnit: value }))}
+                          >
                             <SelectTrigger className="w-24">
                               <SelectValue placeholder="minutes" />
                             </SelectTrigger>
@@ -876,51 +1098,149 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
               {/* Infrastructure & Servers */}
               <div className="space-y-4">
-                <div className="font-medium">Infrastructure & Servers</div>
-                
-                <div className="space-y-4">
-                  <div className="p-4 border rounded-lg">
-                    <div className="font-medium text-sm mb-3">Data Source Configuration</div>
-                    <div className="space-y-3">
-                      <div>
-                        <Label className="text-sm font-medium">Server Type</Label>
-                        <Select>
-                          <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Select server type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="databricks">Databricks</SelectItem>
-                            <SelectItem value="snowflake">Snowflake</SelectItem>
-                            <SelectItem value="postgresql">PostgreSQL</SelectItem>
-                            <SelectItem value="mysql">MySQL</SelectItem>
-                            <SelectItem value="api">REST API</SelectItem>
-                            <SelectItem value="file">File System</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium">Connection String / Endpoint</Label>
-                        <Input placeholder="jdbc:databricks://..." className="mt-1" />
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium">Environment</Label>
-                        <Select>
-                          <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Select environment" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="production">Production</SelectItem>
-                            <SelectItem value="staging">Staging</SelectItem>
-                            <SelectItem value="development">Development</SelectItem>
-                            <SelectItem value="test">Test</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
+                <div className="flex justify-between items-center">
+                  <div className="font-medium">ODCS Server Configuration</div>
+                  <Button type="button" variant="default" onClick={addServerConfig} className="gap-2">
+                    <span>➕</span> Add Server
+                  </Button>
+                </div>
 
-                  <div className="p-4 border rounded-lg">
-                    <div className="font-medium text-sm mb-3">Backup & Recovery</div>
+                {serverConfigs.length === 0 ? (
+                  <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
+                    <div className="text-muted-foreground mb-2">No servers configured yet</div>
+                    <div className="text-sm text-muted-foreground">Add server configurations to define data sources</div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {serverConfigs.map((server, index) => (
+                      <div key={index} className="p-4 border rounded-lg">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="font-medium text-sm">Server {index + 1}</div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeServerConfig(index)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-sm font-medium">Server Identifier *</Label>
+                            <Input
+                              placeholder="e.g., production-db, analytics-warehouse"
+                              value={server.server}
+                              onChange={(e) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, server: e.target.value } : s))}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium">Server Type *</Label>
+                            <Select
+                              value={server.type}
+                              onValueChange={(v) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, type: v } : s))}
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Select server type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {ODCS_SERVER_TYPES.map((type) => (
+                                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium">Environment *</Label>
+                            <Select
+                              value={server.environment}
+                              onValueChange={(v) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, environment: v } : s))}
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Select environment" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {ENVIRONMENTS.map((env) => (
+                                  <SelectItem key={env} value={env}>{env}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium">Description</Label>
+                            <Input
+                              placeholder="Describe this server..."
+                              value={server.description || ''}
+                              onChange={(e) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, description: e.target.value } : s))}
+                              className="mt-1"
+                            />
+                          </div>
+
+                          {/* Common server properties */}
+                          {(server.type === 'postgresql' || server.type === 'mysql' || server.type === 'databricks' || server.type === 'snowflake') && (
+                            <>
+                              <div>
+                                <Label className="text-sm font-medium">Host</Label>
+                                <Input
+                                  placeholder="server.example.com"
+                                  value={server.host || ''}
+                                  onChange={(e) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, host: e.target.value } : s))}
+                                  className="mt-1"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-sm font-medium">Database</Label>
+                                <Input
+                                  placeholder="database_name"
+                                  value={server.database || ''}
+                                  onChange={(e) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, database: e.target.value } : s))}
+                                  className="mt-1"
+                                />
+                              </div>
+                            </>
+                          )}
+
+                          {(server.type === 'api') && (
+                            <div className="lg:col-span-2">
+                              <Label className="text-sm font-medium">API Location</Label>
+                              <Input
+                                placeholder="https://api.example.com/v1"
+                                value={server.location || ''}
+                                onChange={(e) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, location: e.target.value } : s))}
+                                className="mt-1"
+                              />
+                            </div>
+                          )}
+
+                          {(server.type === 's3') && (
+                            <div className="lg:col-span-2">
+                              <Label className="text-sm font-medium">S3 Location</Label>
+                              <Input
+                                placeholder="s3://bucket-name/path/*.json"
+                                value={server.location || ''}
+                                onChange={(e) => setServerConfigs((prev) => prev.map((s, i) => i === index ? { ...s, location: e.target.value } : s))}
+                                className="mt-1"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Additional Infrastructure Settings */}
+            <div className="space-y-4">
+              <div className="font-medium">Infrastructure Management</div>
+
+              <div className="space-y-4">
+                <div className="p-4 border rounded-lg">
+                  <div className="font-medium text-sm mb-3">Backup & Recovery</div>
                     <div className="space-y-3">
                       <div>
                         <Label className="text-sm font-medium">Backup Frequency</Label>
@@ -983,7 +1303,6 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
               </div>
             </div>
           </div>
-        </div>
 
         <DialogFooter className="mt-4">
           <div className="flex justify-between w-full">

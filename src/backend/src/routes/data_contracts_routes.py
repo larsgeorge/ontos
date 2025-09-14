@@ -36,6 +36,7 @@ from src.models.data_contracts_api import (
     DataContractCommentCreate,
     DataContractCommentRead,
 )
+from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 import yaml
@@ -195,6 +196,16 @@ def _build_contract_read_from_db(db, db_contract) -> DataContractRead:
                 'environment': s.environment,
             })
 
+    # Authoritative definitions
+    authoritative_definitions = []
+    if getattr(db_contract, 'authoritative_defs', None):
+        from src.models.data_contracts_api import AuthoritativeDefinition
+        for auth_def in db_contract.authoritative_defs:
+            authoritative_definitions.append(AuthoritativeDefinition(
+                url=auth_def.url,
+                type=auth_def.type
+            ))
+
     return DataContractRead(
         id=db_contract.id,
         name=db_contract.name,
@@ -214,6 +225,7 @@ def _build_contract_read_from_db(db, db_contract) -> DataContractRead:
         customProperties=custom_properties,
         sla=sla,
         servers=servers,
+        authoritativeDefinitions=authoritative_definitions,
         created=db_contract.created_at.isoformat() if db_contract.created_at else None,
         updated=db_contract.updated_at.isoformat() if db_contract.updated_at else None,
     )
@@ -282,6 +294,8 @@ async def create_contract(
                         logical_type=prop_data.logicalType,
                         required=prop_data.required or False,
                         unique=prop_data.unique or False,
+                        classification=getattr(prop_data, 'classification', None),
+                        examples=str(getattr(prop_data, 'examples', None)) if getattr(prop_data, 'examples', None) is not None else None,
                         transform_description=prop_data.description
                     )
                     db.add(prop)
@@ -425,6 +439,17 @@ async def upload_contract(
         if not isinstance(parsed, dict):
             raise HTTPException(status_code=400, detail="Could not parse uploaded file")
 
+        # Validate against ODCS schema (optional, but log warnings if validation fails)
+        try:
+            validate_odcs_contract(parsed, strict=False)
+            logger.info("Contract passes ODCS v3.0.2 validation")
+        except ODCSValidationError as e:
+            # Log validation errors but don't block creation for flexibility
+            logger.warning(f"Contract does not fully comply with ODCS v3.0.2: {e.message}")
+            if e.validation_errors:
+                for error in e.validation_errors[:5]:  # Log first 5 errors
+                    logger.warning(f"ODCS validation: {error}")
+
         # Extract core contract fields
         name_val = parsed.get('name') or filename.replace('.', '_')
         version_val = parsed.get('version') or 'v1.0'
@@ -556,6 +581,18 @@ async def upload_contract(
                         value=str(value)
                     )
                     db.add(sla_prop)
+
+        # Parse authoritative definitions
+        auth_defs_data = parsed.get('authoritativeDefinitions', [])
+        if isinstance(auth_defs_data, list):
+            for auth_def in auth_defs_data:
+                if isinstance(auth_def, dict) and auth_def.get('url') and auth_def.get('type'):
+                    auth_def_db = DataContractAuthorityDb(
+                        contract_id=created.id,
+                        url=auth_def['url'],
+                        type=auth_def['type']
+                    )
+                    db.add(auth_def_db)
 
         # Parse tags (legacy support)
         tags = parsed.get('tags', [])
