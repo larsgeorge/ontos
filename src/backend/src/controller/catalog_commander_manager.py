@@ -1,7 +1,7 @@
 from typing import Any, Dict, List
 
-from databricks import sql
 from databricks.sdk import WorkspaceClient
+from urllib.parse import quote
 
 from ..common.logging import get_logger
 
@@ -151,72 +151,73 @@ class CatalogCommanderManager:
             raise
 
     def get_dataset(self, dataset_path: str) -> Dict[str, Any]:
-        """Get dataset content and schema from a specific path.
-        
+        """Get dataset schema and lightweight details using the shared WorkspaceClient.
+
+        This avoids requiring a SQL Warehouse. It returns column metadata only.
+
         Args:
             dataset_path: Full path to the dataset (catalog.schema.table)
-            
+
         Returns:
-            Dictionary containing schema and data information
+            Dictionary containing at least 'schema': List[{name, type, nullable}]
         """
-        connection = None
+        logger.info(f"Fetching dataset metadata for: {dataset_path}")
         try:
-            logger.info(f"Fetching dataset content for: {dataset_path}")
-            connection = sql.connect(
-                server_hostname=self.client.config.host,
-                http_path=f"/sql/1.0/warehouses/{self.client.config.warehouse_id}",
-                access_token=self.client.config.token
-            )
-            cursor = connection.cursor()
+            parts = dataset_path.split('.')
+            if len(parts) != 3:
+                raise ValueError("dataset_path must be in the form catalog.schema.table")
+            catalog_name, schema_name, table_name = parts
 
-            # Format the dataset path properly for SQL
-            path_parts = dataset_path.split('.')
-            quoted_path = '.'.join(f'`{part}`' for part in path_parts)
+            # Use Unity Catalog Tables API to get table details. Some SDK versions don't expose `.get`.
+            tbl = None
+            try:
+                # Prefer SDK method if available
+                get_method = getattr(self.client.tables, 'get', None)
+                if callable(get_method):
+                    tbl = get_method(catalog_name=catalog_name, schema_name=schema_name, name=table_name)
+                else:
+                    raise AttributeError('tables.get not available')
+            except Exception:
+                # Fallback to direct REST call via api_client
+                path = f"/api/2.1/unity-catalog/tables/{quote(dataset_path, safe='')}"
+                tbl = self.client.api_client.do('GET', path)
 
-            # Get data with Arrow for better performance
-            logger.info(f"Executing SQL query: SELECT * FROM {quoted_path} LIMIT 1000")
-            cursor.execute(f"SELECT * FROM {quoted_path} LIMIT 1000")
-            arrow_table = cursor.fetchall_arrow()
+            # The SDK returns TableInfo; columns is a list of ColumnInfo-like models
+            schema: List[Dict[str, Any]] = []
+            columns_iter = None
+            if hasattr(tbl, 'columns'):
+                columns_iter = tbl.columns
+            elif isinstance(tbl, dict) and 'columns' in tbl:
+                columns_iter = tbl['columns']
 
-            # Convert Arrow table to pandas DataFrame
-            import pandas as pd
-            df = arrow_table.to_pandas()
+            if columns_iter:
+                for col in columns_iter:
+                    # ColumnInfo fields vary slightly by SDK version; use getattr with fallbacks
+                    if isinstance(col, dict):
+                        col_name = col.get('name') or col.get('column_name')
+                        col_type = col.get('type_text') or col.get('type_name') or col.get('data_type')
+                        nullable = col.get('nullable')
+                    else:
+                        col_name = getattr(col, 'name', None) or getattr(col, 'column_name', None)
+                        col_type = getattr(col, 'type_text', None) or getattr(col, 'type_name', None) or getattr(col, 'data_type', None)
+                        nullable = getattr(col, 'nullable', None)
+                    schema.append({
+                        'name': col_name,
+                        'type': col_type,
+                        'nullable': nullable,
+                    })
 
-            # Get schema from DataFrame
-            schema = [
-                {
-                    'name': col_name,
-                    'type': str(df[col_name].dtype),
-                    'nullable': df[col_name].hasnans
-                }
-                for col_name in df.columns
-            ]
-
-            # Convert DataFrame to records
-            rows = df.replace({pd.NA: None}).to_dict('records')
-
-            # Convert any non-string values to strings for JSON serialization
-            for row in rows:
-                for key, value in row.items():
-                    if value is not None:
-                        row[key] = str(value)
-
-            result = {
+            result: Dict[str, Any] = {
                 'schema': schema,
-                'data': rows,
-                'total_rows': len(rows)
+                'data': [],
+                'total_rows': 0,
             }
 
-            logger.info(f"Successfully retrieved dataset with {len(rows)} rows and {len(schema)} columns")
+            logger.info(f"Successfully retrieved metadata with {len(schema)} columns for {dataset_path}")
             return result
-
-        finally:
-            if connection:
-                try:
-                    connection.close()
-                    logger.info("Database connection closed")
-                except Exception as e:
-                    logger.warning(f"Error closing database connection: {e!s}")
+        except Exception as e:
+            logger.error(f"Error fetching dataset metadata for {dataset_path}: {e!s}", exc_info=True)
+            raise
 
     def health_check(self) -> Dict[str, str]:
         """Check if the catalog API is healthy.

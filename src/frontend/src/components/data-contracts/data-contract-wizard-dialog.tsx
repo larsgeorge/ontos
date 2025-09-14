@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import DatasetLookupDialog from './dataset-lookup-dialog'
 import { useDomains } from '@/hooks/use-domains'
+import { useToast } from '@/hooks/use-toast'
 
 type WizardProps = {
   isOpen: boolean
@@ -19,6 +20,7 @@ const statuses = ['draft', 'active', 'deprecated', 'archived']
 
 export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmit, initial }: WizardProps) {
   const { domains, loading: domainsLoading } = useDomains()
+  const { toast } = useToast()
   const [step, setStep] = useState(1)
   const totalSteps = 5
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -40,42 +42,46 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   type SchemaObject = { name: string; physicalName?: string; properties: Column[] }
   const [schemaObjects, setSchemaObjects] = useState<SchemaObject[]>(initial?.schemaObjects || [])
   const [lookupOpen, setLookupOpen] = useState(false)
+  const wasOpenRef = useRef(false)
 
-  // Reset wizard state when opening for new contract
+  // Initialize wizard state only when the dialog transitions from closed -> open
   useEffect(() => {
-    if (isOpen && !initial) {
-      // Reset to defaults for new contract
-      setStep(1)
-      setName('')
-      setVersion('v1.0')
-      setStatus('draft')
-      setOwner('')
-      setDomain('')
-      setTenant('')
-      setDataProduct('')
-      setDescriptionUsage('')
-      setDescriptionPurpose('')
-      setDescriptionLimitations('')
-      setSchemaObjects([])
-      setIsSubmitting(false)
-    } else if (isOpen && initial) {
-      // Initialize from provided data for editing
-      console.log('Wizard initializing with data:', initial)
-      console.log('Initial domain value:', initial.domain)
-      setStep(1)
-      setName(initial.name || '')
-      setVersion(initial.version || 'v1.0')
-      setStatus(initial.status || 'draft')
-      setOwner(initial.owner || '')
-      setDomain(initial.domain || '')
-      setTenant(initial.tenant || '')
-      setDataProduct(initial.dataProduct || '')
-      setDescriptionUsage(initial.descriptionUsage || '')
-      setDescriptionPurpose(initial.descriptionPurpose || '')
-      setDescriptionLimitations(initial.descriptionLimitations || '')
-      setSchemaObjects(initial.schemaObjects || [])
-      console.log('Domain state set to:', initial.domain || '')
-      setIsSubmitting(false)
+    if (isOpen && !wasOpenRef.current) {
+      wasOpenRef.current = true
+      if (!initial) {
+        // Reset to defaults for new contract
+        setStep(1)
+        setName('')
+        setVersion('v1.0')
+        setStatus('draft')
+        setOwner('')
+        setDomain('')
+        setTenant('')
+        setDataProduct('')
+        setDescriptionUsage('')
+        setDescriptionPurpose('')
+        setDescriptionLimitations('')
+        setSchemaObjects([])
+        setIsSubmitting(false)
+      } else {
+        // Initialize from provided data for editing
+        setStep(1)
+        setName(initial.name || '')
+        setVersion(initial.version || 'v1.0')
+        setStatus(initial.status || 'draft')
+        setOwner(initial.owner || '')
+        setDomain(initial.domain || '')
+        setTenant(initial.tenant || '')
+        setDataProduct(initial.dataProduct || '')
+        setDescriptionUsage(initial.descriptionUsage || '')
+        setDescriptionPurpose(initial.descriptionPurpose || '')
+        setDescriptionLimitations(initial.descriptionLimitations || '')
+        setSchemaObjects(initial.schemaObjects || [])
+        setIsSubmitting(false)
+      }
+    } else if (!isOpen && wasOpenRef.current) {
+      // Mark as closed to allow re-initialization on next open
+      wasOpenRef.current = false
     }
   }, [isOpen, initial])
 
@@ -84,9 +90,41 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const addColumn = (objIdx: number) => setSchemaObjects((prev) => prev.map((o, i) => i === objIdx ? { ...o, properties: [...o.properties, { name: '', logicalType: 'string' }] } : o))
   const removeColumn = (objIdx: number, colIdx: number) => setSchemaObjects((prev) => prev.map((o, i) => i === objIdx ? { ...o, properties: o.properties.filter((_, j) => j !== colIdx) } : o))
 
-  const handleInferFromDataset = (table: { full_name: string }) => {
-    // Minimal inference stub: create object with physicalName
-    setSchemaObjects((prev) => [...prev, { name: table.full_name.split('.').pop() || table.full_name, physicalName: table.full_name, properties: [] }])
+  const handleInferFromDataset = async (table: { full_name: string }) => {
+    const datasetPath = table.full_name
+    const logicalName = datasetPath.split('.').pop() || datasetPath
+
+    // Create schema immediately so user sees progress
+    const newIndex = schemaObjects.length
+    setSchemaObjects((prev) => [...prev, { name: logicalName, physicalName: datasetPath, properties: [] }])
+    setStep(2)
+    setTimeout(() => {
+      const el = document.getElementById(`schema-object-${newIndex}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        const input = el.querySelector('input') as HTMLInputElement | null
+        if (input) input.focus()
+      }
+    }, 0)
+
+    // Try to fetch columns asynchronously
+    try {
+      const res = await fetch(`/api/catalogs/dataset/${encodeURIComponent(datasetPath)}`)
+      if (!res.ok) throw new Error('Failed to load dataset schema')
+      const data = await res.json()
+      const columns = Array.isArray(data?.schema)
+        ? data.schema.map((c: any) => ({
+            name: String(c.name || ''),
+            logicalType: String(c.logicalType || c.logical_type || c.type || 'string'),
+            required: c.nullable === undefined ? undefined : !Boolean(c.nullable),
+          }))
+        : []
+
+      setSchemaObjects((prev) => prev.map((o, i) => i === newIndex ? { ...o, properties: columns } : o))
+      toast({ title: 'Schema inferred', description: `Columns loaded from ${datasetPath}` })
+    } catch (e) {
+      toast({ title: 'Schema added without columns', description: 'Could not fetch columns. Configure SQL warehouse to enable inference.', variant: 'warning' as any })
+    }
   }
 
   const handleNext = () => { if (step < totalSteps) setStep(step + 1) }
@@ -339,7 +377,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
             ) : (
               <div className="space-y-6">
                 {schemaObjects.map((obj, objIndex) => (
-                  <div key={objIndex} className="border rounded-lg p-6 bg-card">
+                  <div key={objIndex} id={`schema-object-${objIndex}`} className="border rounded-lg p-6 bg-card">
                     {/* Object Header */}
                     <div className="flex items-center justify-between mb-4">
                       <div className="text-base font-medium">Schema Object {objIndex + 1}</div>

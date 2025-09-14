@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,7 @@ interface DatasetLookupDialogProps {
 }
 
 type CatalogItem = { id: string; name: string; type: 'catalog' | 'schema' | 'table' | 'view'; children: CatalogItem[]; hasChildren: boolean }
-type TreeViewItem = { id: string; name: string; children?: TreeViewItem[]; onClick?: () => void; expanded?: boolean; onExpand?: () => void; hasChildren: boolean }
+type TreeViewItem = { id: string; name: string; children?: TreeViewItem[]; onClick?: () => void; expanded?: boolean; onExpand?: () => void; hasChildren: boolean; loading?: boolean }
 
 export default function DatasetLookupDialog({ isOpen, onOpenChange, onSelect }: DatasetLookupDialogProps) {
   const [search, setSearch] = useState('')
@@ -66,9 +66,16 @@ export default function DatasetLookupDialog({ isOpen, onOpenChange, onSelect }: 
 
   useEffect(() => { if (isOpen) fetchCatalogs() }, [isOpen])
 
-  const renderTree = (nodes: CatalogItem[]): TreeViewItem[] =>
+  // Apply filter only at the current level; once navigating deeper, show all children
+  const renderTree = (nodes: CatalogItem[], bypassFilter: boolean = false): TreeViewItem[] =>
     nodes
-      .filter((n) => !search.trim() || n.name.toLowerCase().includes(search.toLowerCase()))
+      .filter((n) => {
+        if (bypassFilter) return true
+        const q = search.trim().toLowerCase()
+        if (!q) return true
+        if (expanded.has(n.id)) return true
+        return n.name.toLowerCase().includes(q)
+      })
       .map((n) => ({
         id: n.id,
         name: n.name,
@@ -80,8 +87,13 @@ export default function DatasetLookupDialog({ isOpen, onOpenChange, onSelect }: 
           onSelect({ catalog_name, schema_name, table_name, full_name: n.id })
           onOpenChange(false)
         } : undefined,
-        children: n.children ? renderTree(n.children) : [],
+        // When a query is active, do not filter children at deeper levels
+        children: n.children ? renderTree(n.children, Boolean(search.trim())) : [],
+        loading: loadingNodes.has(n.id),
       }))
+
+  // Memoized tree data to avoid re-render churn
+  const treeData = useMemo(() => renderTree(items), [items, expanded, loadingNodes, search])
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -99,7 +111,7 @@ export default function DatasetLookupDialog({ isOpen, onOpenChange, onSelect }: 
             {loading ? (
               <div className="p-3 text-sm">Loading catalogs...</div>
             ) : (
-              <TreeView data={renderTree(items)} className="p-1 text-sm leading-tight whitespace-nowrap min-w-max" />
+              <TreeView data={treeData as any} className="p-1 text-sm leading-tight whitespace-nowrap min-w-max" />
             )}
           </div>
         </div>

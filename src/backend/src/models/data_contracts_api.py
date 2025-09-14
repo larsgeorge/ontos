@@ -12,11 +12,19 @@ class ColumnProperty(BaseModel):
     unique: Optional[bool] = False
     description: Optional[str] = None
 
+    class Config:
+        # Accept both JSON keys: "logicalType" (field name) and "logical_type" (alias)
+        allow_population_by_field_name = True
+
 
 class SchemaObject(BaseModel):
     name: str
     physicalName: Optional[str] = Field(None, alias='physical_name')
     properties: List[ColumnProperty] = Field(default_factory=list)
+
+    class Config:
+        # Accept both "physicalName" and "physical_name"
+        allow_population_by_field_name = True
 
 
 class ContractDescription(BaseModel):
@@ -172,7 +180,8 @@ class DataContractRead(BaseModel):
     status: str
     owner: str
     kind: Optional[str] = 'DataContract'
-    apiVersion: Optional[str] = Field('v3.0.2', alias='api_version')
+    # Ensure JSON uses camelCase key 'apiVersion' so frontend reads it
+    apiVersion: Optional[str] = Field('v3.0.2', alias='apiVersion')
     tenant: Optional[str] = None
     domain: Optional[str] = None
     domainId: Optional[str] = Field(None, alias='domain_id')
