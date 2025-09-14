@@ -225,8 +225,10 @@ The project implements a web application designed to run as a **Databricks App**
   - Test user workflows end-to-end (e.g., create data product → assign permissions → verify access)
 - Ensure proper input validation (Pydantic on backend, Zod/react-hook-form on frontend) and error handling.
 - **Deployment**: Deployed as a Databricks App via `databricks bundle deploy` using `api/app.yaml`.
-- **Development Server**: When developing locally (localhost is used), the FastAPI/Uvicorn and Vite server run in dev mode with auto-reload enabled. File changes automatically restart/reload the server - no manual restart needed.
+- **Development Server**: When developing locally (localhost is used), the FastAPI/Uvicorn and Vite server run in dev mode with auto-reload enabled. File changes automatically restart/reload the server - no manual restart needed. **IMPORTANT**: NEVER RESTART SERVER PROCESSES!
 - **Development Ports**: Backend API runs on port 8000, Frontend UI runs on port 3000.
+- Always use `hatch -e dev run ...` to run Python snippets
+- IMPORTANT: There is no access to the server logs, if you need something from the logs, ask for it.
 
 ## Package Management
 
