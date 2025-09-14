@@ -47,8 +47,6 @@ const ConfirmRoleRequestDialog: React.FC<ConfirmRoleRequestDialogProps> = ({
             message: decisionMessage,
         };
         
-        console.log("Submitting decision payload:", payload);
-
         // Wrap the payload under the key expected by the backend
         const requestBody = { request_data: payload };
 

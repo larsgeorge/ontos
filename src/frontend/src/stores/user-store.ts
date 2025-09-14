@@ -10,7 +10,6 @@ interface UserState {
 
 // Placeholder for API calls - Replace with actual implementation (similar to notifications store)
 const apiGet = async <T>(endpoint: string): Promise<{ data?: T, error?: string }> => {
-    console.log(`[UserStore] Fetching ${endpoint}`);
     try {
         const response = await fetch(endpoint);
         if (!response.ok) {

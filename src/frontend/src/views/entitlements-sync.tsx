@@ -494,7 +494,6 @@ export default function EntitlementsSync() {
                       .getSelectedRowModel()
                       .rows.map((row) => row.original.id);
                     // Add bulk delete functionality here
-                    console.log("Selected IDs:", selectedIds);
                   }}
                 >
                   Delete Selected
@@ -508,7 +507,6 @@ export default function EntitlementsSync() {
                       .getSelectedRowModel()
                       .rows.map((row) => row.original.id);
                     // Add bulk toggle functionality here
-                    console.log("Toggle Status for:", selectedIds);
                   }}
                 >
                   Toggle Status

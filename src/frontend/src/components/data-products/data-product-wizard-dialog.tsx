@@ -349,7 +349,7 @@ export default function DataProductWizardDialog({
             setStep(step + 1);
         }
     } else {
-        console.log("Validation Errors:", form.formState.errors);
+        console.error("Validation Errors:", form.formState.errors);
         toast({ title: "Validation Error", description: "Please fix the errors before proceeding.", variant: "destructive" });
     }
   };
@@ -414,10 +414,8 @@ export default function DataProductWizardDialog({
     try {
       let response;
       if (isEditing) {
-        console.log("Submitting PUT request with data:", JSON.stringify(finalData, null, 2));
         response = await put<DataProduct>(`/api/data-products/${productId}`, finalData);
       } else {
-         console.log("Submitting POST request with data:", JSON.stringify(finalData, null, 2));
         response = await post<DataProduct>('/api/data-products', finalData);
       }
 

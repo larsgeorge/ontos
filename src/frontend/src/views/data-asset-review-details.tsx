@@ -87,7 +87,6 @@ export default function DataAssetReviewDetails() {
         fetchRequestDetails();
         // Cleanup function
         return () => {
-            console.log("DataAssetReviewDetails unmounting, clearing breadcrumb title.");
             setStaticSegments([]);
             setDynamicTitle(null);
         };

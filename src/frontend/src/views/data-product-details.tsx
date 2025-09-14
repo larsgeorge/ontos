@@ -157,7 +157,6 @@ export default function DataProductDetails() {
     
     // Cleanup function: Clear the title when the component unmounts
     return () => {
-        console.log("DataProductDetails unmounting, clearing breadcrumb title.");
         setStaticSegments([]); // Clear static segments as well
         setDynamicTitle(null);
     };
@@ -178,7 +177,6 @@ export default function DataProductDetails() {
 
   // Handler for successful wizard submission (shared logic with list view)
   const handleWizardSubmitSuccess = (savedProduct: DataProduct) => {
-    console.log('Edit wizard submitted successfully, refreshing details...', savedProduct);
     setIsEditWizardOpen(false); // Close the wizard
     fetchDetailsAndDropdowns(); // Refetch details to show updates
   };

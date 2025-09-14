@@ -20,7 +20,6 @@ interface NotificationsState {
 const API_BASE_URL = ''; // Assuming API routes start from the root
 
 const apiGet = async <T>(endpoint: string): Promise<{ data?: T, error?: string }> => {
-    console.log(`[Store] Fetching ${API_BASE_URL}${endpoint}`);
     try {
         const response = await fetch(`${API_BASE_URL}${endpoint}`);
         if (!response.ok) {
@@ -37,7 +36,6 @@ const apiGet = async <T>(endpoint: string): Promise<{ data?: T, error?: string }
 };
 
 const apiPut = async (endpoint: string): Promise<{ error?: string }> => {
-    console.log(`[Store] PUT ${API_BASE_URL}${endpoint}`);
      try {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, { method: 'PUT' });
         if (!response.ok) {
@@ -51,7 +49,6 @@ const apiPut = async (endpoint: string): Promise<{ error?: string }> => {
 };
 
 const apiDelete = async (endpoint: string): Promise<{ error?: string }> => {
-    console.log(`[Store] DELETE ${API_BASE_URL}${endpoint}`);
      try {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, { method: 'DELETE' });
          if (!response.ok && response.status !== 204) { // Allow 204 No Content
@@ -181,9 +178,7 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   startPolling: () => {
       // Clear existing interval before starting a new one
       get().stopPolling(); 
-      console.log(`[Store] Starting notification polling every ${POLLING_INTERVAL / 1000}s`);
       pollingIntervalId = setInterval(() => {
-          console.log("[Store] Polling for notifications...");
           get().fetchNotifications();
       }, POLLING_INTERVAL);
       // Fetch immediately when polling starts
@@ -192,7 +187,6 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
 
   stopPolling: () => {
       if (pollingIntervalId) {
-          console.log("[Store] Stopping notification polling.");
           clearInterval(pollingIntervalId);
           pollingIntervalId = null;
       }

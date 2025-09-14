@@ -391,7 +391,6 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
         const validate = ajv.current.compile(schema);
         setSchemaValidator(() => validate);
         setValidationStatusMessage("Schema ready.");
-        console.log("Data Product schema loaded and compiled successfully.");
       } catch (err: any) {
         console.error("Error fetching or compiling schema:", err);
         setValidationStatusMessage(`Error loading schema: ${err.message}`);
@@ -407,7 +406,6 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
   useEffect(() => {
     const loadProductForEdit = async () => {
       if (isOpen && isEditMode && initialProduct?.id) {
-        console.log(`Dialog open in edit mode. Fetching product: ${initialProduct.id}`);
         setIsLoadingProduct(true);
         setFormError(null);
         setActiveTab('ui'); // Reset to UI tab on load
@@ -430,7 +428,6 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
           delete formData.created_at; // Keep this for optional field
           // delete formData.updated_at; // REMOVE: updated_at is required in type
 
-          console.log("Resetting form with fetched data:", formData);
           reset(formData); 
 
           // Populate state arrays for custom editors *after* reset
@@ -457,7 +454,6 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
         }
       } else if (isOpen && !isEditMode) {
           // Reset form for CREATE mode when dialog opens
-          console.log("Dialog open in create mode. Resetting form.");
           const defaultValues = createDefaultProduct();
           reset(defaultValues); 
           setLinksArray(linksObjectToArray(defaultValues.links));
@@ -530,7 +526,6 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 
   // Validate product object against schema
   const validateProductObject = (data: any): boolean => {
-    console.log("[validateProductObject] Validating object:", data);
     if (!schemaValidator) {
       setValidationStatusMessage("Schema not ready.");
       setIsJsonValid(false); // Assume invalid if no validator
@@ -546,14 +541,12 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
        setValidationStatusMessage("Schema Valid");
        setIsJsonValid(true);
        setSchemaValidationErrors(null);
-       console.log("[validateProductObject] Result: VALID");
     } else {
        setIsJsonValid(false);
        const errors = schemaValidator.errors ?? [];
        setSchemaValidationErrors(errors);
        const errorCount = errors.length;
        setValidationStatusMessage(`${errorCount} schema validation error(s)`); 
-       console.log(`[validateProductObject] Result: INVALID (${errorCount} errors)`);
     }
     return isValid;
   };
@@ -664,17 +657,11 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
          // Compare using stringify
          const isDifferent = JSON.stringify(cleanedParsed) !== JSON.stringify(cleanedCurrent);
 
-         console.log("[JSON -> UI] Comparing cleaned parsed:", JSON.stringify(cleanedParsed).substring(0, 200) + "...");
-         console.log("[JSON -> UI] Comparing cleaned current:", JSON.stringify(cleanedCurrent).substring(0, 200) + "...");
-         console.log("[JSON -> UI] Is data different?", isDifferent);
-
          // Only reset RHF state if data is actually different
          if (isDifferent) {
-             console.log("[JSON -> UI] Data differs, calling reset().");
              // Reset with the raw parsed data
              reset(parsedData);
          } else {
-             console.log("[JSON -> UI] Data is the same, explicitly resetting dirty state.");
              // Reset with current values, marking form as not dirty
              reset(getValues(), { keepDirty: false }); 
          }
@@ -720,8 +707,6 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
         return; // Stop submission
     }
 
-    console.log(`Submitting ${isEditMode ? 'Update' : 'Create'}. Cleaned Payload:`, JSON.stringify(payload, null, 2));
-
     try {
         let response;
         let result: DataProduct;
@@ -729,7 +714,6 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
         if (isEditMode && productId) {
             // --- UPDATE --- 
             payload.id = productId; // Ensure ID is in the payload for PUT
-            console.log("Calling PUT", `/api/data-products/${productId}`);
             response = await put<DataProduct>(`/api/data-products/${productId}`, payload);
             result = checkApiResponse(response, 'Update Product');
         } else {
@@ -737,16 +721,13 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
             // Assign ID if not present (backend might also do this)
             if (!payload.id) {
                 payload.id = crypto.randomUUID(); 
-                console.log("Generated client-side ID for create:", payload.id);
             }
             // Add created_at for new records (backend might override)
             payload.created_at = now;
-            console.log("Calling POST", '/api/data-products');
             response = await post<DataProduct>('/api/data-products', payload);
             result = checkApiResponse(response, 'Create Product');
         }
 
-        console.log('Submit successful:', result);
         toast({ title: 'Success', description: `Data product ${isEditMode ? 'updated' : 'created'}.` });
         onSubmitSuccess(result); // Call the success callback from parent
         onOpenChange(false); // Close dialog on success
@@ -761,7 +742,6 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 
   // UI Form Submit Handler
   const onFormSubmit: SubmitHandler<DataProduct> = (data) => {
-    console.log("UI form submitted, triggering performSubmit...");
     performSubmit(data); // Pass RHF data to the actual submit logic
   };
 
@@ -777,7 +757,6 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
         toast({ title: "Validation Error", description: "JSON data failed schema validation. Cannot save.", variant: "destructive" });
         return; 
       }
-      console.log("JSON submit triggered, calling performSubmit...");
       // Pass the parsed and validated JSON data to the submit logic
       await performSubmit(parsedData); 
 

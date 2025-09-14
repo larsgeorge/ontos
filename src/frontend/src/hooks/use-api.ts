@@ -140,7 +140,6 @@ export const useApi = () => {
           } else {
              data = await response.text(); // Handle non-JSON success response
           }
-          console.log(`[useApi] POST successful response from ${url}:`, data);
           return { data: data as T };
           
       } catch (parseError) {
@@ -158,7 +157,6 @@ export const useApi = () => {
   }, []);
 
   const put = useCallback(async <T>(url: string, body: any): Promise<ApiResponse<T>> => {
-    console.log(`[useApi] PUT request to ${url}`, body);
     setLoading(true);
     try {
       const response = await fetch(url, {
@@ -189,7 +187,6 @@ export const useApi = () => {
       
       // Handle successful response
       const data = await response.json();
-      console.log(`[useApi] PUT response from ${url}:`, data);
       return { data };
     } catch (error) {
       console.error(`[useApi] PUT error from ${url}:`, error);
@@ -200,7 +197,6 @@ export const useApi = () => {
   }, []);
 
   const delete_ = useCallback(async (url: string): Promise<ApiResponse<unknown>> => {
-    console.log(`[useApi] DELETE request to ${url}`);
     setLoading(true);
     let responseData: unknown = null;
     let errorMsg: string | null = null;
@@ -224,7 +220,6 @@ export const useApi = () => {
           console.error(`[useApi] DELETE error response from ${url} (${response.status}):`, errorBody);
       } else {
           // Success (usually 204 No Content for DELETE)
-          console.log(`[useApi] DELETE successful for ${url} (status: ${response.status})`);
           // No data expected for successful delete, but structure requires data field
           responseData = {}; 
       }

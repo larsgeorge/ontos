@@ -32,7 +32,6 @@ export function TreeView({
   const [selectedItemId, setSelectedItemId] = React.useState<string | undefined>(initialSelectedItemId)
 
   const handleToggle = (item: TreeDataItem) => {
-    console.log('Toggling item:', item);
     if (item.loading) return;
 
     setExpandedItems((prev) => {
@@ -42,7 +41,6 @@ export function TreeView({
       } else {
         next.add(item.id);
         if (item.onExpand) {
-          console.log('Calling onExpand for item:', item);
           item.onExpand();
         }
       }
@@ -65,8 +63,6 @@ export function TreeView({
     const isExpanded = expandedItems.has(item.id) || item.expanded;
     const isSelected = selectedItemId === item.id;
 
-    console.log('Rendering item:', { item, hasChildren, isExpanded, isSelected });
-
     return (
       <div key={item.id} className="space-y-1">
         <div
@@ -83,7 +79,6 @@ export function TreeView({
                 className="h-4 w-4 flex-shrink-0 flex items-center justify-center"
                 onClick={(e) => {
                   e.stopPropagation();
-                  console.log('Expand button clicked for item:', item);
                   handleToggle(item);
                 }}
               >

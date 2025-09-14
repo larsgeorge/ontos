@@ -160,14 +160,12 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 };
                 // Wrap the payload in { "role_data": ... } as FastAPI seems to expect it
                 // const nestedPayload = { role_data: updatePayload }; 
-                console.log(`Submitting Update Role Payload (Flat):`, updatePayload); // Changed log
                 response = await put<AppRole>(`/api/settings/roles/${updatePayload.id}`, updatePayload); // Send updatePayload directly
             } else {
                 // For create, construct a new payload explicitly excluding the 'id' field.
                 const { id, ...createPayloadWithoutId } = basePayload;
                 // DO NOT Wrap the payload in { "role_data": ... } 
                 // const nestedPayload = { role_data: createPayload }; 
-                console.log(`Submitting Create Role Payload (Flat):`, createPayloadWithoutId);
                 response = await post<AppRole>('/api/settings/roles', createPayloadWithoutId); // Send createPayload directly
             }
 

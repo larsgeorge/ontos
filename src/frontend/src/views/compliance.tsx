@@ -498,7 +498,6 @@ export default function Compliance() {
                       const selectedIds = table
                         .getSelectedRowModel()
                         .rows.map((row) => row.original.id);
-                      console.log("Selected IDs:", selectedIds);
                     }}
                   >
                     Delete Selected
@@ -511,7 +510,6 @@ export default function Compliance() {
                       const selectedIds = table
                         .getSelectedRowModel()
                         .rows.map((row) => row.original.id);
-                      console.log("Toggle Status for:", selectedIds);
                     }}
                   >
                     Toggle Status

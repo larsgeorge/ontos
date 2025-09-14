@@ -149,13 +149,11 @@ const CatalogCommander: React.FC = () => {
         url = `/api/catalogs/${catalogName}/schemas/${schemaName}/tables`;
       }
       
-      console.log('Fetching children from:', url);
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`Failed to fetch children: ${response.status}`);
       }
       const data = await response.json();
-      console.log('Received children data:', data);
       return data;
     } catch (err) {
       console.error('Error fetching children:', err);
@@ -166,21 +164,17 @@ const CatalogCommander: React.FC = () => {
   const handleNodeExpand = async (nodeId: string, nodeType: string, isSource: boolean) => {
     if (loadingNodes.has(nodeId)) return;
 
-    console.log('Expanding node:', { nodeId, nodeType, isSource });
     setLoadingNodes(prev => new Set(prev).add(nodeId));
     try {
       const children = await fetchChildren(nodeId, nodeType);
-      console.log('Updating children for node:', { nodeId, children });
       if (isSource) {
         setSourceItems(prev => {
           const updated = updateNodeChildren(prev, nodeId, children);
-          console.log('Updated source items:', updated);
           return updated;
         });
       } else {
         setTargetItems(prev => {
           const updated = updateNodeChildren(prev, nodeId, children);
-          console.log('Updated target items:', updated);
           return updated;
         });
       }
@@ -269,10 +263,8 @@ const CatalogCommander: React.FC = () => {
   };
 
   const renderTree = (items: CatalogItem[], isSource: boolean): TreeViewItem[] => {
-    console.log('Rendering tree items:', { items, isSource });
     return items.map(item => {
       const hasChildren = item.hasChildren || (item.children && item.children.length > 0);
-      console.log('Processing item:', { item, hasChildren });
       
       const treeItem = {
         id: item.id,
@@ -280,19 +272,16 @@ const CatalogCommander: React.FC = () => {
         icon: getIcon(item.type),
         children: item.children ? renderTree(item.children, isSource) : [],
         onClick: () => {
-          console.log('Item clicked:', item);
           handleItemSelect(item);
         },
         selected: selectedItems.some(selected => selected.id === item.id),
         expanded: expandedNodes.has(item.id),
         onExpand: () => {
-          console.log('Item expanding:', { item, isSource, hasChildren });
           handleNodeExpand(item.id, item.type, isSource);
         },
         loading: loadingNodes.has(item.id),
         hasChildren: hasChildren
       };
-      console.log('Created tree item:', treeItem);
       return treeItem;
     });
   };

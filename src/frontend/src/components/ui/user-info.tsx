@@ -99,7 +99,6 @@ export default function UserInfo() {
         const data: UserInfoData = await response.json();
         setUserInfo(data);
         setError(null); // Clear previous errors if successful
-        console.log('Successfully fetched user details from SDK.');
       } catch (detailsError: any) {
         console.warn('Failed to fetch user details from SDK, falling back to headers:', detailsError.message);
         // Fallback to fetching basic info from headers
@@ -111,7 +110,6 @@ export default function UserInfo() {
             const fallbackData: UserInfoData = await fallbackResponse.json();
             setUserInfo(fallbackData);
             setError(null); // Clear previous errors if fallback successful
-            console.log('Successfully fetched user info from headers as fallback.');
         } catch (fallbackError: any) {
             console.error('Failed to load user information from both endpoints:', fallbackError);
             setError(fallbackError.message || 'Failed to load user information');

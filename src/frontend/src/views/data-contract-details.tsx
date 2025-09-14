@@ -106,9 +106,6 @@ export default function DataContractDetails() {
       let contractData: DataContract | null = null
       if (contractRes.ok) {
         contractData = await contractRes.json()
-        console.log('Contract data from API:', contractData)
-        console.log('Contract domainId field:', contractData?.domainId)
-        console.log('Contract domain field:', contractData?.domain)
       } else {
         // Fallback: try list endpoint and hydrate a minimal model
         const listRes = await fetch('/api/data-contracts')
