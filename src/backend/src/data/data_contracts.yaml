@@ -6,6 +6,7 @@ contracts:
   status: active
   kind: DataContract
   apiVersion: v3.0.2
+  domain_name: Customer
   description:
     purpose: Core customer data contract defining customer profile, preferences, and transaction history
     usage: Customer master data to power user-facing apps, analytics, and marketing campaigns
@@ -193,6 +194,7 @@ contracts:
   status: deprecated
   kind: DataContract
   apiVersion: v3.0.2
+  domain_name: Product
   description:
     purpose: Complete product catalog with categories, inventory, pricing, and vendor information
     usage: Power e-commerce platform, merchandising experiences, and inventory management
@@ -493,6 +495,7 @@ contracts:
   status: active
   kind: DataContract
   apiVersion: v3.0.2
+  domain_name: Compliance
   description:
     purpose: Legal agreement for data sharing between Analytics and Marketing
     usage: Enables sharing of aggregated analytics for campaign optimization
@@ -505,6 +508,7 @@ contracts:
   status: active
   kind: DataContract
   apiVersion: v3.0.2
+  domain_name: IoT
   description:
     purpose: Comprehensive IoT device management and telemetry data for smart building systems
     usage: Monitor device health, performance, and environmental data in near real-time for predictive maintenance and energy optimization
@@ -850,6 +854,7 @@ contracts:
   status: archived
   kind: DataContract
   apiVersion: v3.0.2
+  domain_name: IoT
   description:
     purpose: Real-time IoT sensor data from manufacturing floor
     usage: Stream analytics and anomaly detection
@@ -886,6 +891,7 @@ contracts:
   status: draft
   kind: DataContract
   apiVersion: v3.0.2
+  domain_name: Finance
   description:
     purpose: Daily financial transaction data
     usage: Reconciliation, accounting, and reporting
@@ -922,6 +928,7 @@ contracts:
   status: deprecated
   kind: DataContract
   apiVersion: v3.0.2
+  domain_name: Supply Chain
   description:
     purpose: Real-time inventory levels and movements
     usage: Track stock levels across warehouses

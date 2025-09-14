@@ -271,14 +271,16 @@ def load_initial_data(app: FastAPI) -> None:
             settings_manager.load_initial_data(db)
         if auth_manager and hasattr(auth_manager, 'load_initial_data'):
             auth_manager.load_initial_data(db)
-        if data_asset_review_manager and hasattr(data_asset_review_manager, 'load_initial_data'):
-            data_asset_review_manager.load_initial_data(db)
-        if data_product_manager and hasattr(data_product_manager, 'load_initial_data'):
-            data_product_manager.load_initial_data(db)
+        # Ensure Data Domains are loaded FIRST so name->id lookups work for dependent entities
         if data_domain_manager and hasattr(data_domain_manager, 'load_initial_data'):
             data_domain_manager.load_initial_data(db)
+        # Now load other feature data that may depend on domains
         if data_contracts_manager and hasattr(data_contracts_manager, 'load_initial_data'):
             data_contracts_manager.load_initial_data(db)
+        if data_product_manager and hasattr(data_product_manager, 'load_initial_data'):
+            data_product_manager.load_initial_data(db)
+        if data_asset_review_manager and hasattr(data_asset_review_manager, 'load_initial_data'):
+            data_asset_review_manager.load_initial_data(db)
         if business_glossaries_manager and hasattr(business_glossaries_manager, 'load_initial_data'):
             business_glossaries_manager.load_initial_data(db)
         semantic_models_manager = getattr(app.state, 'semantic_models_manager', None)

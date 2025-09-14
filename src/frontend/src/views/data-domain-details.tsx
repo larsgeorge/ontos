@@ -19,6 +19,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { DataDomainMiniGraph } from '@/components/data-domains/data-domain-mini-graph';
 import { CommentSidebar } from '@/components/comments';
+import { DataTable } from '@/components/ui/data-table';
+import { ColumnDef } from '@tanstack/react-table';
+import { useDomains } from '@/hooks/use-domains';
 
 // Helper to check API response (can be moved to a shared util if used in many places)
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
@@ -49,6 +52,118 @@ const InfoItem: React.FC<InfoItemProps> = ({ label, value, icon, children, class
   </div>
 );
 
+// Column definitions for child domains table
+const createChildDomainsColumns = (navigate: (path: string) => void): ColumnDef<any>[] => [
+  {
+    accessorKey: "name",
+    header: "Name",
+    cell: ({ row }) => (
+      <Link
+        to={`/data-domains/${row.original.id}`}
+        className="font-medium text-primary hover:underline"
+      >
+        {row.getValue("name")}
+      </Link>
+    ),
+  },
+  {
+    accessorKey: "id",
+    header: "ID",
+    cell: ({ row }) => (
+      <code className="text-xs bg-muted px-2 py-1 rounded">
+        {row.getValue("id")}
+      </code>
+    ),
+  },
+];
+
+// Define the linked asset type
+type LinkedAsset = {
+  id: string;
+  name: string;
+  type?: string;
+  path?: string;
+  domainId?: string;
+  version?: string;
+  status?: string;
+};
+
+// Component for displaying linked assets
+interface LinkedAssetsViewProps {
+  assets: LinkedAsset[];
+}
+
+const LinkedAssetsView: React.FC<LinkedAssetsViewProps> = ({ assets }) => {
+  const { getDomainName } = useDomains();
+  // Define columns for the linked assets table
+  const columns: ColumnDef<LinkedAsset>[] = [
+    {
+      accessorKey: "name",
+      header: "Asset Name",
+      cell: ({ row }) => (
+        <div className="font-medium">{row.getValue("name")}</div>
+      ),
+    },
+    {
+      accessorKey: "type",
+      header: "Type",
+      cell: ({ row }) => {
+        const type = row.getValue("type") as string;
+        return (
+          <Badge variant="outline" className="text-xs">
+            {type?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown'}
+          </Badge>
+        );
+      },
+    },
+    {
+      accessorKey: "path",
+      header: "Path",
+      cell: ({ row }) => {
+        const path = row.getValue("path") as string;
+        return path ? (
+          <code className="text-sm text-muted-foreground bg-muted px-2 py-1 rounded">
+            {path}
+          </code>
+        ) : null;
+      },
+    },
+    {
+      accessorKey: "domainId",
+      header: "Domain",
+      cell: ({ row }) => {
+        const asset = row.original;
+        const domainName = asset.domainId ? getDomainName(asset.domainId) : null;
+        return domainName || "N/A";
+      },
+    },
+  ];
+
+  if (assets.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        No linked assets found
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold">Linked Assets</h3>
+        <Badge variant="secondary" className="text-xs">
+          {assets.length} total
+        </Badge>
+      </div>
+      <DataTable
+        columns={columns}
+        data={assets}
+        searchColumn="name"
+      />
+    </div>
+  );
+};
+
 export default function DataDomainDetailsView() {
   const { domainId } = useParams<{ domainId: string }>();
   const navigate = useNavigate();
@@ -66,6 +181,7 @@ export default function DataDomainDetailsView() {
   const [semanticLinks, setSemanticLinks] = useState<EntitySemanticLink[]>([]);
   const [parentSemanticLinks, setParentSemanticLinks] = useState<EntitySemanticLink[]>([]);
   const [hierarchyConceptIris, setHierarchyConceptIris] = useState<string[]>([]);
+  const [linkedAssets, setLinkedAssets] = useState<any[]>([]);
 
   // Metadata: Rich Texts, Links, Documents
   interface RichTextItem { id: string; entity_id: string; entity_type: string; title: string; short_description?: string | null; content_markdown: string; created_at?: string; }
@@ -143,9 +259,44 @@ export default function DataDomainDetailsView() {
       setDynamicTitle(data.name);
       
       if (linksRes.data && !linksRes.error) {
-        setSemanticLinks(Array.isArray(linksRes.data) ? linksRes.data : []);
+        const links = Array.isArray(linksRes.data) ? linksRes.data : [];
+        setSemanticLinks(links);
+
+        // Transform semantic links to linked assets for the LinkedAssetsView
+        const semanticAssets = links.map(link => ({
+          id: link.entity_id,
+          name: link.label || link.entity_id,
+          type: link.entity_type,
+          path: link.entity_id,
+        }));
+
+        // Fetch data contracts that reference this domain
+        try {
+          const contractsRes = await get(`/api/data-contracts?domain_id=${domainId}`);
+          if (contractsRes.data && !contractsRes.error) {
+            const contracts = Array.isArray(contractsRes.data) ? contractsRes.data : [];
+            const contractAssets = contracts.map(contract => ({
+              id: contract.id,
+              name: contract.name,
+              type: 'data_contract',
+              path: contract.id,
+              domainId: contract.domainId, // For domain name resolution
+              version: contract.version,
+              status: contract.status,
+            }));
+
+            // Combine semantic assets and contract assets
+            setLinkedAssets([...semanticAssets, ...contractAssets]);
+          } else {
+            setLinkedAssets(semanticAssets);
+          }
+        } catch (error) {
+          console.error('Error fetching contracts for domain:', error);
+          setLinkedAssets(semanticAssets);
+        }
       } else {
         setSemanticLinks([]);
+        setLinkedAssets([]);
       }
 
       // Fetch hierarchy concept IRIs (starts from parent, then walks up)
@@ -384,7 +535,7 @@ export default function DataDomainDetailsView() {
 
       <Separator />
 
-      {/* Domain Hierarchy above metadata */}
+      {/* Domain Hierarchy Context */}
       {(domain.parent_info || (domain.children_info && domain.children_info.length > 0)) && (
         <Card className="mb-6">
           <CardHeader className='pb-2'>
@@ -399,32 +550,50 @@ export default function DataDomainDetailsView() {
         </Card>
       )}
 
-      <EntityMetadataPanel entityId={domainId!} entityType={entityType} />
-
-      {/* Mini Graph Display (removed duplicate; displayed above in a single instance) */}
-
+      {/* Child Data Domains */}
       {domain.children_count !== undefined && domain.children_count > 0 && (
-        <>
-            <Separator />
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-xl flex items-center"><ListTree className="mr-2 h-5 w-5 text-primary"/>Child Data Domains ({domain.children_count})</CardTitle>
-                    <CardDescription>Directly nested data domains.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-sm text-muted-foreground">Listing child domains with links to their details pages will be implemented here. This might require fetching child details or having them partially included in the parent's API response.</p>
-                    {/* Placeholder: Fetch and list child domains here */}
-                    {/* Example: 
-                        <ul>
-                            {childDomains.map(child => (
-                                <li key={child.id}><Link to={`/data-domains/${child.id}`}>{child.name}</Link></li>
-                            ))}
-                        </ul>
-                    */}
-                </CardContent>
-            </Card>
-        </>
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-xl flex items-center">
+              <ListTree className="mr-2 h-5 w-5 text-primary"/>
+              Child Data Domains ({domain.children_count})
+            </CardTitle>
+            <CardDescription>Directly nested data domains.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {domain.children_info && domain.children_info.length > 0 ? (
+              <DataTable
+                columns={createChildDomainsColumns(navigate)}
+                data={domain.children_info}
+                searchColumn="name"
+              />
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                No child domains found
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
+
+      {/* Linked Assets Section */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-xl flex items-center">
+            <Tag className="mr-2 h-5 w-5 text-primary"/>
+            Linked Assets
+          </CardTitle>
+          <CardDescription>
+            Assets (data products, contracts, etc.) linked to this data domain through semantic relationships.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LinkedAssetsView assets={linkedAssets} />
+        </CardContent>
+      </Card>
+
+      {/* Metadata Panel - Last Section */}
+      <EntityMetadataPanel entityId={domainId!} entityType={entityType} />
 
       <ConceptSelectDialog
         isOpen={iriDialogOpen}

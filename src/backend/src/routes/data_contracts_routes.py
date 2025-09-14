@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, Depends, Request, Body
 from fastapi.responses import JSONResponse
@@ -57,11 +58,23 @@ def get_data_contracts_manager(request: Request) -> DataContractsManager:
         raise HTTPException(status_code=500, detail="Data Contracts service configuration error.")
     return manager
 
+ 
+
 @router.get('/data-contracts', response_model=list[DataContractRead])
-async def get_contracts(db: DBSessionDep, _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))):
+async def get_contracts(
+    db: DBSessionDep,
+    domain_id: Optional[str] = None,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
     """Get all data contracts with basic ODCS structure"""
     try:
-        contracts = data_contract_repo.get_multi(db)
+        if domain_id:
+            # Filter by domain ID
+            contracts = db.query(DataContractDb).filter(DataContractDb.domain_id == domain_id).all()
+        else:
+            # Get all contracts
+            contracts = data_contract_repo.get_multi(db)
+
         return [
             DataContractRead(
                 id=c.id,
@@ -72,6 +85,7 @@ async def get_contracts(db: DBSessionDep, _: bool = Depends(PermissionChecker('d
                 kind=c.kind,
                 apiVersion=c.api_version,
                 tenant=c.tenant,
+                domainId=c.domain_id,  # Include domainId for frontend resolution
                 dataProduct=c.data_product,
                 created=c.created_at.isoformat() if c.created_at else None,
                 updated=c.updated_at.isoformat() if c.updated_at else None,
@@ -91,14 +105,25 @@ async def get_contract(contract_id: str, db: DBSessionDep, _: bool = Depends(Per
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
 
-        return _build_contract_read_from_db(contract)
+        return _build_contract_read_from_db(db, contract)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-def _build_contract_read_from_db(db_contract) -> DataContractRead:
+def _build_contract_read_from_db(db, db_contract) -> DataContractRead:
     """Build DataContractRead from normalized database models"""
     from src.models.data_contracts_api import ContractDescription, SchemaObject, ColumnProperty
-    
+
+    # Resolve domain name from domain_id if available
+    domain_name = None
+    if db_contract.domain_id:
+        try:
+            from src.repositories.data_domain_repository import data_domain_repo
+            domain = data_domain_repo.get(db, id=db_contract.domain_id)
+            if domain:
+                domain_name = domain.name
+        except Exception as e:
+            logger.warning(f"Failed to resolve domain name for domain_id {db_contract.domain_id}: {e}")
+
     # Build description
     description = None
     if db_contract.description_usage or db_contract.description_purpose or db_contract.description_limitations:
@@ -179,7 +204,8 @@ def _build_contract_read_from_db(db_contract) -> DataContractRead:
         kind=db_contract.kind,
         apiVersion=db_contract.api_version,
         tenant=db_contract.tenant,
-        domain=db_contract.domain_id,  # Include domain_id as domain
+        domain=domain_name,  # Resolved domain name
+        domainId=db_contract.domain_id,  # Provide domain ID for frontend resolution
         dataProduct=db_contract.data_product,
         description=description,
         schema=schema_objects,
@@ -203,6 +229,19 @@ async def create_contract(
 ):
     """Create a new data contract with normalized ODCS structure"""
     try:
+        # Resolve domain_id from provided domainId (UUID) or domain (name)
+        resolved_domain_id: str | None = None
+        try:
+            if getattr(contract_data, 'domainId', None):
+                resolved_domain_id = contract_data.domainId
+            elif getattr(contract_data, 'domain', None):
+                from src.repositories.data_domain_repository import data_domain_repo
+                domain_obj = data_domain_repo.get_by_name(db, name=contract_data.domain)
+                if domain_obj:
+                    resolved_domain_id = domain_obj.id
+        except Exception as e:
+            logger.warning(f"Domain resolution failed during create_contract: {e}")
+
         # Create main contract record
         db_obj = DataContractDb(
             name=contract_data.name,
@@ -213,6 +252,7 @@ async def create_contract(
             api_version=contract_data.apiVersion or 'v3.0.2',
             tenant=contract_data.tenant,
             data_product=contract_data.dataProduct,
+            domain_id=resolved_domain_id,
             description_usage=contract_data.description.usage if contract_data.description else None,
             description_purpose=contract_data.description.purpose if contract_data.description else None,
             description_limitations=contract_data.description.limitations if contract_data.description else None,
@@ -250,7 +290,7 @@ async def create_contract(
         
         # Load with relationships for response
         created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
-        return _build_contract_read_from_db(created_with_relations)
+        return _build_contract_read_from_db(db, created_with_relations)
         
     except Exception as e:
         db.rollback()
@@ -296,7 +336,7 @@ async def update_contract(
         
         # Load with relationships for full response
         updated_with_relations = data_contract_repo.get_with_all(db, id=contract_id)
-        return _build_contract_read_from_db(updated_with_relations)
+        return _build_contract_read_from_db(db, updated_with_relations)
     except Exception as e:
         error_msg = f"Error updating data contract {contract_id}: {e!s}"
         logger.error(error_msg)
@@ -400,6 +440,21 @@ async def upload_contract(
         elif not isinstance(description, dict):
             description = {}
 
+        # Resolve domain_id from parsed payload (domainId or domain name)
+        resolved_domain_id: str | None = None
+        try:
+            parsed_domain_id = parsed.get('domainId') or parsed.get('domain_id')
+            parsed_domain_name = parsed.get('domain')
+            if parsed_domain_id:
+                resolved_domain_id = parsed_domain_id
+            elif parsed_domain_name:
+                from src.repositories.data_domain_repository import data_domain_repo
+                domain_obj = data_domain_repo.get_by_name(db, name=parsed_domain_name)
+                if domain_obj:
+                    resolved_domain_id = domain_obj.id
+        except Exception as e:
+            logger.warning(f"Domain resolution failed during upload_contract: {e}")
+
         # Create main contract record
         db_obj = DataContractDb(
             name=name_val,
@@ -410,6 +465,7 @@ async def upload_contract(
             api_version=api_version_val,
             tenant=parsed.get('tenant'),
             data_product=parsed.get('dataProduct') or parsed.get('data_product'),
+            domain_id=resolved_domain_id,
             description_usage=description.get('usage'),
             description_purpose=description.get('purpose'),
             description_limitations=description.get('limitations'),
@@ -526,7 +582,7 @@ async def upload_contract(
         
         # Load with relationships for response
         created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
-        return _build_contract_read_from_db(created_with_relations)
+        return _build_contract_read_from_db(db, created_with_relations)
         
     except HTTPException:
         raise

@@ -721,8 +721,9 @@ export default function BusinessGlossary() {
           ...concept,
           tagged_assets: semanticLinks.map((link) => ({
             id: link.entity_id,
-            name: link.label || link.entity_id,
+            name: link.label || link.entity_id, // Backend should now provide meaningful labels
             type: link.entity_type,
+            path: link.entity_id, // Show full ID in path column for reference
             description: `${link.entity_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}: ${link.label || link.entity_id}`
           }))
         };

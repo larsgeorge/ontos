@@ -175,6 +175,7 @@ class DataContractRead(BaseModel):
     apiVersion: Optional[str] = Field('v3.0.2', alias='api_version')
     tenant: Optional[str] = None
     domain: Optional[str] = None
+    domainId: Optional[str] = Field(None, alias='domain_id')
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None
     schema: List[SchemaObject] = Field(default_factory=list)

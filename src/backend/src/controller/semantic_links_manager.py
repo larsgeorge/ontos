@@ -1,5 +1,6 @@
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from src.db_models.semantic_links import EntitySemanticLinkDb
 from src.models.semantic_links import EntitySemanticLink, EntitySemanticLinkCreate
@@ -12,13 +13,50 @@ class SemanticLinksManager:
     def __init__(self, db: Session):
         self._db = db
 
+    def _resolve_entity_name(self, entity_id: str, entity_type: str) -> Optional[str]:
+        """Resolve the readable name for an entity based on its type and ID."""
+        try:
+            if entity_type == "data_domain":
+                result = self._db.execute(
+                    text("SELECT name FROM data_domains WHERE id = :entity_id"),
+                    {"entity_id": entity_id}
+                ).fetchone()
+                return result[0] if result else None
+            
+            elif entity_type == "data_product":
+                result = self._db.execute(
+                    text("SELECT title FROM data_product_info WHERE data_product_id = :entity_id"),
+                    {"entity_id": entity_id}
+                ).fetchone()
+                return result[0] if result else None
+                
+            elif entity_type == "data_contract":
+                result = self._db.execute(
+                    text("SELECT name FROM data_contracts WHERE id = :entity_id"),
+                    {"entity_id": entity_id}
+                ).fetchone()
+                return result[0] if result else None
+                
+        except Exception as e:
+            logger.warning(f"Failed to resolve entity name for {entity_type}:{entity_id}: {e}")
+        
+        return None
+
     def _to_api(self, db_obj: EntitySemanticLinkDb) -> EntitySemanticLink:
+        # Use existing label if available, otherwise try to resolve from entity
+        label = db_obj.label
+        if not label:
+            resolved_name = self._resolve_entity_name(db_obj.entity_id, db_obj.entity_type)
+            if resolved_name:
+                label = resolved_name
+                logger.debug(f"Resolved name '{resolved_name}' for {db_obj.entity_type}:{db_obj.entity_id}")
+        
         return EntitySemanticLink(
             id=str(db_obj.id),
             entity_id=db_obj.entity_id,
             entity_type=db_obj.entity_type,  # type: ignore
             iri=db_obj.iri,
-            label=db_obj.label,
+            label=label,
         )
 
     def list_for_entity(self, entity_id: str, entity_type: str) -> List[EntitySemanticLink]:

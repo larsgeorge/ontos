@@ -525,11 +525,22 @@ class DataContractsManager(SearchableAsset):
             'updated': db_obj.updated_at.isoformat() if db_obj.updated_at else None,
         }
         
+        # Resolve and include domain name if domain_id is set
+        try:
+            if getattr(db_obj, 'domain_id', None):
+                from src.repositories.data_domain_repository import data_domain_repo
+                from src.common.database import get_db_session
+                with get_db_session() as db:
+                    domain = data_domain_repo.get(db, id=db_obj.domain_id)
+                    if domain and getattr(domain, 'name', None):
+                        odcs['domain'] = domain.name
+        except Exception:
+            # Best-effort; skip if resolution fails
+            pass
+
         # Add optional top-level fields
         if db_obj.tenant:
             odcs['tenant'] = db_obj.tenant
-        if db_obj.domain:
-            odcs['domain'] = db_obj.domain
         if db_obj.data_product:
             odcs['dataProduct'] = db_obj.data_product
             
@@ -672,6 +683,25 @@ class DataContractsManager(SearchableAsset):
                 if not name:
                     continue
 
+                # Resolve domain_name to domain_id if provided
+                domain_id = None
+                domain_name = c.get('domain_name')
+                logger.info(f"Processing contract '{name}' with domain_name: '{domain_name}'")
+                if domain_name:
+                    try:
+                        from src.repositories.data_domain_repository import data_domain_repo
+                        logger.info(f"Attempting to resolve domain name '{domain_name}' to ID")
+                        domain = data_domain_repo.get_by_name(db, name=domain_name)
+                        if domain:
+                            domain_id = domain.id
+                            logger.info(f"Successfully resolved domain '{domain_name}' to ID: {domain_id}")
+                        else:
+                            logger.warning(f"Domain '{domain_name}' not found for contract '{name}'. Contract will be created without domain assignment.")
+                    except Exception as e:
+                        logger.warning(f"Failed to resolve domain '{domain_name}' for contract '{name}': {e}")
+                else:
+                    logger.info(f"No domain_name specified for contract '{name}'")
+
                 # If an entry with same name+version exists, enrich if needed
                 existing = db.query(DataContractDb).filter(
                     DataContractDb.name == name,
@@ -680,7 +710,14 @@ class DataContractsManager(SearchableAsset):
                 if existing:
                     try:
                         updated_any = False
+
+                        # Update domain_id if provided and different
+                        if domain_id and existing.domain_id != domain_id:
+                            existing.domain_id = domain_id
+                            updated_any = True
+
                         # Enrich description fields if present in YAML but missing in DB
+                        description = c.get('description') or {}
                         if description:
                             if (not existing.description_usage) and description.get('usage'):
                                 existing.description_usage = description.get('usage')
@@ -743,6 +780,7 @@ class DataContractsManager(SearchableAsset):
                         owner=c.get('owner') or 'unknown@local',
                         kind=c.get('kind') or 'DataContract',
                         api_version=c.get('apiVersion') or 'v3.0.2',
+                        domain_id=domain_id,
                         description_usage=description.get('usage'),
                         description_purpose=description.get('purpose'),
                         description_limitations=description.get('limitations'),
@@ -762,6 +800,7 @@ class DataContractsManager(SearchableAsset):
                     owner=c.get('owner') or 'unknown@local',
                     kind=c.get('kind') or 'DataContract',
                     api_version=c.get('apiVersion') or 'v3.0.2',
+                    domain_id=domain_id,
                     description_usage=description.get('usage'),
                     description_purpose=description.get('purpose'),
                     description_limitations=description.get('limitations'),
