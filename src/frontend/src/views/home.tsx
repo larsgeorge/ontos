@@ -17,6 +17,7 @@ import DataCurationSection from '@/components/home/DataCurationSection';
 import RequiredActionsSection from '@/components/home/RequiredActionsSection';
 import QuickActions from '@/components/home/QuickActions';
 import RecentActivity from '@/components/home/RecentActivity';
+import { useUserStore } from '@/stores/user-store';
 
 interface Stats {
   dataContracts: { count: number; loading: boolean; error: string | null };
@@ -292,8 +293,31 @@ export default function Home() {
 
   // Determine configured home sections from applied role (if any)
   const { availableRoles, appliedRoleId } = usePermissions();
-  const activeRole = useMemo(() => availableRoles.find(r => r.id === appliedRoleId) || null, [availableRoles, appliedRoleId]);
-  const configuredSections: HomeSection[] = activeRole?.home_sections || [];
+  const { userInfo } = useUserStore();
+  const userGroups = (userInfo as any)?.groups || [];
+
+  // Determine configured sections:
+  // - If a role override is applied, use that role's sections.
+  // - Otherwise, union sections from all roles assigned to user's groups.
+  const configuredSections: HomeSection[] = useMemo(() => {
+    // Applied override
+    if (appliedRoleId) {
+      const r = availableRoles.find(role => role.id === appliedRoleId);
+      return (r?.home_sections || []) as HomeSection[];
+    }
+    // Union across matched roles
+    if (Array.isArray(userGroups) && userGroups.length > 0) {
+      const groupSet = new Set<string>(userGroups as string[]);
+      const matched = availableRoles.filter(r => Array.isArray(r.assigned_groups) && r.assigned_groups.some(g => groupSet.has(g)));
+      const union = new Set<HomeSection>();
+      matched.forEach(r => (r.home_sections || []).forEach(s => union.add(s as HomeSection)));
+      // Normalize order
+      const order: HomeSection[] = [HomeSection.REQUIRED_ACTIONS, HomeSection.DATA_CURATION, HomeSection.DISCOVERY];
+      const result = order.filter(s => union.has(s));
+      return result.length > 0 ? result : [HomeSection.DISCOVERY];
+    }
+    return [];
+  }, [availableRoles, appliedRoleId, userGroups]);
 
   // Fallback: If no sections configured on the role, default to Discovery only
   const defaultSections: HomeSection[] = [HomeSection.DISCOVERY];

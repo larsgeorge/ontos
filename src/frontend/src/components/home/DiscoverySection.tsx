@@ -38,8 +38,18 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
 
   const filteredProducts = useMemo(() => {
     if (!selectedDomainId) return allProducts;
-    return allProducts.filter(p => p?.info?.domain === selectedDomainId);
-  }, [allProducts, selectedDomainId]);
+    const selected = domains.find(d => d.id === selectedDomainId);
+    const selectedName = selected?.name?.toLowerCase();
+    const selectedId = selected?.id;
+    return allProducts.filter(p => {
+      const pd = (p?.info?.domain || '').toString().toLowerCase();
+      if (!pd) return false;
+      // Match by stored domain id OR by domain name (case-insensitive)
+      if (selectedId && p?.info?.domain === selectedId) return true;
+      if (selectedName && pd === selectedName) return true;
+      return false;
+    });
+  }, [allProducts, selectedDomainId, domains]);
 
   return (
     <section className="mb-16">

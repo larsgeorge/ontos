@@ -402,6 +402,36 @@ class SettingsManager:
         """Lists all configured application roles from the database."""
         try:
             roles_db = self.app_role_repo.get_all_roles(db=self._db)
+
+            # Backfill default home_sections for roles missing configuration
+            updated_any = False
+            for role_db in roles_db:
+                try:
+                    hs_raw = json.loads(getattr(role_db, 'home_sections', '[]') or '[]')
+                except Exception:
+                    hs_raw = []
+                if not hs_raw:
+                    default_sections: List[HomeSection]
+                    name = (role_db.name or '').strip()
+                    if name == 'Admin':
+                        default_sections = [HomeSection.REQUIRED_ACTIONS, HomeSection.DATA_CURATION, HomeSection.DISCOVERY]
+                    elif name in ('Data Steward', 'Security Officer', 'Data Governance Officer'):
+                        default_sections = [HomeSection.REQUIRED_ACTIONS, HomeSection.DISCOVERY]
+                    elif name == 'Data Producer':
+                        default_sections = [HomeSection.DATA_CURATION, HomeSection.DISCOVERY]
+                    else:  # Data Consumer or others
+                        default_sections = [HomeSection.DISCOVERY]
+                    # Persist backfill
+                    self.app_role_repo.update(db=self._db, db_obj=role_db, obj_in={'home_sections': default_sections})
+                    updated_any = True
+
+            if updated_any:
+                # Flush once after backfill
+                try:
+                    self._db.flush()
+                except Exception:
+                    pass
+
             return [self._map_db_to_api(role_db) for role_db in roles_db]
         except SQLAlchemyError as e:
             logger.error(f"Database error listing roles: {e}", exc_info=True)
