@@ -255,6 +255,3 @@ class DataContractCommentDb(Base):
     contract = relationship("DataContractDb", back_populates="comments")
 
 
-# ChangeLog moved to its own module (api/db_models/change_log.py)
-
-
