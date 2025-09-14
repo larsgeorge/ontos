@@ -75,6 +75,10 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         else:
             update_data = obj_in.dict(exclude_unset=True)
 
+        # Never allow primary key changes via generic update
+        if 'id' in update_data:
+            update_data.pop('id', None)
+
         try:
             for field, value in update_data.items():
                 if hasattr(db_obj, field):

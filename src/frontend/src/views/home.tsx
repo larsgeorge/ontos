@@ -2,16 +2,21 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import SearchBar from '@/components/ui/search-bar';
 import { Card, CardContent, CardTitle, CardHeader, CardDescription } from '@/components/ui/card';
-import { Loader2, Database, TrendingUp, FileText as FileTextIcon, BookOpen, Scale, Globe, ArrowRight, AlertCircle } from 'lucide-react';
+import { Loader2, Database, TrendingUp, FileText as FileTextIcon, BookOpen, Scale, Globe, AlertCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { UnityCatalogLogo } from '@/components/unity-catalog-logo';
-import { Button } from '@/components/ui/button';
-import { getLandingPageFeatures, FeatureConfig, FeatureMaturity } from '@/config/features';
+// import { Button } from '@/components/ui/button';
+import { FeatureMaturity } from '@/config/features';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
-import { cn } from '@/lib/utils';
+// import { cn } from '@/lib/utils';
 import { usePermissions } from '@/stores/permissions-store';
-import { FeatureAccessLevel } from '@/types/settings';
+import { FeatureAccessLevel, HomeSection } from '@/types/settings';
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import DiscoverySection from '@/components/home/DiscoverySection';
+import DataCurationSection from '@/components/home/DataCurationSection';
+import RequiredActionsSection from '@/components/home/RequiredActionsSection';
+import QuickActions from '@/components/home/QuickActions';
+import RecentActivity from '@/components/home/RecentActivity';
 
 interface Stats {
   dataContracts: { count: number; loading: boolean; error: string | null };
@@ -32,28 +37,7 @@ interface ComplianceData {
   compliance: number;
 }
 
-interface QuickAction {
-    name: string;
-    path: string;
-}
-
-interface RecentActivity {
-    item: string;
-    time: string;
-}
-
-const quickActions: QuickAction[] = [
-  { name: 'Define Data Contract', path: '/data-contracts/new' },
-  { name: 'Create Data Product', path: '/data-products/new' },
-  { name: 'Add Glossary Term', path: '/business-glossary/new' },
-  { name: 'Request Role Access', path: '/settings?tab=roles' },
-];
-
-const recentActivity: RecentActivity[] = [
-  { item: 'Data Product "Customer Profiles" updated', time: '2 hours ago' },
-  { item: 'Data Contract "Sales Data Quality" approved', time: '1 day ago' },
-  { item: 'Glossary Term "KPI" defined', time: '3 days ago' },
-];
+// Quick actions and recent activity are rendered via components
 
 export default function Home() {
   const [stats, setStats] = useState<Stats>({
@@ -297,16 +281,26 @@ export default function Home() {
       );
   }, [baseSummaryTiles, allowedMaturities, permissionsLoading, hasPermission]);
 
-  const summaryTiles = baseSummaryTiles.filter(tile => allowedMaturities.includes(tile.maturity as FeatureMaturity));
-  const features = getLandingPageFeatures(allowedMaturities);
+  // const summaryTiles = baseSummaryTiles.filter(tile => allowedMaturities.includes(tile.maturity as FeatureMaturity));
   const isComplianceVisible = filteredSummaryTiles.some(tile => tile.id === 'compliance');
-  const canViewCompliance = useMemo(() => !permissionsLoading && hasPermission('compliance', FeatureAccessLevel.READ_ONLY), [permissionsLoading, hasPermission]);
 
   // Check if user has any permissions at all (besides NONE)
   const hasAnyAccess = useMemo(() => {
       if (permissionsLoading || !permissions) return false;
       return Object.values(permissions).some(level => level !== FeatureAccessLevel.NONE);
   }, [permissions, permissionsLoading]);
+
+  // Determine configured home sections from applied role (if any)
+  const { availableRoles, appliedRoleId } = usePermissions();
+  const activeRole = useMemo(() => availableRoles.find(r => r.id === appliedRoleId) || null, [availableRoles, appliedRoleId]);
+  const configuredSections: HomeSection[] = activeRole?.home_sections || [];
+
+  // Fallback: If no sections configured on the role, default to Discovery only
+  const defaultSections: HomeSection[] = [HomeSection.DISCOVERY];
+
+  const orderedSections = configuredSections.length > 0 ? configuredSections : defaultSections;
+
+  // Note: sections themselves handle fine-grained permission visibility internally
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -456,74 +450,20 @@ export default function Home() {
           </Alert>
       )}
 
-      <section className="mb-16">
-        <h2 className="text-3xl font-semibold mb-8 text-center">Key Features</h2>
-         {features.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {features.map((feature: FeatureConfig) => (
-                    <Link key={feature.id} to={feature.path} className="block group">
-                    <Card className="flex flex-col relative h-full transition-shadow group-hover:shadow-md">
-                    {feature.maturity !== 'ga' && (
-                         <span className={cn(
-                            "absolute top-2 right-2 text-xs font-semibold px-2 py-0.5 rounded-full z-10",
-                            feature.maturity === 'beta' ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300" : "",
-                            feature.maturity === 'alpha' ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300" : ""
-                         )}>
-                            {feature.maturity.toUpperCase()}
-                         </span>
-                    )}
-                    <CardHeader>
-                        <div className="flex items-center gap-3 mb-2">
-                        <feature.icon className="h-6 w-6 text-primary" />
-                        <CardTitle>{feature.name}</CardTitle>
-                        </div>
-                        <CardDescription>{feature.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex-grow flex flex-col justify-end">
-                        <div className="mt-auto pt-2 text-right text-xs text-muted-foreground group-hover:text-primary">
-                            View Details <ArrowRight className="inline-block ml-1 h-3 w-3" />
-                        </div>
-                    </CardContent>
-                    </Card>
-                    </Link>
-                ))}
-                </div>
-          ) : (
-             <p className="text-muted-foreground text-center">No features available for the selected feature previews.</p>
-          )}
-      </section>
+      {/* Role-based main sections - respect role configuration order */}
+      {orderedSections.map(section => (
+        section === HomeSection.REQUIRED_ACTIONS ? (
+          <RequiredActionsSection key={section} />
+        ) : section === HomeSection.DATA_CURATION ? (
+          <DataCurationSection key={section} />
+        ) : (
+          <DiscoverySection key={section} />
+        )
+      ))}
 
       <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <h2 className="text-2xl font-semibold mb-4">Quick Actions</h2>
-          <Card>
-            <CardContent className="p-6">
-              <ul className="space-y-3">
-                {quickActions.map((action: QuickAction) => (
-                  <li key={action.name}>
-                    <Button variant="link" className="p-0 h-auto" asChild>
-                      <Link to={action.path}>{action.name}</Link>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        </div>
-        <div>
-          <h2 className="text-2xl font-semibold mb-4">Recent Activity</h2>
-          <Card>
-            <CardContent className="p-6">
-              <ul className="space-y-3">
-                {recentActivity.map((activity: RecentActivity) => (
-                  <li key={activity.item} className="text-sm text-muted-foreground">
-                    {activity.item} - <span className="italic">{activity.time}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        </div>
+        <QuickActions />
+        <RecentActivity />
       </section>
     </div>
   );

@@ -1,23 +1,5 @@
-export type FeatureAccessLevel = 'None' | 'Read-only' | 'Read/Write' | 'Filtered' | 'Full' | 'Admin';
+// Single source of truth for settings types
 
-export interface AppRole {
-  id: string;
-  name: string;
-  description?: string;
-  assigned_groups: string[];
-  feature_permissions: Record<string, FeatureAccessLevel>;
-}
-
-export interface FeatureConfig {
-  name: string;
-  allowed_levels: FeatureAccessLevel[];
-}
-
-export interface UserPermissions {
-  [featureId: string]: FeatureAccessLevel;
-}
-
-// Based on api/common/features.py FeatureAccessLevel
 export enum FeatureAccessLevel {
     NONE = "None",
     READ_ONLY = "Read-only",
@@ -27,20 +9,24 @@ export enum FeatureAccessLevel {
     ADMIN = "Admin",
 }
 
-// Based on api/common/features.py APP_FEATURES structure (API response)
 export interface FeatureConfig {
     name: string;
-    allowed_levels: FeatureAccessLevel[]; // Array of string enum values
+    allowed_levels: FeatureAccessLevel[];
 }
 
-// Based on api/models/settings.py AppRole
+export enum HomeSection {
+    REQUIRED_ACTIONS = 'REQUIRED_ACTIONS',
+    DATA_CURATION = 'DATA_CURATION',
+    DISCOVERY = 'DISCOVERY',
+}
+
 export interface AppRole {
     id: string;
     name: string;
     description?: string | null;
     assigned_groups: string[];
-    feature_permissions: Record<string, FeatureAccessLevel>; // Key is feature ID
+    feature_permissions: Record<string, FeatureAccessLevel>;
+    home_sections?: HomeSection[];
 }
 
-// Type alias for the permissions response
-export type UserPermissions = Record<string, FeatureAccessLevel>; 
+export type UserPermissions = Record<string, FeatureAccessLevel>;

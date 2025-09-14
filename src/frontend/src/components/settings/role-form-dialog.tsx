@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
-import { AppRole, FeatureConfig, FeatureAccessLevel } from '@/types/settings';
+import { AppRole, FeatureConfig, FeatureAccessLevel, HomeSection } from '@/types/settings';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { ACCESS_LEVEL_ORDER } from '../../lib/permissions';
@@ -28,9 +28,10 @@ const getDefaultPermissions = (features: Record<string, FeatureConfig>): Record<
     const defaults: Record<string, FeatureAccessLevel> = {};
     Object.keys(features).forEach(featureId => {
         // Default to NONE if available, otherwise the first allowed level (should include NONE)
-        defaults[featureId] = features[featureId]?.allowed_levels?.includes(FeatureAccessLevel.NONE)
+        const allowed = features[featureId]?.allowed_levels || [];
+        defaults[featureId] = allowed.includes(FeatureAccessLevel.NONE)
             ? FeatureAccessLevel.NONE
-            : features[featureId]?.allowed_levels?.[0] || FeatureAccessLevel.NONE;
+            : (allowed[0] || FeatureAccessLevel.NONE);
     });
     return defaults;
 };
@@ -70,6 +71,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         description: initialRole?.description || '',
         assigned_groups: initialRole?.assigned_groups || [],
         feature_permissions: initialRole?.feature_permissions || getDefaultPermissions(featuresConfig),
+        home_sections: initialRole?.home_sections || [],
     };
 
     const {
@@ -88,7 +90,8 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 name: '', 
                 description: '', 
                 assigned_groups: [], 
-                feature_permissions: getDefaultPermissions(featuresConfig) 
+                feature_permissions: getDefaultPermissions(featuresConfig),
+                home_sections: [],
             };
 
             // Adjust permissions before resetting
@@ -117,7 +120,8 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 name: '', 
                 description: '', 
                 assigned_groups: [], 
-                feature_permissions: getDefaultPermissions(featuresConfig) 
+                feature_permissions: getDefaultPermissions(featuresConfig),
+                home_sections: [],
             });
         }
     }, [isOpen, initialRole, reset, featuresConfig]);
@@ -249,6 +253,24 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                 />
                                 {errors.assigned_groups && <p className="text-sm text-red-600 mt-1">{errors.assigned_groups.message}</p>}
                                 <p className="text-xs text-muted-foreground mt-1">Users belonging to these groups will inherit this role's permissions.</p>
+                            </div>
+
+                            {/* Home Sections Selection */}
+                            <div className="space-y-3 pt-4 border-t">
+                                <h4 className="font-medium">Home Sections</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {Object.values(HomeSection).map(section => (
+                                        <label key={section} className="flex items-center gap-2 text-sm">
+                                            <input
+                                                type="checkbox"
+                                                {...register('home_sections')}
+                                                value={section}
+                                                defaultChecked={defaultValues.home_sections?.includes(section)}
+                                            />
+                                            <span>{section.replace('_', ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}</span>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
 
                             {/* Feature Permissions */}

@@ -29,12 +29,19 @@ class WorkflowInstallation(BaseModel):
 
 # --- RBAC Models ---
 
+# Enum for Home Sections (kept in sync with frontend)
+class HomeSection(str, Enum):
+    REQUIRED_ACTIONS = "REQUIRED_ACTIONS"
+    DATA_CURATION = "DATA_CURATION"
+    DISCOVERY = "DISCOVERY"
+
 # Base model for common fields
 class AppRoleBase(BaseModel):
     name: str
     description: Optional[str] = None
     assigned_groups: List[str] = Field(default_factory=list)
     feature_permissions: Dict[str, FeatureAccessLevel] = Field(default_factory=dict)
+    home_sections: List[HomeSection] = Field(default_factory=list, description="Home sections visible for this role")
 
 # Model for creating a new role (input)
 class AppRoleCreate(AppRoleBase):
@@ -49,6 +56,7 @@ class AppRoleUpdate(AppRoleBase):
     description: Optional[str] = None
     assigned_groups: Optional[List[str]] = None
     feature_permissions: Optional[Dict[str, FeatureAccessLevel]] = None
+    home_sections: Optional[List[HomeSection]] = None
 
 # Model representing a role as returned by the API (output)
 class AppRole(AppRoleBase):

@@ -16,6 +16,7 @@ class AppRoleDb(Base):
     # Using Text for broader compatibility, can switch to JSONB if needed
     assigned_groups = Column(Text, nullable=False, default='[]')
     feature_permissions = Column(Text, nullable=False, default='{}')
+    home_sections = Column(Text, nullable=False, default='[]')
 
     # Add timestamp columns - Make them nullable
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=True)

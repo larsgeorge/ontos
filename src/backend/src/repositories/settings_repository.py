@@ -31,6 +31,9 @@ class AppRoleRepository(CRUDBase[AppRoleDb, AppRoleCreate, AppRoleUpdate]):
         db_obj_data['feature_permissions'] = json.dumps(
             {k: v.value for k, v in permissions_dict.items()} # Save enum values
         )
+        # Home sections stored as list of strings
+        home_sections_list = getattr(obj_in, 'home_sections', [])
+        db_obj_data['home_sections'] = json.dumps(home_sections_list)
         db_obj = self.model(**db_obj_data)
         db.add(db_obj)
         db.flush() # Use flush instead of commit within repository method
@@ -53,6 +56,8 @@ class AppRoleRepository(CRUDBase[AppRoleDb, AppRoleCreate, AppRoleUpdate]):
             update_data['feature_permissions'] = json.dumps(
                  {k: (v.value if hasattr(v, 'value') else v) for k, v in perm_dict.items()}
             )
+        if 'home_sections' in update_data and update_data['home_sections'] is not None:
+            update_data['home_sections'] = json.dumps(update_data['home_sections'])
 
         logger.debug(f"Updating AppRoleDb {db_obj.id} with data: {update_data}")
         # Use the base class update method which handles attribute setting

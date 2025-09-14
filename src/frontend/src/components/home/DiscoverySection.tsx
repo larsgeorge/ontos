@@ -1,0 +1,110 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, Database, BoxSelect, Star, AlertCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useDomains } from '@/hooks/use-domains';
+import { type DataProduct } from '@/types/data-product';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
+interface DiscoverySectionProps {
+  maxItems?: number;
+}
+
+export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProps) {
+  const { domains, loading: domainsLoading } = useDomains();
+  const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
+  const [allProducts, setAllProducts] = useState<DataProduct[]>([]);
+  const [productsLoading, setProductsLoading] = useState<boolean>(false);
+  const [productsError, setProductsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        setProductsLoading(true);
+        const resp = await fetch('/api/data-products');
+        if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
+        const data = await resp.json();
+        setAllProducts(Array.isArray(data) ? data : []);
+        setProductsError(null);
+      } catch (e: any) {
+        setProductsError(e.message || 'Failed to load data products');
+        setAllProducts([]);
+      } finally {
+        setProductsLoading(false);
+      }
+    };
+    loadProducts();
+  }, []);
+
+  const filteredProducts = useMemo(() => {
+    if (!selectedDomainId) return allProducts;
+    return allProducts.filter(p => p?.info?.domain === selectedDomainId);
+  }, [allProducts, selectedDomainId]);
+
+  return (
+    <section className="mb-16">
+      <h2 className="text-2xl font-semibold mb-4">Discovery</h2>
+
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3"><BoxSelect className="h-5 w-5" /><span className="font-medium">Data Domains</span></div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <button
+            className={`text-left px-3 py-2 border rounded-md hover:bg-accent/50 ${!selectedDomainId ? 'border-primary' : 'border-muted'}`}
+            onClick={() => setSelectedDomainId(null)}
+          >All Domains</button>
+          {domainsLoading ? (
+            <div className="col-span-full flex items-center justify-center py-6"><Loader2 className="h-5 w-5 animate-spin" /></div>
+          ) : domains.map(d => (
+            <button
+              key={d.id}
+              className={`text-left px-3 py-2 border rounded-md hover:bg-accent/50 truncate ${selectedDomainId === d.id ? 'border-primary' : 'border-muted'}`}
+              onClick={() => setSelectedDomainId(selectedDomainId === d.id ? null : d.id)}
+              title={d.name}
+            >{d.name}</button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center gap-2 mb-3"><Star className="h-5 w-5 text-primary" /><span className="font-medium">Popular Data Products</span></div>
+        {productsLoading ? (
+          <div className="flex items-center justify-center h-32"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+        ) : productsError ? (
+          <Alert variant="destructive" className="mb-4"><AlertCircle className="h-4 w-4" /><AlertDescription>{productsError}</AlertDescription></Alert>
+        ) : filteredProducts.length === 0 ? (
+          <p className="text-center text-muted-foreground">No data products found.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filteredProducts
+              .slice()
+              .sort((a, b) => new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime())
+              .slice(0, maxItems)
+              .map(p => (
+                <Link key={p.id || p.info.title} to={p.id ? `/data-products/${p.id}` : '/data-products'} className="block group">
+                  <Card className="transition-shadow group-hover:shadow-md h-full">
+                    <CardHeader>
+                      <div className="flex items-center gap-2">
+                        <Database className="h-5 w-5 text-primary" />
+                        <CardTitle className="truncate">{p.info?.title || 'Untitled'}</CardTitle>
+                      </div>
+                      {p.info?.description ? (
+                        <CardDescription className="line-clamp-2">{p.info.description}</CardDescription>
+                      ) : null}
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>{p.info?.owner || 'Unknown owner'}</span>
+                        <span>{p.info?.status || 'N/A'}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.controller.notifications_manager import NotificationsManager
 from src.models.notifications import NotificationType, Notification
-from src.models.settings import JobCluster, WorkflowInstallation, AppRole, AppRoleCreate, AppRoleUpdate
+from src.models.settings import JobCluster, WorkflowInstallation, AppRole, AppRoleCreate, AppRoleUpdate, HomeSection
 from src.common.features import get_feature_config, FeatureAccessLevel, get_all_access_levels, APP_FEATURES
 from src.common.logging import get_logger
 from src.repositories.settings_repository import app_role_repo, AppRoleRepository
@@ -151,6 +151,12 @@ class SettingsManager:
                         for feat_id in all_features_config
                     }
                     logger.info(f"Assigning default ADMIN permissions to Admin role for features: {list(all_features_config.keys())}")
+                    # Default home sections for Admin
+                    role_data["home_sections"] = [
+                        HomeSection.REQUIRED_ACTIONS,
+                        HomeSection.DATA_CURATION,
+                        HomeSection.DISCOVERY,
+                    ]
                 else:
                     role_data["assigned_groups"] = []
                     desired_permissions = DEFAULT_ROLE_PERMISSIONS.get(role_name, {})
@@ -172,6 +178,16 @@ class SettingsManager:
                                 
                     role_data["feature_permissions"] = final_permissions
                     logger.info(f"Assigning default permissions for role '{role_name}': { {k: v.value for k,v in final_permissions.items()} }")
+
+                    # Default home sections per role
+                    if role_name == "Data Consumer":
+                        role_data["home_sections"] = [HomeSection.DISCOVERY]
+                    elif role_name == "Data Producer":
+                        role_data["home_sections"] = [HomeSection.DATA_CURATION, HomeSection.DISCOVERY]
+                    elif role_name in ("Data Steward", "Security Officer", "Data Governance Officer"):
+                        role_data["home_sections"] = [HomeSection.REQUIRED_ACTIONS, HomeSection.DISCOVERY]
+                    else:
+                        role_data["home_sections"] = [HomeSection.DISCOVERY]
 
                 logger.debug(f"Final permissions data for role '{role_name}': {role_data['feature_permissions']}")
 
@@ -351,12 +367,20 @@ class SettingsManager:
             logger.warning(f"Could not parse or convert feature_permissions JSON for role ID {role_db.id}: {role_db.feature_permissions}. Error: {e}")
             feature_permissions = {}
 
+        try:
+            home_sections_raw = json.loads(getattr(role_db, 'home_sections', '[]') or '[]')
+            home_sections = [HomeSection(s) for s in home_sections_raw if isinstance(s, str)]
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            logger.warning(f"Could not parse or convert home_sections JSON for role ID {role_db.id}: {getattr(role_db, 'home_sections', None)}. Error: {e}")
+            home_sections = []
+
         return AppRole(
             id=role_db.id, # Keep UUID
             name=role_db.name,
             description=role_db.description,
             assigned_groups=assigned_groups,
             feature_permissions=feature_permissions,
+            home_sections=home_sections,
             # created_at=role_db.created_at, # Uncomment if needed
             # updated_at=role_db.updated_at  # Uncomment if needed
         )
