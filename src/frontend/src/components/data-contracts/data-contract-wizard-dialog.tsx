@@ -184,7 +184,25 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const addColumn = (objIdx: number) => setSchemaObjects((prev) => prev.map((o, i) => i === objIdx ? { ...o, properties: [...o.properties, { name: '', physicalType: '', logicalType: 'string', classification: '', examples: '' }] } : o))
   const removeColumn = (objIdx: number, colIdx: number) => setSchemaObjects((prev) => prev.map((o, i) => i === objIdx ? { ...o, properties: o.properties.filter((_, j) => j !== colIdx) } : o))
 
-  const addQualityRule = () => setQualityRules((prev) => [...prev, { name: '', dimension: 'completeness', type: 'library', severity: 'warning', businessImpact: 'operational' }])
+  const addQualityRule = () => setQualityRules((prev) => [...prev, {
+    name: '',
+    dimension: 'completeness',
+    type: 'library',
+    severity: 'warning',
+    businessImpact: 'operational',
+    description: '',
+    level: 'object',
+    rule: '',
+    query: '',
+    engine: '',
+    implementation: '',
+    mustBe: '',
+    mustNotBe: '',
+    mustBeGt: '',
+    mustBeLt: '',
+    mustBeBetweenMin: '',
+    mustBeBetweenMax: ''
+  }])
   const removeQualityRule = (idx: number) => setQualityRules((prev) => prev.filter((_, i) => i !== idx))
 
   const addServerConfig = () => setServerConfigs((prev) => [...prev, { server: '', type: 'postgresql', environment: 'production' }])
@@ -227,10 +245,26 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
     }
   }
 
-  const handleNext = () => { if (step < totalSteps) setStep(step + 1) }
+  const handleNext = () => {
+    // Validate Step 1 before proceeding
+    if (step === 1) {
+      if (!name || !name.trim()) {
+        toast({ title: 'Validation Error', description: 'Contract name is required', variant: 'destructive' as any })
+        return
+      }
+    }
+
+    if (step < totalSteps) setStep(step + 1)
+  }
   const handlePrev = () => { if (step > 1) setStep(step - 1) }
 
   const handleSubmit = async () => {
+    // Validation
+    if (!name || !name.trim()) {
+      toast({ title: 'Validation Error', description: 'Contract name is required', variant: 'destructive' as any })
+      return
+    }
+
     setIsSubmitting(true)
     try {
       const payload = {
@@ -265,11 +299,11 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const handleSaveDraft = async () => {
     // Validate minimum required fields
     if (!name.trim()) {
-      alert('Contract name is required to save a draft')
+      toast({ title: 'Validation Error', description: 'Contract name is required to save a draft', variant: 'destructive' as any })
       return
     }
     if (!owner.trim()) {
-      alert('Contract owner is required to save a draft')
+      toast({ title: 'Validation Error', description: 'Contract owner is required to save a draft', variant: 'destructive' as any })
       return
     }
 
@@ -590,6 +624,210 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                   </Button>
                                 </div>
 
+                                {/* Logical Type Constraints */}
+                                {(col as any).logicalType === 'string' && (
+                                  <div className="lg:col-span-12 mt-2 p-3 bg-muted/20 rounded border">
+                                    <div className="text-[11px] font-medium mb-2">String Constraints</div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                      <div>
+                                        <Label className="text-[10px]">Min Length</Label>
+                                        <Input
+                                          type="number"
+                                          placeholder="0"
+                                          value={(col as any).minLength || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, minLength: parseInt(e.target.value) || undefined } : y) } : x))}
+                                          className="mt-0.5 h-7 text-xs"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-[10px]">Max Length</Label>
+                                        <Input
+                                          type="number"
+                                          placeholder="255"
+                                          value={(col as any).maxLength || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, maxLength: parseInt(e.target.value) || undefined } : y) } : x))}
+                                          className="mt-0.5 h-7 text-xs"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-[10px]">Pattern (Regex)</Label>
+                                        <Input
+                                          placeholder="^[a-zA-Z]+$"
+                                          value={(col as any).pattern || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, pattern: e.target.value || undefined } : y) } : x))}
+                                          className="mt-0.5 h-7 text-xs"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {(col as any).logicalType === 'number' && (
+                                  <div className="lg:col-span-12 mt-2 p-3 bg-muted/20 rounded border">
+                                    <div className="text-[11px] font-medium mb-2">Number Constraints</div>
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                                      <div>
+                                        <Label className="text-[10px]">Minimum</Label>
+                                        <Input
+                                          type="number"
+                                          step="any"
+                                          placeholder="0"
+                                          value={(col as any).minimum || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, minimum: parseFloat(e.target.value) || undefined } : y) } : x))}
+                                          className="mt-0.5 h-7 text-xs"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-[10px]">Maximum</Label>
+                                        <Input
+                                          type="number"
+                                          step="any"
+                                          placeholder="100"
+                                          value={(col as any).maximum || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, maximum: parseFloat(e.target.value) || undefined } : y) } : x))}
+                                          className="mt-0.5 h-7 text-xs"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-[10px]">Multiple Of</Label>
+                                        <Input
+                                          type="number"
+                                          step="any"
+                                          placeholder="1"
+                                          value={(col as any).multipleOf || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, multipleOf: parseFloat(e.target.value) || undefined } : y) } : x))}
+                                          className="mt-0.5 h-7 text-xs"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-[10px]">Precision</Label>
+                                        <Input
+                                          type="number"
+                                          placeholder="2"
+                                          value={(col as any).precision || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, precision: parseInt(e.target.value) || undefined } : y) } : x))}
+                                          className="mt-0.5 h-7 text-xs"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {(col as any).logicalType === 'integer' && (
+                                  <div className="lg:col-span-12 mt-2 p-3 bg-muted/20 rounded border">
+                                    <div className="text-[11px] font-medium mb-2">Integer Constraints</div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                      <div>
+                                        <Label className="text-[10px]">Minimum</Label>
+                                        <Input
+                                          type="number"
+                                          placeholder="0"
+                                          value={(col as any).minimum || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, minimum: parseInt(e.target.value) || undefined } : y) } : x))}
+                                          className="mt-0.5 h-7 text-xs"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-[10px]">Maximum</Label>
+                                        <Input
+                                          type="number"
+                                          placeholder="100"
+                                          value={(col as any).maximum || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, maximum: parseInt(e.target.value) || undefined } : y) } : x))}
+                                          className="mt-0.5 h-7 text-xs"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {(col as any).logicalType === 'date' && (
+                                  <div className="lg:col-span-12 mt-2 p-3 bg-muted/20 rounded border">
+                                    <div className="text-[11px] font-medium mb-2">Date Constraints</div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                      <div>
+                                        <Label className="text-[10px]">Format</Label>
+                                        <Select
+                                          value={(col as any).format || 'date'}
+                                          onValueChange={(v) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, format: v } : y) } : x))}
+                                        >
+                                          <SelectTrigger className="mt-0.5 h-7 text-xs">
+                                            <SelectValue placeholder="Select format" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="date" className="text-xs">YYYY-MM-DD</SelectItem>
+                                            <SelectItem value="date-time" className="text-xs">ISO 8601</SelectItem>
+                                            <SelectItem value="time" className="text-xs">HH:MM:SS</SelectItem>
+                                            <SelectItem value="timestamp" className="text-xs">Unix timestamp</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div>
+                                        <Label className="text-[10px]">Timezone</Label>
+                                        <Input
+                                          placeholder="UTC, America/New_York"
+                                          value={(col as any).timezone || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, timezone: e.target.value || undefined } : y) } : x))}
+                                          className="mt-0.5 h-7 text-xs"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-[10px]">Custom Format</Label>
+                                        <Input
+                                          placeholder="%Y-%m-%d %H:%M:%S"
+                                          value={(col as any).customFormat || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, customFormat: e.target.value || undefined } : y) } : x))}
+                                          className="mt-0.5 h-7 text-xs"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {(col as any).logicalType === 'array' && (
+                                  <div className="lg:col-span-12 mt-2 p-3 bg-muted/20 rounded border">
+                                    <div className="text-[11px] font-medium mb-2">Array Constraints</div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                      <div>
+                                        <Label className="text-[10px]">Item Type</Label>
+                                        <Select
+                                          value={(col as any).itemType || 'string'}
+                                          onValueChange={(v) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, itemType: v } : y) } : x))}
+                                        >
+                                          <SelectTrigger className="mt-0.5 h-7 text-xs">
+                                            <SelectValue placeholder="Select item type" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {LOGICAL_TYPES.filter(t => t !== 'array').map((t) => (
+                                              <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                      <div>
+                                        <Label className="text-[10px]">Min Items</Label>
+                                        <Input
+                                          type="number"
+                                          placeholder="0"
+                                          value={(col as any).minItems || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, minItems: parseInt(e.target.value) || undefined } : y) } : x))}
+                                          className="mt-0.5 h-7 text-xs"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="text-[10px]">Max Items</Label>
+                                        <Input
+                                          type="number"
+                                          placeholder="100"
+                                          value={(col as any).maxItems || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, maxItems: parseInt(e.target.value) || undefined } : y) } : x))}
+                                          className="mt-0.5 h-7 text-xs"
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
                                 {/* Row 2: Description + Flags */}
                                 <div className="lg:col-span-8">
                                   <Label className="text-[11px]">Description</Label>
@@ -794,20 +1032,129 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                       </div>
                     </div>
 
-                    {rule.type === 'sql' && (
-                      <div className="mt-4">
-                        <Label className="text-sm font-medium">SQL Query *</Label>
-                        <Textarea
-                          placeholder="SELECT COUNT(*) FROM table WHERE condition..."
-                          value={rule.query || ''}
-                          onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, query: e.target.value } : r))}
-                          className="mt-1 min-h-[80px]"
-                        />
-                        <div className="text-xs text-muted-foreground mt-1">
-                          SQL query should return a numeric result for validation
+                    {rule.type === 'library' && (
+                      <div className="mt-4 space-y-3">
+                        <div>
+                          <Label className="text-sm font-medium">Library Rule *</Label>
+                          <Input
+                            placeholder="e.g., not_null, unique, range_check"
+                            value={rule.rule || ''}
+                            onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, rule: e.target.value } : r))}
+                            className="mt-1"
+                          />
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Library-defined rule name or identifier
+                          </div>
                         </div>
                       </div>
                     )}
+
+                    {rule.type === 'sql' && (
+                      <div className="mt-4 space-y-3">
+                        <div>
+                          <Label className="text-sm font-medium">SQL Query *</Label>
+                          <Textarea
+                            placeholder="SELECT COUNT(*) FROM table WHERE condition..."
+                            value={rule.query || ''}
+                            onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, query: e.target.value } : r))}
+                            className="mt-1 min-h-[80px]"
+                          />
+                          <div className="text-xs text-muted-foreground mt-1">
+                            SQL query should return a numeric result for validation
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {rule.type === 'custom' && (
+                      <div className="mt-4 space-y-3">
+                        <div>
+                          <Label className="text-sm font-medium">Engine *</Label>
+                          <Input
+                            placeholder="e.g., great_expectations, deequ, pydantic"
+                            value={rule.engine || ''}
+                            onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, engine: e.target.value } : r))}
+                            className="mt-1"
+                          />
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Custom quality engine or framework name
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Implementation</Label>
+                          <Textarea
+                            placeholder="Implementation details (JSON config, code, etc.)"
+                            value={rule.implementation || ''}
+                            onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, implementation: e.target.value } : r))}
+                            className="mt-1 min-h-[80px]"
+                          />
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Engine-specific implementation configuration or code
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Common comparators for all types */}
+                    <div className="mt-4">
+                      <div className="font-medium text-sm mb-3">Validation Criteria (Optional)</div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-sm">Must Be</Label>
+                          <Input
+                            placeholder="Expected value"
+                            value={rule.mustBe || ''}
+                            onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, mustBe: e.target.value } : r))}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm">Must Not Be</Label>
+                          <Input
+                            placeholder="Forbidden value"
+                            value={rule.mustNotBe || ''}
+                            onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, mustNotBe: e.target.value } : r))}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm">Must Be Greater Than</Label>
+                          <Input
+                            placeholder="Minimum value"
+                            value={rule.mustBeGt || ''}
+                            onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, mustBeGt: e.target.value } : r))}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm">Must Be Less Than</Label>
+                          <Input
+                            placeholder="Maximum value"
+                            value={rule.mustBeLt || ''}
+                            onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, mustBeLt: e.target.value } : r))}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm">Range Min</Label>
+                          <Input
+                            placeholder="Range minimum"
+                            value={rule.mustBeBetweenMin || ''}
+                            onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, mustBeBetweenMin: e.target.value } : r))}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm">Range Max</Label>
+                          <Input
+                            placeholder="Range maximum"
+                            value={rule.mustBeBetweenMax || ''}
+                            onChange={(e) => setQualityRules((prev) => prev.map((r, i) => i === index ? { ...r, mustBeBetweenMax: e.target.value } : r))}
+                            className="mt-1"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

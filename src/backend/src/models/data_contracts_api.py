@@ -1,7 +1,10 @@
 from datetime import datetime
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    pass  # Used to avoid circular imports if needed
 
 
 # ODCS-compliant schema models
@@ -19,9 +22,30 @@ class ColumnProperty(BaseModel):
     classification: Optional[str] = None
     logicalTypeOptions: Optional[Dict[str, Any]] = Field(None, alias='logical_type_options')
 
+    # String constraints
+    minLength: Optional[int] = None
+    maxLength: Optional[int] = None
+    pattern: Optional[str] = None
+
+    # Number/Integer constraints
+    minimum: Optional[Union[int, float]] = None
+    maximum: Optional[Union[int, float]] = None
+    multipleOf: Optional[Union[int, float]] = None
+    precision: Optional[int] = None
+
+    # Date constraints
+    format: Optional[str] = None
+    timezone: Optional[str] = None
+    customFormat: Optional[str] = None
+
+    # Array constraints
+    itemType: Optional[str] = None
+    minItems: Optional[int] = None
+    maxItems: Optional[int] = None
+
     class Config:
         # Accept both JSON keys: "logicalType" (field name) and "logical_type" (alias)
-        allow_population_by_field_name = True
+        populate_by_name = True
 
 
 class SchemaObject(BaseModel):
@@ -29,9 +53,18 @@ class SchemaObject(BaseModel):
     physicalName: Optional[str] = Field(None, alias='physical_name')
     properties: List[ColumnProperty] = Field(default_factory=list)
 
+    # ODCS v3.0.2 additional schema object fields
+    businessName: Optional[str] = None
+    physicalType: Optional[str] = None  # table, view, etc.
+    description: Optional[str] = None
+    dataGranularityDescription: Optional[str] = None
+    tags: Optional[List[str]] = Field(default_factory=list)
+    authoritativeDefinitions: Optional[List['AuthoritativeDefinition']] = Field(default_factory=list)
+    customProperties: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    quality: Optional[List['QualityRule']] = Field(default_factory=list)  # ODCS quality rules are schema-nested
+
     class Config:
-        # Accept both "physicalName" and "physical_name"
-        allow_population_by_field_name = True
+        populate_by_name = True
 
 
 class ContractDescription(BaseModel):
@@ -41,10 +74,43 @@ class ContractDescription(BaseModel):
 
 
 class QualityRule(BaseModel):
-    type: str  # 'completeness', 'accuracy', 'consistency', 'custom'
+    # Core fields
+    name: Optional[str] = None
+    description: Optional[str] = None
+    level: Optional[str] = None  # 'object' or 'property'
     enabled: bool = True
+
+    # ODCS quality framework fields
+    dimension: Optional[str] = None  # accuracy, completeness, conformity, consistency, coverage, timeliness, uniqueness
+    business_impact: Optional[str] = None  # operational, regulatory
+    severity: Optional[str] = None  # info, warning, error
+
+    # Type and engine configuration
+    type: str = "library"  # text, library, sql, custom
+    method: Optional[str] = None
+    schedule: Optional[str] = None
+    scheduler: Optional[str] = None
+    unit: Optional[str] = None
+    tags: Optional[str] = None
+
+    # Type-specific fields
+    rule: Optional[str] = None  # for library type
+    query: Optional[str] = None  # for sql type
+    engine: Optional[str] = None  # for custom type
+    implementation: Optional[str] = None  # for custom type (JSON string)
+
+    # Comparators for all types
+    must_be: Optional[str] = None
+    must_not_be: Optional[str] = None
+    must_be_gt: Optional[str] = None
+    must_be_ge: Optional[str] = None
+    must_be_lt: Optional[str] = None
+    must_be_le: Optional[str] = None
+    must_be_between_min: Optional[str] = None
+    must_be_between_max: Optional[str] = None
+
+    # Legacy support
     threshold: Optional[float] = None
-    query: Optional[str] = None
 
 
 class TeamMember(BaseModel):
@@ -62,10 +128,47 @@ class AccessControl(BaseModel):
     requires_encryption: bool = Field(False, alias='requiresEncryption')
 
 
+class SupportChannel(BaseModel):
+    """ODCS v3.0.2 Support Channel"""
+    channel: str
+    url: str
+    description: Optional[str] = None
+    tool: Optional[str] = None  # slack, email, etc.
+    scope: Optional[str] = None
+    invitationUrl: Optional[str] = None
+
+    class Config:
+        populate_by_name = True
+
+
 class SupportChannels(BaseModel):
+    """Legacy support structure - kept for backward compatibility"""
     email: Optional[str] = None
     slack: Optional[str] = None
     documentation: Optional[str] = None
+
+
+class PricingInfo(BaseModel):
+    """ODCS v3.0.2 Pricing Information"""
+    priceAmount: Optional[Union[int, float]] = None
+    priceCurrency: Optional[str] = None  # USD, EUR, etc.
+    priceUnit: Optional[str] = None  # megabyte, record, etc.
+
+    class Config:
+        populate_by_name = True
+
+
+class ContractRole(BaseModel):
+    """ODCS v3.0.2 Role Definition"""
+    role: str
+    description: Optional[str] = None
+    access: Optional[str] = None  # read, write, etc.
+    firstLevelApprovers: Optional[str] = None
+    secondLevelApprovers: Optional[str] = None
+    customProperties: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+    class Config:
+        populate_by_name = True
 
 
 class AuthoritativeDefinition(BaseModel):
@@ -73,7 +176,21 @@ class AuthoritativeDefinition(BaseModel):
     type: str  # businessDefinition, transformationImplementation, videoTutorial, tutorial, implementation
 
 
+class SLAProperty(BaseModel):
+    """ODCS v3.0.2 SLA Property"""
+    property: str
+    value: Union[str, int, float]
+    valueExt: Optional[Union[str, int, float]] = None
+    unit: Optional[str] = None
+    element: Optional[str] = None
+    driver: Optional[str] = None  # regulatory, analytics, operational
+
+    class Config:
+        populate_by_name = True
+
+
 class SLARequirements(BaseModel):
+    """Legacy SLA structure - kept for backward compatibility"""
     uptime_target: Optional[float] = Field(None, alias='uptimeTarget')  # percentage
     max_downtime_minutes: Optional[int] = Field(None, alias='maxDowntimeMinutes')
     query_response_time_ms: Optional[int] = Field(None, alias='queryResponseTimeMs')
@@ -109,7 +226,7 @@ class ServerConfig(BaseModel):
     properties: Dict[str, Any] = Field(default_factory=dict)
 
     class Config:
-        allow_population_by_field_name = True
+        populate_by_name = True
 
 
 # Full ODCS Contract Structure
@@ -120,7 +237,7 @@ class ODCSContract(BaseModel):
     id: Optional[str] = None
     version: str
     status: str
-    
+
     # Metadata section
     name: str
     tenant: Optional[str] = None
@@ -128,28 +245,41 @@ class ODCSContract(BaseModel):
     dataProduct: Optional[str] = Field(None, alias='data_product')
     owner: str
     description: Optional[ContractDescription] = None
-    
+
+    # ODCS v3.0.2 top-level fields
+    tags: Optional[List[str]] = Field(default_factory=list)
+    contractCreatedTs: Optional[str] = None  # ISO datetime string
+
     # Schema section
     schema: List[SchemaObject] = Field(default_factory=list)
-    
-    # Data Quality section
-    quality_rules: List[QualityRule] = Field(default_factory=list, alias='qualityRules')
-    quality_thresholds: Dict[str, float] = Field(default_factory=dict, alias='qualityThresholds')
-    
-    # Team and Roles section  
+
+    # SLA section (ODCS v3.0.2 structure)
+    slaDefaultElement: Optional[str] = None
+    slaProperties: Optional[List[SLAProperty]] = Field(default_factory=list)
+    sla: Optional[SLARequirements] = None  # Legacy structure
+
+    # Pricing section
+    price: Optional[PricingInfo] = None
+
+    # Team and Roles section
     team: List[TeamMember] = Field(default_factory=list)
-    access_control: Optional[AccessControl] = Field(None, alias='accessControl')
-    support: Optional[SupportChannels] = None
-    
-    # SLA section
-    sla: Optional[SLARequirements] = None
-    servers: Optional[ServerConfig] = None
+    roles: Optional[List[ContractRole]] = Field(default_factory=list)  # ODCS roles
+    access_control: Optional[AccessControl] = Field(None, alias='accessControl')  # Legacy
+
+    # Support section (ODCS v3.0.2 structure)
+    support: Union[List[SupportChannel], SupportChannels, None] = None
+
+    # Infrastructure section
+    servers: List[ServerConfig] = Field(default_factory=list)
 
     # Authoritative definitions
-    authoritative_definitions: List[AuthoritativeDefinition] = Field(default_factory=list, alias='authoritativeDefinitions')
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(default_factory=list)
 
     # Custom properties
-    custom_properties: Dict[str, Any] = Field(default_factory=dict, alias='customProperties')
+    customProperties: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+    class Config:
+        populate_by_name = True
 
 
 class DataContractBase(BaseModel):
@@ -174,16 +304,38 @@ class DataContractCreate(DataContractBase):
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None
     schema: Optional[List[SchemaObject]] = Field(None)
-    
-    # Full ODCS structure fields
-    quality_rules: Optional[List[QualityRule]] = Field(None, alias='qualityRules')
+
+    # ODCS v3.0.2 top-level fields
+    tags: Optional[List[str]] = Field(default_factory=list)
+    contractCreatedTs: Optional[str] = None
+
+    # SLA section (ODCS v3.0.2 structure)
+    slaDefaultElement: Optional[str] = None
+    slaProperties: Optional[List[SLAProperty]] = Field(default_factory=list)
+    sla: Optional[SLARequirements] = None  # Legacy structure
+
+    # Pricing section
+    price: Optional[PricingInfo] = None
+
+    # Team and Roles section
     team: Optional[List[TeamMember]] = Field(None)
-    access_control: Optional[AccessControl] = Field(None, alias='accessControl')
-    support: Optional[SupportChannels] = None
-    sla: Optional[SLARequirements] = None
-    servers: Optional[ServerConfig] = None
-    authoritative_definitions: Optional[List[AuthoritativeDefinition]] = Field(None, alias='authoritativeDefinitions')
-    custom_properties: Optional[Dict[str, Any]] = Field(None, alias='customProperties')
+    roles: Optional[List[ContractRole]] = Field(default_factory=list)
+    access_control: Optional[AccessControl] = Field(None, alias='accessControl')  # Legacy
+
+    # Support section (ODCS v3.0.2 structure)
+    support: Union[List[SupportChannel], SupportChannels, None] = None
+
+    # Infrastructure section
+    servers: List[ServerConfig] = Field(default_factory=list)
+
+    # Authoritative definitions
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(default_factory=list)
+
+    # Custom properties
+    customProperties: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+    # Legacy fields (kept for backward compatibility)
+    quality_rules: Optional[List[QualityRule]] = Field(None, alias='qualityRules')
     
     def to_odcs_contract(self) -> ODCSContract:
         """Convert to full ODCS contract structure"""
@@ -229,17 +381,48 @@ class DataContractRead(BaseModel):
     domainId: Optional[str] = Field(None, alias='domain_id')
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None
+
+    # ODCS v3.0.2 top-level fields
+    tags: Optional[List[str]] = Field(default_factory=list)
+    contractCreatedTs: Optional[str] = None
+
+    # Schema section
     schema: List[SchemaObject] = Field(default_factory=list)
-    quality_rules: List[QualityRule] = Field(default_factory=list, alias='qualityRules')
+
+    # SLA section (ODCS v3.0.2 structure)
+    slaDefaultElement: Optional[str] = None
+    slaProperties: Optional[List[SLAProperty]] = Field(default_factory=list)
+    sla: Optional[SLARequirements] = None  # Legacy structure
+
+    # Pricing section
+    price: Optional[PricingInfo] = None
+
+    # Team and Roles section
     team: List[TeamMember] = Field(default_factory=list)
-    access_control: Optional[AccessControl] = Field(None, alias='accessControl')
-    support: Optional[SupportChannels] = None
-    sla: Optional[SLARequirements] = None
-    servers: Optional[ServerConfig] = None
-    authoritative_definitions: List[AuthoritativeDefinition] = Field(default_factory=list, alias='authoritativeDefinitions')
-    custom_properties: Dict[str, Any] = Field(default_factory=dict, alias='customProperties')
+    roles: Optional[List[ContractRole]] = Field(default_factory=list)
+    access_control: Optional[AccessControl] = Field(None, alias='accessControl')  # Legacy
+
+    # Support section (ODCS v3.0.2 structure)
+    support: Union[List[SupportChannel], SupportChannels, None] = None
+
+    # Infrastructure section
+    servers: List[ServerConfig] = Field(default_factory=list)
+
+    # Authoritative definitions
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(default_factory=list)
+
+    # Custom properties
+    customProperties: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+    # Legacy fields (kept for backward compatibility)
+    quality_rules: List[QualityRule] = Field(default_factory=list, alias='qualityRules')
+
+    # Timestamps
     created: Optional[str] = None
     updated: Optional[str] = None
+
+    class Config:
+        populate_by_name = True
 
 
 class DataContractCommentCreate(BaseModel):
@@ -253,3 +436,8 @@ class DataContractCommentRead(BaseModel):
     created_at: Optional[str] = None
 
 
+# Rebuild models to resolve forward references
+SchemaObject.model_rebuild()
+ODCSContract.model_rebuild()
+DataContractCreate.model_rebuild()
+DataContractRead.model_rebuild()

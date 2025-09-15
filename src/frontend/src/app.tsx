@@ -17,6 +17,9 @@ import DataContracts from './views/data-contracts';
 import DataContractDetails from './views/data-contract-details';
 import BusinessGlossary from './views/business-glossary';
 import Compliance from './views/compliance';
+import CompliancePolicyDetails from './views/compliance-policy-details';
+import ComplianceRunDetails from './views/compliance-run-details';
+import CreateUcObject from './views/create-uc-object';
 import EstateManager from './views/estate-manager';
 import EstateDetailsView from './views/estate-details';
 import MasterDataManagement from './views/master-data-management';
@@ -74,7 +77,10 @@ export default function App() {
               <Route path="/security" element={<SecurityFeatures />} />
               <Route path="/entitlements-sync" element={<EntitlementsSync />} />
               <Route path="/compliance" element={<Compliance />} />
+              <Route path="/compliance/policies/:policyId" element={<CompliancePolicyDetails />} />
+              <Route path="/compliance/runs/:runId" element={<ComplianceRunDetails />} />
               <Route path="/catalog-commander" element={<CatalogCommander />} />
+              <Route path="/create-uc" element={<CreateUcObject />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/search" element={<SearchView />} />
               <Route path="/about" element={<About />} />

@@ -34,6 +34,10 @@ class DataContractDb(Base):
     description_purpose = Column(Text, nullable=True)
     description_limitations = Column(Text, nullable=True)
 
+    # ODCS v3.0.2 additional top-level fields
+    sla_default_element = Column(String, nullable=True)  # ODCS slaDefaultElement field
+    contract_created_ts = Column(DateTime(timezone=True), nullable=True)  # ODCS contractCreatedTs field
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     created_by = Column(String, nullable=True)
@@ -179,9 +183,18 @@ class SchemaObjectDb(Base):
     logical_type = Column(String, nullable=False, default="object")
     physical_name = Column(String, nullable=True)
     data_granularity_description = Column(Text, nullable=True)
+
+    # ODCS v3.0.2 additional schema object fields
+    business_name = Column(String, nullable=True)  # ODCS businessName field
+    physical_type = Column(String, nullable=True)  # ODCS physicalType field (table, view, etc.)
+    tags = Column(Text, nullable=True)  # ODCS schema-level tags (JSON array stored as text)
+    description = Column(Text, nullable=True)  # ODCS description field
+
     contract = relationship("DataContractDb", back_populates="schema_objects")
     properties = relationship("SchemaPropertyDb", back_populates="schema_object", cascade="all, delete-orphan")
     quality_checks = relationship("DataQualityCheckDb", back_populates="schema_object", cascade="all, delete-orphan")
+    authoritative_definitions = relationship("SchemaObjectAuthorityDb", back_populates="schema_object", cascade="all, delete-orphan")
+    custom_properties = relationship("SchemaObjectCustomPropertyDb", back_populates="schema_object", cascade="all, delete-orphan")
 
 
 class SchemaPropertyDb(Base):
@@ -206,6 +219,7 @@ class SchemaPropertyDb(Base):
     critical_data_element = Column(Boolean, nullable=False, default=False)
     logical_type_options_json = Column(Text, nullable=True)  # JSON string of ODCS type-specific options
     items_logical_type = Column(String, nullable=True)  # for arrays
+    business_name = Column(String, nullable=True)  # ODCS businessName field at property level
     schema_object = relationship("SchemaObjectDb", back_populates="properties")
     parent_property = relationship("SchemaPropertyDb", remote_side=[id])
 
@@ -256,5 +270,25 @@ class DataContractCommentDb(Base):
     message = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     contract = relationship("DataContractDb", back_populates="comments")
+
+
+class SchemaObjectAuthorityDb(Base):
+    """ODCS v3.0.2 schema-level authoritative definitions"""
+    __tablename__ = "data_contract_schema_object_authorities"
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    schema_object_id = Column(String, ForeignKey("data_contract_schema_objects.id", ondelete="CASCADE"), nullable=False, index=True)
+    url = Column(String, nullable=False)
+    type = Column(String, nullable=False)
+    schema_object = relationship("SchemaObjectDb", back_populates="authoritative_definitions")
+
+
+class SchemaObjectCustomPropertyDb(Base):
+    """ODCS v3.0.2 schema-level custom properties"""
+    __tablename__ = "data_contract_schema_object_custom_properties"
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    schema_object_id = Column(String, ForeignKey("data_contract_schema_objects.id", ondelete="CASCADE"), nullable=False, index=True)
+    property = Column(String, nullable=False)
+    value = Column(Text, nullable=True)
+    schema_object = relationship("SchemaObjectDb", back_populates="custom_properties")
 
 

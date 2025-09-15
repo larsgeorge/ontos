@@ -41,7 +41,10 @@ export default function DataCurationSection() {
             <CardDescription>Create or manage schemas and permissions.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild variant="outline"><Link to="/catalog-commander">Open</Link></Button>
+            <div className="flex gap-2">
+              <Button asChild variant="outline"><Link to="/catalog-commander">Open</Link></Button>
+              <Button asChild><Link to="/create-uc">Create</Link></Button>
+            </div>
           </CardContent>
         </Card>
         <Card className="h-full">
@@ -50,7 +53,10 @@ export default function DataCurationSection() {
             <CardDescription>Provision catalogs and manage access.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild variant="outline"><Link to="/catalog-commander">Open</Link></Button>
+            <div className="flex gap-2">
+              <Button asChild variant="outline"><Link to="/catalog-commander">Open</Link></Button>
+              <Button asChild><Link to="/create-uc">Create</Link></Button>
+            </div>
           </CardContent>
         </Card>
       </div>

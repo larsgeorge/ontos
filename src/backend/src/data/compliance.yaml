@@ -1,4 +1,4 @@
-- id: "naming-conventions"
+- id: "b1a7f5c2-1a1f-4f7c-8d7b-9a3ef2b3c101"
   name: "Naming Conventions"
   description: "Verify that all objects follow corporate naming conventions"
   rule: |
@@ -18,8 +18,45 @@
   category: "governance"
   created_at: "2024-03-20T10:00:00Z"
   updated_at: "2024-03-20T10:00:00Z" 
+  examples:
+    pass:
+      - { object_type: "catalog", name: "analytics" }
+      - { object_type: "schema", name: "customer_360" }
+      - { object_type: "table", name: "orders_daily" }
+      - { object_type: "view", name: "v_orders_summary" }
+    fail:
+      - { object_type: "catalog", name: "1invalid" }
+      - { object_type: "schema", name: "CamelCase" }
+      - { object_type: "table", name: "Orders" }
+      - { object_type: "view", name: "orders_view" }
+  sample_runs:
+    - id: "3d9b2e2a-2a9b-4f5b-9e84-1d953f0a1a01"
+      status: "succeeded"
+      started_at: "2025-09-14T10:00:00Z"
+      finished_at: "2025-09-14T10:01:00Z"
+      results:
+        - { object_type: "catalog", object_name: "analytics", passed: true }
+        - { object_type: "schema", object_name: "customer_360", passed: true }
+        - { object_type: "table", object_name: "Orders", passed: false, message: "Expected name to match ^[a-z][a-z0-9_]*$" }
+        - { object_type: "view", object_name: "orders_view", passed: false, message: "Views must start with v_" }
+    - id: "3d9b2e2a-2a9b-4f5b-9e84-1d953f0a1a02"
+      status: "succeeded"
+      started_at: "2025-09-15T09:00:00Z"
+      finished_at: "2025-09-15T09:02:10Z"
+      results:
+        - { object_type: "table", object_name: "orders_daily", passed: true }
+        - { object_type: "view", object_name: "v_orders_summary", passed: true }
+        - { object_type: "catalog", object_name: "analytics", passed: true }
+        - { object_type: "schema", object_name: "finance_data", passed: true }
+        - { object_type: "table", object_name: "customers_daily", passed: true }
+        - { object_type: "schema", object_name: "CamelCase", passed: false, message: "Expected name to match ^[a-z][a-z0-9_]*$" }
+  history_seed:
+    days: 30
+    base_score: 82.0
+    variance: 8.0
+    total_checks: 30
   
-- id: "pii-encryption"
+- id: "b3d0c1a9-59c7-4a0e-9ef1-6b96d2f1c202"
   name: "PII Data Encryption"
   description: "Ensure all PII data is encrypted at rest"
   rule: "MATCH (d:Dataset) WHERE d.contains_pii = true ASSERT d.encryption = 'AES256'"
@@ -30,8 +67,29 @@
   category: "security"
   created_at: "2024-03-20T10:00:00Z"
   updated_at: "2024-03-20T10:00:00Z"
+  examples:
+    pass:
+      - { object_type: "dataset", contains_pii: true, encryption: "AES256" }
+    fail:
+      - { object_type: "dataset", contains_pii: true, encryption: "NONE" }
+  sample_runs:
+    - id: "e0d6b9a1-77aa-4d67-9d9b-2ac5b9e21b03"
+      status: "succeeded"
+      started_at: "2025-09-14T11:00:00Z"
+      finished_at: "2025-09-14T11:00:40Z"
+      results:
+        - { object_type: "dataset", object_name: "customer.emails", passed: true }
+        - { object_type: "dataset", object_name: "customer.addresses", passed: true }
+        - { object_type: "dataset", object_name: "customer.accounts", passed: true }
+        - { object_type: "dataset", object_name: "customer.cards", passed: false, message: "Encryption required: AES256" }
+        - { object_type: "dataset", object_name: "customer.profiles", passed: true }
+  history_seed:
+    days: 30
+    base_score: 88.0
+    variance: 6.0
+    total_checks: 25
 
-- id: "data-quality"
+- id: "f6c2f8a1-2b4c-4e7d-9a2d-7c1b3e5d4303"
   name: "Data Quality Thresholds"
   description: "Maintain data quality metrics above defined thresholds"
   rule: "MATCH (d:Dataset) ASSERT d.completeness > 0.95 AND d.accuracy > 0.98"
@@ -42,8 +100,34 @@
   category: "quality"
   created_at: "2024-03-20T10:00:00Z"
   updated_at: "2024-03-20T10:00:00Z"
+  examples:
+    pass:
+      - { object_type: "dataset", completeness: 0.99, accuracy: 0.99 }
+    fail:
+      - { object_type: "dataset", completeness: 0.90, accuracy: 0.97 }
+  sample_runs:
+    - id: "5a2f3b1c-8e44-4a7b-a1c3-5b6d7e8f2c04"
+      status: "succeeded"
+      started_at: "2025-09-13T08:00:00Z"
+      finished_at: "2025-09-13T08:01:10Z"
+      results:
+        - { object_type: "dataset", object_name: "sales.orders_daily", passed: true }
+        - { object_type: "dataset", object_name: "sales.customers", passed: true }
+        - { object_type: "dataset", object_name: "sales.products", passed: true }
+        - { object_type: "dataset", object_name: "sales.regions", passed: true }
+        - { object_type: "dataset", object_name: "sales.channels", passed: true }
+        - { object_type: "dataset", object_name: "sales.payments", passed: true }
+        - { object_type: "dataset", object_name: "sales.shipments", passed: true }
+        - { object_type: "dataset", object_name: "sales.inventory", passed: true }
+        - { object_type: "dataset", object_name: "sales.promotions", passed: true }
+        - { object_type: "dataset", object_name: "sales.orders_raw", passed: false, message: "completeness=0.91 < 0.95" }
+  history_seed:
+    days: 30
+    base_score: 90.0
+    variance: 5.0
+    total_checks: 50
 
-- id: "access-control"
+- id: "8a5d2c7f-4b1e-491f-a0c6-2f9d1e7b1404"
   name: "Access Control"
   description: "Verify proper access controls on sensitive data"
   rule: "MATCH (d:Dataset) WHERE d.sensitivity = 'high' ASSERT d.access_level = 'restricted'"
@@ -54,8 +138,28 @@
   category: "security"
   created_at: "2024-03-20T10:00:00Z"
   updated_at: "2024-03-20T10:00:00Z"
+  examples:
+    pass:
+      - { object_type: "dataset", sensitivity: "high", access_level: "restricted" }
+    fail:
+      - { object_type: "dataset", sensitivity: "high", access_level: "public" }
+  sample_runs:
+    - id: "9c4d2e1b-3f6a-41d2-8b9a-7c6e5d4f3d05"
+      status: "succeeded"
+      started_at: "2025-09-12T16:00:00Z"
+      finished_at: "2025-09-12T16:00:35Z"
+      results:
+        - { object_type: "dataset", object_name: "hr.salaries", passed: true }
+        - { object_type: "dataset", object_name: "bi.hr_public", passed: true }
+        - { object_type: "dataset", object_name: "prod.secure_docs", passed: true }
+        - { object_type: "dataset", object_name: "finance.payments", passed: false, message: "access_level must be restricted" }
+  history_seed:
+    days: 30
+    base_score: 80.0
+    variance: 6.0
+    total_checks: 20
 
-- id: "data-freshness"
+- id: "d2c1b7a4-9e8f-4d1a-8f0c-5b6a7c8d1205"
   name: "Data Freshness"
   description: "Ensure data is updated within defined timeframes"
   rule: "MATCH (d:Dataset) ASSERT d.last_updated > datetime() - duration('P1D')"
@@ -66,3 +170,28 @@
   category: "freshness"
   created_at: "2024-03-20T10:00:00Z"
   updated_at: "2024-03-20T10:00:00Z"
+  examples:
+    pass:
+      - { object_type: "dataset", last_updated: "now-12h" }
+    fail:
+      - { object_type: "dataset", last_updated: "now-36h" }
+  sample_runs:
+    - id: "a1b2c3d4-5678-4e9f-8a0b-1c2d3e4f4e06"
+      status: "succeeded"
+      started_at: "2025-09-11T07:00:00Z"
+      finished_at: "2025-09-11T07:00:28Z"
+      results:
+        - { object_type: "dataset", object_name: "bi.product_dim", passed: true }
+        - { object_type: "dataset", object_name: "bi.sales_fact", passed: true }
+        - { object_type: "dataset", object_name: "bi.customer_dim", passed: true }
+        - { object_type: "dataset", object_name: "bi.calendar_dim", passed: true }
+        - { object_type: "dataset", object_name: "bi.store_dim", passed: true }
+        - { object_type: "dataset", object_name: "bi.region_dim", passed: true }
+        - { object_type: "dataset", object_name: "bi.channel_dim", passed: true }
+        - { object_type: "dataset", object_name: "bi.payment_dim", passed: true }
+        - { object_type: "dataset", object_name: "bi.inventory_fact", passed: false, message: "last_updated older than 1 day" }
+  history_seed:
+    days: 30
+    base_score: 86.0
+    variance: 7.0
+    total_checks: 45

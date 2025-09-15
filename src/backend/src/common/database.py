@@ -42,7 +42,7 @@ try:
     from src.db_models import metadata as metadata_db
     from src.db_models import semantic_models
     from src.db_models import comments
-    from src.db_models.data_products import DataProductDb, InfoDb, InputPortDb, OutputPortDb
+    # from src.db_models.data_products import DataProductDb, InfoDb, InputPortDb, OutputPortDb  # Already imported via module import above
     from src.db_models.settings import AppRoleDb
     # from src.db_models.users import UserActivityDb, UserSearchHistoryDb # Commented out due to missing file
     from src.db_models.audit_log import AuditLogDb

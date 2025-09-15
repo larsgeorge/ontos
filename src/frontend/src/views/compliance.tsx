@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Scale, MoreHorizontal, ChevronDown } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import {
   Table,
   TableBody,
@@ -43,7 +44,7 @@ import { useApi } from '@/hooks/use-api';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
 interface CompliancePolicy {
-  id: string;
+  id: string; // UUID
   name: string;
   description: string;
   rule: string;
@@ -275,7 +276,11 @@ export default function Compliance() {
           </Button>
         );
       },
-      cell: ({ row }) => <div className="font-medium">{row.getValue("name")}</div>,
+      cell: ({ row }) => (
+        <Link to={`/compliance/policies/${row.original.id}`} className="font-medium text-primary hover:underline">
+          {row.getValue("name")}
+        </Link>
+      ),
     },
     {
       accessorKey: "category",
@@ -495,9 +500,7 @@ export default function Compliance() {
                     size="sm"
                     className="h-8"
                     onClick={() => {
-                      const selectedIds = table
-                        .getSelectedRowModel()
-                        .rows.map((row) => row.original.id);
+                      /* bulk delete not implemented */
                     }}
                   >
                     Delete Selected
@@ -507,9 +510,7 @@ export default function Compliance() {
                     size="sm"
                     className="h-8"
                     onClick={() => {
-                      const selectedIds = table
-                        .getSelectedRowModel()
-                        .rows.map((row) => row.original.id);
+                      /* bulk toggle not implemented */
                     }}
                   >
                     Toggle Status

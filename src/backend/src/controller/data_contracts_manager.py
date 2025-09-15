@@ -543,6 +543,12 @@ class DataContractsManager(SearchableAsset):
             odcs['tenant'] = db_obj.tenant
         if db_obj.data_product:
             odcs['dataProduct'] = db_obj.data_product
+
+        # ODCS v3.0.2 additional top-level fields
+        if getattr(db_obj, 'sla_default_element', None):
+            odcs['slaDefaultElement'] = db_obj.sla_default_element
+        if getattr(db_obj, 'contract_created_ts', None):
+            odcs['contractCreatedTs'] = db_obj.contract_created_ts.isoformat()
             
         # Build description object
         description: Dict[str, Any] = {}
@@ -565,22 +571,150 @@ class DataContractsManager(SearchableAsset):
                 }
                 if schema_obj.physical_name:
                     schema_dict['physicalName'] = schema_obj.physical_name
+                if schema_obj.data_granularity_description:
+                    schema_dict['dataGranularityDescription'] = schema_obj.data_granularity_description
+
+                # ODCS v3.0.2 additional schema object fields
+                if getattr(schema_obj, 'business_name', None):
+                    schema_dict['businessName'] = schema_obj.business_name
+                if getattr(schema_obj, 'physical_type', None):
+                    schema_dict['physicalType'] = schema_obj.physical_type
+                if getattr(schema_obj, 'description', None):
+                    schema_dict['description'] = schema_obj.description
+                if getattr(schema_obj, 'tags', None):
+                    try:
+                        import json
+                        schema_dict['tags'] = json.loads(schema_obj.tags)
+                    except (json.JSONDecodeError, TypeError):
+                        schema_dict['tags'] = []
                     
-                # Add properties
+                # Add properties with full ODCS field support
                 if hasattr(schema_obj, 'properties') and schema_obj.properties:
                     for prop in schema_obj.properties:
                         prop_dict = {
                             'name': prop.name,
-                            'logicalType': prop.logical_type,
                         }
+                        if prop.logical_type:
+                            prop_dict['logicalType'] = prop.logical_type
+                        if prop.physical_type:
+                            prop_dict['physicalType'] = prop.physical_type
                         if prop.required is not None:
                             prop_dict['required'] = prop.required
                         if prop.unique is not None:
                             prop_dict['unique'] = prop.unique
+                        if prop.partitioned is not None:
+                            prop_dict['partitioned'] = prop.partitioned
+                        if prop.primary_key_position >= 0:
+                            prop_dict['primaryKey'] = True
+                            prop_dict['primaryKeyPosition'] = prop.primary_key_position
+                        if prop.partition_key_position >= 0:
+                            prop_dict['partitionKeyPosition'] = prop.partition_key_position
+                        if prop.classification:
+                            prop_dict['classification'] = prop.classification
+                        if prop.encrypted_name:
+                            prop_dict['encryptedName'] = prop.encrypted_name
+                        if prop.transform_logic:
+                            prop_dict['transformLogic'] = prop.transform_logic
+                        if prop.transform_source_objects:
+                            try:
+                                import json
+                                prop_dict['transformSourceObjects'] = json.loads(prop.transform_source_objects)
+                            except (json.JSONDecodeError, TypeError):
+                                prop_dict['transformSourceObjects'] = prop.transform_source_objects
                         if prop.transform_description:
                             prop_dict['description'] = prop.transform_description
+                        if prop.examples:
+                            try:
+                                import json
+                                prop_dict['examples'] = json.loads(prop.examples)
+                            except (json.JSONDecodeError, TypeError):
+                                prop_dict['examples'] = prop.examples
+                        if prop.critical_data_element is not None:
+                            prop_dict['criticalDataElement'] = prop.critical_data_element
+                        if prop.logical_type_options_json:
+                            try:
+                                import json
+                                logical_type_options = json.loads(prop.logical_type_options_json)
+                                prop_dict.update(logical_type_options)  # Merge constraints into property
+                            except (json.JSONDecodeError, TypeError):
+                                pass
+                        if prop.items_logical_type:
+                            prop_dict['itemType'] = prop.items_logical_type
+
                         schema_dict['properties'].append(prop_dict)
-                        
+
+                # Add schema-level quality rules (ODCS compliant structure)
+                if hasattr(schema_obj, 'quality_checks') and schema_obj.quality_checks:
+                    quality = []
+                    for check in schema_obj.quality_checks:
+                        quality_dict = {
+                            'rule': check.rule or check.name,
+                            'type': check.type,
+                        }
+                        if check.description:
+                            quality_dict['description'] = check.description
+                        if check.dimension:
+                            quality_dict['dimension'] = check.dimension
+                        if check.business_impact:
+                            quality_dict['businessImpact'] = check.business_impact
+                        if check.severity:
+                            quality_dict['severity'] = check.severity
+                        if check.method:
+                            quality_dict['method'] = check.method
+                        if check.schedule:
+                            quality_dict['schedule'] = check.schedule
+                        if check.scheduler:
+                            quality_dict['scheduler'] = check.scheduler
+                        if check.unit:
+                            quality_dict['unit'] = check.unit
+                        if check.tags:
+                            quality_dict['tags'] = check.tags
+                        if check.query:
+                            quality_dict['query'] = check.query
+                        if check.engine:
+                            quality_dict['engine'] = check.engine
+                        if check.implementation:
+                            quality_dict['implementation'] = check.implementation
+
+                        # Add comparison fields
+                        for field in ['must_be', 'must_not_be', 'must_be_gt', 'must_be_ge',
+                                     'must_be_lt', 'must_be_le', 'must_be_between_min', 'must_be_between_max']:
+                            value = getattr(check, field, None)
+                            if value:
+                                camel_case_field = ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(field.split('_')))
+                                quality_dict[camel_case_field] = value
+
+                        quality.append(quality_dict)
+                    schema_dict['quality'] = quality
+
+                # Add schema-level authoritative definitions
+                if hasattr(schema_obj, 'authoritative_definitions') and schema_obj.authoritative_definitions:
+                    auth_defs = []
+                    for auth_def in schema_obj.authoritative_definitions:
+                        auth_defs.append({
+                            'url': auth_def.url,
+                            'type': auth_def.type
+                        })
+                    schema_dict['authoritativeDefinitions'] = auth_defs
+
+                # Add schema-level custom properties
+                if hasattr(schema_obj, 'custom_properties') and schema_obj.custom_properties:
+                    custom_props = []
+                    for custom_prop in schema_obj.custom_properties:
+                        prop_value = custom_prop.value
+                        try:
+                            # Try to parse JSON if it's a serialized object
+                            import json
+                            prop_value = json.loads(custom_prop.value)
+                        except (json.JSONDecodeError, TypeError):
+                            pass  # Keep as string
+
+                        custom_props.append({
+                            'property': custom_prop.property,
+                            'value': prop_value
+                        })
+                    schema_dict['customProperties'] = custom_props
+
                 schema.append(schema_dict)
             odcs['schema'] = schema
             
@@ -599,66 +733,166 @@ class DataContractsManager(SearchableAsset):
                 team.append(member_dict)
             odcs['team'] = team
             
-        # Build access control from quality checks (this is a simplified mapping)
-        if hasattr(db_obj, 'quality_checks') and db_obj.quality_checks:
-            quality_rules = []
-            for check in db_obj.quality_checks:
-                rule_dict = {
-                    'type': check.check_type,
-                    'enabled': check.enabled,
-                }
-                if check.threshold is not None:
-                    rule_dict['threshold'] = check.threshold
-                if check.query:
-                    rule_dict['query'] = check.query
-                quality_rules.append(rule_dict)
-            odcs['qualityRules'] = quality_rules
+        # Legacy: Top-level quality rules are deprecated in favor of schema-nested quality rules
+        # ODCS v3.0.2 specifies quality rules should be nested under schema objects (implemented above)
+        # Keeping this section commented for backwards compatibility reference:
+        # if hasattr(db_obj, 'quality_checks') and db_obj.quality_checks:
+        #     legacy_quality_rules = [check for check in db_obj.quality_checks if getattr(check, 'level', None) == 'contract']
+        #     if legacy_quality_rules:
+        #         # Only export legacy contract-level rules at top level for backwards compatibility
+        #         pass
             
-        # Build support channels
-        if hasattr(db_obj, 'support_channels') and db_obj.support_channels:
-            support = {}
-            for channel in db_obj.support_channels:
-                support[channel.channel] = channel.url
+        # Build support channels (ODCS format as list)
+        if hasattr(db_obj, 'support') and db_obj.support:
+            support = []
+            for channel in db_obj.support:
+                support_item = {
+                    'channel': channel.channel,
+                    'url': channel.url
+                }
+                if channel.description:
+                    support_item['description'] = channel.description
+                if channel.tool:
+                    support_item['tool'] = channel.tool
+                if channel.scope:
+                    support_item['scope'] = channel.scope
+                if channel.invitation_url:
+                    support_item['invitationUrl'] = channel.invitation_url
+                support.append(support_item)
             odcs['support'] = support
             
-        # Build SLA properties
+        # Build SLA properties (ODCS format as list)
         if hasattr(db_obj, 'sla_properties') and db_obj.sla_properties:
-            sla = {}
+            sla_properties = []
             for prop in db_obj.sla_properties:
-                # Try to convert numeric values
-                value = prop.value
+                sla_item = {
+                    'property': prop.property,
+                }
+                # Add value, trying to preserve types
+                if prop.value:
+                    try:
+                        if '.' in prop.value:
+                            sla_item['value'] = float(prop.value)
+                        else:
+                            sla_item['value'] = int(prop.value)
+                    except (ValueError, TypeError):
+                        sla_item['value'] = prop.value
+
+                # Add additional ODCS SLA fields
+                if prop.value_ext:
+                    try:
+                        if '.' in prop.value_ext:
+                            sla_item['valueExt'] = float(prop.value_ext)
+                        else:
+                            sla_item['valueExt'] = int(prop.value_ext)
+                    except (ValueError, TypeError):
+                        sla_item['valueExt'] = prop.value_ext
+
+                if prop.unit:
+                    sla_item['unit'] = prop.unit
+                if prop.element:
+                    sla_item['element'] = prop.element
+                if prop.driver:
+                    sla_item['driver'] = prop.driver
+
+                sla_properties.append(sla_item)
+            odcs['slaProperties'] = sla_properties
+
+        # Build pricing information
+        if hasattr(db_obj, 'pricing') and db_obj.pricing:
+            price = {}
+            if db_obj.pricing.price_amount:
                 try:
-                    if '.' in value:
-                        sla[prop.property] = float(value)
+                    # Try to convert to numeric if possible
+                    if '.' in db_obj.pricing.price_amount:
+                        price['priceAmount'] = float(db_obj.pricing.price_amount)
                     else:
-                        sla[prop.property] = int(value)
+                        price['priceAmount'] = int(db_obj.pricing.price_amount)
                 except (ValueError, TypeError):
-                    sla[prop.property] = value
-            odcs['sla'] = sla
-            
+                    price['priceAmount'] = db_obj.pricing.price_amount
+            if db_obj.pricing.price_currency:
+                price['priceCurrency'] = db_obj.pricing.price_currency
+            if db_obj.pricing.price_unit:
+                price['priceUnit'] = db_obj.pricing.price_unit
+            if price:
+                odcs['price'] = price
+
         # Build custom properties
         if hasattr(db_obj, 'custom_properties') and db_obj.custom_properties:
             custom_props = {}
             for prop in db_obj.custom_properties:
                 custom_props[prop.property] = prop.value
             odcs['customProperties'] = custom_props
-            
+
+        # Build authoritative definitions
+        if hasattr(db_obj, 'authoritative_defs') and db_obj.authoritative_defs:
+            auth_defs = []
+            for auth_def in db_obj.authoritative_defs:
+                auth_defs.append({
+                    'url': auth_def.url,
+                    'type': auth_def.type
+                })
+            odcs['authoritativeDefinitions'] = auth_defs
+
         # Legacy support for tags and roles
         if hasattr(db_obj, 'tags') and db_obj.tags:
             odcs['tags'] = [t.name for t in db_obj.tags]
             
         if hasattr(db_obj, 'roles') and db_obj.roles:
-            odcs['roles'] = [
-                {
+            roles = []
+            for r in db_obj.roles:
+                role_dict = {
                     'role': r.role,
-                    'description': r.description,
-                    'access': r.access,
-                    'firstLevelApprovers': r.first_level_approvers,
-                    'secondLevelApprovers': r.second_level_approvers,
                 }
-                for r in db_obj.roles
-            ]
-            
+                if r.description:
+                    role_dict['description'] = r.description
+                if r.access:
+                    role_dict['access'] = r.access
+                if r.first_level_approvers:
+                    role_dict['firstLevelApprovers'] = r.first_level_approvers
+                if r.second_level_approvers:
+                    role_dict['secondLevelApprovers'] = r.second_level_approvers
+
+                # Add role custom properties
+                if hasattr(r, 'custom_properties') and r.custom_properties:
+                    custom_props = {}
+                    for prop in r.custom_properties:
+                        custom_props[prop.property] = prop.value
+                    role_dict['customProperties'] = custom_props
+
+                roles.append(role_dict)
+            odcs['roles'] = roles
+
+        # Build servers array with full ODCS structure
+        if hasattr(db_obj, 'servers') and db_obj.servers:
+            servers = []
+            for server in db_obj.servers:
+                server_dict = {
+                    'server': server.server,
+                    'type': server.type,
+                }
+
+                # Add optional server fields
+                if server.description:
+                    server_dict['description'] = server.description
+                if server.environment:
+                    server_dict['environment'] = server.environment
+
+                # Build server properties (host, port, database, etc.)
+                if hasattr(server, 'properties') and server.properties:
+                    for prop in server.properties:
+                        # Handle numeric port field
+                        if prop.key == 'port' and prop.value:
+                            try:
+                                server_dict[prop.key] = int(prop.value)
+                            except ValueError:
+                                server_dict[prop.key] = prop.value
+                        else:
+                            server_dict[prop.key] = prop.value
+
+                servers.append(server_dict)
+            odcs['servers'] = servers
+
         return odcs
 
     # --- App startup data loader ---
