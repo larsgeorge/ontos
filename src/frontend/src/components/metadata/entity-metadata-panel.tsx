@@ -8,11 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RelativeDate } from '@/components/common/relative-date';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Plus, RefreshCcw, Eye, Trash2, FileText, LinkIcon, Paperclip } from 'lucide-react';
+import { Plus, RefreshCcw, Eye, Trash2, FileText, LinkIcon, Paperclip, Pencil } from 'lucide-react';
 import FilePreviewDialog from '@/components/preview/file-preview-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
+import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
 
 export type EntityKind = 'data_domain' | 'data_product' | 'data_contract';
 
@@ -50,6 +51,19 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
 
   const [previewDoc, setPreviewDoc] = React.useState<DocumentItem | null>(null);
   const [previewNote, setPreviewNote] = React.useState<RichTextItem | null>(null);
+  const [showPreview, setShowPreview] = React.useState(false);
+
+  // Editing states for notes
+  const [editingNote, setEditingNote] = React.useState<RichTextItem | null>(null);
+  const [editNoteTitle, setEditNoteTitle] = React.useState('');
+  const [editNoteDesc, setEditNoteDesc] = React.useState('');
+  const [editNoteContent, setEditNoteContent] = React.useState('');
+  
+  // Editing states for links
+  const [editingLink, setEditingLink] = React.useState<LinkItem | null>(null);
+  const [editLinkTitle, setEditLinkTitle] = React.useState('');
+  const [editLinkUrl, setEditLinkUrl] = React.useState('');
+  const [editLinkDesc, setEditLinkDesc] = React.useState('');
 
   const fetchMetadata = React.useCallback(async () => {
     try {
@@ -74,9 +88,24 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
   };
 
   return (
+    <>
     <Card>
       <CardHeader>
-        <CardTitle className="text-xl">Metadata</CardTitle>
+        <CardTitle className="text-xl flex items-center gap-2">
+          Metadata
+          {entityType === 'data_product' && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={() => setShowPreview(true)}>
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Preview rendered page</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </CardTitle>
         <CardDescription>Notes, links, and attachments.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -137,6 +166,16 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Preview</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon" onClick={() => { setEditingNote(n); setEditNoteTitle(n.title); setEditNoteDesc(n.short_description || ''); setEditNoteContent(n.content_markdown); }}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Edit</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                             <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={async () => {
@@ -238,6 +277,16 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Open</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="ghost" size="icon" onClick={() => { setEditingLink(l); setEditLinkTitle(l.title); setEditLinkUrl(l.url); setEditLinkDesc(l.short_description || ''); }}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Edit</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                             <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={async () => {
@@ -413,8 +462,118 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Note Edit Dialog */}
+        <Dialog open={!!editingNote} onOpenChange={(open) => { if (!open) setEditingNote(null); }}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Edit note</DialogTitle>
+            </DialogHeader>
+            {editingNote && (
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="edit-note-title">Title</Label>
+                  <Input id="edit-note-title" value={editNoteTitle} onChange={(e) => setEditNoteTitle(e.target.value)} />
+                </div>
+                <div>
+                  <Label htmlFor="edit-note-desc">Short Description</Label>
+                  <Input id="edit-note-desc" value={editNoteDesc} onChange={(e) => setEditNoteDesc(e.target.value)} />
+                </div>
+                <div>
+                  <Label htmlFor="edit-note-content">Content (Markdown)</Label>
+                  <Textarea id="edit-note-content" rows={8} value={editNoteContent} onChange={(e) => setEditNoteContent(e.target.value)} />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setEditingNote(null)}>Cancel</Button>
+                  <Button
+                    onClick={async () => {
+                      try {
+                        const payload = {
+                          title: editNoteTitle || undefined,
+                          short_description: editNoteDesc || undefined,
+                          content_markdown: editNoteContent || undefined,
+                        };
+                        const resp = await fetch(`/api/rich-texts/${editingNote.id}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(payload),
+                        });
+                        if (!resp.ok) throw new Error(await resp.text());
+                        setEditingNote(null);
+                        fetchMetadata();
+                      } catch (e: any) {
+                        toast({ title: 'Update failed', description: e.message, variant: 'destructive' });
+                      }
+                    }}
+                    disabled={!editNoteTitle}
+                  >Save</Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Link Edit Dialog */}
+        <Dialog open={!!editingLink} onOpenChange={(open) => { if (!open) setEditingLink(null); }}>
+          <DialogContent className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Edit link</DialogTitle>
+            </DialogHeader>
+            {editingLink && (
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="edit-link-title">Title</Label>
+                  <Input id="edit-link-title" value={editLinkTitle} onChange={(e) => setEditLinkTitle(e.target.value)} />
+                </div>
+                <div>
+                  <Label htmlFor="edit-link-url">URL</Label>
+                  <Input id="edit-link-url" value={editLinkUrl} onChange={(e) => setEditLinkUrl(e.target.value)} />
+                </div>
+                <div>
+                  <Label htmlFor="edit-link-desc">Short Description</Label>
+                  <Input id="edit-link-desc" value={editLinkDesc} onChange={(e) => setEditLinkDesc(e.target.value)} />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setEditingLink(null)}>Cancel</Button>
+                  <Button
+                    onClick={async () => {
+                      try {
+                        const payload = {
+                          title: editLinkTitle || undefined,
+                          url: editLinkUrl || undefined,
+                          short_description: editLinkDesc || undefined,
+                        };
+                        const resp = await fetch(`/api/links/${editingLink.id}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(payload),
+                        });
+                        if (!resp.ok) throw new Error(await resp.text());
+                        setEditingLink(null);
+                        fetchMetadata();
+                      } catch (e: any) {
+                        toast({ title: 'Update failed', description: e.message, variant: 'destructive' });
+                      }
+                    }}
+                    disabled={!editLinkTitle || !editLinkUrl}
+                  >Save</Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
+    {entityType === 'data_product' && (
+      <EntityInfoDialog
+        entityType={'data_product'}
+        entityId={entityId}
+        title={undefined}
+        open={showPreview}
+        onOpenChange={setShowPreview}
+      />
+    )}
+  </>
   );
 };
 

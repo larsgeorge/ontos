@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Database, BoxSelect, Star, AlertCircle } from 'lucide-react';
+import { Loader2, Database, BoxSelect, Star, AlertCircle, Info } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
 import { useDomains } from '@/hooks/use-domains';
 import { type DataProduct } from '@/types/data-product';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -16,6 +17,8 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
   const [allProducts, setAllProducts] = useState<DataProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState<boolean>(false);
   const [productsError, setProductsError] = useState<string | null>(null);
+  const [infoProductId, setInfoProductId] = useState<string | null>(null);
+  const [infoProductTitle, setInfoProductTitle] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -90,12 +93,24 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
               .sort((a, b) => new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime())
               .slice(0, maxItems)
               .map(p => (
-                <Link key={p.id || p.info.title} to={p.id ? `/data-products/${p.id}` : '/data-products'} className="block group">
+                <div key={p.id || p.info.title} className="group">
                   <Card className="transition-shadow group-hover:shadow-md h-full">
                     <CardHeader>
                       <div className="flex items-center gap-2">
                         <Database className="h-5 w-5 text-primary" />
-                        <CardTitle className="truncate">{p.info?.title || 'Untitled'}</CardTitle>
+                        <CardTitle className="truncate flex-1">
+                          <Link to={p.id ? `/data-products/${p.id}` : '/data-products'} className="hover:underline">
+                            {p.info?.title || 'Untitled'}
+                          </Link>
+                        </CardTitle>
+                        <button
+                          className="inline-flex items-center justify-center text-foreground/80 hover:text-foreground transition-colors"
+                          title="Info"
+                          aria-label="Info"
+                          onClick={() => { if (p.id) { setInfoProductId(p.id); setInfoProductTitle(p.info?.title); } }}
+                        >
+                          <Info className="h-4 w-4" />
+                        </button>
                       </div>
                       {p.info?.description ? (
                         <CardDescription className="line-clamp-2">{p.info.description}</CardDescription>
@@ -108,11 +123,18 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
                       </div>
                     </CardContent>
                   </Card>
-                </Link>
+                </div>
             ))}
           </div>
         )}
       </div>
+      <EntityInfoDialog
+        entityType={'data_product'}
+        entityId={infoProductId}
+        title={infoProductTitle}
+        open={!!infoProductId}
+        onOpenChange={(open) => { if (!open) { setInfoProductId(null); setInfoProductTitle(undefined); } }}
+      />
     </section>
   );
 }
