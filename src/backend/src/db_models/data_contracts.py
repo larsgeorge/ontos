@@ -19,12 +19,12 @@ class DataContractDb(Base):
     __tablename__ = "data_contracts"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    name = Column(String, nullable=False, index=True)
+    name = Column(String, nullable=False, index=True)  # Required for app usability
     kind = Column(String, nullable=False, default="DataContract")
-    api_version = Column(String, nullable=False, default="v3.0.1")
+    api_version = Column(String, nullable=False, default="v3.0.2")
     version = Column(String, nullable=False, index=True)
     status = Column(String, nullable=False, default="draft", index=True)
-    owner = Column(String, nullable=False, index=True)
+    owner = Column(String, nullable=True, index=True)  # Optional per ODCS v3.0.2
     tenant = Column(String, nullable=True)
     data_product = Column(String, nullable=True)
     domain_id = Column(String, ForeignKey("data_domains.id"), nullable=True, index=True)

@@ -14,6 +14,34 @@ interface DomainsState {
 
 let globalDomainsCache: DataDomain[] | null = null
 let globalCachePromise: Promise<DataDomain[]> | null = null
+let cachedServerVersion: number | null = null
+
+const checkCacheVersion = async (): Promise<boolean> => {
+  try {
+    const response = await fetch('/api/cache-version')
+    if (!response.ok) {
+      // If we can't get cache version, assume cache is valid to avoid unnecessary refetches
+      return true
+    }
+    const data = await response.json()
+    const serverVersion = data.version
+
+    if (cachedServerVersion === null) {
+      cachedServerVersion = serverVersion
+      return true
+    }
+
+    return cachedServerVersion === serverVersion
+  } catch (error) {
+    // If cache version check fails, assume cache is valid
+    return true
+  }
+}
+
+const invalidateCache = () => {
+  globalDomainsCache = null
+  cachedServerVersion = null
+}
 
 export const useDomains = () => {
   const [state, setState] = useState<DomainsState>({
@@ -28,9 +56,15 @@ export const useDomains = () => {
       return globalCachePromise
     }
 
-    // Return cached data if available
+    // Check cache version before using cached data
     if (globalDomainsCache) {
-      return globalDomainsCache
+      const isCacheValid = await checkCacheVersion()
+      if (isCacheValid) {
+        return globalDomainsCache
+      } else {
+        // Cache is stale, invalidate it
+        invalidateCache()
+      }
     }
 
     // Create new fetch promise
@@ -42,9 +76,21 @@ export const useDomains = () => {
         }
         const data = await response.json()
         const domains = data || []
-        
-        // Cache the result
+
+        // Cache the result and update cache version
         globalDomainsCache = domains
+
+        // Update cached server version
+        try {
+          const versionResponse = await fetch('/api/cache-version')
+          if (versionResponse.ok) {
+            const versionData = await versionResponse.json()
+            cachedServerVersion = versionData.version
+          }
+        } catch (error) {
+          // If cache version update fails, continue without it
+        }
+
         return domains
       } catch (error) {
         // Clear the promise on error so next call can retry
@@ -61,13 +107,20 @@ export const useDomains = () => {
 
   const loadDomains = useCallback(async () => {
     if (globalDomainsCache) {
-      // Use cached data immediately
-      setState({
-        domains: globalDomainsCache,
-        loading: false,
-        error: null,
-      })
-      return
+      // Check cache version before using cached data
+      const isCacheValid = await checkCacheVersion()
+      if (isCacheValid) {
+        // Use cached data immediately
+        setState({
+          domains: globalDomainsCache,
+          loading: false,
+          error: null,
+        })
+        return
+      } else {
+        // Cache is stale, invalidate and refetch
+        invalidateCache()
+      }
     }
 
     setState(prev => ({ ...prev, loading: true, error: null }))

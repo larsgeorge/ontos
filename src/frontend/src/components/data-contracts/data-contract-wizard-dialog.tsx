@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import DatasetLookupDialog from './dataset-lookup-dialog'
+import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
 import { useDomains } from '@/hooks/use-domains'
 import { useToast } from '@/hooks/use-toast'
 
@@ -17,6 +18,13 @@ type WizardProps = {
 }
 
 const statuses = ['draft', 'active', 'deprecated', 'archived']
+
+interface SemanticConcept {
+  iri: string
+  label?: string
+  description?: string
+  type?: string
+}
 // ODCS v3.0.2 compliant logical types (exact match with spec)
 const LOGICAL_TYPES = [
   'string',
@@ -44,8 +52,41 @@ const ODCS_SERVER_TYPES = [
 const ENVIRONMENTS = ['production', 'staging', 'development', 'test']
 
 export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmit, initial }: WizardProps) {
-  const { domains, loading: domainsLoading } = useDomains()
+  const { domains, loading: domainsLoading, refetch: refetchDomains } = useDomains()
   const { toast } = useToast()
+
+  // Helper function to handle domain-related errors
+  const handleDomainError = async (error: any) => {
+    const errorMessage = error?.message || error?.detail || error?.toString() || 'Unknown error'
+
+    if (errorMessage.includes('Domain with ID') && errorMessage.includes('not found')) {
+      // This is a domain validation error
+      toast({
+        title: 'Domain Error',
+        description: 'The selected domain is no longer available. Please select a different domain.',
+        variant: 'destructive' as any
+      })
+
+      // Clear the invalid domain selection
+      setDomain('')
+
+      // Refetch domains to get the latest list
+      try {
+        await refetchDomains()
+        toast({
+          title: 'Domains Updated',
+          description: 'Available domains have been refreshed. Please select a domain again.',
+          variant: 'default' as any
+        })
+      } catch (refetchError) {
+        console.error('Failed to refetch domains:', refetchError)
+      }
+
+      return true // Indicates this was a domain error and was handled
+    }
+
+    return false // Not a domain error
+  }
   const [step, setStep] = useState(1)
   const totalSteps = 5
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -76,9 +117,16 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
     description?: string;
     classification?: string;
     examples?: string;
+    semanticConcepts?: SemanticConcept[];
   }
-  type SchemaObject = { name: string; physicalName?: string; properties: Column[] }
+  type SchemaObject = {
+    name: string;
+    physicalName?: string;
+    properties: Column[];
+    semanticConcepts?: SemanticConcept[];
+  }
   const [schemaObjects, setSchemaObjects] = useState<SchemaObject[]>(initial?.schemaObjects || [])
+  const [contractSemanticConcepts, setContractSemanticConcepts] = useState<SemanticConcept[]>(initial?.contractSemanticConcepts || [])
 
   type QualityRule = {
     name: string;
@@ -246,10 +294,18 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   }
 
   const handleNext = () => {
-    // Validate Step 1 before proceeding
+    // Validate Step 1 before proceeding - ODCS required + app required fields
     if (step === 1) {
       if (!name || !name.trim()) {
         toast({ title: 'Validation Error', description: 'Contract name is required', variant: 'destructive' as any })
+        return
+      }
+      if (!version || !version.trim()) {
+        toast({ title: 'Validation Error', description: 'Version is required', variant: 'destructive' as any })
+        return
+      }
+      if (!status || !status.trim()) {
+        toast({ title: 'Validation Error', description: 'Status is required', variant: 'destructive' as any })
         return
       }
     }
@@ -259,24 +315,52 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
   const handlePrev = () => { if (step > 1) setStep(step - 1) }
 
   const handleSubmit = async () => {
-    // Validation
+    // Validation - ODCS required + app required fields
     if (!name || !name.trim()) {
       toast({ title: 'Validation Error', description: 'Contract name is required', variant: 'destructive' as any })
+      return
+    }
+    if (!version || !version.trim()) {
+      toast({ title: 'Validation Error', description: 'Version is required', variant: 'destructive' as any })
+      return
+    }
+    if (!status || !status.trim()) {
+      toast({ title: 'Validation Error', description: 'Status is required', variant: 'destructive' as any })
       return
     }
 
     setIsSubmitting(true)
     try {
+      // Helper function to convert semantic concepts to ODCS authoritativeDefinitions format
+      const convertSemanticConcepts = (concepts: SemanticConcept[] = []) => {
+        return concepts.map(concept => ({
+          url: concept.iri,
+          type: "http://databricks.com/ontology/uc/semanticAssignment"
+        }))
+      }
+
       const payload = {
         name,
         version,
-        status: 'active', // Final submission should be active
+        status: status, // Use user-selected status
         owner,
-        domain,
+        domainId: domain, // Send as domainId since domain variable contains the ID
         tenant,
         dataProduct,
         description: { usage: descriptionUsage, purpose: descriptionPurpose, limitations: descriptionLimitations },
-        schema: schemaObjects.map((o) => ({ name: o.name, physicalName: o.physicalName, properties: o.properties })),
+        // Include contract-level semantic assignments as authoritativeDefinitions
+        authoritativeDefinitions: convertSemanticConcepts(contractSemanticConcepts),
+        schema: schemaObjects.map((o) => ({
+          name: o.name,
+          physicalName: o.physicalName,
+          // Include schema-level semantic assignments
+          authoritativeDefinitions: convertSemanticConcepts(o.semanticConcepts),
+          properties: o.properties.map(p => ({
+            ...p,
+            // Include property-level semantic assignments
+            authoritativeDefinitions: convertSemanticConcepts(p.semanticConcepts)
+          }))
+        })),
         qualityRules: qualityRules,
         serverConfigs: serverConfigs,
         sla: {
@@ -289,36 +373,70 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       await onSubmit(payload)
       // Don't close here - let the parent component handle closing on success
     } catch (error) {
-      // Error handling - stay open on error so user can retry
-      console.error('Failed to submit contract:', error)
+      // Handle domain-specific errors gracefully
+      const wasDomainError = await handleDomainError(error)
+
+      if (!wasDomainError) {
+        // Generic error handling for non-domain errors
+        toast({
+          title: 'Submission Error',
+          description: 'Failed to save contract. Please try again.',
+          variant: 'destructive' as any
+        })
+        console.error('Failed to submit contract:', error)
+      }
     } finally {
       setIsSubmitting(false)
     }
   }
 
   const handleSaveDraft = async () => {
-    // Validate minimum required fields
-    if (!name.trim()) {
+    // Validate minimum required fields - ODCS required + app required fields for drafts
+    if (!name || !name.trim()) {
       toast({ title: 'Validation Error', description: 'Contract name is required to save a draft', variant: 'destructive' as any })
       return
     }
-    if (!owner.trim()) {
-      toast({ title: 'Validation Error', description: 'Contract owner is required to save a draft', variant: 'destructive' as any })
+    if (!version || !version.trim()) {
+      toast({ title: 'Validation Error', description: 'Version is required to save a draft', variant: 'destructive' as any })
+      return
+    }
+    if (!status || !status.trim()) {
+      toast({ title: 'Validation Error', description: 'Status is required to save a draft', variant: 'destructive' as any })
       return
     }
 
     setIsSavingDraft(true)
     try {
+      // Helper function to convert semantic concepts to ODCS authoritativeDefinitions format
+      const convertSemanticConcepts = (concepts: SemanticConcept[] = []) => {
+        return concepts.map(concept => ({
+          url: concept.iri,
+          type: "http://databricks.com/ontology/uc/semanticAssignment"
+        }))
+      }
+
       const payload = {
         name,
         version,
         status: 'draft', // Draft status for partial saves
         owner,
-        domain,
+        domainId: domain, // Send as domainId since domain variable contains the ID
         tenant,
         dataProduct,
         description: { usage: descriptionUsage, purpose: descriptionPurpose, limitations: descriptionLimitations },
-        schema: schemaObjects.map((o) => ({ name: o.name, physicalName: o.physicalName, properties: o.properties })),
+        // Include contract-level semantic assignments as authoritativeDefinitions
+        authoritativeDefinitions: convertSemanticConcepts(contractSemanticConcepts),
+        schema: schemaObjects.map((o) => ({
+          name: o.name,
+          physicalName: o.physicalName,
+          // Include schema-level semantic assignments
+          authoritativeDefinitions: convertSemanticConcepts(o.semanticConcepts),
+          properties: o.properties.map(p => ({
+            ...p,
+            // Include property-level semantic assignments
+            authoritativeDefinitions: convertSemanticConcepts(p.semanticConcepts)
+          }))
+        })),
         qualityRules: qualityRules,
         serverConfigs: serverConfigs,
         sla: {
@@ -331,8 +449,18 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       await onSubmit(payload)
       // Don't close here - let the parent component handle closing on success
     } catch (error) {
-      // Error handling - stay open on error so user can retry
-      console.error('Failed to save draft:', error)
+      // Handle domain-specific errors gracefully
+      const wasDomainError = await handleDomainError(error)
+
+      if (!wasDomainError) {
+        // Generic error handling for non-domain errors
+        toast({
+          title: 'Save Error',
+          description: 'Failed to save draft. Please try again.',
+          variant: 'destructive' as any
+        })
+        console.error('Failed to save draft:', error)
+      }
     } finally {
       setIsSavingDraft(false)
     }
@@ -397,7 +525,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                     />
                   </div>
                   <div>
-                    <Label className="text-sm font-medium">Status</Label>
+                    <Label className="text-sm font-medium">Status *</Label>
                     <Select value={status} onValueChange={setStatus}>
                       <SelectTrigger className="mt-1">
                         <SelectValue placeholder="Select status" />
@@ -409,7 +537,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="dc-owner" className="text-sm font-medium">Contract Owner *</Label>
+                  <Label htmlFor="dc-owner" className="text-sm font-medium">Contract Owner</Label>
                   <Input 
                     id="dc-owner" 
                     value={owner} 
@@ -494,6 +622,20 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                 </div>
               </div>
             </div>
+
+            {/* Contract-Level Business Concepts */}
+            <div className="border-t pt-6">
+              <div className="text-sm text-muted-foreground mb-3">
+                Link business concepts to this data contract for better discoverability and context
+              </div>
+              <BusinessConceptsDisplay
+                concepts={contractSemanticConcepts}
+                onConceptsChange={setContractSemanticConcepts}
+                entityType="data_contract"
+                entityId={name || 'contract'}
+                conceptType="class"
+              />
+            </div>
           </div>
 
           {/* Step 2: Schema Definition */}
@@ -558,6 +700,21 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                           className="mt-1"
                         />
                       </div>
+                    </div>
+
+                    {/* Schema-Level Business Concepts */}
+                    <div className="mb-6">
+                      <BusinessConceptsDisplay
+                        concepts={obj.semanticConcepts || []}
+                        onConceptsChange={(concepts) =>
+                          setSchemaObjects((prev) =>
+                            prev.map((x, i) => i === objIndex ? { ...x, semanticConcepts: concepts } : x)
+                          )
+                        }
+                        entityType="data_contract_schema"
+                        entityId={`${name || 'contract'}#${obj.name}`}
+                        conceptType="class"
+                      />
                     </div>
 
                     {/* Columns Section */}
@@ -863,14 +1020,6 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                     />
                                     Primary Key
                                   </label>
-                                  <label className="flex items-center gap-1 text-[11px]">
-                                    <input
-                                      type="checkbox"
-                                      checked={!!col.partitioned}
-                                      onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, partitioned: e.target.checked, partitionKeyPosition: e.target.checked ? j + 1 : -1 } : y) } : x))}
-                                    />
-                                    Partition Key
-                                  </label>
                                 </div>
 
                                 {/* Row 3: Advanced */}
@@ -880,12 +1029,25 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                     <div className="mt-2 grid grid-cols-1 lg:grid-cols-12 gap-2">
                                       <div className="lg:col-span-3">
                                         <Label className="text-[11px]">Classification</Label>
-                                        <Input 
-                                          placeholder="confidential, pii, internal" 
+                                        <Input
+                                          placeholder="confidential, pii, internal"
                                           value={(col as any).classification || ''}
                                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, classification: e.target.value } : y) } : x))}
                                           className="mt-0.5 h-8 text-xs"
                                         />
+                                      </div>
+                                      <div className="lg:col-span-3">
+                                        <Label className="text-[11px]">Partition</Label>
+                                        <div className="mt-0.5">
+                                          <label className="flex items-center gap-1 text-[11px]">
+                                            <input
+                                              type="checkbox"
+                                              checked={!!col.partitioned}
+                                              onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, partitioned: e.target.checked, partitionKeyPosition: e.target.checked ? j + 1 : -1 } : y) } : x))}
+                                            />
+                                            Partition Key
+                                          </label>
+                                        </div>
                                       </div>
                                       <div className="lg:col-span-9">
                                         <Label className="text-[11px]">Examples (comma-separated)</Label>
@@ -895,6 +1057,30 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, examples: e.target.value } : y) } : x))}
                                           className="mt-0.5 h-8 text-xs"
                                         />
+                                      </div>
+                                      <div className="lg:col-span-12 pt-2">
+                                        <div className="mt-0.5">
+                                          <BusinessConceptsDisplay
+                                            concepts={col.semanticConcepts || []}
+                                            onConceptsChange={(concepts) =>
+                                              setSchemaObjects((prev) =>
+                                                prev.map((x, i) =>
+                                                  i === objIndex
+                                                    ? {
+                                                        ...x,
+                                                        properties: x.properties.map((y, j) =>
+                                                          j === colIndex ? { ...y, semanticConcepts: concepts } : y
+                                                        ),
+                                                      }
+                                                    : x
+                                                )
+                                              )
+                                            }
+                                            entityType="data_contract_property"
+                                            entityId={`${name || 'contract'}#${obj.name}#${col.name}`}
+                                            conceptType="property"
+                                          />
+                                        </div>
                                       </div>
                                     </div>
                                   </details>

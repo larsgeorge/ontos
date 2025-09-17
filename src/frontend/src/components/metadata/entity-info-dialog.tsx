@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
@@ -76,8 +76,11 @@ export default function EntityInfoDialog({ entityType, entityId, open, onOpenCha
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl h-[80vh] overflow-y-auto sm:top-10 sm:-translate-y-0">
-        <DialogHeader>
+      <DialogContent
+        className="max-w-5xl h-[80vh] overflow-y-auto p-0"
+        style={{ top: '2rem', transform: 'translateX(-50%) translateY(0)' }}
+      >
+        <DialogHeader className="px-6 pt-3">
           <DialogTitle className="flex items-center gap-3 text-xl">
             <span className="font-semibold">{title || 'Entity Information'}</span>
           </DialogTitle>
@@ -88,7 +91,7 @@ export default function EntityInfoDialog({ entityType, entityId, open, onOpenCha
         ) : error ? (
           <div className="text-destructive">{error}</div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-6 px-6 pb-6 [&>*:first-child]:mt-0">
             {toc.length > 0 && (
               <div className="rounded-lg border bg-muted/20 p-4">
                 <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Table of contents</div>

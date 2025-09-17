@@ -232,18 +232,18 @@ class ServerConfig(BaseModel):
 # Full ODCS Contract Structure
 class ODCSContract(BaseModel):
     """ODCS v3.0.2 compliant contract structure"""
-    kind: str = 'DataContract'
-    apiVersion: str = Field('v3.0.2', alias='api_version')
-    id: Optional[str] = None
-    version: str
-    status: str
+    kind: str = 'DataContract'  # Required by ODCS
+    apiVersion: str = Field('v3.0.2', alias='api_version')  # Required by ODCS
+    id: str  # Required by ODCS
+    version: str  # Required by ODCS
+    status: str  # Required by ODCS
 
     # Metadata section
-    name: str
+    name: str  # Required for app usability
     tenant: Optional[str] = None
     domain: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
-    owner: str
+    owner: Optional[str] = None
     description: Optional[ContractDescription] = None
 
     # ODCS v3.0.2 top-level fields
@@ -283,12 +283,12 @@ class ODCSContract(BaseModel):
 
 
 class DataContractBase(BaseModel):
-    name: str
+    name: str  # Required for app usability
     version: str = Field('v1.0')
     status: str = Field('draft')
-    owner: str
-    kind: Optional[str] = Field('DataContract')
-    apiVersion: Optional[str] = Field('v3.0.1', alias='api_version')
+    owner: Optional[str] = None
+    kind: str = Field('DataContract')  # Required by ODCS
+    apiVersion: str = Field('v3.0.2', alias='api_version')  # Required by ODCS
     domainId: Optional[str] = Field(None, alias='domain_id')
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
@@ -300,6 +300,7 @@ class DataContractBase(BaseModel):
 class DataContractCreate(DataContractBase):
     # Additional ODCS fields for wizard
     domain: Optional[str] = None
+    domainId: Optional[str] = None  # Domain ID for direct domain assignment
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None
@@ -368,14 +369,14 @@ class DataContractUpdate(BaseModel):
 
 
 class DataContractRead(BaseModel):
-    id: str
-    name: str
-    version: str
-    status: str
-    owner: str
-    kind: Optional[str] = 'DataContract'
+    id: str  # Required by ODCS
+    name: str  # Required for app usability
+    version: str  # Required by ODCS
+    status: str  # Required by ODCS
+    owner: Optional[str] = None
+    kind: str = Field('DataContract')  # Required by ODCS
     # Ensure JSON uses camelCase key 'apiVersion' so frontend reads it
-    apiVersion: Optional[str] = Field('v3.0.2', alias='apiVersion')
+    apiVersion: str = Field('v3.0.2', alias='apiVersion')  # Required by ODCS
     tenant: Optional[str] = None
     domain: Optional[str] = None
     domainId: Optional[str] = Field(None, alias='domain_id')

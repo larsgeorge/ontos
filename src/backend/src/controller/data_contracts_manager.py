@@ -893,6 +893,67 @@ class DataContractsManager(SearchableAsset):
                 servers.append(server_dict)
             odcs['servers'] = servers
 
+        # Inject semantic assignments from EntitySemanticLinks
+        from src.controller.semantic_links_manager import SemanticLinksManager
+        from src.common.database import get_db_session
+
+        SEMANTIC_ASSIGNMENT_TYPE = "http://databricks.com/ontology/uc/semanticAssignment"
+
+        try:
+            with get_db_session() as db:
+                semantic_manager = SemanticLinksManager(db)
+
+                # Inject contract-level semantic assignments
+                contract_links = semantic_manager.list_for_entity(entity_id=db_obj.id, entity_type='data_contract')
+                if contract_links:
+                    if 'authoritativeDefinitions' not in odcs:
+                        odcs['authoritativeDefinitions'] = []
+                    for link in contract_links:
+                        auth_def = {
+                            'url': link.iri,
+                            'type': SEMANTIC_ASSIGNMENT_TYPE
+                        }
+                        odcs['authoritativeDefinitions'].append(auth_def)
+
+                # Inject schema and property-level semantic assignments
+                if 'schema' in odcs:
+                    for schema_dict in odcs['schema']:
+                        schema_name = schema_dict['name']
+
+                        # Schema-level semantic assignments
+                        schema_entity_id = f"{db_obj.id}#{schema_name}"
+                        schema_links = semantic_manager.list_for_entity(entity_id=schema_entity_id, entity_type='data_contract_schema')
+                        if schema_links:
+                            if 'authoritativeDefinitions' not in schema_dict:
+                                schema_dict['authoritativeDefinitions'] = []
+                            for link in schema_links:
+                                auth_def = {
+                                    'url': link.iri,
+                                    'type': SEMANTIC_ASSIGNMENT_TYPE
+                                }
+                                schema_dict['authoritativeDefinitions'].append(auth_def)
+
+                        # Property-level semantic assignments
+                        if 'properties' in schema_dict:
+                            for prop_dict in schema_dict['properties']:
+                                prop_name = prop_dict['name']
+                                prop_entity_id = f"{db_obj.id}#{schema_name}#{prop_name}"
+                                prop_links = semantic_manager.list_for_entity(entity_id=prop_entity_id, entity_type='data_contract_property')
+                                if prop_links:
+                                    if 'authoritativeDefinitions' not in prop_dict:
+                                        prop_dict['authoritativeDefinitions'] = []
+                                    for link in prop_links:
+                                        auth_def = {
+                                            'url': link.iri,
+                                            'type': SEMANTIC_ASSIGNMENT_TYPE
+                                        }
+                                        prop_dict['authoritativeDefinitions'].append(auth_def)
+        except Exception as e:
+            # Log error but don't fail export
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to inject semantic assignments during ODCS export: {e}")
+
         return odcs
 
     # --- App startup data loader ---

@@ -11,6 +11,9 @@ import mimetypes
 import time
 from pathlib import Path
 
+# Server startup timestamp for cache invalidation
+SERVER_STARTUP_TIME = int(time.time())
+
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
@@ -185,6 +188,11 @@ tags_routes.register_routes(app)
 async def get_current_time():
     """Get the current time (for testing purposes mostly)"""
     return {'time': time.time()}
+
+@app.get("/api/cache-version")
+async def get_cache_version():
+    """Get the server cache version for client-side cache invalidation"""
+    return {'version': SERVER_STARTUP_TIME, 'timestamp': int(time.time())}
 
 # Define the SPA catch-all route LAST
 @app.get("/{full_path:path}")

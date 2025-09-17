@@ -1,0 +1,75 @@
+# Test contract with semantic assignments
+name: semantic-test-contract
+domain: test-domain
+dataProduct: semantic-test-product
+version: 1.0.0
+status: draft
+id: semantic-test-001
+owner: test-user
+tenant: TestTenant
+
+kind: DataContract
+apiVersion: v3.0.2
+
+description:
+  purpose: Test contract for semantic assignment validation
+  usage: Testing semantic linking with authoritativeDefinitions
+
+# Contract-level semantic assignments
+authoritativeDefinitions:
+  - url: "https://ontology.example.com/PaymentDataContract"
+    type: "http://databricks.com/ontology/uc/semanticAssignment"
+  - url: "https://business-glossary.company.com/data-contracts/payment"
+    type: "http://databricks.com/ontology/uc/semanticAssignment"
+  - url: "https://catalog.data.gov/dataset/business-definition"
+    type: "businessDefinition"  # Non-semantic type should be preserved
+
+schema:
+  - name: payment_table
+    physicalName: payments_tbl
+    physicalType: table
+    businessName: Payment Transactions
+    description: Core payment transaction data
+    # Schema-level semantic assignments
+    authoritativeDefinitions:
+      - url: "https://ontology.example.com/PaymentTransaction"
+        type: "http://databricks.com/ontology/uc/semanticAssignment"
+      - url: "https://catalog.data.gov/dataset/payment-schema"
+        type: "businessDefinition"
+    properties:
+      - name: transaction_id
+        physicalName: txn_id
+        logicalType: string
+        physicalType: varchar(36)
+        primaryKey: true
+        primaryKeyPosition: 1
+        businessName: Transaction Identifier
+        description: Unique identifier for payment transaction
+        # Property-level semantic assignments
+        authoritativeDefinitions:
+          - url: "https://ontology.example.com/TransactionIdentifier"
+            type: "http://databricks.com/ontology/uc/semanticAssignment"
+          - url: "https://business-glossary.company.com/terms/transaction-id"
+            type: "http://databricks.com/ontology/uc/semanticAssignment"
+      - name: amount
+        physicalName: amount_usd
+        logicalType: number
+        physicalType: decimal(10,2)
+        businessName: Payment Amount
+        description: Payment amount in USD
+        # Property-level semantic assignments
+        authoritativeDefinitions:
+          - url: "https://ontology.example.com/MonetaryAmount"
+            type: "http://databricks.com/ontology/uc/semanticAssignment"
+          - url: "https://standards.iso.org/iso/4217"
+            type: "businessDefinition"
+      - name: customer_id
+        physicalName: cust_id
+        logicalType: string
+        physicalType: varchar(18)
+        businessName: Customer Identifier
+        description: Reference to customer entity
+        # Property-level semantic assignments
+        authoritativeDefinitions:
+          - url: "https://ontology.example.com/CustomerIdentifier"
+            type: "http://databricks.com/ontology/uc/semanticAssignment"

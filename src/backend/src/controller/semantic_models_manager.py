@@ -362,6 +362,66 @@ class SemanticModelsManager:
             # If SPARQL fails, fall back to empty results
             return []
 
+    def search_properties(self, text_filter: str = "", limit: int = 50) -> List[dict]:
+        """Search for properties in the semantic models using SPARQL.
+
+        Returns:
+        - OWL properties (owl:ObjectProperty, owl:DatatypeProperty)
+        - RDFS properties (rdfs:Property)
+        """
+        sparql_query = f"""
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+        PREFIX owl: <http://www.w3.org/2002/07/owl#>
+        SELECT DISTINCT ?property_iri ?label
+        WHERE {{
+            {{
+                ?property_iri a owl:ObjectProperty .
+            }}
+            UNION
+            {{
+                ?property_iri a owl:DatatypeProperty .
+            }}
+            UNION
+            {{
+                ?property_iri a rdfs:Property .
+            }}
+            OPTIONAL {{ ?property_iri rdfs:label ?label }}
+            {f'FILTER(CONTAINS(LCASE(STR(?property_iri)), LCASE("{text_filter}")) || CONTAINS(LCASE(STR(?label)), LCASE("{text_filter}")))' if text_filter.strip() else ''}
+        }}
+        ORDER BY ?property_iri
+        LIMIT {limit}
+        """
+
+        try:
+            raw_results = self.query(sparql_query)
+            results = []
+            for row in raw_results:
+                property_iri = row.get('property_iri', '')
+                label = row.get('label', '')
+
+                # Use label if available, otherwise extract last part of IRI
+                if label and label.strip():
+                    display_name = label.strip()
+                else:
+                    # Extract the last segment after # or /
+                    if '#' in property_iri:
+                        display_name = property_iri.split('#')[-1]
+                    elif '/' in property_iri:
+                        display_name = property_iri.split('/')[-1]
+                    else:
+                        display_name = property_iri
+
+                results.append({
+                    'value': property_iri,
+                    'label': display_name,
+                    'type': 'property'
+                })
+
+            return results
+        except Exception as e:
+            # If SPARQL fails, fall back to empty results
+            return []
+
     def get_child_concepts(self, parent_iri: str, limit: int = 10) -> List[dict]:
         """Get child concepts of a given parent concept for suggestions."""
         if not parent_iri:
@@ -432,6 +492,26 @@ class SemanticModelsManager:
         return {
             'suggested': suggested,
             'other': other_results
+        }
+
+    def search_properties_with_suggestions(self, text_filter: str = "", parent_iris: List[str] = None, limit: int = 50) -> dict:
+        """Search for properties with suggested child properties first if parent_iris is provided.
+
+        Args:
+            text_filter: Text filter for property search
+            parent_iris: List of parent concept IRIs in hierarchy order (nearest first)
+            limit: Maximum number of results to return
+        """
+        # For properties, we don't typically have parent-child hierarchies like concepts,
+        # so we'll return empty suggestions and all properties as "other"
+        suggested = []
+
+        # Get all matching properties
+        all_results = self.search_properties(text_filter, limit=limit)
+
+        return {
+            'suggested': suggested,
+            'other': all_results
         }
 
     # Outgoing neighbors of a resource: returns distinct predicate/object pairs

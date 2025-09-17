@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional, Literal
 
 
-EntityType = Literal['data_domain', 'data_product', 'data_contract']
+EntityType = Literal['data_domain', 'data_product', 'data_contract', 'data_contract_schema', 'data_contract_property']
 
 
 class EntitySemanticLink(BaseModel):

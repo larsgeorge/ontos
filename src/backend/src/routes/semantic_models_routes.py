@@ -63,7 +63,7 @@ async def search_concepts(
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
 ):
     """Search for classes/concepts in the semantic models using SPARQL.
-    
+
     Returns:
     - RDFS classes (rdfs:Class instances or rdfs:subClassOf relationships)
     - SKOS concepts (skos:Concept instances)
@@ -83,10 +83,10 @@ async def search_concepts_with_suggestions(
     manager: SemanticModelsManager = Depends(get_semantic_models_manager),
 ):
     """Search for classes/concepts with suggested child concepts first if parent_iris is provided.
-    
+
     Args:
         parent_iris: Comma-separated list of parent concept IRIs in hierarchy order (nearest first)
-    
+
     Returns:
     - suggested: List of child concepts of the best available parent
     - other: All other matching concepts
@@ -97,6 +97,50 @@ async def search_concepts_with_suggestions(
         return manager.search_concepts_with_suggestions(q, parent_iris=parent_iris_list, limit=limit)
     except Exception as e:
         logger.error(f"Concept search with suggestions failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/semantic-models/properties", response_model=List[dict])
+async def search_properties(
+    q: str = "",
+    limit: int = 50,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+):
+    """Search for properties in the semantic models using SPARQL.
+
+    Returns:
+    - OWL properties (owl:ObjectProperty, owl:DatatypeProperty)
+    - RDFS properties (rdfs:Property)
+    """
+    try:
+        return manager.search_properties(q, limit=limit)
+    except Exception as e:
+        logger.error(f"Property search failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/semantic-models/properties/suggestions", response_model=dict)
+async def search_properties_with_suggestions(
+    q: str = "",
+    parent_iris: str = "",
+    limit: int = 50,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
+):
+    """Search for properties with suggested child properties first if parent_iris is provided.
+
+    Args:
+        parent_iris: Comma-separated list of parent concept IRIs in hierarchy order (nearest first)
+
+    Returns:
+    - suggested: List of child properties of the best available parent (typically empty)
+    - other: All other matching properties
+    """
+    try:
+        # Parse comma-separated parent IRIs
+        parent_iris_list = [iri.strip() for iri in parent_iris.split(",") if iri.strip()] if parent_iris else []
+        return manager.search_properties_with_suggestions(q, parent_iris=parent_iris_list, limit=limit)
+    except Exception as e:
+        logger.error(f"Property search with suggestions failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 

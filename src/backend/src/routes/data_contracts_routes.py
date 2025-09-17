@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, Depends, Request, Body
 from fastapi.responses import JSONResponse
@@ -318,7 +319,7 @@ async def create_contract(
 ):
     """Create a new data contract with normalized ODCS structure"""
     try:
-        # Validate required fields
+        # Validate required fields for app usability
         if not contract_data.name or not contract_data.name.strip():
             raise HTTPException(status_code=400, detail="Contract name is required")
 
@@ -327,12 +328,19 @@ async def create_contract(
         try:
             domain_id = getattr(contract_data, 'domainId', None)
             if domain_id and domain_id.strip():  # Only if not empty
+                # Validate that the domain exists
+                from src.repositories.data_domain_repository import data_domain_repo
+                domain_obj = data_domain_repo.get(db, id=domain_id)
+                if not domain_obj:
+                    raise HTTPException(status_code=400, detail=f"Domain with ID {domain_id} not found")
                 resolved_domain_id = domain_id
             elif getattr(contract_data, 'domain', None):
                 from src.repositories.data_domain_repository import data_domain_repo
                 domain_obj = data_domain_repo.get_by_name(db, name=contract_data.domain)
                 if domain_obj:
                     resolved_domain_id = domain_obj.id
+        except HTTPException:
+            raise  # Re-raise HTTPException for validation errors
         except Exception as e:
             logger.warning(f"Domain resolution failed during create_contract: {e}")
 
@@ -458,6 +466,71 @@ async def create_contract(
                     )
                     db.add(quality_check)
 
+        # Process semantic assignments from authoritativeDefinitions
+        from src.controller.semantic_links_manager import SemanticLinksManager
+        from src.models.semantic_links import EntitySemanticLinkCreate
+
+        semantic_manager = SemanticLinksManager(db)
+        SEMANTIC_ASSIGNMENT_TYPE = "http://databricks.com/ontology/uc/semanticAssignment"
+
+        # Process contract-level semantic assignments
+        contract_auth_defs = getattr(contract_data, 'authoritativeDefinitions', []) or []
+        if contract_auth_defs:
+            for auth_def in contract_auth_defs:
+                if hasattr(auth_def, 'type') and auth_def.type == SEMANTIC_ASSIGNMENT_TYPE:
+                    url = getattr(auth_def, 'url', None)
+                    if url:
+                        semantic_link = EntitySemanticLinkCreate(
+                            entity_id=created.id,
+                            entity_type='data_contract',
+                            iri=url,
+                            label=None  # Will be resolved by business glossary
+                        )
+                        semantic_manager.add(semantic_link, created_by=current_user.username if current_user else None)
+
+        # Process schema-level semantic assignments
+        schema_objects = db.query(SchemaObjectDb).filter(SchemaObjectDb.contract_id == created.id).all()
+        if contract_data.schema:
+            for i, schema_obj_data in enumerate(contract_data.schema):
+                if i >= len(schema_objects):
+                    continue
+
+                schema_obj = schema_objects[i]
+                schema_auth_defs = getattr(schema_obj_data, 'authoritativeDefinitions', []) or []
+                if schema_auth_defs:
+                    for auth_def in schema_auth_defs:
+                        if hasattr(auth_def, 'type') and auth_def.type == SEMANTIC_ASSIGNMENT_TYPE:
+                            url = getattr(auth_def, 'url', None)
+                            if url:
+                                entity_id = f"{created.id}#{schema_obj.name}"
+                                semantic_link = EntitySemanticLinkCreate(
+                                    entity_id=entity_id,
+                                    entity_type='data_contract_schema',
+                                    iri=url,
+                                    label=None
+                                )
+                                semantic_manager.add(semantic_link, created_by=current_user.username if current_user else None)
+
+                # Process property-level semantic assignments
+                properties = getattr(schema_obj_data, 'properties', []) or []
+                if properties:
+                    for prop_data in properties:
+                        prop_name = getattr(prop_data, 'name', 'column')
+                        prop_auth_defs = getattr(prop_data, 'authoritativeDefinitions', []) or []
+                        if prop_auth_defs:
+                            for auth_def in prop_auth_defs:
+                                if hasattr(auth_def, 'type') and auth_def.type == SEMANTIC_ASSIGNMENT_TYPE:
+                                    url = getattr(auth_def, 'url', None)
+                                    if url:
+                                        entity_id = f"{created.id}#{schema_obj.name}#{prop_name}"
+                                        semantic_link = EntitySemanticLinkCreate(
+                                            entity_id=entity_id,
+                                            entity_type='data_contract_property',
+                                            iri=url,
+                                            label=None
+                                        )
+                                        semantic_manager.add(semantic_link, created_by=current_user.username if current_user else None)
+
         db.commit()
         
         # Load with relationships for response
@@ -487,10 +560,16 @@ async def update_contract(
         if contract_data.name is not None and (not contract_data.name or not contract_data.name.strip()):
             raise HTTPException(status_code=400, detail="Contract name cannot be empty")
 
-        # Handle domain_id properly - convert empty string to None
+        # Handle domain_id properly - convert empty string to None and validate existence
         domain_id = contract_data.domainId
         if domain_id is not None and not domain_id.strip():
             domain_id = None
+        elif domain_id is not None:
+            # Validate that the domain exists
+            from src.repositories.data_domain_repository import data_domain_repo
+            domain_obj = data_domain_repo.get(db, id=domain_id)
+            if not domain_obj:
+                raise HTTPException(status_code=400, detail=f"Domain with ID {domain_id} not found")
 
         update_payload = {}
         payload_map = {
@@ -674,12 +753,19 @@ async def upload_contract(
             parsed_domain_id = parsed.get('domainId') or parsed.get('domain_id')
             parsed_domain_name = parsed.get('domain')
             if parsed_domain_id:
+                # Validate that the domain exists
+                from src.repositories.data_domain_repository import data_domain_repo
+                domain_obj = data_domain_repo.get(db, id=parsed_domain_id)
+                if not domain_obj:
+                    raise HTTPException(status_code=400, detail=f"Domain with ID {parsed_domain_id} not found")
                 resolved_domain_id = parsed_domain_id
             elif parsed_domain_name:
                 from src.repositories.data_domain_repository import data_domain_repo
                 domain_obj = data_domain_repo.get_by_name(db, name=parsed_domain_name)
                 if domain_obj:
                     resolved_domain_id = domain_obj.id
+        except HTTPException:
+            raise  # Re-raise HTTPException for validation errors
         except Exception as e:
             logger.warning(f"Domain resolution failed during upload_contract: {e}")
 
