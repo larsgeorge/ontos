@@ -20,6 +20,7 @@ import { FeatureAccessLevel } from '@/types/settings';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import DataProductGraphView from '@/components/data-products/data-product-graph-view';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import { useDomains } from '@/hooks/use-domains';
 
 // --- Helper Function Type Definition --- 
 type CheckApiResponseFn = <T>(
@@ -68,6 +69,7 @@ export default function DataProducts() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { getDomainName, getDomainIdByName } = useDomains();
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
@@ -372,7 +374,27 @@ export default function DataProducts() {
           Title <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => <div className="font-medium">{row.original.info.title}</div>,
+      cell: ({ row }) => {
+        const product = row.original;
+        const domainName = product.info.domain;
+        const domainId = getDomainIdByName(domainName);
+        return (
+          <div>
+            <div className="font-medium">{product.info.title}</div>
+            {domainName && domainId && (
+              <div
+                className="text-xs text-muted-foreground cursor-pointer hover:underline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/data-domains/${domainId}`);
+                }}
+              >
+                ↳ Domain: {domainName}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       accessorKey: "info.owner",

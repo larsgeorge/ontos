@@ -161,10 +161,20 @@ export const useDomains = () => {
   // Memoized domain lookup by name function
   const getDomainById = useMemo(() => {
     const domainMap = new Map(state.domains.map(domain => [domain.id, domain]))
-    
+
     return (domainId: string | undefined | null): DataDomain | null => {
       if (!domainId) return null
       return domainMap.get(domainId) || null
+    }
+  }, [state.domains])
+
+  // Memoized domain ID lookup by name function
+  const getDomainIdByName = useMemo(() => {
+    const domainNameMap = new Map(state.domains.map(domain => [domain.name, domain.id]))
+
+    return (domainName: string | undefined | null): string | null => {
+      if (!domainName) return null
+      return domainNameMap.get(domainName) || null
     }
   }, [state.domains])
 
@@ -174,6 +184,7 @@ export const useDomains = () => {
     error: state.error,
     getDomainName,
     getDomainById,
+    getDomainIdByName,
     refetch: loadDomains,
   }
 }

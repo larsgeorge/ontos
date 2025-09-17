@@ -512,7 +512,7 @@ class DataContractsManager(SearchableAsset):
                 ))
         return created
 
-    def build_odcs_from_db(self, db_obj: DataContractDb) -> Dict[str, Any]:
+    def build_odcs_from_db(self, db_obj: DataContractDb, db_session=None) -> Dict[str, Any]:
         odcs: Dict[str, Any] = {
             'id': db_obj.id,
             'kind': db_obj.kind or 'DataContract',
@@ -527,13 +527,11 @@ class DataContractsManager(SearchableAsset):
         
         # Resolve and include domain name if domain_id is set
         try:
-            if getattr(db_obj, 'domain_id', None):
+            if getattr(db_obj, 'domain_id', None) and db_session is not None:
                 from src.repositories.data_domain_repository import data_domain_repo
-                from src.common.database import get_db_session
-                with get_db_session() as db:
-                    domain = data_domain_repo.get(db, id=db_obj.domain_id)
-                    if domain and getattr(domain, 'name', None):
-                        odcs['domain'] = domain.name
+                domain = data_domain_repo.get(db_session, id=db_obj.domain_id)
+                if domain and getattr(domain, 'name', None):
+                    odcs['domain'] = domain.name
         except Exception:
             # Best-effort; skip if resolution fails
             pass

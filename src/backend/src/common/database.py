@@ -488,6 +488,33 @@ def get_db():
     finally:
         db.close()
 
+@contextmanager
+def get_db_session():
+    """Context manager that yields a SQLAlchemy session.
+
+    Ensures the session is committed on success and rolled back on error,
+    and that the session is always closed. If the session factory is not
+    initialized yet, it attempts to initialize the database first.
+    """
+    global _SessionLocal
+    if _SessionLocal is None:
+        try:
+            init_db()
+        except Exception as e:
+            logger.critical(f"Failed to initialize database session factory: {e}", exc_info=True)
+            raise RuntimeError("Database session factory not available and initialization failed.") from e
+
+    session = _SessionLocal()
+    try:
+        yield session
+        session.commit()
+    except Exception as e:
+        logger.error(f"Error during database session, rolling back: {e}", exc_info=True)
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
 def get_engine():
     global _engine
     if _engine is None:

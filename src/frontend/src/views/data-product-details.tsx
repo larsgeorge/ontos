@@ -20,6 +20,7 @@ import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
 import type { EntitySemanticLink } from '@/types/semantic-link';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { CommentSidebar } from '@/components/comments';
+import { useDomains } from '@/hooks/use-domains';
 
 // Helper Function Type Definition (copied from DataProducts view for checking API responses)
 type CheckApiResponseFn = <T>(
@@ -51,6 +52,7 @@ export default function DataProductDetails() {
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments); // For potential parent path
   const { hasPermission, isLoading: permissionsLoading } = usePermissions(); // Use permissions hook
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications); // Get refresh action
+  const { getDomainName, getDomainIdByName } = useDomains();
 
   const [product, setProduct] = useState<DataProduct | null>(null);
   const [loading, setLoading] = useState(true);
@@ -392,7 +394,23 @@ export default function DataProductDetails() {
         <CardContent className="space-y-4">
           <div className="grid md:grid-cols-4 gap-4">
             <div className="space-y-1"><Label>Owner:</Label> <span className="text-sm block">{product.info.owner}</span></div>
-            <div className="space-y-1"><Label>Domain:</Label> <span className="text-sm block">{product.info.domain || 'N/A'}</span></div>
+            <div className="space-y-1">
+              <Label>Domain:</Label>
+              {(() => {
+                const domainName = product.info.domain;
+                const domainId = getDomainIdByName(domainName);
+                return domainName && domainId ? (
+                  <span
+                    className="text-sm block cursor-pointer text-primary hover:underline"
+                    onClick={() => navigate(`/data-domains/${domainId}`)}
+                  >
+                    {domainName}
+                  </span>
+                ) : (
+                  <span className="text-sm block">{product.info.domain || 'N/A'}</span>
+                );
+              })()}
+            </div>
             <div className="space-y-1">
               <Label>Status:</Label>
               <Badge variant={getStatusColor(product.info.status)} className="ml-1">{product.info.status || 'N/A'}</Badge>

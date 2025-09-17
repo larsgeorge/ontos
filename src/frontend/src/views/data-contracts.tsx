@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { DataContractListItem, DataContractDraft } from '@/types/data-contract';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useNavigate } from 'react-router-dom'
+import { useDomains } from '@/hooks/use-domains'
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,6 +39,7 @@ import useBreadcrumbStore from '@/stores/breadcrumb-store';
 
 export default function DataContracts() {
   const { toast } = useToast();
+  const { getDomainName } = useDomains();
   const [contracts, setContracts] = useState<DataContractListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -187,12 +189,16 @@ export default function DataContracts() {
     try {
       const response = await fetch(`/api/data-contracts/${id}/odcs/export`)
       if (!response.ok) throw new Error('Failed to export ODCS')
-      const data = await response.json()
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      // YAML download
+      const text = await response.text()
+      const contentDisposition = response.headers.get('Content-Disposition') || ''
+      const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
+      const suggestedName = filenameMatch?.[1]
+      const blob = new Blob([text], { type: 'application/x-yaml; charset=utf-8' })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${(nameHint || 'contract').toLowerCase().replace(/\s+/g, '_')}-odcs.json`
+      a.download = suggestedName || `${(nameHint || 'contract').toLowerCase().replace(/\s+/g, '_')}-odcs.yaml`
       a.click()
       window.URL.revokeObjectURL(url)
     } catch (e) {
@@ -307,7 +313,27 @@ export default function DataContracts() {
           </Button>
         );
       },
-      cell: ({ row }) => <div className="font-medium">{row.getValue("name")}</div>,
+      cell: ({ row }) => {
+        const contract = row.original;
+        const domainId = (contract as any).domain_id || (contract as any).domainId;
+        const domainName = getDomainName(domainId) || contract.domain;
+        return (
+          <div>
+            <div className="font-medium">{row.getValue("name")}</div>
+            {domainName && domainId && (
+              <div
+                className="text-xs text-muted-foreground cursor-pointer hover:underline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/data-domains/${domainId}`);
+                }}
+              >
+                ↳ Domain: {domainName}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       accessorKey: "version",

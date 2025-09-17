@@ -189,12 +189,16 @@ export default function DataContractDetails() {
     try {
       const res = await fetch(`/api/data-contracts/${contractId}/odcs/export`)
       if (!res.ok) throw new Error('Export ODCS failed')
-      const data = await res.json()
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      // Backend returns YAML; read as text and download as .yaml
+      const text = await res.text()
+      const contentDisposition = res.headers.get('Content-Disposition') || ''
+      const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
+      const suggestedName = filenameMatch?.[1]
+      const blob = new Blob([text], { type: 'application/x-yaml; charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${contract.name.toLowerCase().replace(/\s+/g, '_')}-odcs.json`
+      a.download = suggestedName || `${contract.name.toLowerCase().replace(/\s+/g, '_')}-odcs.yaml`
       a.click()
       URL.revokeObjectURL(url)
     } catch (e) {
@@ -301,7 +305,23 @@ export default function DataContractDetails() {
             <div className="space-y-1"><Label>Status:</Label> <Badge variant="secondary" className="ml-1">{contract.status}</Badge></div>
             <div className="space-y-1"><Label>Version:</Label> <Badge variant="outline" className="ml-1">{contract.version}</Badge></div>
             <div className="space-y-1"><Label>API Version:</Label> <span className="text-sm block">{contract.apiVersion}</span></div>
-            <div className="space-y-1"><Label>Domain:</Label> <span className="text-sm block">{getDomainName(contract.domainId || contract.domain) || contract.domain || 'N/A'}</span></div>
+            <div className="space-y-1">
+              <Label>Domain:</Label>
+              {(() => {
+                const domainId = (contract as any).domain_id || (contract as any).domainId;
+                const domainName = getDomainName(domainId) || contract.domain;
+                return domainName && domainId ? (
+                  <span
+                    className="text-sm block cursor-pointer text-primary hover:underline"
+                    onClick={() => navigate(`/data-domains/${domainId}`)}
+                  >
+                    {domainName}
+                  </span>
+                ) : (
+                  <span className="text-sm block">{contract.domain || 'N/A'}</span>
+                );
+              })()}
+            </div>
             <div className="space-y-1"><Label>Tenant:</Label> <span className="text-sm block">{contract.tenant || 'N/A'}</span></div>
             <div className="space-y-1"><Label>Data Product:</Label> <span className="text-sm block">{contract.dataProduct || 'N/A'}</span></div>
             <div className="space-y-1"><Label>Kind:</Label> <span className="text-sm block">{contract.kind}</span></div>
