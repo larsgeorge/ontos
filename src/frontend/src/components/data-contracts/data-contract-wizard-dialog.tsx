@@ -124,6 +124,13 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
     physicalName?: string;
     properties: Column[];
     semanticConcepts?: SemanticConcept[];
+    // Extended UC metadata
+    description?: string;
+    tableType?: string;
+    owner?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    tableProperties?: Record<string, any>;
   }
   const [schemaObjects, setSchemaObjects] = useState<SchemaObject[]>(initial?.schemaObjects || [])
   const [contractSemanticConcepts, setContractSemanticConcepts] = useState<SemanticConcept[]>(initial?.contractSemanticConcepts || [])
@@ -278,16 +285,47 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
       const res = await fetch(`/api/catalogs/dataset/${encodeURIComponent(datasetPath)}`)
       if (!res.ok) throw new Error('Failed to load dataset schema')
       const data = await res.json()
+
+      // Enhanced column mapping with UC metadata
       const columns = Array.isArray(data?.schema)
         ? data.schema.map((c: any) => ({
             name: String(c.name || ''),
-            logicalType: String(c.logicalType || c.logical_type || c.type || 'string'),
+            physicalType: String(c.physicalType || c.type || ''), // UC physical type
+            logicalType: String(c.logicalType || c.logical_type || 'string'), // ODCS logical type
             required: c.nullable === undefined ? undefined : !Boolean(c.nullable),
+            description: String(c.comment || ''), // UC column comment
+            partitioned: Boolean(c.partitioned),
+            partitionKeyPosition: c.partitionKeyPosition || undefined,
           }))
         : []
 
-      setSchemaObjects((prev) => prev.map((o, i) => i === newIndex ? { ...o, properties: columns } : o))
-      toast({ title: 'Schema inferred', description: `Columns loaded from ${datasetPath}` })
+      // Update schema object with enhanced metadata and table info
+      setSchemaObjects((prev) => prev.map((o, i) => {
+        if (i === newIndex) {
+          return {
+            ...o,
+            properties: columns,
+            // Add table-level metadata if available
+            ...(data.table_info && {
+              physicalName: data.table_info.storage_location || datasetPath,
+              description: data.table_info.comment || undefined,
+              tableType: data.table_info.table_type || undefined,
+              owner: data.table_info.owner || undefined,
+              createdAt: data.table_info.created_at || undefined,
+              updatedAt: data.table_info.updated_at || undefined,
+              tableProperties: data.table_info.properties || undefined,
+            })
+          }
+        }
+        return o
+      }))
+
+      const columnCount = columns.length
+      const tableInfo = data.table_info || {}
+      toast({
+        title: 'Schema inferred successfully',
+        description: `Loaded ${columnCount} columns from ${datasetPath}${tableInfo.owner ? ` (owner: ${tableInfo.owner})` : ''}`
+      })
     } catch (e) {
       toast({ title: 'Schema added without columns', description: 'Could not fetch columns. Configure SQL warehouse to enable inference.', variant: 'warning' as any })
     }
