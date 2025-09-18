@@ -115,6 +115,7 @@ class DataContractTeamDb(Base):
     contract_id = Column(String, ForeignKey("data_contracts.id", ondelete="CASCADE"), nullable=False, index=True)
     username = Column(String, nullable=False)
     role = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
     date_in = Column(String, nullable=True)  # ISO date string
     date_out = Column(String, nullable=True)
     replaced_by_username = Column(String, nullable=True)

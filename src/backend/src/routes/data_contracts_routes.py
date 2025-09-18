@@ -181,11 +181,14 @@ def _build_contract_read_from_db(db, db_contract) -> DataContractRead:
     team = []
     if getattr(db_contract, 'team', None):
         for member in db_contract.team:
-            team.append({
+            entry = {
                 'role': member.role or 'member',
                 'email': member.username,
                 'name': None,
-            })
+            }
+            if getattr(member, 'description', None):
+                entry['description'] = member.description
+            team.append(entry)
 
     # Build support channels (legacy minimal)
     support = None
@@ -764,13 +767,40 @@ async def upload_contract(
                 domain_obj = data_domain_repo.get_by_name(db, name=parsed_domain_name)
                 if domain_obj:
                     resolved_domain_id = domain_obj.id
+                else:
+                    # Auto-create missing domain using manager to set created_by and proper serialization
+                    try:
+                        from src.controller.data_domains_manager import DataDomainManager
+                        from src.models.data_domains import DataDomainCreate
+                        owner_list = [current_user.username] if current_user and getattr(current_user, 'username', None) else ['system']
+                        manager = DataDomainManager(repository=data_domain_repo)
+                        created_read = manager.create_domain(
+                            db,
+                            domain_in=DataDomainCreate(name=parsed_domain_name, description=None, owner=owner_list, tags=[], parent_id=None),
+                            current_user_id=(current_user.username if current_user else 'system')
+                        )
+                        resolved_domain_id = str(created_read.id)
+                    except Exception as ce:
+                        logger.warning(f"Auto-create domain failed for '{parsed_domain_name}': {ce}")
         except HTTPException:
             raise  # Re-raise HTTPException for validation errors
         except Exception as e:
             logger.warning(f"Domain resolution failed during upload_contract: {e}")
 
         # Create main contract record
+        # If caller provided an explicit ID in the ODCS, preserve it when available and not conflicting
+        provided_id = parsed.get('id')
+        if provided_id:
+            try:
+                # Avoid collision: only use if not taken
+                existing = data_contract_repo.get(db, id=provided_id)
+                if existing:
+                    provided_id = None
+            except Exception:
+                provided_id = None
+
         db_obj = DataContractDb(
+            id=provided_id if provided_id else None,
             name=name_val,
             version=version_val,
             status=status_val,
@@ -980,6 +1010,7 @@ async def upload_contract(
                     contract_id=created.id,
                     username=member_data.get('email', member_data.get('username', 'unknown')),
                     role=member_data.get('role', 'member'),
+                    description=member_data.get('description'),
                     date_in=member_data.get('dateIn') or member_data.get('date_in'),
                     date_out=member_data.get('dateOut') or member_data.get('date_out'),
                     replaced_by_username=member_data.get('replacedByUsername') or member_data.get('replaced_by_username')
@@ -1034,6 +1065,15 @@ async def upload_contract(
                     value=str(value) if value is not None else None
                 )
                 db.add(custom_prop)
+        elif isinstance(custom_props, list):
+            for item in custom_props:
+                if isinstance(item, dict) and item.get('property') is not None:
+                    custom_prop = DataContractCustomPropertyDb(
+                        contract_id=created.id,
+                        property=str(item.get('property')),
+                        value=json.dumps(item.get('value')) if isinstance(item.get('value'), (list, dict)) else str(item.get('value')) if item.get('value') is not None else None
+                    )
+                    db.add(custom_prop)
 
         # Parse SLA properties (ODCS format)
         sla_properties_data = parsed.get('slaProperties', [])
