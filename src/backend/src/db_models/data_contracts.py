@@ -208,6 +208,7 @@ class SchemaPropertyDb(Base):
     physical_type = Column(String, nullable=True)
     required = Column(Boolean, nullable=False, default=False)
     unique = Column(Boolean, nullable=False, default=False)
+    primary_key = Column(Boolean, nullable=False, default=False)
     partitioned = Column(Boolean, nullable=False, default=False)
     primary_key_position = Column(Integer, nullable=False, default=-1)
     partition_key_position = Column(Integer, nullable=False, default=-1)

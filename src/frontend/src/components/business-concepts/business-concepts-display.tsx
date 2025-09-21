@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { X } from 'lucide-react'
+import { X, Shapes, Columns2 } from 'lucide-react'
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog'
 
 interface BusinessConcept {
@@ -28,9 +28,24 @@ export default function BusinessConceptsDisplay({
 }: BusinessConceptsDisplayProps) {
   const [showDialog, setShowDialog] = useState(false)
 
+  // Derive a human-readable label from an IRI. This splits on both
+  // '/' and '#' so IRIs like ".../concepts#BusinessConcept" become
+  // just "BusinessConcept". Underscores are converted to spaces.
+  const getLabelFromIri = (iri: string) => {
+    const last = iri.split(/[\/#]/).pop() || iri
+    return last.replace(/_/g, ' ')
+  }
+
+  const getDisplayLabel = (iri: string, label?: string) => {
+    // If provided label looks like a URL/URN, prefer IRI-derived fallback
+    const looksLikeUrl = label && /^(https?:\/\/|urn:)/i.test(label)
+    if (!label || looksLikeUrl) return getLabelFromIri(iri)
+    return label
+  }
+
   const handleAddConcept = (iri: string) => {
-    // Extract label from IRI for display
-    const label = iri.split('/').pop()?.replace(/[#_]/g, ' ') || iri
+    // Extract clean label from IRI for display (name only)
+    const label = getLabelFromIri(iri)
 
     const newConcept: BusinessConcept = { iri, label }
     onConceptsChange([...concepts, newConcept])
@@ -62,7 +77,12 @@ export default function BusinessConceptsDisplay({
           <div className="flex flex-wrap gap-1">
             {concepts.map((concept) => (
               <Badge key={concept.iri} variant="secondary" className="flex items-center gap-1">
-                <span>{concept.label || concept.iri.split('/').pop()}</span>
+                {conceptType === 'property' ? (
+                  <Columns2 className="h-3 w-3" />
+                ) : (
+                  <Shapes className="h-3 w-3" />
+                )}
+                <span>{getDisplayLabel(concept.iri, concept.label)}</span>
                 <X
                   className="h-3 w-3 cursor-pointer hover:text-destructive"
                   onClick={() => handleRemoveConcept(concept.iri)}

@@ -12,14 +12,22 @@ The semantic linking system operates at three distinct levels:
 
 This hierarchical approach enables precise semantic annotation at the appropriate granularity level while maintaining clear relationships between business concepts and data assets.
 
+General Notes:
+  - The app has its own semantic resource linking functionality
+  - In ODCS, these links are represented as authoritative definitions
+  - Imported ODCS may already have their own definitions set and these need to be retained roundtrip
+  - When importing ODCS, definitions that use our own type (semantic assignment) are converted into app specific links
+  - On export of ODCS, the app specific links are exported, along with any other previously existing definitions we just stored
+  - Any change of semantics linking in the app rebuilds the in-memory RDF graph so that searching or walking the graph shows the linked resources. This also happens when importing an ODCS contract that has app specific definitions 
+
 ## Architecture Components
 
 ### 1. Core Managers
 
 #### SemanticLinksManager (`src/controller/semantic_links_manager.py`)
 - Manages traditional entity semantic links
-- Supports data domains, data products, and data contracts
-- Creates links with URIRef format: `urn:ucapp:{entity_type}:{entity_id}#{schema}#{property}`
+- Supports data domains, data products, data contracts, schemas, and properties
+- Creates subjects as `urn:ucapp:{entity_type}:{entity_id}`. The `entity_id` already encodes schema/property when applicable (e.g., `contractId#schema` or `contractId#schema#property`).
 - Handles lifecycle management (create, update, delete, list)
 
 #### DataContractsManager (`src/controller/data_contracts_manager.py`)
@@ -38,10 +46,15 @@ This hierarchical approach enables precise semantic annotation at the appropriat
 ```python
 class EntitySemanticLinkDb(Base):
     __tablename__ = "entity_semantic_links"
-    entity_type: Column(String)      # "data_contract", "data_product", etc.
-    entity_id: Column(String)        # UUID of the linked entity
-    iri: Column(String)             # Business concept IRI
-    semantic_type: Column(String)   # Type of semantic relationship
+    id = Column(UUID, primary_key=True)
+    entity_id = Column(String, nullable=False, index=True)
+    entity_type = Column(String, nullable=False, index=True)  # data_domain | data_product | data_contract | data_contract_schema | data_contract_property
+    iri = Column(Text, nullable=False)
+    label = Column(Text, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("entity_id", "entity_type", "iri", name="uq_entity_semantic_link"),
+    )
 ```
 
 #### ODCS Authoritative Definitions

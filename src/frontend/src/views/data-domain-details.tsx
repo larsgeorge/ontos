@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Edit3, Users, Tag, Hash, CalendarDays, UserCircle, ListTree, ChevronsUpDown } from 'lucide-react';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
+import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
 import type { EntitySemanticLink } from '@/types/semantic-link';
 import { DataDomain } from '@/types/data-domain';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
@@ -516,19 +517,11 @@ export default function DataDomainDetailsView() {
             </InfoItem>
             
             <InfoItem label="Linked Business Concepts" className="col-span-full">
-              <div className="flex flex-wrap gap-2 mt-1 items-center">
-                {semanticLinks.length === 0 ? (
-                  <span className="text-sm text-muted-foreground">No business concepts linked</span>
-                ) : (
-                  semanticLinks.map(l => (
-                    <span key={l.id} className="inline-flex items-center gap-1 border rounded px-2 py-1 text-sm max-w-[420px] truncate">
-                      <a href={`/search?startIri=${encodeURIComponent(l.iri)}`} className="hover:underline truncate" title={l.iri}>{l.iri}</a>
-                      <button aria-label="Remove concept link" className="ml-1 text-muted-foreground hover:text-foreground" onClick={(e) => { e.preventDefault(); removeLink(l.id); }}>×</button>
-                    </span>
-                  ))
-                )}
-                <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add Concept</Button>
-              </div>
+              <LinkedConceptChips
+                links={semanticLinks}
+                onRemove={(id) => removeLink(id)}
+                trailing={<Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add Concept</Button>}
+              />
             </InfoItem>
         </CardContent>
       </Card>

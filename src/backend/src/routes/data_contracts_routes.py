@@ -471,27 +471,25 @@ async def create_contract(
 
         # Process semantic assignments from authoritativeDefinitions
         from src.controller.semantic_links_manager import SemanticLinksManager
-        from src.models.semantic_links import EntitySemanticLinkCreate
+        from src.utils.semantic_helpers import (
+            process_contract_semantic_links,
+            process_schema_semantic_links,
+            process_property_semantic_links
+        )
 
         semantic_manager = SemanticLinksManager(db)
-        SEMANTIC_ASSIGNMENT_TYPE = "http://databricks.com/ontology/uc/semanticAssignment"
+        total_semantic_links = 0
 
         # Process contract-level semantic assignments
         contract_auth_defs = getattr(contract_data, 'authoritativeDefinitions', []) or []
-        if contract_auth_defs:
-            for auth_def in contract_auth_defs:
-                if hasattr(auth_def, 'type') and auth_def.type == SEMANTIC_ASSIGNMENT_TYPE:
-                    url = getattr(auth_def, 'url', None)
-                    if url:
-                        semantic_link = EntitySemanticLinkCreate(
-                            entity_id=created.id,
-                            entity_type='data_contract',
-                            iri=url,
-                            label=None  # Will be resolved by business glossary
-                        )
-                        semantic_manager.add(semantic_link, created_by=current_user.username if current_user else None)
+        total_semantic_links += process_contract_semantic_links(
+            semantic_manager=semantic_manager,
+            contract_id=created.id,
+            authoritative_definitions=contract_auth_defs,
+            created_by=current_user.username if current_user else None
+        )
 
-        # Process schema-level semantic assignments
+        # Process schema-level and property-level semantic assignments
         schema_objects = db.query(SchemaObjectDb).filter(SchemaObjectDb.contract_id == created.id).all()
         if contract_data.schema:
             for i, schema_obj_data in enumerate(contract_data.schema):
@@ -499,40 +497,33 @@ async def create_contract(
                     continue
 
                 schema_obj = schema_objects[i]
+
+                # Process schema-level semantic assignments
                 schema_auth_defs = getattr(schema_obj_data, 'authoritativeDefinitions', []) or []
-                if schema_auth_defs:
-                    for auth_def in schema_auth_defs:
-                        if hasattr(auth_def, 'type') and auth_def.type == SEMANTIC_ASSIGNMENT_TYPE:
-                            url = getattr(auth_def, 'url', None)
-                            if url:
-                                entity_id = f"{created.id}#{schema_obj.name}"
-                                semantic_link = EntitySemanticLinkCreate(
-                                    entity_id=entity_id,
-                                    entity_type='data_contract_schema',
-                                    iri=url,
-                                    label=None
-                                )
-                                semantic_manager.add(semantic_link, created_by=current_user.username if current_user else None)
+                total_semantic_links += process_schema_semantic_links(
+                    semantic_manager=semantic_manager,
+                    contract_id=created.id,
+                    schema_name=schema_obj.name,
+                    authoritative_definitions=schema_auth_defs,
+                    created_by=current_user.username if current_user else None
+                )
 
                 # Process property-level semantic assignments
                 properties = getattr(schema_obj_data, 'properties', []) or []
-                if properties:
-                    for prop_data in properties:
-                        prop_name = getattr(prop_data, 'name', 'column')
-                        prop_auth_defs = getattr(prop_data, 'authoritativeDefinitions', []) or []
-                        if prop_auth_defs:
-                            for auth_def in prop_auth_defs:
-                                if hasattr(auth_def, 'type') and auth_def.type == SEMANTIC_ASSIGNMENT_TYPE:
-                                    url = getattr(auth_def, 'url', None)
-                                    if url:
-                                        entity_id = f"{created.id}#{schema_obj.name}#{prop_name}"
-                                        semantic_link = EntitySemanticLinkCreate(
-                                            entity_id=entity_id,
-                                            entity_type='data_contract_property',
-                                            iri=url,
-                                            label=None
-                                        )
-                                        semantic_manager.add(semantic_link, created_by=current_user.username if current_user else None)
+                for prop_data in properties:
+                    prop_name = getattr(prop_data, 'name', 'column')
+                    prop_auth_defs = getattr(prop_data, 'authoritativeDefinitions', []) or []
+                    total_semantic_links += process_property_semantic_links(
+                        semantic_manager=semantic_manager,
+                        contract_id=created.id,
+                        schema_name=schema_obj.name,
+                        property_name=prop_name,
+                        authoritative_definitions=prop_auth_defs,
+                        created_by=current_user.username if current_user else None
+                    )
+
+        if total_semantic_links > 0:
+            logger.info(f"Created {total_semantic_links} semantic links for contract {created.id}")
 
         db.commit()
         
@@ -623,50 +614,51 @@ async def update_contract(
                             transform_description=getattr(prop_data, 'description', None),
                             primary_key=getattr(prop_data, 'primaryKey', False),
                             primary_key_position=getattr(prop_data, 'primaryKeyPosition', -1),
-                            partition_key=getattr(prop_data, 'partitioned', False),
+                            partitioned=getattr(prop_data, 'partitioned', False),
                             partition_key_position=getattr(prop_data, 'partitionKeyPosition', -1),
                         )
                         db.add(prop)
                         db.flush()
 
-                        # Handle property-level semantic links
-                        if hasattr(prop_data, 'authoritativeDefinitions') and prop_data.authoritativeDefinitions:
-                            from src.controller.semantic_links_manager import SemanticLinksManager
-                            from src.models.semantic_links import EntitySemanticLinkCreate
-                            semantic_manager = SemanticLinksManager(db)
-
-                            for auth_def in prop_data.authoritativeDefinitions:
-                                if hasattr(auth_def, 'url') and auth_def.url:
-                                    prop_entity_id = f"{contract_id}#{schema_obj_data.name}#{prop_data.name}"
-                                    semantic_link = EntitySemanticLinkCreate(
-                                        entity_id=prop_entity_id,
-                                        entity_type='data_contract_property',
-                                        iri=auth_def.url,
-                                        label=None
-                                    )
-                                    semantic_manager.add(semantic_link, created_by=current_user.username if current_user else None)
-
-                # Handle schema-level semantic links
-                if hasattr(schema_obj_data, 'authoritativeDefinitions') and schema_obj_data.authoritativeDefinitions:
-                    from src.controller.semantic_links_manager import SemanticLinksManager
-                    from src.models.semantic_links import EntitySemanticLinkCreate
-                    semantic_manager = SemanticLinksManager(db)
-
-                    for auth_def in schema_obj_data.authoritativeDefinitions:
-                        if hasattr(auth_def, 'url') and auth_def.url:
-                            schema_entity_id = f"{contract_id}#{schema_obj_data.name}"
-                            semantic_link = EntitySemanticLinkCreate(
-                                entity_id=schema_entity_id,
-                                entity_type='data_contract_schema',
-                                iri=auth_def.url,
-                                label=None
+                        # Handle property-level semantic links via helper (supports dicts or models)
+                        from src.controller.semantic_links_manager import SemanticLinksManager
+                        from src.utils.semantic_helpers import process_property_semantic_links
+                        semantic_manager = SemanticLinksManager(db)
+                        # Replace existing links for this property entity id
+                        prop_entity_id = f"{contract_id}#{schema_obj_data.name}#{prop_data.name}"
+                        for link in semantic_manager.list_for_entity(entity_id=prop_entity_id, entity_type='data_contract_property'):
+                            semantic_manager.remove(link.id)
+                        if getattr(prop_data, 'authoritativeDefinitions', None):
+                            process_property_semantic_links(
+                                semantic_manager=semantic_manager,
+                                contract_id=contract_id,
+                                schema_name=schema_obj_data.name,
+                                property_name=prop_data.name,
+                                authoritative_definitions=getattr(prop_data, 'authoritativeDefinitions', []) or [],
+                                created_by=current_user.username if current_user else None,
                             )
-                            semantic_manager.add(semantic_link, created_by=current_user.username if current_user else None)
 
-        # Handle contract-level semantic links
+                # Handle schema-level semantic links via helper (supports dicts or models)
+                from src.controller.semantic_links_manager import SemanticLinksManager
+                from src.utils.semantic_helpers import process_schema_semantic_links
+                semantic_manager = SemanticLinksManager(db)
+                # Replace existing links for this schema entity id
+                schema_entity_id = f"{contract_id}#{schema_obj_data.name}"
+                for link in semantic_manager.list_for_entity(entity_id=schema_entity_id, entity_type='data_contract_schema'):
+                    semantic_manager.remove(link.id)
+                if getattr(schema_obj_data, 'authoritativeDefinitions', None):
+                    process_schema_semantic_links(
+                        semantic_manager=semantic_manager,
+                        contract_id=contract_id,
+                        schema_name=schema_obj_data.name,
+                        authoritative_definitions=getattr(schema_obj_data, 'authoritativeDefinitions', []) or [],
+                        created_by=current_user.username if current_user else None,
+                    )
+
+        # Handle contract-level semantic links via helper (supports dicts or models)
         if contract_data.authoritativeDefinitions is not None:
             from src.controller.semantic_links_manager import SemanticLinksManager
-            from src.models.semantic_links import EntitySemanticLinkCreate
+            from src.utils.semantic_helpers import process_contract_semantic_links
             semantic_manager = SemanticLinksManager(db)
 
             # Remove existing contract-level semantic links
@@ -674,16 +666,12 @@ async def update_contract(
             for link in existing_links:
                 semantic_manager.remove(link.id)
 
-            # Add new contract-level semantic links
-            for auth_def in contract_data.authoritativeDefinitions:
-                if hasattr(auth_def, 'url') and auth_def.url:
-                    semantic_link = EntitySemanticLinkCreate(
-                        entity_id=contract_id,
-                        entity_type='data_contract',
-                        iri=auth_def.url,
-                        label=None
-                    )
-                    semantic_manager.add(semantic_link, created_by=current_user.username if current_user else None)
+            process_contract_semantic_links(
+                semantic_manager=semantic_manager,
+                contract_id=contract_id,
+                authoritative_definitions=contract_data.authoritativeDefinitions or [],
+                created_by=current_user.username if current_user else None,
+            )
 
         db.commit()
 
@@ -1327,8 +1315,23 @@ async def upload_contract(
                                 )
                                 db.add(prop_db)
 
+        # Process semantic assignments from authoritativeDefinitions
+        from src.controller.semantic_links_manager import SemanticLinksManager
+        from src.utils.semantic_helpers import process_all_semantic_links_from_odcs
+
+        semantic_manager = SemanticLinksManager(db)
+        total_semantic_links = process_all_semantic_links_from_odcs(
+            semantic_manager=semantic_manager,
+            contract_id=created.id,
+            parsed_odcs=parsed,
+            created_by=current_user.username if current_user else None
+        )
+
+        if total_semantic_links > 0:
+            logger.info(f"Processed {total_semantic_links} semantic links during upload for contract {created.id}")
+
         db.commit()
-        
+
         # Load with relationships for response
         created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
         return _build_contract_read_from_db(db, created_with_relations)

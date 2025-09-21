@@ -17,6 +17,7 @@ import * as Settings from '@/types/settings'; // Import FeatureAccessLevel enum 
 import { useNotificationsStore } from '@/stores/notifications-store'; // Import notification store
 import CreateVersionDialog from '@/components/data-products/create-version-dialog';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
+import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
 import type { EntitySemanticLink } from '@/types/semantic-link';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { CommentSidebar } from '@/components/comments';
@@ -443,19 +444,11 @@ export default function DataProductDetails() {
           </div>
           <div className="space-y-1">
             <Label>Linked Business Concepts:</Label>
-            <div className="flex flex-wrap gap-2 mt-1 items-center">
-              {links.length === 0 ? (
-                <span className="text-sm text-muted-foreground">No business concepts linked</span>
-              ) : (
-                links.map(l => (
-                  <span key={l.id} className="inline-flex items-center gap-1 border rounded px-2 py-1 text-sm max-w-[420px] truncate">
-                    <a href={`/search?startIri=${encodeURIComponent(l.iri)}`} className="hover:underline truncate" title={l.iri}>{l.iri}</a>
-                    <button aria-label="Remove concept link" className="ml-1 text-muted-foreground hover:text-foreground" onClick={(e) => { e.preventDefault(); removeLink(l.id); }}>×</button>
-                  </span>
-                ))
-              )}
-              <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add Concept</Button>
-            </div>
+            <LinkedConceptChips
+              links={links}
+              onRemove={(id) => removeLink(id)}
+              trailing={<Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add Concept</Button>}
+            />
           </div>
         </CardContent>
       </Card>

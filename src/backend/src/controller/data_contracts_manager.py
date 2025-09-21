@@ -1095,8 +1095,9 @@ class DataContractsManager(SearchableAsset):
         # Inject semantic assignments from EntitySemanticLinks
         from src.controller.semantic_links_manager import SemanticLinksManager
         from src.common.database import get_db_session
+        from src.utils.semantic_helpers import get_semantic_assignment_type
 
-        SEMANTIC_ASSIGNMENT_TYPE = "http://databricks.com/ontology/uc/semanticAssignment"
+        SEMANTIC_ASSIGNMENT_TYPE = get_semantic_assignment_type()
 
         try:
             with get_db_session() as db:
@@ -1389,11 +1390,10 @@ class DataContractsManager(SearchableAsset):
         logger.info(f"Starting semantic links processing for {len(contracts_yaml)} contracts")
         try:
             from src.controller.semantic_links_manager import SemanticLinksManager
-            from src.models.semantic_links import EntitySemanticLinkCreate
+            from src.utils.semantic_helpers import process_all_semantic_links_from_odcs
 
             semantic_manager = SemanticLinksManager(db)
-            SEMANTIC_ASSIGNMENT_TYPE = "http://databricks.com/ontology/uc/semanticAssignment"
-            links_created = 0
+            total_links_created = 0
 
             for contract_yaml in contracts_yaml:
                 contract_name = contract_yaml.get('name')
@@ -1411,74 +1411,23 @@ class DataContractsManager(SearchableAsset):
 
                 logger.debug(f"Found contract in DB: {contract_db.id}")
 
-                # Process contract-level authoritativeDefinitions
-                auth_defs = contract_yaml.get('authoritativeDefinitions', [])
-                logger.debug(f"Contract-level authoritativeDefinitions: {len(auth_defs)}")
+                # Use shared utility to process all semantic links for this contract
+                links_created = process_all_semantic_links_from_odcs(
+                    semantic_manager=semantic_manager,
+                    contract_id=str(contract_db.id),
+                    parsed_odcs=contract_yaml,
+                    created_by="system"
+                )
 
-                for auth_def in auth_defs:
-                    logger.debug(f"Processing auth_def: {auth_def}")
-                    if isinstance(auth_def, dict) and auth_def.get('type') == SEMANTIC_ASSIGNMENT_TYPE:
-                        url = auth_def.get('url')
-                        if url:
-                            semantic_link = EntitySemanticLinkCreate(
-                                entity_id=str(contract_db.id),
-                                entity_type='data_contract',
-                                iri=url,
-                                label=None
-                            )
-                            logger.info(f"Creating contract semantic link: {semantic_link.entity_type} {semantic_link.entity_id} -> {semantic_link.iri}")
-                            semantic_manager.add(semantic_link, created_by="system")
-                            links_created += 1
+                total_links_created += links_created
+                if links_created > 0:
+                    logger.info(f"Created {links_created} semantic links for contract '{contract_name}' ({contract_db.id})")
 
-                # Process schema-level authoritativeDefinitions
-                schemas = contract_yaml.get('schema', [])
-                for schema_yaml in schemas:
-                    schema_name = schema_yaml.get('name')
-                    if not schema_name:
-                        continue
+            logger.info(f"Semantic links processing completed. Total links created: {total_links_created}")
 
-                    schema_auth_defs = schema_yaml.get('authoritativeDefinitions', [])
-                    for auth_def in schema_auth_defs:
-                        if isinstance(auth_def, dict) and auth_def.get('type') == SEMANTIC_ASSIGNMENT_TYPE:
-                            url = auth_def.get('url')
-                            if url:
-                                entity_id = f"{contract_db.id}#{schema_name}"
-                                semantic_link = EntitySemanticLinkCreate(
-                                    entity_id=entity_id,
-                                    entity_type='data_contract_schema',
-                                    iri=url,
-                                    label=None
-                                )
-                                semantic_manager.add(semantic_link, created_by="system")
-                                links_created += 1
-
-                    # Process property-level authoritativeDefinitions
-                    properties = schema_yaml.get('properties', [])
-                    for prop_yaml in properties:
-                        prop_name = prop_yaml.get('name')
-                        if not prop_name:
-                            continue
-
-                        prop_auth_defs = prop_yaml.get('authoritativeDefinitions', [])
-                        for auth_def in prop_auth_defs:
-                            if isinstance(auth_def, dict) and auth_def.get('type') == SEMANTIC_ASSIGNMENT_TYPE:
-                                url = auth_def.get('url')
-                                if url:
-                                    entity_id = f"{contract_db.id}#{schema_name}#{prop_name}"
-                                    semantic_link = EntitySemanticLinkCreate(
-                                        entity_id=entity_id,
-                                        entity_type='data_contract_property',
-                                        iri=url,
-                                        label=None
-                                    )
-                                    semantic_manager.add(semantic_link, created_by="system")
-                                    links_created += 1
-
-            logger.info(f"Semantic links processing completed. Total links created: {links_created}")
-
-            if links_created > 0:
+            if total_links_created > 0:
                 db.commit()
-                logger.info(f"Created {links_created} semantic links from demo contract authoritativeDefinitions")
+                logger.info(f"Created {total_links_created} semantic links from demo contract authoritativeDefinitions")
             else:
                 logger.warning("No semantic links created from demo contracts - check contract authoritativeDefinitions")
 

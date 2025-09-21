@@ -30,3 +30,4 @@ settings.json
 audit_logs/
 
 .playwright-mcp/
+src/frontend/test-results/.last-run.json

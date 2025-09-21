@@ -1,12 +1,11 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound } from 'lucide-react'
+import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, Shapes, Columns2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DataTable } from '@/components/ui/data-table'
 import { ColumnDef } from '@tanstack/react-table'
@@ -15,6 +14,7 @@ import { useToast } from '@/hooks/use-toast'
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel'
 import { CommentSidebar } from '@/components/comments'
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog'
+import LinkedConceptChips from '@/components/semantic/linked-concept-chips'
 import { useDomains } from '@/hooks/use-domains'
 import type { EntitySemanticLink } from '@/types/semantic-link'
 import type { DataContract } from '@/types/data-contract'
@@ -42,24 +42,26 @@ const createSchemaPropertyColumns = (
     cell: ({ row }) => {
       const property = row.original
       const schemaName = contract?.schema?.[selectedSchemaIndex]?.name || ''
-      const propertyKey = `${schemaName}.${property.name}`
+      const propertyKey = `${schemaName}#${property.name}`
       const links = propertyLinks[propertyKey] || []
 
+      const getLabel = (iri: string, label?: string) => (label && !/^https?:\/\//.test(label) && !/^urn:/.test(label)) ? label : (iri.split(/[\/#]/).pop() || iri)
       return (
         <div>
           <span className="font-mono font-medium">{property.name}</span>
           {links.length > 0 && (
-            <div className="text-xs text-muted-foreground mt-1">
+            <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
               {links.map((link, idx) => (
-                <div key={idx}>
+                <span key={idx} className="inline-flex items-center gap-1">
+                  <Columns2 className="h-3 w-3" />
                   <span
                     className="cursor-pointer hover:underline"
                     onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
                     title={link.iri}
                   >
-                    ↳ {link.iri.split('/').pop() || link.iri}
+                    {getLabel(link.iri, link.label)}
                   </span>
-                </div>
+                </span>
               ))}
             </div>
           )}
@@ -198,7 +200,7 @@ export default function DataContractDetails() {
           // Fetch schema-level semantic links
           const schemaEntityId = `${contractId}#${schema.name}`
           try {
-            const schemaLinksRes = await fetch(`/api/semantic-links/entity/data_contract_schema/${schemaEntityId}`)
+            const schemaLinksRes = await fetch(`/api/semantic-links/entity/data_contract_schema/${encodeURIComponent(schemaEntityId)}`)
             if (schemaLinksRes.ok) {
               const schemaLinksData = await schemaLinksRes.json()
               schemaLinksMap[schema.name] = Array.isArray(schemaLinksData) ? schemaLinksData : []
@@ -211,9 +213,9 @@ export default function DataContractDetails() {
           if (schema.properties) {
             for (const property of schema.properties) {
               const propertyEntityId = `${contractId}#${schema.name}#${property.name}`
-              const propertyKey = `${schema.name}.${property.name}`
+              const propertyKey = `${schema.name}#${property.name}`
               try {
-                const propertyLinksRes = await fetch(`/api/semantic-links/entity/data_contract_property/${propertyEntityId}`)
+                const propertyLinksRes = await fetch(`/api/semantic-links/entity/data_contract_property/${encodeURIComponent(propertyEntityId)}`)
                 if (propertyLinksRes.ok) {
                   const propertyLinksData = await propertyLinksRes.json()
                   propertyLinksMap[propertyKey] = Array.isArray(propertyLinksData) ? propertyLinksData : []
@@ -552,19 +554,11 @@ export default function DataContractDetails() {
           )}
           <div className="space-y-1">
             <Label>Linked Business Concepts:</Label>
-            <div className="flex flex-wrap gap-2 mt-1 items-center">
-              {links.length === 0 ? (
-                <span className="text-sm text-muted-foreground">No business concepts linked</span>
-              ) : (
-                links.map(l => (
-                  <span key={l.id} className="inline-flex items-center gap-1 border rounded px-2 py-1 text-sm max-w-[420px] truncate">
-                    <a href={`/search?startIri=${encodeURIComponent(l.iri)}`} className="hover:underline truncate" title={l.iri}>{l.iri}</a>
-                    <button aria-label="Remove concept link" className="ml-1 text-muted-foreground hover:text-foreground" onClick={(e) => { e.preventDefault(); removeLink(l.id); }}>×</button>
-                  </span>
-                ))
-              )}
-              <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add Concept</Button>
-            </div>
+            <LinkedConceptChips
+              links={links}
+              onRemove={(id) => removeLink(id)}
+              trailing={<Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add Concept</Button>}
+            />
           </div>
         </CardContent>
       </Card>
@@ -588,15 +582,16 @@ export default function DataContractDetails() {
                   <div>
                     <Label className="text-base font-semibold">{contract.schema[0].name}</Label>
                     {schemaLinks[contract.schema[0].name] && schemaLinks[contract.schema[0].name].length > 0 && (
-                      <div className="text-xs text-muted-foreground mt-1">
+                      <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
                         {schemaLinks[contract.schema[0].name].map((link, idx) => (
-                          <span key={idx} className="mr-2">
+                          <span key={idx} className="inline-flex items-center gap-1">
+                            <Shapes className="h-3 w-3" />
                             <span
                               className="cursor-pointer hover:underline"
                               onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
                               title={link.iri}
                             >
-                              🔗 {link.iri.split('/').pop() || link.iri}
+                              {(link.label && !/^https?:\/\//.test(link.label) && !/^urn:/.test(link.label)) ? link.label : (link.iri.split(/[\/#]/).pop() || link.iri)}
                             </span>
                           </span>
                         ))}
@@ -640,15 +635,16 @@ export default function DataContractDetails() {
                     <div>
                       <Label className="text-base font-semibold">{contract.schema[selectedSchemaIndex]?.name || `Table ${selectedSchemaIndex + 1}`}</Label>
                       {contract.schema[selectedSchemaIndex]?.name && schemaLinks[contract.schema[selectedSchemaIndex].name] && schemaLinks[contract.schema[selectedSchemaIndex].name].length > 0 && (
-                        <div className="text-xs text-muted-foreground mt-1">
+                        <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
                           {schemaLinks[contract.schema[selectedSchemaIndex].name].map((link, idx) => (
-                            <span key={idx} className="mr-2">
+                            <span key={idx} className="inline-flex items-center gap-1">
+                              <Shapes className="h-3 w-3" />
                               <span
                                 className="cursor-pointer hover:underline"
                                 onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
                                 title={link.iri}
                               >
-                                🔗 {link.iri.split('/').pop() || link.iri}
+                                {(link.label && !/^https?:\/\//.test(link.label) && !/^urn:/.test(link.label)) ? link.label : (link.iri.split(/[\/#]/).pop() || link.iri)}
                               </span>
                             </span>
                           ))}
@@ -698,15 +694,16 @@ export default function DataContractDetails() {
                     <div>
                       <Label className="text-base font-semibold">{contract.schema[selectedSchemaIndex]?.name || `Table ${selectedSchemaIndex + 1}`}</Label>
                       {contract.schema[selectedSchemaIndex]?.name && schemaLinks[contract.schema[selectedSchemaIndex].name] && schemaLinks[contract.schema[selectedSchemaIndex].name].length > 0 && (
-                        <div className="text-xs text-muted-foreground mt-1">
+                        <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
                           {schemaLinks[contract.schema[selectedSchemaIndex].name].map((link, idx) => (
-                            <span key={idx} className="mr-2">
+                            <span key={idx} className="inline-flex items-center gap-1">
+                              <Shapes className="h-3 w-3" />
                               <span
                                 className="cursor-pointer hover:underline"
                                 onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
                                 title={link.iri}
                               >
-                                🔗 {link.iri.split('/').pop() || link.iri}
+                                {(link.label && !/^https?:\/\//.test(link.label) && !/^urn:/.test(link.label)) ? link.label : (link.iri.split(/[\/#]/).pop() || link.iri)}
                               </span>
                             </span>
                           ))}
@@ -760,8 +757,7 @@ export default function DataContractDetails() {
               .map(link => ({
                 iri: link.iri,
                 label: link.label || link.iri.split('#')[1] || link.iri,
-                description: link.description,
-                type: link.type || 'class'
+                type: 'class'
               })),
             properties: schema.properties?.map(property => ({
               ...property,
@@ -769,8 +765,7 @@ export default function DataContractDetails() {
                 .map(link => ({
                   iri: link.iri,
                   label: link.label || link.iri.split('#')[1] || link.iri,
-                  description: link.description,
-                  type: link.type || 'class'
+                  type: 'class'
                 }))
             })) || []
           })) || [],
@@ -778,8 +773,7 @@ export default function DataContractDetails() {
           contractSemanticConcepts: (links || []).map(link => ({
             iri: link.iri,
             label: link.label || link.iri.split('#')[1] || link.iri,
-            description: link.description,
-            type: link.type || 'class'
+            type: 'class'
           })),
           team: contract.team,
           accessControl: contract.accessControl,
@@ -820,8 +814,9 @@ export default function DataContractDetails() {
               body: JSON.stringify(transformedPayload)
             })
             if (!res.ok) throw new Error('Update failed')
-            setIsWizardOpen(false)
+            // Ensure details (including semantic links) are refreshed BEFORE closing the dialog
             await fetchDetails()
+            setIsWizardOpen(false)
             toast({ title: 'Updated', description: 'Contract updated.' })
           } catch (e) {
             toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
