@@ -32,6 +32,7 @@ from src.controller.tags_manager import TagsManager # Import TagsManager
 from src.controller.semantic_models_manager import SemanticModelsManager
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.models.semantic_links import EntitySemanticLinkCreate
+from src.controller.compliance_manager import ComplianceManager
 
 # Import repositories (needed for manager instantiation)
 from src.repositories.settings_repository import AppRoleRepository
@@ -49,6 +50,7 @@ from src.db_models.audit_log import AuditLogDb
 from src.db_models.data_asset_reviews import DataAssetReviewRequestDb
 # Import the DataProductDb DB model
 from src.db_models.data_products import DataProductDb, InfoDb, InputPortDb, OutputPortDb
+from src.db_models.compliance import CompliancePolicyDb
 
 # Import Demo Data Loader
 # from src.utils.demo_data_loader import load_demo_data # Removed unused import
@@ -227,6 +229,22 @@ def initialize_managers(app: FastAPI):
         
         # --- Ensure default roles exist using the manager method --- 
         app.state.settings_manager.ensure_default_roles_exist()
+
+        # --- Preload Compliance demo data so home dashboard has data on first load ---
+        try:
+            yaml_path = Path(__file__).parent.parent / "data" / "compliance.yaml"
+            if yaml_path.exists():
+                # Seed only if there are no policies yet
+                existing_count = db_session.query(CompliancePolicyDb).count()
+                if existing_count == 0:
+                    ComplianceManager().load_from_yaml(db_session, str(yaml_path))
+                    logger.info("Seeded compliance policies and sample runs from YAML during startup.")
+                else:
+                    logger.debug("Compliance policies already present; skipping YAML seeding.")
+            else:
+                logger.debug(f"Compliance YAML not found at {yaml_path}; skipping preload.")
+        except Exception as e:
+            logger.error(f"Failed preloading compliance data at startup: {e}", exc_info=True)
 
         # --- Commit session potentially used for default role creation --- 
         # This commit is crucial AFTER all managers are initialized AND 
