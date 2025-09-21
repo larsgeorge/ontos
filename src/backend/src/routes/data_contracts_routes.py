@@ -594,8 +594,99 @@ async def update_contract(
                 update_payload[k] = v
         update_payload["updated_by"] = current_user.username if current_user else None
         updated = data_contract_repo.update(db=db, db_obj=db_obj, obj_in=update_payload)
+
+        # Handle schema objects and semantic links if provided
+        if contract_data.schema is not None:
+            # Remove existing schema objects for this contract
+            db.query(SchemaObjectDb).filter(SchemaObjectDb.contract_id == contract_id).delete()
+
+            # Create new schema objects
+            for schema_obj_data in contract_data.schema:
+                schema_obj = SchemaObjectDb(
+                    contract_id=contract_id,
+                    name=schema_obj_data.name,
+                    physical_name=schema_obj_data.physicalName,
+                    logical_type='object'
+                )
+                db.add(schema_obj)
+                db.flush()  # Get the ID
+
+                # Create properties for this schema
+                if schema_obj_data.properties:
+                    for prop_data in schema_obj_data.properties:
+                        prop = SchemaPropertyDb(
+                            object_id=schema_obj.id,
+                            name=prop_data.name,
+                            logical_type=prop_data.logicalType,
+                            required=getattr(prop_data, 'required', False),
+                            unique=getattr(prop_data, 'unique', False),
+                            transform_description=getattr(prop_data, 'description', None),
+                            primary_key=getattr(prop_data, 'primaryKey', False),
+                            primary_key_position=getattr(prop_data, 'primaryKeyPosition', -1),
+                            partition_key=getattr(prop_data, 'partitioned', False),
+                            partition_key_position=getattr(prop_data, 'partitionKeyPosition', -1),
+                        )
+                        db.add(prop)
+                        db.flush()
+
+                        # Handle property-level semantic links
+                        if hasattr(prop_data, 'authoritativeDefinitions') and prop_data.authoritativeDefinitions:
+                            from src.controller.semantic_links_manager import SemanticLinksManager
+                            from src.models.semantic_links import EntitySemanticLinkCreate
+                            semantic_manager = SemanticLinksManager(db)
+
+                            for auth_def in prop_data.authoritativeDefinitions:
+                                if hasattr(auth_def, 'url') and auth_def.url:
+                                    prop_entity_id = f"{contract_id}#{schema_obj_data.name}#{prop_data.name}"
+                                    semantic_link = EntitySemanticLinkCreate(
+                                        entity_id=prop_entity_id,
+                                        entity_type='data_contract_property',
+                                        iri=auth_def.url,
+                                        label=None
+                                    )
+                                    semantic_manager.add(semantic_link, created_by=current_user.username if current_user else None)
+
+                # Handle schema-level semantic links
+                if hasattr(schema_obj_data, 'authoritativeDefinitions') and schema_obj_data.authoritativeDefinitions:
+                    from src.controller.semantic_links_manager import SemanticLinksManager
+                    from src.models.semantic_links import EntitySemanticLinkCreate
+                    semantic_manager = SemanticLinksManager(db)
+
+                    for auth_def in schema_obj_data.authoritativeDefinitions:
+                        if hasattr(auth_def, 'url') and auth_def.url:
+                            schema_entity_id = f"{contract_id}#{schema_obj_data.name}"
+                            semantic_link = EntitySemanticLinkCreate(
+                                entity_id=schema_entity_id,
+                                entity_type='data_contract_schema',
+                                iri=auth_def.url,
+                                label=None
+                            )
+                            semantic_manager.add(semantic_link, created_by=current_user.username if current_user else None)
+
+        # Handle contract-level semantic links
+        if contract_data.authoritativeDefinitions is not None:
+            from src.controller.semantic_links_manager import SemanticLinksManager
+            from src.models.semantic_links import EntitySemanticLinkCreate
+            semantic_manager = SemanticLinksManager(db)
+
+            # Remove existing contract-level semantic links
+            existing_links = semantic_manager.list_for_entity(entity_id=contract_id, entity_type='data_contract')
+            for link in existing_links:
+                semantic_manager.remove(link.id)
+
+            # Add new contract-level semantic links
+            for auth_def in contract_data.authoritativeDefinitions:
+                if hasattr(auth_def, 'url') and auth_def.url:
+                    semantic_link = EntitySemanticLinkCreate(
+                        entity_id=contract_id,
+                        entity_type='data_contract',
+                        iri=auth_def.url,
+                        label=None
+                    )
+                    semantic_manager.add(semantic_link, created_by=current_user.username if current_user else None)
+
         db.commit()
-        
+
         # Load with relationships for full response
         updated_with_relations = data_contract_repo.get_with_all(db, id=contract_id)
         return _build_contract_read_from_db(db, updated_with_relations)

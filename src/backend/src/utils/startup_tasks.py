@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, List
 import json # Import json for parsing
+import yaml
 
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
@@ -29,6 +30,8 @@ from src.controller.audit_manager import AuditManager
 from src.controller.data_domains_manager import DataDomainManager # Import new manager
 from src.controller.tags_manager import TagsManager # Import TagsManager
 from src.controller.semantic_models_manager import SemanticModelsManager
+from src.controller.semantic_links_manager import SemanticLinksManager
+from src.models.semantic_links import EntitySemanticLinkCreate
 
 # Import repositories (needed for manager instantiation)
 from src.repositories.settings_repository import AppRoleRepository
@@ -240,6 +243,80 @@ def initialize_managers(app: FastAPI):
             db_session.close()
             logger.info("DB session for manager instantiation closed.")
 
+def load_demo_semantic_links(db: Session) -> None:
+    """Load demo semantic links between app entities and business concepts."""
+    logger.info("Loading demo semantic links...")
+
+    try:
+        semantic_links_manager = SemanticLinksManager(db)
+
+        # Load semantic links configuration
+        semantic_links_file = Path(__file__).parent.parent / "data" / "semantic_links_demo.yaml"
+        if not semantic_links_file.exists():
+            logger.warning(f"Semantic links demo file not found: {semantic_links_file}")
+            return
+
+        with open(semantic_links_file, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        if not config or 'semantic_links' not in config:
+            logger.warning("No semantic_links section found in config")
+            return
+
+        # Load entity semantic links
+        links_created = 0
+        for link_config in config['semantic_links']:
+            try:
+                entity_type = link_config['entity_type']
+                entity_name = link_config['entity_name']
+                iri = link_config['iri']
+                label = link_config.get('label', '')
+
+                # Find entity ID by name and type
+                entity_id = None
+                if entity_type == 'data_domain':
+                    # Query data domains to find by name
+                    from src.db_models.data_domains import DataDomain
+                    domain = db.query(DataDomain).filter(DataDomain.name == entity_name).first()
+                    if domain:
+                        entity_id = str(domain.id)
+                elif entity_type == 'data_product':
+                    # Query data products to find by title
+                    from src.db_models.data_products import InfoDb
+                    info = db.query(InfoDb).filter(InfoDb.title == entity_name).first()
+                    if info:
+                        entity_id = str(info.data_product_id)
+                elif entity_type == 'data_contract':
+                    # Query data contracts to find by name
+                    from src.db_models.data_contracts import DataContractDb
+                    contract = db.query(DataContractDb).filter(DataContractDb.name == entity_name).first()
+                    if contract:
+                        entity_id = str(contract.id)
+
+                if entity_id:
+                    # Create semantic link
+                    link_data = EntitySemanticLinkCreate(
+                        entity_id=entity_id,
+                        entity_type=entity_type,
+                        iri=iri,
+                        label=label
+                    )
+                    semantic_links_manager.add(link_data, created_by="system")
+                    links_created += 1
+                    logger.debug(f"Created semantic link: {entity_type}:{entity_name} -> {iri}")
+                else:
+                    logger.warning(f"Entity not found: {entity_type} '{entity_name}'")
+
+            except Exception as e:
+                logger.warning(f"Failed to create semantic link for {link_config}: {e}")
+
+        db.commit()
+        logger.info(f"Successfully created {links_created} semantic links")
+
+    except Exception as e:
+        logger.exception(f"Error loading demo semantic links: {e}")
+        db.rollback()
+
 def load_initial_data(app: FastAPI) -> None:
     """Loads initial demo data if configured."""
     settings: Settings = get_settings()
@@ -296,7 +373,10 @@ def load_initial_data(app: FastAPI) -> None:
         # Load demo timeline entries after all entities are created
         if data_domain_manager and hasattr(data_domain_manager, 'load_demo_timeline_entries'):
             data_domain_manager.load_demo_timeline_entries(db)
-        
+
+        # Load demo semantic links after all entities are created
+        load_demo_semantic_links(db)
+
         # No final commit needed here if managers commit internally or role creation already committed
         logger.info("Initial data loading process completed for all managers.")
 

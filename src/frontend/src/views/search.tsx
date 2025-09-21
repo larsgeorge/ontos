@@ -61,6 +61,10 @@ export default function SearchView() {
   const conceptsQuery = params.get('concepts_query') || '';
   const conceptsIri = params.get('concepts_iri');
 
+  // Handle legacy startIri parameter - if present, add it to the KG path
+  const startIri = params.get('startIri');
+  const finalKgPath = startIri && kgPath.length === 0 ? [startIri] : kgPath;
+
   // Create initial concept for concepts search
   const initialConcept = conceptsIri ? {
     value: conceptsIri,
@@ -89,7 +93,7 @@ export default function SearchView() {
         <TabsContent value="kg">
           <KGSearch
             initialPrefix={kgPrefix}
-            initialPath={kgPath}
+            initialPath={finalKgPath}
             initialSparql={kgSparql}
             initialDirectionFilter={kgDirection}
             initialShowConceptsOnly={kgConceptsOnly}

@@ -34,6 +34,7 @@ from src.db_models.data_contracts import (
     DataContractServerDb,
     SchemaObjectDb,
     SchemaPropertyDb,
+    SchemaPropertyAuthorityDb,
 )
 from src.repositories.data_contracts_repository import data_contract_repo
 
@@ -1302,6 +1303,18 @@ class DataContractsManager(SearchableAsset):
                 )
                 created = data_contract_repo.create(db=db, obj_in=db_obj)  # type: ignore[arg-type]
 
+                # Process contract-level authoritativeDefinitions
+                contract_auth_defs = c.get('authoritativeDefinitions') or []
+                if isinstance(contract_auth_defs, list):
+                    from src.db_models.data_contracts import DataContractAuthorityDb
+                    for auth_def in contract_auth_defs:
+                        if isinstance(auth_def, dict) and auth_def.get('url') and auth_def.get('type'):
+                            db.add(DataContractAuthorityDb(
+                                contract_id=created.id,
+                                url=auth_def['url'],
+                                type=auth_def['type']
+                            ))
+
                 # Schema objects
                 schema_list = c.get('schema') or []
                 if isinstance(schema_list, list):
@@ -1317,20 +1330,45 @@ class DataContractsManager(SearchableAsset):
                         db.add(so)
                         db.flush()
 
+                        # Process schema-level authoritativeDefinitions
+                        schema_auth_defs = obj.get('authoritativeDefinitions') or []
+                        if isinstance(schema_auth_defs, list):
+                            from src.db_models.data_contracts import SchemaObjectAuthorityDb
+                            for auth_def in schema_auth_defs:
+                                if isinstance(auth_def, dict) and auth_def.get('url') and auth_def.get('type'):
+                                    db.add(SchemaObjectAuthorityDb(
+                                        schema_object_id=so.id,
+                                        url=auth_def['url'],
+                                        type=auth_def['type']
+                                    ))
+
                         # Properties
                         props = obj.get('properties') or []
                         if isinstance(props, list):
                             for p in props:
                                 if not isinstance(p, dict):
                                     continue
-                                db.add(SchemaPropertyDb(
+                                prop_obj = SchemaPropertyDb(
                                     object_id=so.id,
                                     name=p.get('name') or 'column',
                                     logical_type=p.get('logicalType') or p.get('logical_type') or 'string',
                                     required=bool(p.get('required', False)),
                                     unique=bool(p.get('unique', False)),
                                     transform_description=p.get('description'),
-                                ))
+                                )
+                                db.add(prop_obj)
+                                db.flush()
+
+                                # Process property-level authoritativeDefinitions
+                                prop_auth_defs = p.get('authoritativeDefinitions') or []
+                                if isinstance(prop_auth_defs, list):
+                                    for auth_def in prop_auth_defs:
+                                        if isinstance(auth_def, dict) and auth_def.get('url') and auth_def.get('type'):
+                                            db.add(SchemaPropertyAuthorityDb(
+                                                property_id=prop_obj.id,
+                                                url=auth_def['url'],
+                                                type=auth_def['type']
+                                            ))
 
                 created_count += 1
 
@@ -1339,5 +1377,110 @@ class DataContractsManager(SearchableAsset):
                 logger.info(f"Loaded {created_count} data contracts from YAML into DB.")
             else:
                 logger.info("No new data contracts loaded from YAML (existing entries found).")
+
+            # Always process semantic links for contracts with authoritativeDefinitions
+            # This ensures semantic links are created even if contracts already exist
+            self._process_semantic_links_for_demo_data(db, contracts)
         except Exception as e:
             logger.error(f"Failed to load initial data contracts into DB: {e}", exc_info=True)
+
+    def _process_semantic_links_for_demo_data(self, db, contracts_yaml):
+        """Process authoritativeDefinitions from demo contracts and create semantic links."""
+        logger.info(f"Starting semantic links processing for {len(contracts_yaml)} contracts")
+        try:
+            from src.controller.semantic_links_manager import SemanticLinksManager
+            from src.models.semantic_links import EntitySemanticLinkCreate
+
+            semantic_manager = SemanticLinksManager(db)
+            SEMANTIC_ASSIGNMENT_TYPE = "http://databricks.com/ontology/uc/semanticAssignment"
+            links_created = 0
+
+            for contract_yaml in contracts_yaml:
+                contract_name = contract_yaml.get('name')
+                logger.debug(f"Processing contract: {contract_name}")
+
+                if not contract_name:
+                    logger.warning("Contract missing name, skipping")
+                    continue
+
+                # Find the contract in the database
+                contract_db = self.repository.get_by_name(db, name=contract_name)
+                if not contract_db:
+                    logger.warning(f"Contract '{contract_name}' not found in database, skipping")
+                    continue
+
+                logger.debug(f"Found contract in DB: {contract_db.id}")
+
+                # Process contract-level authoritativeDefinitions
+                auth_defs = contract_yaml.get('authoritativeDefinitions', [])
+                logger.debug(f"Contract-level authoritativeDefinitions: {len(auth_defs)}")
+
+                for auth_def in auth_defs:
+                    logger.debug(f"Processing auth_def: {auth_def}")
+                    if isinstance(auth_def, dict) and auth_def.get('type') == SEMANTIC_ASSIGNMENT_TYPE:
+                        url = auth_def.get('url')
+                        if url:
+                            semantic_link = EntitySemanticLinkCreate(
+                                entity_id=str(contract_db.id),
+                                entity_type='data_contract',
+                                iri=url,
+                                label=None
+                            )
+                            logger.info(f"Creating contract semantic link: {semantic_link.entity_type} {semantic_link.entity_id} -> {semantic_link.iri}")
+                            semantic_manager.add(semantic_link, created_by="system")
+                            links_created += 1
+
+                # Process schema-level authoritativeDefinitions
+                schemas = contract_yaml.get('schema', [])
+                for schema_yaml in schemas:
+                    schema_name = schema_yaml.get('name')
+                    if not schema_name:
+                        continue
+
+                    schema_auth_defs = schema_yaml.get('authoritativeDefinitions', [])
+                    for auth_def in schema_auth_defs:
+                        if isinstance(auth_def, dict) and auth_def.get('type') == SEMANTIC_ASSIGNMENT_TYPE:
+                            url = auth_def.get('url')
+                            if url:
+                                entity_id = f"{contract_db.id}#{schema_name}"
+                                semantic_link = EntitySemanticLinkCreate(
+                                    entity_id=entity_id,
+                                    entity_type='data_contract_schema',
+                                    iri=url,
+                                    label=None
+                                )
+                                semantic_manager.add(semantic_link, created_by="system")
+                                links_created += 1
+
+                    # Process property-level authoritativeDefinitions
+                    properties = schema_yaml.get('properties', [])
+                    for prop_yaml in properties:
+                        prop_name = prop_yaml.get('name')
+                        if not prop_name:
+                            continue
+
+                        prop_auth_defs = prop_yaml.get('authoritativeDefinitions', [])
+                        for auth_def in prop_auth_defs:
+                            if isinstance(auth_def, dict) and auth_def.get('type') == SEMANTIC_ASSIGNMENT_TYPE:
+                                url = auth_def.get('url')
+                                if url:
+                                    entity_id = f"{contract_db.id}#{schema_name}#{prop_name}"
+                                    semantic_link = EntitySemanticLinkCreate(
+                                        entity_id=entity_id,
+                                        entity_type='data_contract_property',
+                                        iri=url,
+                                        label=None
+                                    )
+                                    semantic_manager.add(semantic_link, created_by="system")
+                                    links_created += 1
+
+            logger.info(f"Semantic links processing completed. Total links created: {links_created}")
+
+            if links_created > 0:
+                db.commit()
+                logger.info(f"Created {links_created} semantic links from demo contract authoritativeDefinitions")
+            else:
+                logger.warning("No semantic links created from demo contracts - check contract authoritativeDefinitions")
+
+        except Exception as e:
+            logger.error(f"Failed to process semantic links for demo contracts: {e}", exc_info=True)

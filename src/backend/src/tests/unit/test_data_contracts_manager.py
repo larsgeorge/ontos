@@ -25,6 +25,7 @@ from src.db_models.data_contracts import (
     DataQualityCheckDb,
     SchemaObjectAuthorityDb,
     SchemaObjectCustomPropertyDb,
+    SchemaPropertyAuthorityDb,
 )
 
 
@@ -182,6 +183,24 @@ class TestDataContractsManager:
         )
 
         schema_obj.authoritative_definitions = [auth_def1, auth_def2]
+
+        # Add property-level authoritative definitions
+        prop_auth1 = SchemaPropertyAuthorityDb(
+            id="prop-auth-1",
+            property_id=prop1.id,
+            url="http://example.com/business/properties#transactionDate",
+            type="http://databricks.com/ontology/uc/semanticAssignment"
+        )
+
+        prop_auth2 = SchemaPropertyAuthorityDb(
+            id="prop-auth-2",
+            property_id=prop2.id,
+            url="http://example.com/business/properties#receiverId",
+            type="http://databricks.com/ontology/uc/semanticAssignment"
+        )
+
+        prop1.authoritative_definitions = [prop_auth1]
+        prop2.authoritative_definitions = [prop_auth2]
 
         # Add custom properties
         custom_prop = SchemaObjectCustomPropertyDb(
@@ -841,3 +860,39 @@ class TestDataContractsManager:
 
             assert items[1].id == "contract::contract-2"
             assert items[1].description == ""
+
+    def test_build_odcs_property_authoritative_definitions(self, manager, full_contract_db):
+        """Test property-level authoritative definitions in ODCS export."""
+        with patch('src.repositories.data_domain_repository.data_domain_repo') as mock_domain_repo:
+            mock_domain = Mock()
+            mock_domain.name = "seller"
+            mock_domain_repo.get.return_value = mock_domain
+
+            # Mock semantic links manager
+            with patch('src.controller.semantic_links_manager.SemanticLinksManager') as mock_semantic_manager:
+                mock_semantic_manager.return_value.list_for_entity.return_value = []
+
+                mock_db_session = Mock(spec=Session)
+
+                odcs = manager.build_odcs_from_db(full_contract_db, mock_db_session)
+
+                # Test that property-level authoritative definitions are exported
+                schema = odcs['schema'][0]
+                properties = schema['properties']
+
+                # Find the property with authoritative definitions
+                prop_with_auth = None
+                for prop in properties:
+                    if 'authoritativeDefinitions' in prop and len(prop['authoritativeDefinitions']) > 0:
+                        prop_with_auth = prop
+                        break
+
+                if prop_with_auth:
+                    auth_defs = prop_with_auth['authoritativeDefinitions']
+                    assert len(auth_defs) > 0
+
+                    # Check the structure of authoritative definition
+                    auth_def = auth_defs[0]
+                    assert 'url' in auth_def
+                    assert 'type' in auth_def
+                    assert auth_def['type'] == "http://databricks.com/ontology/uc/semanticAssignment"

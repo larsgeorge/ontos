@@ -20,6 +20,7 @@ from src.db_models.data_contracts import (
     DataQualityCheckDb,
     SchemaObjectAuthorityDb,
     SchemaObjectCustomPropertyDb,
+    SchemaPropertyAuthorityDb,
     DataContractCommentDb,
 )
 
@@ -577,6 +578,63 @@ class TestDataContractDbModels:
         business_key = next(p for p in retrieved_schema.custom_properties if p.property == "business_key")
         assert '"user_id"' in business_key.value
 
+    def test_property_with_authoritative_definitions(self, db_session: Session):
+        """Test schema property with authoritative definitions."""
+        contract = DataContractDb(
+            name="Property Authority Contract",
+            version="1.0.0",
+            status="active"
+        )
+        db_session.add(contract)
+        db_session.commit()
+
+        schema_obj = SchemaObjectDb(
+            contract_id=contract.id,
+            name="property_authority_table",
+            logical_type="table"
+        )
+        db_session.add(schema_obj)
+        db_session.commit()
+
+        property_obj = SchemaPropertyDb(
+            object_id=schema_obj.id,
+            name="email",
+            logical_type="string",
+            required=True,
+            classification="pii"
+        )
+        db_session.add(property_obj)
+        db_session.commit()
+
+        # Add property-level authoritative definitions
+        prop_auth_defs = [
+            SchemaPropertyAuthorityDb(
+                property_id=property_obj.id,
+                url="http://example.com/business/properties#email",
+                type="http://databricks.com/ontology/uc/semanticAssignment"
+            ),
+            SchemaPropertyAuthorityDb(
+                property_id=property_obj.id,
+                url="https://schema.org/email",
+                type="http://databricks.com/ontology/uc/semanticAssignment"
+            )
+        ]
+        db_session.add_all(prop_auth_defs)
+        db_session.commit()
+
+        # Verify property authoritative definitions
+        retrieved_property = db_session.query(SchemaPropertyDb).filter_by(id=property_obj.id).first()
+        assert len(retrieved_property.authoritative_definitions) == 2
+
+        business_def = next(a for a in retrieved_property.authoritative_definitions
+                          if "business/properties" in a.url)
+        assert business_def.url == "http://example.com/business/properties#email"
+        assert business_def.type == "http://databricks.com/ontology/uc/semanticAssignment"
+
+        schema_org_def = next(a for a in retrieved_property.authoritative_definitions
+                            if "schema.org" in a.url)
+        assert schema_org_def.url == "https://schema.org/email"
+
     def test_contract_with_comments(self, db_session: Session):
         """Test contract with comments."""
         contract = DataContractDb(
@@ -634,11 +692,21 @@ class TestDataContractDbModels:
         db_session.add(schema_prop)
         db_session.commit()
 
+        # Add property authoritative definition
+        prop_auth = SchemaPropertyAuthorityDb(
+            property_id=schema_prop.id,
+            url="http://example.com/test",
+            type="test"
+        )
+        db_session.add(prop_auth)
+        db_session.commit()
+
         # Verify objects exist
         assert db_session.query(DataContractTagDb).filter_by(contract_id=contract.id).count() == 1
         assert db_session.query(DataContractTeamDb).filter_by(contract_id=contract.id).count() == 1
         assert db_session.query(SchemaObjectDb).filter_by(contract_id=contract.id).count() == 1
         assert db_session.query(SchemaPropertyDb).filter_by(object_id=schema_obj.id).count() == 1
+        assert db_session.query(SchemaPropertyAuthorityDb).filter_by(property_id=schema_prop.id).count() == 1
 
         # Delete contract
         db_session.delete(contract)
@@ -649,6 +717,7 @@ class TestDataContractDbModels:
         assert db_session.query(DataContractTeamDb).filter_by(contract_id=contract.id).count() == 0
         assert db_session.query(SchemaObjectDb).filter_by(contract_id=contract.id).count() == 0
         assert db_session.query(SchemaPropertyDb).filter_by(object_id=schema_obj.id).count() == 0
+        assert db_session.query(SchemaPropertyAuthorityDb).filter_by(property_id=schema_prop.id).count() == 0
 
     def test_contract_timestamps(self, db_session: Session):
         """Test that timestamps are properly set and updated."""

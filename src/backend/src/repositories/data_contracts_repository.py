@@ -30,6 +30,15 @@ class DataContractRepository(CRUDBase[DataContractDb, Dict[str, Any], Union[Dict
     def __init__(self):
         super().__init__(DataContractDb)
 
+    def get_by_name(self, db: Session, *, name: str) -> Optional[DataContractDb]:
+        """Get data contract by name."""
+        try:
+            return db.query(self.model).filter(self.model.name == name).first()
+        except Exception as e:
+            logger.error(f"Error fetching DataContractDb by name {name}: {e}", exc_info=True)
+            db.rollback()
+            raise
+
     def get_with_all(self, db: Session, *, id: str) -> Optional[DataContractDb]:
         try:
             return (

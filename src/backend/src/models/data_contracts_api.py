@@ -43,9 +43,14 @@ class ColumnProperty(BaseModel):
     minItems: Optional[int] = None
     maxItems: Optional[int] = None
 
+    # Semantic concepts for business glossary integration
+    semanticConcepts: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    authoritativeDefinitions: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+
     class Config:
         # Accept both JSON keys: "logicalType" (field name) and "logical_type" (alias)
         populate_by_name = True
+        extra = "allow"  # Allow extra fields from wizard that we don't explicitly define
 
 
 class SchemaObject(BaseModel):
@@ -65,6 +70,7 @@ class SchemaObject(BaseModel):
 
     class Config:
         populate_by_name = True
+        extra = "allow"  # Allow extra fields from wizard
 
 
 class ContractDescription(BaseModel):
@@ -366,6 +372,12 @@ class DataContractUpdate(BaseModel):
     descriptionUsage: Optional[str] = Field(None, alias='description_usage')
     descriptionPurpose: Optional[str] = Field(None, alias='description_purpose')
     descriptionLimitations: Optional[str] = Field(None, alias='description_limitations')
+    # Add schema and semantic links support for updates from wizard
+    schema: Optional[List[SchemaObject]] = Field(None)
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None)
+    qualityRules: Optional[List[QualityRule]] = Field(None)
+    serverConfigs: Optional[List[ServerConfig]] = Field(None)
+    sla: Optional[SLARequirements] = None
 
 
 class DataContractRead(BaseModel):

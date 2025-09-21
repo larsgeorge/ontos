@@ -1,0 +1,82 @@
+# Demo Semantic Links
+# This file defines semantic links between app entities and business concept IRIs
+
+semantic_links:
+  # Data Domain Links to Business Concepts
+  - entity_type: "data_domain"
+    entity_name: "Customer"  # Will be resolved to ID by loader
+    iri: "http://example.com/business/concepts#CustomerDomain"
+    label: "Customer Domain"
+
+  - entity_type: "data_domain"
+    entity_name: "Finance"
+    iri: "http://example.com/business/concepts#FinancialDomain"
+    label: "Financial Domain"
+
+  - entity_type: "data_domain"
+    entity_name: "Sales"
+    iri: "http://example.com/business/concepts#SalesDomain"
+    label: "Sales Domain"
+
+  - entity_type: "data_domain"
+    entity_name: "Marketing"
+    iri: "http://example.com/business/concepts#MarketingDomain"
+    label: "Marketing Domain"
+
+  - entity_type: "data_domain"
+    entity_name: "Retail"
+    iri: "http://example.com/business/concepts#RetailDomain"
+    label: "Retail Domain"
+
+  - entity_type: "data_domain"
+    entity_name: "Product"
+    iri: "http://example.com/business/concepts#ProductDomain"
+    label: "Product Domain"
+
+  - entity_type: "data_domain"
+    entity_name: "Human Resources"
+    iri: "http://example.com/business/concepts#EmployeeDomain"
+    label: "Employee Domain"
+
+  # Data Product Links to Business Concepts
+  - entity_type: "data_product"
+    entity_name: "POS Transaction Stream v1"  # Will be resolved to ID by loader
+    iri: "http://example.com/business/concepts#Sale"
+    label: "Sale"
+
+  - entity_type: "data_product"
+    entity_name: "Prepared Sales Transactions v1"
+    iri: "http://example.com/business/concepts#Transaction"
+    label: "Transaction"
+
+  - entity_type: "data_product"
+    entity_name: "Customer Marketing Recommendations v1"
+    iri: "http://example.com/business/concepts#Customer"
+    label: "Customer"
+
+  - entity_type: "data_product"
+    entity_name: "Retail Performance Dashboard Data v1"
+    iri: "http://example.com/business/concepts#Sale"
+    label: "Sale"
+
+  - entity_type: "data_product"
+    entity_name: "Inventory Optimization Recommendations v1"
+    iri: "http://example.com/business/concepts#Inventory"
+    label: "Inventory"
+
+  - entity_type: "data_product"
+    entity_name: "Price Optimization Model Output v1"
+    iri: "http://example.com/business/concepts#Product"
+    label: "Product"
+
+  # Data Contract Links to Business Concepts
+  # Note: Customer Data Contract semantic links are now defined in the ODCS contract itself
+  # via authoritativeDefinitions at contract, schema, and property levels
+
+# Schema Property Links to Business Properties
+# Note: Property-level semantic links are not currently implemented in the system.
+# The semantic links system currently supports entity-level links only.
+# This section is kept for future reference when property-level linking is implemented.
+
+# Future enhancement: Link individual schema properties within contracts to business properties
+# This would require extending the semantic links system to support property-level granularity

@@ -11,45 +11,81 @@ contracts:
     purpose: Core customer data contract defining customer profile, preferences, and transaction history
     usage: Customer master data to power user-facing apps, analytics, and marketing campaigns
     limitations: Emails must be validated; PII must be encrypted at rest; data retention 7 years max
+  # Contract-level semantic assignments
+  authoritativeDefinitions:
+    - url: "http://example.com/business/concepts#Customer"
+      type: "http://databricks.com/ontology/uc/semanticAssignment"
   schema:
   - name: customers
     physicalName: crm.customers_v2
+    # Schema-level semantic assignments
+    authoritativeDefinitions:
+      - url: "http://example.com/business/concepts#Customer"
+        type: "http://databricks.com/ontology/uc/semanticAssignment"
     properties:
     - name: customer_id
       logicalType: string
       required: true
       unique: true
       description: Unique customer identifier (UUID format)
+      # Property-level semantic assignments
+      authoritativeDefinitions:
+        - url: "http://example.com/business/properties#customerId"
+          type: "http://databricks.com/ontology/uc/semanticAssignment"
     - name: email
       logicalType: string
       required: true
       unique: true
       description: Customer email address (primary contact)
+      # Property-level semantic assignments
+      authoritativeDefinitions:
+        - url: "http://example.com/business/properties#email"
+          type: "http://databricks.com/ontology/uc/semanticAssignment"
     - name: first_name
       logicalType: string
       required: true
       unique: false
       description: Customer first name
+      # Property-level semantic assignments
+      authoritativeDefinitions:
+        - url: "http://example.com/business/properties#firstName"
+          type: "http://databricks.com/ontology/uc/semanticAssignment"
     - name: last_name
       logicalType: string
       required: true
       unique: false
       description: Customer last name
+      # Property-level semantic assignments
+      authoritativeDefinitions:
+        - url: "http://example.com/business/properties#lastName"
+          type: "http://databricks.com/ontology/uc/semanticAssignment"
     - name: date_of_birth
       logicalType: date
       required: false
       unique: false
       description: Customer date of birth (YYYY-MM-DD)
+      # Property-level semantic assignments
+      authoritativeDefinitions:
+        - url: "http://example.com/business/properties#dateOfBirth"
+          type: "http://databricks.com/ontology/uc/semanticAssignment"
     - name: phone_number
       logicalType: string
       required: false
       unique: false
       description: Primary phone number (E.164 format)
+      # Property-level semantic assignments
+      authoritativeDefinitions:
+        - url: "http://example.com/business/properties#phoneNumber"
+          type: "http://databricks.com/ontology/uc/semanticAssignment"
     - name: country_code
       logicalType: string
       required: true
       unique: false
       description: ISO 3166-1 alpha-2 country code
+      # Property-level semantic assignments
+      authoritativeDefinitions:
+        - url: "http://example.com/business/properties#country"
+          type: "http://databricks.com/ontology/uc/semanticAssignment"
     - name: registration_date
       logicalType: timestamp
       required: true
@@ -120,6 +156,10 @@ contracts:
       description: Preference last update timestamp (UTC)
   - name: customer_addresses
     physicalName: crm.customer_addresses
+    # Schema-level semantic assignments
+    authoritativeDefinitions:
+      - url: "http://example.com/business/concepts#CustomerProfile"
+        type: "http://databricks.com/ontology/uc/semanticAssignment"
     properties:
     - name: address_id
       logicalType: string
@@ -141,6 +181,10 @@ contracts:
       required: true
       unique: false
       description: Street address line 1
+      # Property-level semantic assignments
+      authoritativeDefinitions:
+        - url: "http://example.com/business/properties#streetAddress"
+          type: "http://databricks.com/ontology/uc/semanticAssignment"
     - name: street_address_2
       logicalType: string
       required: false
@@ -151,16 +195,28 @@ contracts:
       required: true
       unique: false
       description: City name
+      # Property-level semantic assignments
+      authoritativeDefinitions:
+        - url: "http://example.com/business/properties#city"
+          type: "http://databricks.com/ontology/uc/semanticAssignment"
     - name: state_province
       logicalType: string
       required: false
       unique: false
       description: State or province name
+      # Property-level semantic assignments
+      authoritativeDefinitions:
+        - url: "http://example.com/business/properties#state"
+          type: "http://databricks.com/ontology/uc/semanticAssignment"
     - name: postal_code
       logicalType: string
       required: true
       unique: false
       description: Postal or ZIP code
+      # Property-level semantic assignments
+      authoritativeDefinitions:
+        - url: "http://example.com/business/properties#zipCode"
+          type: "http://databricks.com/ontology/uc/semanticAssignment"
     - name: country_code
       logicalType: string
       required: true

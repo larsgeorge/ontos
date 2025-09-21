@@ -223,6 +223,7 @@ class SchemaPropertyDb(Base):
     business_name = Column(String, nullable=True)  # ODCS businessName field at property level
     schema_object = relationship("SchemaObjectDb", back_populates="properties")
     parent_property = relationship("SchemaPropertyDb", remote_side=[id])
+    authoritative_definitions = relationship("SchemaPropertyAuthorityDb", back_populates="property", cascade="all, delete-orphan")
 
 
 class DataQualityCheckDb(Base):
@@ -291,5 +292,15 @@ class SchemaObjectCustomPropertyDb(Base):
     property = Column(String, nullable=False)
     value = Column(Text, nullable=True)
     schema_object = relationship("SchemaObjectDb", back_populates="custom_properties")
+
+
+class SchemaPropertyAuthorityDb(Base):
+    """ODCS v3.0.2 property-level authoritative definitions"""
+    __tablename__ = "data_contract_schema_property_authorities"
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    property_id = Column(String, ForeignKey("data_contract_schema_properties.id", ondelete="CASCADE"), nullable=False, index=True)
+    url = Column(String, nullable=False)
+    type = Column(String, nullable=False)
+    property = relationship("SchemaPropertyDb", back_populates="authoritative_definitions")
 
 

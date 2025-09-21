@@ -7,6 +7,7 @@ import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, Ke
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DataTable } from '@/components/ui/data-table'
 import { ColumnDef } from '@tanstack/react-table'
 import DataContractWizardDialog from '@/components/data-contracts/data-contract-wizard-dialog'
@@ -22,29 +23,62 @@ import useBreadcrumbStore from '@/stores/breadcrumb-store'
 // Define column structure for schema properties
 type SchemaProperty = {
   name: string
-  logicalType: string
+  logicalType?: string
+  logical_type?: string  // API response uses underscore
   required: boolean
   unique: boolean
   description?: string
 }
 
-// Column definition for schema properties table
-const schemaPropertyColumns: ColumnDef<SchemaProperty>[] = [
+// Define this as a function to access component state
+const createSchemaPropertyColumns = (
+  contract: DataContract | null,
+  selectedSchemaIndex: number,
+  propertyLinks: Record<string, EntitySemanticLink[]>
+): ColumnDef<SchemaProperty>[] => [
   {
     accessorKey: 'name',
     header: 'Column Name',
-    cell: ({ row }) => (
-      <span className="font-mono font-medium">{row.getValue('name')}</span>
-    ),
+    cell: ({ row }) => {
+      const property = row.original
+      const schemaName = contract?.schema?.[selectedSchemaIndex]?.name || ''
+      const propertyKey = `${schemaName}.${property.name}`
+      const links = propertyLinks[propertyKey] || []
+
+      return (
+        <div>
+          <span className="font-mono font-medium">{property.name}</span>
+          {links.length > 0 && (
+            <div className="text-xs text-muted-foreground mt-1">
+              {links.map((link, idx) => (
+                <div key={idx}>
+                  <span
+                    className="cursor-pointer hover:underline"
+                    onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
+                    title={link.iri}
+                  >
+                    ↳ {link.iri.split('/').pop() || link.iri}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    },
   },
   {
     accessorKey: 'logicalType',
     header: 'Data Type',
-    cell: ({ row }) => (
-      <Badge variant="secondary" className="text-xs">
-        {row.getValue('logicalType')}
-      </Badge>
-    ),
+    cell: ({ row }) => {
+      const property = row.original
+      const logicalType = property.logicalType || (property as any).logical_type
+      return (
+        <Badge variant="secondary" className="text-xs">
+          {logicalType || 'N/A'}
+        </Badge>
+      )
+    },
   },
   {
     accessorKey: 'required',
@@ -91,6 +125,9 @@ export default function DataContractDetails() {
   const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false)
   const [iriDialogOpen, setIriDialogOpen] = useState(false)
   const [links, setLinks] = useState<EntitySemanticLink[]>([])
+  const [selectedSchemaIndex, setSelectedSchemaIndex] = useState(0)
+  const [schemaLinks, setSchemaLinks] = useState<Record<string, EntitySemanticLink[]>>({})
+  const [propertyLinks, setPropertyLinks] = useState<Record<string, EntitySemanticLink[]>>({})
 
   const fetchDetails = async () => {
     if (!contractId) return
@@ -150,6 +187,46 @@ export default function DataContractDetails() {
         setLinks(Array.isArray(linksData) ? linksData : [])
       } else {
         setLinks([])
+      }
+
+      // Fetch schema and property semantic links if contract has schemas
+      if (contractData?.schema) {
+        const schemaLinksMap: Record<string, EntitySemanticLink[]> = {}
+        const propertyLinksMap: Record<string, EntitySemanticLink[]> = {}
+
+        for (const schema of contractData.schema) {
+          // Fetch schema-level semantic links
+          const schemaEntityId = `${contractId}#${schema.name}`
+          try {
+            const schemaLinksRes = await fetch(`/api/semantic-links/entity/data_contract_schema/${schemaEntityId}`)
+            if (schemaLinksRes.ok) {
+              const schemaLinksData = await schemaLinksRes.json()
+              schemaLinksMap[schema.name] = Array.isArray(schemaLinksData) ? schemaLinksData : []
+            }
+          } catch (e) {
+            console.warn(`Failed to fetch schema links for ${schema.name}:`, e)
+          }
+
+          // Fetch property-level semantic links
+          if (schema.properties) {
+            for (const property of schema.properties) {
+              const propertyEntityId = `${contractId}#${schema.name}#${property.name}`
+              const propertyKey = `${schema.name}.${property.name}`
+              try {
+                const propertyLinksRes = await fetch(`/api/semantic-links/entity/data_contract_property/${propertyEntityId}`)
+                if (propertyLinksRes.ok) {
+                  const propertyLinksData = await propertyLinksRes.json()
+                  propertyLinksMap[propertyKey] = Array.isArray(propertyLinksData) ? propertyLinksData : []
+                }
+              } catch (e) {
+                console.warn(`Failed to fetch property links for ${propertyKey}:`, e)
+              }
+            }
+          }
+        }
+
+        setSchemaLinks(schemaLinksMap)
+        setPropertyLinks(propertyLinksMap)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
@@ -508,7 +585,24 @@ export default function DataContractDetails() {
               // Single schema - no tabs needed
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
-                  <Label className="text-base font-semibold">{contract.schema[0].name}</Label>
+                  <div>
+                    <Label className="text-base font-semibold">{contract.schema[0].name}</Label>
+                    {schemaLinks[contract.schema[0].name] && schemaLinks[contract.schema[0].name].length > 0 && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {schemaLinks[contract.schema[0].name].map((link, idx) => (
+                          <span key={idx} className="mr-2">
+                            <span
+                              className="cursor-pointer hover:underline"
+                              onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
+                              title={link.iri}
+                            >
+                              🔗 {link.iri.split('/').pop() || link.iri}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   {contract.schema[0].physicalName && (
                     <Badge variant="outline" className="text-xs">
                       Physical: {contract.schema[0].physicalName}
@@ -517,47 +611,123 @@ export default function DataContractDetails() {
                 </div>
                 {contract.schema[0].properties && contract.schema[0].properties.length > 0 && (
                   <DataTable
-                    columns={schemaPropertyColumns}
+                    columns={createSchemaPropertyColumns(contract, 0, propertyLinks)}
                     data={contract.schema[0].properties as SchemaProperty[]}
                     searchColumn="name"
                   />
                 )}
               </div>
-            ) : (
-              // Multiple schemas - use tabs
-              <Tabs defaultValue={contract.schema[0]?.name || '0'}>
-                <TabsList className="mb-4">
-                  {contract.schema.map((schemaObj, idx) => (
-                    <TabsTrigger key={idx} value={schemaObj.name || idx.toString()}>
-                      {schemaObj.name || `Table ${idx + 1}`}
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        ({schemaObj.properties?.length || 0})
-                      </span>
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-                {contract.schema.map((schemaObj, idx) => (
-                  <TabsContent key={idx} value={schemaObj.name || idx.toString()}>
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-4">
-                        <Label className="text-base font-semibold">{schemaObj.name}</Label>
-                        {schemaObj.physicalName && (
-                          <Badge variant="outline" className="text-xs">
-                            Physical: {schemaObj.physicalName}
-                          </Badge>
-                        )}
-                      </div>
-                      {schemaObj.properties && schemaObj.properties.length > 0 && (
-                        <DataTable
-                          columns={schemaPropertyColumns}
-                          data={schemaObj.properties as SchemaProperty[]}
-                          searchColumn="name"
-                        />
+            ) : contract.schema.length > 6 ? (
+              // Many schemas - use dropdown selector
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <Label>Select Schema:</Label>
+                  <Select value={selectedSchemaIndex.toString()} onValueChange={(value) => setSelectedSchemaIndex(parseInt(value))}>
+                    <SelectTrigger className="w-80">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[40vh] overflow-y-auto" position="popper" sideOffset={5}>
+                      {contract.schema.map((schemaObj, idx) => (
+                        <SelectItem key={idx} value={idx.toString()}>
+                          {schemaObj.name || `Table ${idx + 1}`} ({schemaObj.properties?.length || 0} columns)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <Label className="text-base font-semibold">{contract.schema[selectedSchemaIndex]?.name || `Table ${selectedSchemaIndex + 1}`}</Label>
+                      {contract.schema[selectedSchemaIndex]?.name && schemaLinks[contract.schema[selectedSchemaIndex].name] && schemaLinks[contract.schema[selectedSchemaIndex].name].length > 0 && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {schemaLinks[contract.schema[selectedSchemaIndex].name].map((link, idx) => (
+                            <span key={idx} className="mr-2">
+                              <span
+                                className="cursor-pointer hover:underline"
+                                onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
+                                title={link.iri}
+                              >
+                                🔗 {link.iri.split('/').pop() || link.iri}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
-                  </TabsContent>
-                ))}
-              </Tabs>
+                    {contract.schema[selectedSchemaIndex]?.physicalName && (
+                      <Badge variant="outline" className="text-xs">
+                        Physical: {contract.schema[selectedSchemaIndex].physicalName}
+                      </Badge>
+                    )}
+                  </div>
+                  {contract.schema[selectedSchemaIndex]?.properties && contract.schema[selectedSchemaIndex].properties.length > 0 && (
+                    <DataTable
+                      columns={createSchemaPropertyColumns(contract, selectedSchemaIndex, propertyLinks)}
+                      data={contract.schema[selectedSchemaIndex].properties as SchemaProperty[]}
+                      searchColumn="name"
+                    />
+                  )}
+                </div>
+              </div>
+            ) : (
+              // Few schemas - use tabs with custom scrollable container
+              <div className="space-y-4">
+                <div className="w-full overflow-x-auto">
+                  <div className="flex border-b border-border">
+                    {contract.schema.map((schemaObj, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setSelectedSchemaIndex(idx)}
+                        className={`flex-shrink-0 px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                          selectedSchemaIndex === idx
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
+                        }`}
+                      >
+                        {schemaObj.name || `Table ${idx + 1}`}
+                        <span className="ml-2 text-xs">
+                          ({schemaObj.properties?.length || 0})
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <Label className="text-base font-semibold">{contract.schema[selectedSchemaIndex]?.name || `Table ${selectedSchemaIndex + 1}`}</Label>
+                      {contract.schema[selectedSchemaIndex]?.name && schemaLinks[contract.schema[selectedSchemaIndex].name] && schemaLinks[contract.schema[selectedSchemaIndex].name].length > 0 && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {schemaLinks[contract.schema[selectedSchemaIndex].name].map((link, idx) => (
+                            <span key={idx} className="mr-2">
+                              <span
+                                className="cursor-pointer hover:underline"
+                                onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
+                                title={link.iri}
+                              >
+                                🔗 {link.iri.split('/').pop() || link.iri}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {contract.schema[selectedSchemaIndex]?.physicalName && (
+                      <Badge variant="outline" className="text-xs">
+                        Physical: {contract.schema[selectedSchemaIndex].physicalName}
+                      </Badge>
+                    )}
+                  </div>
+                  {contract.schema[selectedSchemaIndex]?.properties && contract.schema[selectedSchemaIndex].properties.length > 0 && (
+                    <DataTable
+                      columns={createSchemaPropertyColumns(contract, selectedSchemaIndex, propertyLinks)}
+                      data={contract.schema[selectedSchemaIndex].properties as SchemaProperty[]}
+                      searchColumn="name"
+                    />
+                  )}
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -576,15 +746,41 @@ export default function DataContractDetails() {
           version: contract.version,
           status: contract.status,
           owner: contract.owner,
-          domain: contract.domainId || contract.domain, // Use domainId if available, fallback to domain
+          domain: (contract as any).domain_id || contract.domainId, // Use domain_id (backend) or domainId (frontend)
           tenant: contract.tenant,
           dataProduct: contract.dataProduct,
           // Flatten description for wizard compatibility
           descriptionUsage: contract.description?.usage,
           descriptionPurpose: contract.description?.purpose,
           descriptionLimitations: contract.description?.limitations,
-          // Rename schema to schemaObjects for wizard compatibility
-          schemaObjects: contract.schema,
+          // Rename schema to schemaObjects for wizard compatibility and include semantic concepts
+          schemaObjects: contract.schema?.map(schema => ({
+            ...schema,
+            semanticConcepts: (schemaLinks[schema.name] || [])
+              .map(link => ({
+                iri: link.iri,
+                label: link.label || link.iri.split('#')[1] || link.iri,
+                description: link.description,
+                type: link.type || 'class'
+              })),
+            properties: schema.properties?.map(property => ({
+              ...property,
+              semanticConcepts: (propertyLinks[`${schema.name}#${property.name}`] || [])
+                .map(link => ({
+                  iri: link.iri,
+                  label: link.label || link.iri.split('#')[1] || link.iri,
+                  description: link.description,
+                  type: link.type || 'class'
+                }))
+            })) || []
+          })) || [],
+          // Convert contract-level semantic links to wizard format
+          contractSemanticConcepts: (links || []).map(link => ({
+            iri: link.iri,
+            label: link.label || link.iri.split('#')[1] || link.iri,
+            description: link.description,
+            type: link.type || 'class'
+          })),
           team: contract.team,
           accessControl: contract.accessControl,
           support: contract.support,
@@ -594,7 +790,7 @@ export default function DataContractDetails() {
         }}
         onSubmit={async (payload) => {
           try {
-            // Transform payload to match backend expectations
+            // Transform payload to match backend expectations - include ALL fields from wizard
             const transformedPayload = {
               name: payload.name,
               version: payload.version,
@@ -604,11 +800,17 @@ export default function DataContractDetails() {
               apiVersion: payload.apiVersion,
               tenant: payload.tenant,
               dataProduct: payload.dataProduct,
-              domain_id: payload.domain, // Backend expects domain_id (with underscore)
+              domain_id: payload.domainId, // Use the domainId from wizard payload
               // Flatten description object
               descriptionUsage: payload.description?.usage,
               descriptionPurpose: payload.description?.purpose,
               descriptionLimitations: payload.description?.limitations,
+              // Include schema and other important fields that the wizard sends
+              schema: payload.schema,
+              authoritativeDefinitions: payload.authoritativeDefinitions,
+              qualityRules: payload.qualityRules,
+              serverConfigs: payload.serverConfigs,
+              sla: payload.sla,
             }
             
             

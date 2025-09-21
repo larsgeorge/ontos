@@ -15,6 +15,7 @@ import { Card } from '@/components/ui/card'; // Simple card for node
 
 interface DataDomainMiniGraphProps {
   currentDomain: DataDomain; // Full current domain for its details
+  onNodeClick?: (domainId: string) => void; // Optional override for click handling
 }
 
 const nodeWidth = 150;
@@ -39,13 +40,17 @@ const CustomNode = ({ data }: { data: { label: string; domainId: string; onClick
 
 const nodeTypes = { custom: CustomNode };
 
-export const DataDomainMiniGraph: React.FC<DataDomainMiniGraphProps> = ({ currentDomain }) => {
+export const DataDomainMiniGraph: React.FC<DataDomainMiniGraphProps> = ({ currentDomain, onNodeClick }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const navigate = useNavigate();
 
   const handleNodeClick = (domainId: string) => {
-    navigate(`/data-domains/${domainId}`);
+    if (onNodeClick) {
+      onNodeClick(domainId);
+    } else {
+      navigate(`/data-domains/${domainId}`);
+    }
   };
 
   useEffect(() => {
@@ -183,25 +188,8 @@ export const DataDomainMiniGraph: React.FC<DataDomainMiniGraphProps> = ({ curren
     setEdges(newEdges);
   }, [currentDomain, navigate, setNodes, setEdges]);
   
-  const graphHeight = useMemo(() => {
-    const parentExists = !!currentDomain.parent_info;
-    const numChildren = currentDomain.children_info ? currentDomain.children_info.length : 0;
-
-    const isSimpleHorizontalLayout = 
-      (parentExists && numChildren === 0) ||
-      (!parentExists && numChildren <= 1) ||
-      (parentExists && numChildren === 1);
-
-    if (isSimpleHorizontalLayout) {
-      return nodeHeight + (2 * fixedPadding); // Single row of nodes
-    } else {
-      // Christmas Tree layout
-      let levels = 1; // Current node
-      if (parentExists) levels++;
-      if (numChildren > 0) levels++; // If children exist, they form a new level
-      return (levels * nodeHeight) + Math.max(0, (levels - 1)) * verticalLevelSpacing + (2 * fixedPadding);
-    }
-  }, [currentDomain]);
+  // Fixed height for consistent layout; rely on fitView to include all nodes
+  const graphHeight = 220;
   
   // Conditional rendering based on whether there's anything to show beyond the current node
   // If only the current node exists (no parent, no children), don't render the graph.
@@ -220,7 +208,6 @@ export const DataDomainMiniGraph: React.FC<DataDomainMiniGraphProps> = ({ curren
   };
 
   return (
-    // Removed maxWidth from style, width: '100%' remains implicitly via block behavior or can be explicit if needed
     <div style={{ height: graphHeight, margin: 'auto' }} className="border rounded-lg overflow-hidden bg-muted/20 w-full">
       <ReactFlow
         nodes={nodes}
@@ -230,7 +217,7 @@ export const DataDomainMiniGraph: React.FC<DataDomainMiniGraphProps> = ({ curren
         nodeTypes={nodeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         fitView
-        fitViewOptions={{ padding: 0.2 }} // Increased padding slightly
+        fitViewOptions={{ padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
         nodesDraggable={false}
         nodesConnectable={false}
@@ -240,7 +227,8 @@ export const DataDomainMiniGraph: React.FC<DataDomainMiniGraphProps> = ({ curren
         minZoom={0.1} // Allow more aggressive zoom out if needed
         maxZoom={1.5}
       >
-        {/* No Background or Controls for a very simple graph */}
+        {/* Ensure viewport fits nodes on first render and when layout changes */}
+        {/* reactflow will auto fit with fitView on mount and when size changes; to enforce on data change, we can key the flow */}
       </ReactFlow>
     </div>
   );

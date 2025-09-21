@@ -188,6 +188,25 @@ export default function KGSearch({
     if (urlConceptsOnly !== initialShowConceptsOnly) setShowConceptsOnly(urlConceptsOnly);
   }, [location.search]);
 
+  // Load neighbors when path changes
+  useEffect(() => {
+    const loadNeighbors = async () => {
+      if (path.length > 0) {
+        const currentIri = path[path.length - 1];
+        try {
+          const res = await get<Neighbor[]>(`/api/semantic-models/neighbors?iri=${encodeURIComponent(currentIri)}&limit=200`);
+          setNeighbors(res.data || []);
+        } catch (e) {
+          console.error('Failed to load neighbors:', e);
+          setNeighbors([]);
+        }
+      } else {
+        setNeighbors([]);
+      }
+    };
+    loadNeighbors();
+  }, [path]);
+
   // Prefix search
   useEffect(() => {
     const run = async () => {
@@ -208,25 +227,18 @@ export default function KGSearch({
     const newPath = [iri];
     setPath(newPath);
     updateUrl({ path: newPath });
-    const res = await get<Neighbor[]>(`/api/semantic-models/neighbors?iri=${encodeURIComponent(iri)}&limit=200`);
-    setNeighbors(res.data || []);
   };
 
   const stepTo = async (iri: string) => {
     const newPath = [...path, iri];
     setPath(newPath);
     updateUrl({ path: newPath });
-    const res = await get<Neighbor[]>(`/api/semantic-models/neighbors?iri=${encodeURIComponent(iri)}&limit=200`);
-    setNeighbors(res.data || []);
   };
 
   const jumpTo = async (index: number) => {
     const newPath = path.slice(0, index + 1);
     setPath(newPath);
     updateUrl({ path: newPath });
-    const iri = newPath[newPath.length - 1];
-    const res = await get<Neighbor[]>(`/api/semantic-models/neighbors?iri=${encodeURIComponent(iri)}&limit=200`);
-    setNeighbors(res.data || []);
   };
 
   const runSparql = async () => {
