@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { Shapes, Columns2, FileText, Package, Globe, X } from 'lucide-react';
 
 type ConceptItem = { value: string; label: string; type: 'class' };
 type Neighbor = {
@@ -139,6 +140,17 @@ export default function ConceptsSearch({
     return () => clearTimeout(timer);
   }, [conceptSearchQuery]);
 
+  const clearSearch = () => {
+    setConceptSearchQuery('');
+    setSelectedConcept(null);
+    setConceptIri('');
+    setConceptLabel('');
+    setConceptNeighbors([]);
+    setSemanticLinks([]);
+    setIsConceptDropdownOpen(false);
+    updateUrl({ query: '', conceptIri: '' });
+  };
+
   // Select a concept and load its details
   const selectConcept = async (concept: ConceptItem) => {
     setSelectedConcept(concept);
@@ -246,6 +258,26 @@ export default function ConceptsSearch({
           case 'data_domain':
             endpoint = `/api/data-domains/${link.entity_id}`;
             break;
+          case 'data_contract_schema': {
+            const [contractId, schemaName] = String(link.entity_id).split('#');
+            if (contractId) {
+              const contractRes = await get<any>(`/api/data-contracts/${contractId}`);
+              const contractTitle = contractRes.data?.name || contractRes.data?.info?.title || contractId;
+              entityName = `${contractTitle}#${schemaName || ''}`.trim();
+            }
+            enrichedLinks.push({ ...link, entity_name: entityName });
+            continue;
+          }
+          case 'data_contract_property': {
+            const [contractId, schemaName, propertyName] = String(link.entity_id).split('#');
+            if (contractId) {
+              const contractRes = await get<any>(`/api/data-contracts/${contractId}`);
+              const contractTitle = contractRes.data?.name || contractRes.data?.info?.title || contractId;
+              entityName = `${contractTitle}#${schemaName || ''}.${propertyName || ''}`.trim();
+            }
+            enrichedLinks.push({ ...link, entity_name: entityName });
+            continue;
+          }
           default:
             enrichedLinks.push({ ...link, entity_name: link.entity_id });
             continue;
@@ -378,6 +410,18 @@ export default function ConceptsSearch({
             placeholder="Type to search by name, label, or IRI..."
             className="w-full"
           />
+          {(conceptSearchQuery || selectedConcept) && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1 h-7 w-7"
+              onClick={clearSearch}
+              aria-label="Clear"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
 
           {/* Search Results Dropdown */}
           {isConceptDropdownOpen && conceptSearchResults.length > 0 && (
@@ -387,8 +431,12 @@ export default function ConceptsSearch({
                   key={result.value}
                   className="px-3 py-2 text-popover-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer border-b border-border last:border-b-0 transition-colors"
                   onClick={() => selectConcept(result)}
+                  title={result.value}
                 >
-                  <div className="text-sm">{result.label} - {result.value}</div>
+                  <div className="text-sm flex items-center gap-2">
+                    <Shapes className="h-4 w-4 text-muted-foreground" />
+                    <span className="truncate">{result.label} - {result.value}</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -403,9 +451,9 @@ export default function ConceptsSearch({
           <Card>
             <CardContent className="pt-4">
               <div className="space-y-2">
-                <div>
-                  <span className="text-sm font-medium text-muted-foreground">IRI: </span>
-                  <span className="text-sm font-mono text-foreground">{conceptIri}</span>
+                <div className="flex items-center gap-2">
+                  <Shapes className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-mono text-foreground break-all">{conceptIri}</span>
                 </div>
                 {conceptNeighbors.filter(n =>
                   n.direction === 'outgoing' &&
@@ -442,10 +490,11 @@ export default function ConceptsSearch({
                         <Badge
                           key={idx}
                           variant="outline"
-                          className="cursor-pointer hover:bg-accent"
+                          className="cursor-pointer hover:bg-accent inline-flex items-center gap-1"
                           onClick={() => parent.stepIri && navigateToConcept(parent.stepIri)}
                         >
-                          {parent.display.split('/').pop() || parent.display.split('#').pop() || parent.display}
+                          <Shapes className="h-3 w-3" />
+                          {parent.display.split('#').pop() || parent.display.split('/').pop() || parent.display}
                         </Badge>
                       ))
                     )}
@@ -462,10 +511,11 @@ export default function ConceptsSearch({
                         <Badge
                           key={idx}
                           variant="outline"
-                          className="cursor-pointer hover:bg-accent"
+                          className="cursor-pointer hover:bg-accent inline-flex items-center gap-1"
                           onClick={() => sub.stepIri && navigateToConcept(sub.stepIri)}
                         >
-                          {sub.display.split('/').pop() || sub.display.split('#').pop() || sub.display}
+                          <Shapes className="h-3 w-3" />
+                          {sub.display.split('#').pop() || sub.display.split('/').pop() || sub.display}
                         </Badge>
                       ))
                     )}
@@ -485,8 +535,9 @@ export default function ConceptsSearch({
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {getRelatedProperties().map((prop, idx) => (
-                      <Badge key={idx} variant="secondary" className="text-xs">
-                        {prop.display.split('/').pop() || prop.display.split('#').pop() || prop.display}
+                      <Badge key={idx} variant="secondary" className="text-xs inline-flex items-center gap-1">
+                        <Columns2 className="h-3 w-3" />
+                        {prop.display.split('#').pop() || prop.display.split('/').pop() || prop.display}
                       </Badge>
                     ))}
                   </div>
@@ -504,17 +555,31 @@ export default function ConceptsSearch({
                   <p className="text-sm text-center text-muted-foreground">No catalog objects assigned.</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {getCatalogObjects().map((link) => (
-                      <Badge
-                        key={link.id}
-                        variant="outline"
-                        className="text-xs cursor-pointer hover:bg-accent transition-colors"
-                        onClick={() => navigateToEntity(link)}
-                        title={`Click to view ${link.entity_type.replace('_', ' ')} details`}
-                      >
-                        {link.entity_type.replace('_', ' ')}: {link.entity_name || link.entity_id}
-                      </Badge>
-                    ))}
+                    {getCatalogObjects().map((link) => {
+                      const typeLabel = link.entity_type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                      const Icon = link.entity_type === 'data_contract'
+                        ? FileText
+                        : link.entity_type === 'data_product'
+                        ? Package
+                        : link.entity_type === 'data_domain'
+                        ? Globe
+                        : link.entity_type === 'data_contract_schema'
+                        ? Shapes
+                        : link.entity_type === 'data_contract_property'
+                        ? Columns2
+                        : FileText;
+                      return (
+                        <Badge
+                          key={link.id}
+                          variant="outline"
+                          className="text-xs inline-flex items-center gap-1 cursor-pointer hover:bg-accent transition-colors"
+                          onClick={() => navigateToEntity(link)}
+                          title={`Click to view ${typeLabel} details`}
+                        >
+                          <Icon className="h-3 w-3" /> {typeLabel}: {link.entity_name || link.entity_id}
+                        </Badge>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
