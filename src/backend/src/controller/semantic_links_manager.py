@@ -90,24 +90,44 @@ class SemanticLinksManager:
         self._db.flush()
         self._db.refresh(db_obj)
         
-        # Trigger KG refresh
+        # Incrementally update the in-memory RDF graph via the shared manager on app.state
         try:
-            from src.controller.semantic_models_manager import SemanticModelsManager
-            # Reuse same DB session to get manager from app.state is not available here; instantiate lightweight
-            sm = SemanticModelsManager(db=self._db)
-            sm.on_models_changed()
+            from fastapi import Request
+            # Access global app.state manager through SQLAlchemy session bind info when available
+            # Fallback: attempt to import a locator util
+            manager = None
+            try:
+                # Preferred path: retrieve from a globally stored application reference
+                from src.common.app_state import get_app_state_manager
+                manager = get_app_state_manager('semantic_models_manager')
+            except Exception:
+                manager = None
+            if manager is not None:
+                manager.add_entity_semantic_link_to_graph(payload.entity_type, payload.entity_id, payload.iri)
+            else:
+                # As a safe fallback, perform a lightweight rebuild using a temp instance
+                from src.controller.semantic_models_manager import SemanticModelsManager
+                SemanticModelsManager(db=self._db).on_models_changed()
         except Exception as e:
-            logger.warning(f"Failed to trigger KG refresh after link add: {e}")
+            logger.warning(f"Failed to update KG after link add: {e}")
         return self._to_api(db_obj)
 
     def remove(self, link_id: str) -> bool:
         removed = entity_semantic_links_repo.remove(self._db, id=link_id)
         try:
-            from src.controller.semantic_models_manager import SemanticModelsManager
-            sm = SemanticModelsManager(db=self._db)
-            sm.on_models_changed()
+            manager = None
+            try:
+                from src.common.app_state import get_app_state_manager
+                manager = get_app_state_manager('semantic_models_manager')
+            except Exception:
+                manager = None
+            if removed and manager is not None:
+                manager.remove_entity_semantic_link_from_graph(removed.entity_type, removed.entity_id, removed.iri)
+            else:
+                from src.controller.semantic_models_manager import SemanticModelsManager
+                SemanticModelsManager(db=self._db).on_models_changed()
         except Exception as e:
-            logger.warning(f"Failed to trigger KG refresh after link removal: {e}")
+            logger.warning(f"Failed to update KG after link removal: {e}")
         return removed is not None
 
 

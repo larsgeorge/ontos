@@ -208,6 +208,12 @@ class SemanticModelsManager:
             except Exception as e:
                 logger.warning(f"Skipping model '{it.name}' due to parse error: {e}")
         
+        # Load application entities (data domains, data products, data contracts) into a named graph
+        try:
+            self._load_app_entities_into_graph()
+        except Exception as e:
+            logger.warning(f"Failed to load application entities into graph: {e}")
+
         # Load file-based taxonomies into named graphs
         try:
             taxonomy_dir = self._data_dir / "taxonomies"
@@ -578,6 +584,71 @@ class SemanticModelsManager:
             add('predicate', uri, o, o)
 
         return results
+
+    # --- App Entities & Incremental Link Updates ---
+
+    def _load_app_entities_into_graph(self) -> None:
+        """Load core application entities into the RDF graph with labels/types.
+
+        Adds triples into the 'urn:app-entities' named graph so they persist across rebuilds.
+        """
+        from sqlalchemy import text as sql_text
+        from rdflib.namespace import RDF
+
+        context = self._graph.get_context("urn:app-entities")
+
+        # Data Domains: table data_domains(id, name)
+        try:
+            rows = self._db.execute(sql_text("SELECT id, name FROM data_domains")).fetchall()
+            for r in rows:
+                subj = URIRef(f"urn:ucapp:data_domain:{r[0]}")
+                context.add((subj, RDF.type, URIRef("urn:ucapp:entity-type:data_domain")))
+                if r[1]:
+                    context.add((subj, RDFS.label, Literal(str(r[1]))))
+        except Exception as e:
+            logger.debug(f"Skipping data domains load into graph: {e}")
+
+        # Data Products: resolve id and title from data_product_info
+        try:
+            rows = self._db.execute(sql_text("SELECT data_product_id, title FROM data_product_info")).fetchall()
+            for r in rows:
+                subj = URIRef(f"urn:ucapp:data_product:{r[0]}")
+                context.add((subj, RDF.type, URIRef("urn:ucapp:entity-type:data_product")))
+                if r[1]:
+                    context.add((subj, RDFS.label, Literal(str(r[1]))))
+        except Exception as e:
+            logger.debug(f"Skipping data products load into graph: {e}")
+
+        # Data Contracts: table data_contracts(id, name)
+        try:
+            rows = self._db.execute(sql_text("SELECT id, name FROM data_contracts")).fetchall()
+            for r in rows:
+                subj = URIRef(f"urn:ucapp:data_contract:{r[0]}")
+                context.add((subj, RDF.type, URIRef("urn:ucapp:entity-type:data_contract")))
+                if r[1]:
+                    context.add((subj, RDFS.label, Literal(str(r[1]))))
+        except Exception as e:
+            logger.debug(f"Skipping data contracts load into graph: {e}")
+
+    def add_entity_semantic_link_to_graph(self, entity_type: str, entity_id: str, iri: str) -> None:
+        """Incrementally add a single semantic link triple into the graph without full rebuild."""
+        try:
+            context = self._graph.get_context("urn:semantic-links")
+            subj = URIRef(f"urn:ucapp:{entity_type}:{entity_id}")
+            obj = URIRef(iri)
+            context.add((subj, RDFS.seeAlso, obj))
+        except Exception as e:
+            logger.warning(f"Failed to add semantic link incrementally: {e}")
+
+    def remove_entity_semantic_link_from_graph(self, entity_type: str, entity_id: str, iri: str) -> None:
+        """Incrementally remove a single semantic link triple from the graph without full rebuild."""
+        try:
+            context = self._graph.get_context("urn:semantic-links")
+            subj = URIRef(f"urn:ucapp:{entity_type}:{entity_id}")
+            obj = URIRef(iri)
+            context.remove((subj, RDFS.seeAlso, obj))
+        except Exception as e:
+            logger.warning(f"Failed to remove semantic link incrementally: {e}")
 
     # --- New Ontology Methods ---
     

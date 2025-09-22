@@ -1403,8 +1403,9 @@ class DataContractsManager(SearchableAsset):
                     logger.warning("Contract missing name, skipping")
                     continue
 
-                # Find the contract in the database
-                contract_db = self.repository.get_by_name(db, name=contract_name)
+                # Find the contract in the database via repository singleton
+                from src.repositories.data_contracts_repository import data_contract_repo
+                contract_db = data_contract_repo.get_by_name(db, name=contract_name)
                 if not contract_db:
                     logger.warning(f"Contract '{contract_name}' not found in database, skipping")
                     continue

@@ -159,6 +159,12 @@ def initialize_managers(app: FastAPI):
         app.state.data_domain_manager = DataDomainManager(repository=data_domain_repo)
         app.state.data_contracts_manager = DataContractsManager(data_dir=data_dir)
         app.state.semantic_models_manager = SemanticModelsManager(db=db_session, data_dir=Path(__file__).parent.parent / "data")
+        # Also register in global app_state fallback
+        try:
+            from src.common.app_state import set_app_state_manager
+            set_app_state_manager('semantic_models_manager', app.state.semantic_models_manager)
+        except Exception:
+            pass
         app.state.business_glossaries_manager = BusinessGlossariesManager(data_dir=data_dir, semantic_models_manager=app.state.semantic_models_manager)
         notifications_manager = getattr(app.state, 'notifications_manager', None)
         # Add other managers: Compliance, Estate, MDM, Security, Entitlements, Catalog Commander...
@@ -394,6 +400,13 @@ def load_initial_data(app: FastAPI) -> None:
 
         # Load demo semantic links after all entities are created
         load_demo_semantic_links(db)
+        # After loading demo links, ensure KG contains entities and links
+        try:
+            sm = getattr(app.state, 'semantic_models_manager', None)
+            if sm:
+                sm.on_models_changed()
+        except Exception:
+            pass
 
         # No final commit needed here if managers commit internally or role creation already committed
         logger.info("Initial data loading process completed for all managers.")
