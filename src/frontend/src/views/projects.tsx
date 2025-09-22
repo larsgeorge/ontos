@@ -1,0 +1,319 @@
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { ColumnDef } from '@tanstack/react-table';
+import { MoreHorizontal, PlusCircle, Loader2, AlertCircle, FolderOpen } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
+import { ProjectRead } from '@/types/project';
+import { useApi } from '@/hooks/use-api';
+import { useToast } from "@/hooks/use-toast";
+import { RelativeDate } from '@/components/common/relative-date';
+import {
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+} from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from "@/components/ui/badge";
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/settings';
+import { Toaster } from "@/components/ui/toaster";
+import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import { ProjectFormDialog } from '@/components/projects/project-form-dialog';
+
+// Check API response helper
+const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
+    if (response.error) throw new Error(`${name} fetch failed: ${response.error}`);
+    if (response.data && typeof response.data === 'object' && response.data !== null && 'detail' in response.data && typeof (response.data as { detail: string }).detail === 'string') {
+        throw new Error(`${name} fetch failed: ${(response.data as { detail: string }).detail}`);
+    }
+    if (response.data === null || response.data === undefined) throw new Error(`${name} fetch returned null or undefined data.`);
+    return response.data as T;
+};
+
+export default function ProjectsView() {
+  const [projects, setProjects] = useState<ProjectRead[]>([]);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<ProjectRead | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
+  const [componentError, setComponentError] = useState<string | null>(null);
+
+  const { get: apiGet, delete: apiDelete, loading: apiIsLoading } = useApi();
+  const { toast } = useToast();
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
+  const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
+  const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
+
+  const featureId = 'projects';
+  const canRead = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_ONLY);
+  const canWrite = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_WRITE);
+  const canAdmin = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.ADMIN);
+
+  const fetchProjects = useCallback(async () => {
+    if (!canRead && !permissionsLoading) {
+        setComponentError("Permission Denied: Cannot view projects.");
+        return;
+    }
+    setComponentError(null);
+    try {
+      const response = await apiGet<ProjectRead[]>('/api/projects');
+      const data = checkApiResponse(response, 'Projects');
+      const projectsData = Array.isArray(data) ? data : [];
+      setProjects(projectsData);
+      if (response.error) {
+        setComponentError(response.error);
+        setProjects([]);
+        toast({ variant: "destructive", title: "Error fetching projects", description: response.error });
+      }
+    } catch (err: any) {
+      setComponentError(err.message || 'Failed to load projects');
+      setProjects([]);
+      toast({ variant: "destructive", title: "Error fetching projects", description: err.message });
+    }
+  }, [canRead, permissionsLoading, apiGet, toast, setComponentError]);
+
+  useEffect(() => {
+    fetchProjects();
+    setStaticSegments([]);
+    setDynamicTitle('Projects');
+    return () => {
+        setStaticSegments([]);
+        setDynamicTitle(null);
+    };
+  }, [fetchProjects, setStaticSegments, setDynamicTitle]);
+
+  const handleOpenCreateDialog = () => {
+    if (!canWrite) {
+        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to create projects." });
+        return;
+    }
+    setEditingProject(null);
+    setIsFormOpen(true);
+  };
+
+  const handleOpenEditDialog = (project: ProjectRead) => {
+    if (!canWrite) {
+        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to edit projects." });
+        return;
+    }
+    setEditingProject(project);
+    setIsFormOpen(true);
+  };
+
+  const handleFormSubmitSuccess = (savedProject: ProjectRead) => {
+    fetchProjects();
+  };
+
+  const openDeleteDialog = (projectId: string) => {
+    if (!canAdmin) {
+         toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to delete projects." });
+         return;
+    }
+    setDeletingProjectId(projectId);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingProjectId || !canAdmin) return;
+    try {
+      const response = await apiDelete(`/api/projects/${deletingProjectId}`);
+      if (response.error) {
+        let errorMessage = response.error;
+        if (response.data && typeof response.data === 'object' && response.data !== null && 'detail' in response.data && typeof (response.data as { detail: string }).detail === 'string') {
+            errorMessage = (response.data as { detail: string }).detail;
+        }
+        throw new Error(errorMessage || 'Failed to delete project.');
+      }
+      toast({ title: "Project Deleted", description: "The project was successfully deleted." });
+      fetchProjects();
+    } catch (err: any) {
+       toast({ variant: "destructive", title: "Error Deleting Project", description: err.message || 'Failed to delete project.' });
+       setComponentError(err.message || 'Failed to delete project.');
+    } finally {
+       setIsDeleteDialogOpen(false);
+       setDeletingProjectId(null);
+    }
+  };
+
+  const columns = useMemo<ColumnDef<ProjectRead>[]>(() => [
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => {
+        const project = row.original;
+        return (
+          <div>
+            <span className="font-medium">{project.name}</span>
+            {project.title && (
+              <div className="text-xs text-muted-foreground">
+                {project.title}
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "description",
+      header: "Description",
+      cell: ({ row }) => (
+        <div className="truncate max-w-sm text-sm text-muted-foreground">
+          {row.getValue("description") || '-'}
+        </div>
+      ),
+    },
+    {
+      accessorKey: "teams",
+      header: "Teams",
+      cell: ({ row }) => {
+        const teams = row.original.teams;
+        if (!teams || teams.length === 0) return '-';
+        return (
+          <div className="flex flex-col space-y-0.5">
+            {teams.slice(0, 3).map((team, index) => (
+              <Badge
+                key={index}
+                variant="secondary"
+                className="text-xs truncate w-fit"
+              >
+                {team.name}
+              </Badge>
+            ))}
+            {teams.length > 3 && (
+              <Badge variant="outline" className="text-xs">
+                +{teams.length - 3} more
+              </Badge>
+            )}
+          </div>
+        );
+      }
+    },
+    {
+      accessorKey: "tags",
+      header: "Tags",
+      cell: ({ row }) => {
+        const tags = row.original.tags;
+        if (!tags || tags.length === 0) return '-';
+        return (
+          <div className="flex flex-wrap gap-1">
+            {tags.slice(0, 2).map((tag, index) => (
+              <Badge key={index} variant="outline" className="text-xs">
+                {tag}
+              </Badge>
+            ))}
+            {tags.length > 2 && (
+              <Badge variant="outline" className="text-xs">
+                +{tags.length - 2} more
+              </Badge>
+            )}
+          </div>
+        );
+      }
+    },
+    {
+      accessorKey: "updated_at",
+      header: "Last Updated",
+      cell: ({ row }) => {
+         const dateValue = row.getValue("updated_at");
+         return dateValue ? <RelativeDate date={dateValue as string | Date | number} /> : 'N/A';
+      },
+    },
+    {
+      id: "actions",
+      cell: ({ row }) => {
+        const project = row.original;
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => handleOpenEditDialog(project)} disabled={!canWrite}>
+                Edit Project
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => openDeleteDialog(project.id)}
+                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                disabled={!canAdmin}
+              >
+                Delete Project
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
+    },
+  ], [canWrite, canAdmin]);
+
+  return (
+    <div className="py-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+           <FolderOpen className="w-8 h-8" />
+           Projects
+        </h1>
+        <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading || apiIsLoading}>
+            <PlusCircle className="mr-2 h-4 w-4" /> Add New Project
+        </Button>
+      </div>
+
+      {(apiIsLoading || permissionsLoading) ? (
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
+      ) : !canRead ? (
+         <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Permission Denied</AlertTitle>
+              <AlertDescription>You do not have permission to view projects.</AlertDescription>
+         </Alert>
+      ) : componentError ? (
+          <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error Loading Data</AlertTitle>
+              <AlertDescription>{componentError}</AlertDescription>
+          </Alert>
+      ) : (
+        <>
+          <DataTable
+             columns={columns}
+             data={projects}
+             searchColumn="name"
+             toolbarActions={null}
+          />
+          <ProjectFormDialog
+            isOpen={isFormOpen}
+            onOpenChange={setIsFormOpen}
+            project={editingProject}
+            onSubmitSuccess={handleFormSubmitSuccess}
+          />
+        </>
+      )}
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the project and remove it from all teams.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeletingProjectId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700" disabled={apiIsLoading || permissionsLoading}>
+               {(apiIsLoading || permissionsLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Toaster />
+    </div>
+  );
+}

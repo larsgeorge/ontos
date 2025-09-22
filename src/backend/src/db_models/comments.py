@@ -19,11 +19,14 @@ class CommentDb(Base):
     id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     entity_id = Column(String, nullable=False, index=True)
     entity_type = Column(String, nullable=False, index=True)  # data_domain | data_product | data_contract | etc.
-    
+
     title = Column(String, nullable=True)  # Optional title for comment
     comment = Column(Text, nullable=False)
     audience = Column(Text, nullable=True)  # JSON array of group names who can see the comment
     status = Column(Enum(CommentStatus), nullable=False, default=CommentStatus.ACTIVE)
+
+    # Project relationship (nullable for backward compatibility)
+    project_id = Column(String, nullable=True, index=True)  # Note: Removed ForeignKey to avoid circular import
     
     created_by = Column(String, nullable=False)
     updated_by = Column(String, nullable=True)

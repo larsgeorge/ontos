@@ -492,6 +492,7 @@ export default function ConceptsSearch({
                           variant="outline"
                           className="cursor-pointer hover:bg-accent inline-flex items-center gap-1"
                           onClick={() => parent.stepIri && navigateToConcept(parent.stepIri)}
+                          title={parent.stepIri || parent.display}
                         >
                           <Shapes className="h-3 w-3" />
                           {parent.display.split('#').pop() || parent.display.split('/').pop() || parent.display}
@@ -513,6 +514,7 @@ export default function ConceptsSearch({
                           variant="outline"
                           className="cursor-pointer hover:bg-accent inline-flex items-center gap-1"
                           onClick={() => sub.stepIri && navigateToConcept(sub.stepIri)}
+                          title={sub.stepIri || sub.display}
                         >
                           <Shapes className="h-3 w-3" />
                           {sub.display.split('#').pop() || sub.display.split('/').pop() || sub.display}
@@ -535,7 +537,7 @@ export default function ConceptsSearch({
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {getRelatedProperties().map((prop, idx) => (
-                      <Badge key={idx} variant="secondary" className="text-xs inline-flex items-center gap-1">
+                      <Badge key={idx} variant="secondary" className="text-xs inline-flex items-center gap-1" title={prop.display}>
                         <Columns2 className="h-3 w-3" />
                         {prop.display.split('#').pop() || prop.display.split('/').pop() || prop.display}
                       </Badge>
@@ -574,7 +576,7 @@ export default function ConceptsSearch({
                           variant="outline"
                           className="text-xs inline-flex items-center gap-1 cursor-pointer hover:bg-accent transition-colors"
                           onClick={() => navigateToEntity(link)}
-                          title={`Click to view ${typeLabel} details`}
+                          title={`${typeLabel}: ${link.entity_name || link.entity_id} • ${link.iri}`}
                         >
                           <Icon className="h-3 w-3" /> {typeLabel}: {link.entity_name || link.entity_id}
                         </Badge>

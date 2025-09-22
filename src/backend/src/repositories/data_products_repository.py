@@ -268,6 +268,45 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
              logger.error(f"Error querying distinct statuses (normalized): {e}", exc_info=True)
              return []
 
+    # --- Project Filtering Methods ---
+    def get_by_project(self, db: Session, project_id: str, skip: int = 0, limit: int = 100) -> List[DataProductDb]:
+        """Get data products filtered by project_id."""
+        logger.debug(f"Fetching DataProducts for project {project_id} with skip: {skip}, limit: {limit}")
+        try:
+            return db.query(self.model).options(
+                selectinload(self.model.info),
+                selectinload(self.model.inputPorts),
+                selectinload(self.model.outputPorts),
+            ).filter(self.model.project_id == project_id).offset(skip).limit(limit).all()
+        except Exception as e:
+            logger.error(f"Database error fetching DataProducts by project {project_id}: {e}", exc_info=True)
+            db.rollback()
+            raise
+
+    def get_without_project(self, db: Session, skip: int = 0, limit: int = 100) -> List[DataProductDb]:
+        """Get data products that are not assigned to any project."""
+        logger.debug(f"Fetching DataProducts without project assignment with skip: {skip}, limit: {limit}")
+        try:
+            return db.query(self.model).options(
+                selectinload(self.model.info),
+                selectinload(self.model.inputPorts),
+                selectinload(self.model.outputPorts),
+            ).filter(self.model.project_id.is_(None)).offset(skip).limit(limit).all()
+        except Exception as e:
+            logger.error(f"Database error fetching DataProducts without project: {e}", exc_info=True)
+            db.rollback()
+            raise
+
+    def count_by_project(self, db: Session, project_id: str) -> int:
+        """Count data products for a specific project."""
+        logger.debug(f"Counting DataProducts for project {project_id}")
+        try:
+            return db.query(self.model).filter(self.model.project_id == project_id).count()
+        except Exception as e:
+            logger.error(f"Database error counting DataProducts by project {project_id}: {e}", exc_info=True)
+            db.rollback()
+            raise
+
 # Create a single instance of the repository for use
 # This could also be instantiated within the manager or injected via FastAPI deps
 data_product_repo = DataProductRepository(DataProductDb) 

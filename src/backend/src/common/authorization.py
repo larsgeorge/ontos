@@ -6,6 +6,7 @@ from src.controller.authorization_manager import AuthorizationManager
 from src.models.users import UserInfo
 from src.common.features import FeatureAccessLevel
 from src.common.logging import get_logger
+from src.common.database import get_db
 # Import dependencies for user info and managers (adjust paths if needed)
 # from src.routes.user_routes import get_user_details_from_sdk # REMOVE this import
 # Import dependencies needed for the moved function
@@ -78,14 +79,122 @@ async def get_user_groups(user_email: str) -> List[str]:
     """Get user groups for the given user email."""
     # Get settings directly instead of using dependency injection
     settings = get_settings()
-    
+
     if settings.ENV.upper().startswith("LOCAL"):
         # Return mock groups for local development
         return LOCAL_DEV_USER.groups
-    
+
     # In production, you would get groups from the user details
     # For now, returning empty list as fallback
     return []
+
+
+async def get_user_team_role_overrides(user_identifier: str, user_groups: List[str], request: Request) -> Optional[str]:
+    """Get the highest team role override for a user."""
+    try:
+        # Get teams manager from app state
+        teams_manager = getattr(request.app.state, 'teams_manager', None)
+        if not teams_manager:
+            logger.debug("Teams manager not available in app state")
+            return None
+
+        # Get database session
+        db = next(get_db())
+        try:
+            # Get teams where user is a member
+            user_teams = teams_manager.get_teams_for_user(db, user_identifier)
+
+            # Collect all role overrides for this user across teams
+            role_overrides = []
+            for team in user_teams:
+                for member in team.members:
+                    if member.member_identifier == user_identifier and member.app_role_override:
+                        role_overrides.append(member.app_role_override)
+
+            # Also check group memberships
+            for team in user_teams:
+                for member in team.members:
+                    if member.member_identifier in user_groups and member.app_role_override:
+                        role_overrides.append(member.app_role_override)
+
+            if not role_overrides:
+                return None
+
+            # Return the highest role override (assuming role names have hierarchical order)
+            # For now, just return the first one found - in practice you'd need proper role hierarchy
+            logger.debug(f"Found team role overrides for user {user_identifier}: {role_overrides}")
+            return role_overrides[0]
+
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"Error checking team role overrides for user {user_identifier}: {e}")
+        return None
+
+
+async def check_user_project_access(user_identifier: str, user_groups: List[str], project_id: str, request: Request) -> bool:
+    """Check if a user has access to a specific project."""
+    try:
+        # Get projects manager from app state
+        projects_manager = getattr(request.app.state, 'projects_manager', None)
+        if not projects_manager:
+            logger.debug("Projects manager not available in app state")
+            return False
+
+        # Get database session
+        db = next(get_db())
+        try:
+            # Check if user has access to the project
+            return projects_manager.check_user_project_access(db, user_identifier, user_groups, project_id)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"Error checking project access for user {user_identifier} to project {project_id}: {e}")
+        return False
+
+
+class ProjectAccessChecker:
+    """FastAPI Dependency to check user access to a specific project."""
+    def __init__(self, project_id_param: str = "project_id"):
+        self.project_id_param = project_id_param
+        logger.debug(f"ProjectAccessChecker initialized for parameter '{self.project_id_param}'")
+
+    async def __call__(
+        self,
+        request: Request,
+        user_details: UserInfo = Depends(get_user_details_from_sdk)
+    ):
+        """Performs the project access check when the dependency is called."""
+        # Extract project_id from path parameters
+        project_id = request.path_params.get(self.project_id_param)
+        if not project_id:
+            logger.warning(f"Project ID parameter '{self.project_id_param}' not found in request")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Project ID parameter '{self.project_id_param}' not found"
+            )
+
+        logger.debug(f"Checking project access for user '{user_details.email}' to project '{project_id}'")
+
+        user_groups = user_details.groups or []
+        has_access = await check_user_project_access(
+            user_details.email,
+            user_groups,
+            project_id,
+            request
+        )
+
+        if not has_access:
+            logger.warning(
+                f"Project access denied for user '{user_details.email}' to project '{project_id}'"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied to project '{project_id}'"
+            )
+
+        logger.debug(f"Project access granted for user '{user_details.email}' to project '{project_id}'")
+        return
 
 
 class PermissionChecker:
@@ -112,7 +221,17 @@ class PermissionChecker:
             )
 
         try:
-            effective_permissions = auth_manager.get_user_effective_permissions(user_details.groups)
+            # Check for team role overrides
+            team_role_override = await get_user_team_role_overrides(
+                user_details.email,
+                user_details.groups or [],
+                request
+            )
+
+            effective_permissions = auth_manager.get_user_effective_permissions(
+                user_details.groups,
+                team_role_override
+            )
             has_required_permission = auth_manager.has_permission(
                 effective_permissions,
                 self.feature_id,
@@ -157,4 +276,8 @@ def require_read_only(feature_id: str) -> PermissionChecker:
 
 # Example for a feature-specific check
 def require_data_product_read() -> PermissionChecker:
-    return PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY) 
+    return PermissionChecker('data-products', FeatureAccessLevel.READ_ONLY)
+
+# Project access convenience functions
+def require_project_access(project_id_param: str = "project_id") -> ProjectAccessChecker:
+    return ProjectAccessChecker(project_id_param) 

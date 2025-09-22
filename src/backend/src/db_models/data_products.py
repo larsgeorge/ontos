@@ -37,6 +37,9 @@ class DataProductDb(Base):
     version = Column(String, nullable=False, default="v1.0", index=True)
     product_type = Column(String, nullable=True, index=True)
 
+    # Project relationship (nullable for backward compatibility)
+    project_id = Column(String, ForeignKey('projects.id'), nullable=True, index=True)
+
     # Relationships (Corrected names)
     info = relationship("InfoDb", back_populates="data_product", uselist=False, cascade="all, delete-orphan")
     inputPorts = relationship("InputPortDb", back_populates="data_product", cascade="all, delete-orphan", lazy="selectin")

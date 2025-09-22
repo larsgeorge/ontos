@@ -1,0 +1,52 @@
+import { TeamSummary } from './team';
+
+export interface Project {
+  id: string;
+  name: string;
+  title?: string | null;
+  description?: string | null;
+  tags?: string[] | null;
+  metadata?: Record<string, any> | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+  updated_by: string;
+  teams: TeamSummary[];
+}
+
+export interface ProjectCreate {
+  name: string;
+  title?: string | null;
+  description?: string | null;
+  tags?: string[] | null;
+  metadata?: Record<string, any> | null;
+  team_ids?: string[] | null;
+}
+
+export interface ProjectUpdate {
+  name?: string;
+  title?: string | null;
+  description?: string | null;
+  tags?: string[] | null;
+  metadata?: Record<string, any> | null;
+}
+
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  title?: string | null;
+  team_count: number;
+}
+
+export interface ProjectTeamAssignment {
+  team_id: string;
+}
+
+export interface UserProjectAccess {
+  projects: ProjectSummary[];
+  current_project_id?: string | null;
+}
+
+export interface ProjectContext {
+  project_id?: string | null;
+}

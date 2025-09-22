@@ -20,6 +20,9 @@ class DataAssetReviewRequestDb(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
+    # Project relationship (nullable for backward compatibility)
+    project_id = Column(String, ForeignKey('projects.id'), nullable=True, index=True)
+
     # Relationship to Reviewed Assets (One-to-Many)
     assets = relationship("ReviewedAssetDb", back_populates="review_request", cascade="all, delete-orphan", lazy="selectin")
 

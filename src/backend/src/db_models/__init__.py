@@ -1,4 +1,4 @@
-# Makes api/db_models a package 
+# Makes api/db_models a package
 
 from .data_products import DataProductDb
 from .settings import AppRoleDb
@@ -6,6 +6,8 @@ from .audit_log import AuditLogDb
 from .data_asset_reviews import DataAssetReviewRequestDb, ReviewedAssetDb
 from .data_domains import DataDomain
 from .tags import TagDb, TagNamespaceDb, TagNamespacePermissionDb, EntityTagAssociationDb
+from .teams import TeamDb, TeamMemberDb, MemberType
+from .projects import ProjectDb, project_team_association
 
 __all__ = [
     "DataProductDb",
@@ -18,4 +20,9 @@ __all__ = [
     "TagNamespaceDb",
     "TagNamespacePermissionDb",
     "EntityTagAssociationDb",
+    "TeamDb",
+    "TeamMemberDb",
+    "MemberType",
+    "ProjectDb",
+    "project_team_association",
 ] 

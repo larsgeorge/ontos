@@ -14,13 +14,15 @@ class AuthorizationManager:
         """Requires SettingsManager to access role configurations."""
         self._settings_manager = settings_manager
 
-    def get_user_effective_permissions(self, user_groups: Optional[List[str]]) -> Dict[str, FeatureAccessLevel]:
+    def get_user_effective_permissions(self, user_groups: Optional[List[str]], team_role_override: Optional[str] = None) -> Dict[str, FeatureAccessLevel]:
         """
-        Calculates the effective permission level for each feature based on the user's groups.
+        Calculates the effective permission level for each feature based on the user's groups and team role overrides.
         Permissions are merged by taking the highest level granted by any matching role.
+        Team role overrides take precedence over group-based roles.
 
         Args:
             user_groups: A list of group names the user belongs to.
+            team_role_override: Optional team role that overrides group-based permissions.
 
         Returns:
             A dictionary mapping feature IDs to the highest granted FeatureAccessLevel.
@@ -33,16 +35,37 @@ class AuthorizationManager:
 
         user_group_set = set(user_groups)
         effective_permissions: Dict[str, FeatureAccessLevel] = defaultdict(lambda: FeatureAccessLevel.NONE)
-        
+
         # Log before fetching roles
         logger.debug("Fetching all application roles from SettingsManager...")
         all_roles = self._settings_manager.list_app_roles() # Fetches roles from DB via SettingsManager
         logger.debug(f"Fetched {len(all_roles)} roles total.")
-        # Log details of fetched roles (optional, can be verbose)
-        # for role in all_roles:
-        #     logger.debug(f"  Role '{role.name}' (ID: {role.id}) - Assigned Groups: {role.assigned_groups}, Permissions: {role.feature_permissions}")
-            
+
         feature_config = get_feature_config()
+
+        # If team role override is provided, prioritize it
+        if team_role_override:
+            logger.debug(f"Processing team role override: {team_role_override}")
+            team_role = next((role for role in all_roles if role.name == team_role_override), None)
+            if team_role:
+                logger.debug(f"Found team role '{team_role_override}' in roles, applying as override")
+                for feature_id, assigned_level in team_role.feature_permissions.items():
+                    if feature_id in feature_config:
+                        effective_permissions[feature_id] = assigned_level
+                        logger.debug(f"Applied team role override for '{feature_id}': {assigned_level.value}")
+                    else:
+                        logger.warning(f"Team role '{team_role_override}' contains permission for unknown feature ID '{feature_id}'. Skipping.")
+
+                # Return team role permissions (team override takes full precedence)
+                for feature_id in feature_config:
+                    if feature_id not in effective_permissions:
+                        effective_permissions[feature_id] = FeatureAccessLevel.NONE
+
+                final_perms_str = {k: v.value for k, v in effective_permissions.items()}
+                logger.debug(f"Final permissions using team role override '{team_role_override}': {final_perms_str}")
+                return dict(effective_permissions)
+            else:
+                logger.warning(f"Team role override '{team_role_override}' not found in available roles. Falling back to group-based permissions.")
 
         matching_roles = []
         logger.debug("Identifying matching roles based on group intersection...")

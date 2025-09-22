@@ -4,6 +4,7 @@ import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import NotificationBell from '@/components/ui/notification-bell';
 import SearchBar from '@/components/ui/search-bar';
+import { ProjectChooser } from '@/components/ui/project-chooser';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -31,6 +32,7 @@ export function Header({ onToggleSidebar, isSidebarCollapsed }: HeaderProps) {
 
       {/* Right-aligned items */}
       <div className="ml-auto flex items-center gap-2 shrink-0">
+          <ProjectChooser />
           <NotificationBell />
          <ThemeToggle />
         <UserInfo />

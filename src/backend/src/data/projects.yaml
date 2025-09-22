@@ -1,0 +1,67 @@
+projects:
+  - name: "customer-360"
+    title: "Customer 360 Initiative"
+    description: "Comprehensive customer data platform and analytics"
+    tags: ["customer", "analytics", "platform"]
+    metadata:
+      budget: "$500K"
+      timeline: "6 months"
+      stakeholders: ["Marketing", "Sales", "Customer Success"]
+      priority: "high"
+    assigned_teams:
+      - "data-engineering"
+      - "analytics-team"
+      - "data-science"
+
+  - name: "financial-reporting"
+    title: "Financial Reporting Modernization"
+    description: "Modernize financial reporting infrastructure and processes"
+    tags: ["finance", "reporting", "compliance"]
+    metadata:
+      budget: "$300K"
+      timeline: "4 months"
+      compliance_requirements: ["SOX", "GAAP"]
+      priority: "high"
+    assigned_teams:
+      - "data-engineering"
+      - "analytics-team"
+      - "governance-team"
+
+  - name: "ml-platform"
+    title: "Machine Learning Platform"
+    description: "Build and deploy ML infrastructure and services"
+    tags: ["ml", "platform", "infrastructure"]
+    metadata:
+      budget: "$750K"
+      timeline: "8 months"
+      technologies: ["MLflow", "Kubernetes", "TensorFlow"]
+      priority: "medium"
+    assigned_teams:
+      - "data-engineering"
+      - "data-science"
+
+  - name: "data-governance-pilot"
+    title: "Data Governance Pilot Program"
+    description: "Pilot program for implementing data governance best practices"
+    tags: ["governance", "pilot", "compliance"]
+    metadata:
+      budget: "$200K"
+      timeline: "3 months"
+      scope: ["Data Quality", "Data Lineage", "Access Control"]
+      priority: "medium"
+    assigned_teams:
+      - "governance-team"
+      - "data-engineering"
+
+  - name: "real-time-analytics"
+    title: "Real-time Analytics Platform"
+    description: "Build real-time streaming analytics capabilities"
+    tags: ["real-time", "streaming", "analytics"]
+    metadata:
+      budget: "$400K"
+      timeline: "5 months"
+      technologies: ["Kafka", "Spark Streaming", "Delta Lake"]
+      priority: "low"
+    assigned_teams:
+      - "data-engineering"
+      - "analytics-team"

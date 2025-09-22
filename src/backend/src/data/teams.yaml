@@ -1,0 +1,70 @@
+teams:
+  - name: "data-engineering"
+    title: "Data Engineering Team"
+    description: "Responsible for data pipeline development and infrastructure"
+    domain_id: null  # Standalone team
+    tags: ["engineering", "data", "infrastructure"]
+    metadata:
+      slack_channel: "https://company.slack.com/channels/data-eng"
+      lead: "john.doe@company.com"
+    members:
+      - member_type: "user"
+        member_identifier: "john.doe@company.com"
+        app_role_override: "Data Engineer Lead"
+      - member_type: "group"
+        member_identifier: "data-engineers"
+        app_role_override: null
+      - member_type: "user"
+        member_identifier: "jane.smith@company.com"
+        app_role_override: "Senior Data Engineer"
+
+  - name: "analytics-team"
+    title: "Analytics Team"
+    description: "Business analytics and reporting team"
+    domain_id: null  # Will be linked to a domain programmatically
+    tags: ["analytics", "reporting", "business"]
+    metadata:
+      slack_channel: "https://company.slack.com/channels/analytics"
+      tools: ["Tableau", "Power BI", "SQL"]
+    members:
+      - member_type: "user"
+        member_identifier: "alice.johnson@company.com"
+        app_role_override: "Analytics Lead"
+      - member_type: "group"
+        member_identifier: "analysts"
+        app_role_override: null
+
+  - name: "data-science"
+    title: "Data Science Team"
+    description: "Machine learning and advanced analytics"
+    domain_id: null
+    tags: ["data-science", "ml", "ai"]
+    metadata:
+      slack_channel: "https://company.slack.com/channels/data-science"
+      research_areas: ["NLP", "Computer Vision", "Recommendation Systems"]
+    members:
+      - member_type: "user"
+        member_identifier: "bob.wilson@company.com"
+        app_role_override: "Data Science Lead"
+      - member_type: "group"
+        member_identifier: "data-scientists"
+        app_role_override: null
+      - member_type: "user"
+        member_identifier: "carol.brown@company.com"
+        app_role_override: "Senior Data Scientist"
+
+  - name: "governance-team"
+    title: "Data Governance Team"
+    description: "Data quality, compliance, and governance oversight"
+    domain_id: null
+    tags: ["governance", "compliance", "quality"]
+    metadata:
+      slack_channel: "https://company.slack.com/channels/data-governance"
+      responsibilities: ["Data Quality", "Privacy Compliance", "Access Control"]
+    members:
+      - member_type: "user"
+        member_identifier: "david.garcia@company.com"
+        app_role_override: "Data Steward Lead"
+      - member_type: "group"
+        member_identifier: "data-stewards"
+        app_role_override: null

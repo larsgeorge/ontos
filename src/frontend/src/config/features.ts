@@ -14,6 +14,8 @@ import {
     ClipboardCheck, // Added icon for Data Asset Review
     BoxSelect, // Added icon for Data Domain
     Search, // Added icon for Search
+    UserCheck, // Added icon for Teams
+    FolderOpen, // Added icon for Projects
     type LucideIcon, // Import LucideIcon type
   } from 'lucide-react';
   
@@ -35,7 +37,7 @@ import {
     // Data Products - Core product development lifecycle
     {
       id: 'data-domains',
-      name: 'Data Domains',
+      name: 'Domains',
       path: '/data-domains',
       description: 'Organize data products and assets into logical domains.',
       icon: BoxSelect,
@@ -44,8 +46,28 @@ import {
       showInLanding: true,
     },
     {
+      id: 'teams',
+      name: 'Teams',
+      path: '/teams',
+      description: 'Manage teams and team members with role overrides.',
+      icon: UserCheck,
+      group: 'Data Products',
+      maturity: 'ga',
+      showInLanding: false,
+    },
+    {
+      id: 'projects',
+      name: 'Projects',
+      path: '/projects',
+      description: 'Manage projects and assign teams for workspace isolation.',
+      icon: FolderOpen,
+      group: 'Data Products',
+      maturity: 'ga',
+      showInLanding: false,
+    },
+    {
       id: 'data-contracts',
-      name: 'Data Contracts',
+      name: 'Contracts',
       path: '/data-contracts',
       description: 'Define and enforce technical metadata standards.',
       icon: FileTextIcon,
@@ -55,7 +77,7 @@ import {
     },
     {
       id: 'data-products',
-      name: 'Data Products',
+      name: 'Products',
       path: '/data-products',
       description: 'Group and manage related Databricks assets with tags.',
       icon: Database,
@@ -76,7 +98,7 @@ import {
     },
     {
       id: 'data-asset-reviews',
-      name: 'Data Asset Review',
+      name: 'Asset Review',
       path: '/data-asset-reviews',
       description: 'Review and approve Databricks assets like tables, views, and functions.',
       icon: ClipboardCheck,

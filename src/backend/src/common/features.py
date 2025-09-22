@@ -55,6 +55,14 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'name': 'Data Contracts',
         'allowed_levels': READ_WRITE_ADMIN_LEVELS
     },
+    'teams': {
+        'name': 'Teams',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS
+    },
+    'projects': {
+        'name': 'Projects',
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS
+    },
     'business-glossary': {
         'name': 'Business Glossary',
         'allowed_levels': READ_WRITE_ADMIN_LEVELS

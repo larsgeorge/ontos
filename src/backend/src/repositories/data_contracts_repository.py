@@ -86,6 +86,49 @@ class DataContractRepository(CRUDBase[DataContractDb, Dict[str, Any], Union[Dict
             db.rollback()
             raise
 
+    # --- Project Filtering Methods ---
+    def get_by_project(self, db: Session, project_id: str, skip: int = 0, limit: int = 100) -> List[DataContractDb]:
+        """Get data contracts filtered by project_id."""
+        logger.debug(f"Fetching DataContracts for project {project_id} with skip: {skip}, limit: {limit}")
+        try:
+            return (
+                db.query(self.model)
+                .filter(self.model.project_id == project_id)
+                .offset(skip)
+                .limit(limit)
+                .all()
+            )
+        except Exception as e:
+            logger.error(f"Database error fetching DataContracts by project {project_id}: {e}", exc_info=True)
+            db.rollback()
+            raise
+
+    def get_without_project(self, db: Session, skip: int = 0, limit: int = 100) -> List[DataContractDb]:
+        """Get data contracts that are not assigned to any project."""
+        logger.debug(f"Fetching DataContracts without project assignment with skip: {skip}, limit: {limit}")
+        try:
+            return (
+                db.query(self.model)
+                .filter(self.model.project_id.is_(None))
+                .offset(skip)
+                .limit(limit)
+                .all()
+            )
+        except Exception as e:
+            logger.error(f"Database error fetching DataContracts without project: {e}", exc_info=True)
+            db.rollback()
+            raise
+
+    def count_by_project(self, db: Session, project_id: str) -> int:
+        """Count data contracts for a specific project."""
+        logger.debug(f"Counting DataContracts for project {project_id}")
+        try:
+            return db.query(self.model).filter(self.model.project_id == project_id).count()
+        except Exception as e:
+            logger.error(f"Database error counting DataContracts by project {project_id}: {e}", exc_info=True)
+            db.rollback()
+            raise
+
 
 # Singleton-like access if desired
 data_contract_repo = DataContractRepository()

@@ -29,6 +29,9 @@ class DataContractDb(Base):
     data_product = Column(String, nullable=True)
     domain_id = Column(String, ForeignKey("data_domains.id"), nullable=True, index=True)
 
+    # Project relationship (nullable for backward compatibility)
+    project_id = Column(String, ForeignKey('projects.id'), nullable=True, index=True)
+
     # Top-level description fields
     description_usage = Column(Text, nullable=True)
     description_purpose = Column(Text, nullable=True)
