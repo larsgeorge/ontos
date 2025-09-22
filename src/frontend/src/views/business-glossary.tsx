@@ -46,6 +46,7 @@ import {
   Zap,
   Search,
   Network,
+  Loader2,
 } from 'lucide-react';
 import ReactFlow, { Node, Edge, Background, MarkerType, Controls, ConnectionMode, MiniMap, Position } from 'reactflow';
 import ForceGraph2D from 'react-force-graph-2d';
@@ -1238,16 +1239,7 @@ export default function BusinessGlossary() {
     setOpenDialog(false);
   };
 
-  if (loading && !taxonomies.length) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p>Loading business glossary data...</p>
-        </div>
-      </div>
-    );
-  }
+  // Removed early return to keep header visible while loading
 
   return (
     <div className="py-6">
@@ -1274,13 +1266,16 @@ export default function BusinessGlossary() {
         </div>
       </div>
 
-      {error && (
+      {loading ? (
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
+      ) : error ? (
         <Alert variant="destructive" className="mb-6">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-      )}
-
+      ) : (
       <div className="grid grid-cols-12 gap-6">
         {/* Left Panel - Taxonomy Tree */}
         <div className="col-span-4 border rounded-lg flex flex-col">
@@ -1479,6 +1474,7 @@ export default function BusinessGlossary() {
           )}
         </div>
       </div>
+      )}
 
       {/* Legacy Dialog (for backwards compatibility) */}
       <Dialog open={openDialog} onOpenChange={setOpenDialog}>
