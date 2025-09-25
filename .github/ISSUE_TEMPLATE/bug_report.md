@@ -1,32 +1,82 @@
----
-name: Bug report
-about: Create a report to help us improve
+# See https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms
+# and https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema
+name: Bug Report
 title: ''
+about: Create a report to help us improve
+description: Something is not working with Ontos
 labels: bug, needs-triage
+type: Bug
 assignees: ''
-
----
-
-**Describe the bug**
-A clear and concise description of what the bug is.
-
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
-
-**Expected behavior**
-A clear and concise description of what you expected to happen.
-
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
-
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
-
-**Additional context**
-Add any other context about the problem here.
+body:
+  - type: checkboxes
+    attributes:
+      label: Is there an existing issue for this?
+      description: Please search to see if an issue already exists for the bug you encountered.
+      options:
+      - label: I have searched the existing issues
+        required: true
+  - type: textarea
+    attributes:
+      label: Current Behavior
+      description: |
+        A concise description of what you're experiencing.
+        **Do not paste links to attachments with logs and/or images, as all issues with attachments will get deleted.**
+        Use the `Relevant log output` field to paste redacted log output without personal identifying information (PII).
+        You can Ctrl/Cmd+V the screenshot, which would appear as a rendered image if it doesn't contain any PII.
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Expected Behavior
+      description: A concise description of what you expected to happen.
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Steps To Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. In this environment...
+        1. With this config...
+        1. Run '...'
+        1. See error...
+    validations:
+      required: false
+  - type: dropdown
+    id: cloud
+    attributes:
+      label: Cloud
+      description: What cloud are you using?
+      options:
+        - AWS
+        - Azure
+        - GCP
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Browser
+      description: Which browser are you using?
+      options:
+        - Chrome
+        - Edge
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: version
+    attributes:
+      label: Version
+      description: What version of our software are you running?
+      options:
+        - latest
+      default: 0
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
+      render: shell
