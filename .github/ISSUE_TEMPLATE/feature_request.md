@@ -1,4 +1,3 @@
----
 # See https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms
 # and https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema
 name: Feature Request
@@ -8,7 +7,7 @@ title: ''
 labels: feature, needs-triage
 assignees: ''
 type: Feature
----
+
 body:
   - type: checkboxes
     attributes:
