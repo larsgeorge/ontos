@@ -1,20 +1,37 @@
 ---
-name: Feature request
+# See https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms
+# and https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema
+name: Feature Request
 about: Suggest an idea for this project
+description: Something new needs to happen with Ontos
 title: ''
 labels: feature, needs-triage
 assignees: ''
-
+type: Feature
 ---
-
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
-
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
-
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
-
-**Additional context**
-Add any other context or screenshots about the feature request here.
+body:
+  - type: checkboxes
+    attributes:
+      label: Is there an existing issue for this?
+      description: Please search to see if an issue already exists for the feature request you're willing to submit
+      options:
+      - label: I have searched the existing issues
+        required: true
+  - type: textarea
+    attributes:
+      label: Problem statement
+      description: A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Proposed Solution
+      description: A clear and concise description of what you want to happen.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Additional Context
+      description: Add any other context, references or screenshots about the feature request here.
+    validations:
+      required: false
