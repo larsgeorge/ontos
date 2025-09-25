@@ -4,7 +4,8 @@ from typing import Any, Dict, Generic, List, Optional, Type, TypeVar, Union
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import select, func
+from sqlalchemy import select, func, String as SAString
+from uuid import UUID
 
 from src.common.database import Base
 from .logging import get_logger
@@ -32,7 +33,17 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def get(self, db: Session, id: Any) -> Optional[ModelType]:
         logger.debug(f"Fetching {self.model.__name__} with id: {id}")
         try:
-            return db.query(self.model).filter(self.model.id == id).first()
+            # Normalize UUID to string if model primary key is String
+            normalized_id = id
+            try:
+                model_id_column = getattr(self.model, 'id').property.columns[0]
+                if isinstance(model_id_column.type, SAString) and isinstance(id, UUID):
+                    normalized_id = str(id)
+            except Exception:
+                # If any introspection fails, fall back to original id
+                normalized_id = id
+
+            return db.query(self.model).filter(self.model.id == normalized_id).first()
         except SQLAlchemyError as e:
             logger.error(f"Database error fetching {self.model.__name__} by id {id}: {e}", exc_info=True)
             db.rollback() # Ensure rollback on read error if transaction started
@@ -100,7 +111,16 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def remove(self, db: Session, *, id: Any) -> Optional[ModelType]:
         logger.debug(f"Deleting {self.model.__name__} with id: {id}")
         try:
-            obj = db.query(self.model).get(id)
+            # Normalize UUID to string if model primary key is String
+            normalized_id = id
+            try:
+                model_id_column = getattr(self.model, 'id').property.columns[0]
+                if isinstance(model_id_column.type, SAString) and isinstance(id, UUID):
+                    normalized_id = str(id)
+            except Exception:
+                normalized_id = id
+
+            obj = db.query(self.model).get(normalized_id)
             if obj:
                 db.delete(obj)
                 # db.commit()
