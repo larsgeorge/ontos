@@ -1,11 +1,7 @@
-# See https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms
-# and https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema
 name: Bug Report
 title: ''
 about: Create a report to help us improve
-description: Something is not working with Ontos
-labels: bug, needs-triage
-type: Bug
+labels: bug,needs-triage
 assignees: ''
 body:
   - type: checkboxes
