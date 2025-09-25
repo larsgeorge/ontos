@@ -1,0 +1,36 @@
+name: Epic
+description: Something big needs to happen with Ontos
+title: '[EPIC]: '
+labels: epic,needs-triage
+body:
+  - type: checkboxes
+    attributes:
+      label: Is there an existing epic for this?
+      description: Please search to see if an issue already exists for the epic you're creating
+      options:
+      - label: I have searched the existing epics
+        required: true
+  - type: textarea
+    attributes:
+      label: Sub-tasks
+      description: A list of tasks related to the epic
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Problem Statement
+      description: A clear and concise description of what you want to happen
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Proposed Solution
+      description: A description of what this epic covers
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Additional Context
+      description: Add any other context, references or screenshots about the feature request here
+    validations:
+      required: false
