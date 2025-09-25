@@ -1,13 +1,9 @@
 # See https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms
 # and https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema
 name: Feature Request
-about: Suggest an idea for this project
 description: Something new needs to happen with Ontos
-title: ''
-labels: feature, needs-triage
-assignees: ''
-type: Feature
-
+title: '[FEATURE]: '
+labels: feature,needs-triage
 body:
   - type: checkboxes
     attributes:
