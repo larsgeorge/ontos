@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, PlusCircle, Loader2, AlertCircle, UserCheck } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, Loader2, AlertCircle, UserCheck, User, Users } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { TeamRead } from '@/types/team';
@@ -183,8 +183,17 @@ export default function TeamsView() {
               <div key={index} className="flex items-center gap-1">
                 <Badge
                   variant={member.member_type === 'user' ? 'default' : 'secondary'}
-                  className="text-xs truncate w-fit"
+                  className={`text-xs truncate w-fit flex items-center gap-1 ${
+                    member.member_type === 'user'
+                      ? 'bg-white text-gray-900 border border-gray-300 hover:bg-gray-50'
+                      : 'bg-gray-900 text-white hover:bg-gray-800'
+                  }`}
                 >
+                  {member.member_type === 'user' ? (
+                    <User className="w-3 h-3" />
+                  ) : (
+                    <Users className="w-3 h-3" />
+                  )}
                   {member.member_name || member.member_identifier}
                 </Badge>
                 {(member.role_override || member.app_role_override) && (

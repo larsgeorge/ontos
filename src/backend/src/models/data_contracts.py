@@ -40,7 +40,7 @@ class SecurityClassification(Enum):
 @dataclass
 class Metadata:
     domain: str
-    owner: str
+    owner_team_id: Optional[str] = None  # Team UUID reference
     tags: Dict[str, str] = field(default_factory=dict)
     subdomain: Optional[str] = None
     steward: Optional[str] = None
@@ -123,8 +123,8 @@ class DataContract:
     name: str
     contract_text: str  # Raw contract text (JSON, YAML, etc)
     version: str
-    owner: str
     format: str  # Format of the contract (json, yaml, etc)
+    owner_team_id: Optional[str] = None  # Team UUID reference
     description: Optional[str] = None
     status: str = "draft"
     created_at: datetime = field(default_factory=datetime.utcnow)
@@ -138,7 +138,7 @@ class DataContract:
             'description': self.description or f"Data contract for {self.name}",
             'version': self.version,
             'status': self.status,
-            'owner': self.owner,
+            'owner_team_id': self.owner_team_id,
             'format': self.format,
             'created': self.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
             'updated': self.updated_at.strftime("%Y-%m-%dT%H:%M:%SZ")

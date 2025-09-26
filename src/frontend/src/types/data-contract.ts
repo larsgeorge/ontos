@@ -4,7 +4,7 @@ export type DataContractListItem = {
   name: string
   version: string
   status: string
-  owner: string
+  owner_team_id?: string // UUID of the owning team
   created?: string
   updated?: string
 }
@@ -77,7 +77,7 @@ export interface DataContract {
   domain?: string // Legacy field (domain name)
   domainId?: string // Domain ID for backend API
   dataProduct?: string
-  owner: string
+  owner_team_id?: string // UUID of the owning team
   description?: ContractDescription
   schema?: SchemaObject[]
   qualityRules?: Array<{
@@ -109,7 +109,7 @@ export type DataContractCreate = {
   name: string
   version?: string
   status?: string
-  owner: string
+  owner_team_id?: string // UUID of the owning team
   kind?: string
   apiVersion?: string
   domain?: string

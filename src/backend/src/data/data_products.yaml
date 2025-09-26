@@ -6,7 +6,7 @@
   productType: "source"
   info:
     title: "POS Transaction Stream v1"
-    owner: "Retail Systems"
+    owner_team: "data-engineering"
     domain: "Retail Operations"
     description: "Raw point-of-sale transaction stream from store systems."
     status: "active"
@@ -32,7 +32,7 @@
   productType: "source-aligned"
   info:
     title: "Prepared Sales Transactions v1"
-    owner: "Data Engineering"
+    owner_team: "data-engineering"
     domain: "Retail Analytics"
     description: "Cleaned, validated, and standardized sales transaction data, ready for analytics."
     status: "active"
@@ -70,7 +70,7 @@
   productType: "aggregate"
   info:
     title: "Demand Forecast Model Output v1"
-    owner: "Analytics Team"
+    owner_team: "analytics-team"
     domain: "Retail Analytics"
     description: "Predicted demand for products at various locations based on historical sales and external factors."
     status: "active"
@@ -111,7 +111,7 @@
   productType: "consumer-aligned"
   info:
     title: "Inventory Optimization Recommendations v1"
-    owner: "Supply Chain Team"
+    owner_team: "operations-team"
     domain: "Supply Chain"
     description: "Recommendations for inventory reordering based on demand forecasts and stock levels."
     status: "active"
@@ -151,7 +151,7 @@
   productType: "aggregate" # Or consumer-aligned depending on primary consumer
   info:
     title: "Price Optimization Model Output v1"
-    owner: "Pricing Team"
+    owner_team: "analytics-team"
     domain: "Retail Analytics"
     description: "Recommended pricing strategies based on demand, competition, and customer behavior."
     status: "active"
@@ -188,7 +188,7 @@
   productType: "consumer-aligned"
   info:
     title: "Customer Marketing Recommendations v1"
-    owner: "Marketing Team"
+    owner_team: "marketing-team"
     domain: "Marketing"
     description: "Targeted customer lists and product recommendations for marketing campaigns."
     status: "active"
@@ -225,7 +225,7 @@
   productType: "consumer-aligned"
   info:
     title: "Retail Performance Dashboard Data v1"
-    owner: "BI Team"
+    owner_team: "analytics-team"
     domain: "Retail Analytics"
     description: "Aggregated data optimized for the main retail performance BI dashboard."
     status: "active"
@@ -269,7 +269,7 @@
 #   productType: "sink"
 #   info:
 #     title: "Retail Data Archival Sink v1"
-#     owner: "Data Governance"
+#     owner_team: "governance-team"
 #     domain: "Compliance"
 #     description: "Sink product responsible for archiving various retail data products."
 #     status: "active"

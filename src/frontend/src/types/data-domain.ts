@@ -7,7 +7,7 @@ export interface DataDomain {
   id: string;
   name: string;
   description?: string | null;
-  owner: string[]; // Added owner based on Pydantic model
+  owner_team_id?: string | null; // UUID of the owning team
   tags?: string[] | null; // Added tags based on Pydantic model
   parent_id?: string | null;
   parent_name?: string | null; // Kept for now, but parent_info should be primary
@@ -22,7 +22,7 @@ export interface DataDomain {
 export interface DataDomainCreate {
   name: string;
   description?: string | null;
-  owner: string[];
+  owner_team_id?: string | null; // UUID of the owning team
   tags?: string[] | null;
   parent_id?: string | null;
 }

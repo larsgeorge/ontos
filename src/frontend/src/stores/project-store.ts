@@ -1,19 +1,23 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ProjectSummary, UserProjectAccess } from '@/types/project';
+import { ProjectSummary, UserProjectAccess, ProjectAccessRequest, ProjectAccessRequestResponse } from '@/types/project';
 
 interface ProjectState {
   // Current project context
   currentProject: ProjectSummary | null;
   availableProjects: ProjectSummary[];
+  allProjects: ProjectSummary[];
   isLoading: boolean;
   error: string | null;
 
   // Actions
   setCurrentProject: (project: ProjectSummary | null) => void;
   setAvailableProjects: (projects: ProjectSummary[]) => void;
+  setAllProjects: (projects: ProjectSummary[]) => void;
   fetchUserProjects: () => Promise<void>;
+  fetchAllProjects: () => Promise<void>;
   switchProject: (projectId: string) => Promise<void>;
+  requestProjectAccess: (request: ProjectAccessRequest) => Promise<ProjectAccessRequestResponse>;
   clearProject: () => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;

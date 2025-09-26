@@ -10,7 +10,9 @@ from src.models.projects import (
     ProjectSummary,
     UserProjectAccess,
     ProjectTeamAssignment,
-    ProjectContext
+    ProjectContext,
+    ProjectAccessRequest,
+    ProjectAccessRequestResponse
 )
 from src.controller.projects_manager import projects_manager
 from src.common.database import get_db
@@ -19,7 +21,8 @@ from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
     DBSessionDep,
-    CurrentUserDep
+    CurrentUserDep,
+    NotificationsManagerDep
 )
 from src.models.users import UserInfo
 from src.common.errors import NotFoundError, ConflictError
@@ -326,6 +329,43 @@ def set_current_project(
     except Exception as e:
         logger.exception(f"Failed to set current project: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to set current project")
+
+
+@router.post(
+    "/user/request-project-access",
+    response_model=ProjectAccessRequestResponse,
+    status_code=status.HTTP_201_CREATED
+)
+async def request_project_access(
+    request: ProjectAccessRequest,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    notifications_manager: NotificationsManagerDep,
+    manager = Depends(get_projects_manager)
+):
+    """Request access to a project by sending notifications to project team members."""
+    logger.info(f"User '{current_user.email}' requesting access to project: {request.project_id}")
+    try:
+        user_groups = current_user.groups or []
+        response = await manager.request_project_access(
+            db=db,
+            user_identifier=current_user.email,
+            user_groups=user_groups,
+            request=request,
+            notifications_manager=notifications_manager
+        )
+        db.commit()
+        return response
+    except NotFoundError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ConflictError as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Failed to request project access: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to request project access: {e!s}")
 
 
 def register_routes(app):

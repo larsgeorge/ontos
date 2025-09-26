@@ -61,13 +61,14 @@ class InfoDb(Base):
     data_product_id = Column(String, ForeignKey('data_products.id'), unique=True, nullable=False)
     
     title = Column(String, nullable=False)
-    owner = Column(String, nullable=False, index=True)
+    owner_team_id = Column(String, ForeignKey('teams.id'), nullable=True, index=True)  # Team UUID reference
     domain = Column(String, nullable=True, index=True)
     description = Column(Text, nullable=True)
     status = Column(String, nullable=True, index=True)
     archetype = Column(String, nullable=True, index=True)
     
-    # Relationship back to DataProductDb (Corrected reference)
+    # Relationships
+    owner_team = relationship("TeamDb", foreign_keys=[owner_team_id])
     data_product = relationship("DataProductDb", back_populates="info")
 
 # --- InputPort Table (Corrected relationship) ---

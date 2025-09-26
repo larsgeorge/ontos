@@ -44,7 +44,7 @@ class DataOutput(BaseModel):
 
 class Info(BaseModel):
     title: str = Field(..., description="The display name of this data product", example="Search Queries all")
-    owner: str = Field(..., description="The technical id of the team that owns the data product", example="search-team")
+    owner_team_id: Optional[str] = Field(None, description="The UUID of the team that owns the data product")
     domain: Optional[str] = Field(None, description="The technical id of the domain", example="ecommerce")
     description: Optional[str] = Field(None, example="All search queries with user interactions")
     status: Optional[str] = Field(None, description="Status like 'proposed', 'in development', 'active', 'retired'", example="active")

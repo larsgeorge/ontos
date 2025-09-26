@@ -106,3 +106,15 @@ class UserProjectAccess(BaseModel):
 class ProjectContext(BaseModel):
     """Model for setting project context"""
     project_id: Optional[str] = Field(None, description="Project ID to set as current (null for no project)")
+
+
+class ProjectAccessRequest(BaseModel):
+    """Model for requesting access to a project"""
+    project_id: str = Field(..., description="Project ID to request access to")
+    message: Optional[str] = Field(None, description="Optional message explaining why access is needed")
+
+
+class ProjectAccessRequestResponse(BaseModel):
+    """Response model for project access requests"""
+    message: str = Field(..., description="Status message")
+    project_name: str = Field(..., description="Name of the project access was requested for")

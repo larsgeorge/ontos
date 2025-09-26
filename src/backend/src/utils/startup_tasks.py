@@ -33,6 +33,8 @@ from src.controller.semantic_models_manager import SemanticModelsManager
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.models.semantic_links import EntitySemanticLinkCreate
 from src.controller.compliance_manager import ComplianceManager
+from src.controller.teams_manager import TeamsManager
+from src.controller.projects_manager import ProjectsManager
 
 # Import repositories (needed for manager instantiation)
 from src.repositories.settings_repository import AppRoleRepository
@@ -166,6 +168,11 @@ def initialize_managers(app: FastAPI):
         except Exception:
             pass
         app.state.business_glossaries_manager = BusinessGlossariesManager(data_dir=data_dir, semantic_models_manager=app.state.semantic_models_manager)
+
+        # Teams and Projects Managers
+        app.state.teams_manager = TeamsManager()
+        app.state.projects_manager = ProjectsManager()
+
         notifications_manager = getattr(app.state, 'notifications_manager', None)
         # Add other managers: Compliance, Estate, MDM, Security, Entitlements, Catalog Commander...
 
@@ -365,6 +372,8 @@ def load_initial_data(app: FastAPI) -> None:
         data_contracts_manager = getattr(app.state, 'data_contracts_manager', None) # Add
         business_glossaries_manager = getattr(app.state, 'business_glossaries_manager', None) # Add
         notifications_manager = getattr(app.state, 'notifications_manager', None) # Add this line
+        teams_manager = getattr(app.state, 'teams_manager', None)
+        projects_manager = getattr(app.state, 'projects_manager', None)
         # Add other managers as needed
 
         # Call load_initial_data for each manager that has it
@@ -375,7 +384,16 @@ def load_initial_data(app: FastAPI) -> None:
         # Ensure Data Domains are loaded FIRST so name->id lookups work for dependent entities
         if data_domain_manager and hasattr(data_domain_manager, 'load_initial_data'):
             data_domain_manager.load_initial_data(db)
-        # Now load other feature data that may depend on domains
+
+        # Load Teams BEFORE Projects (projects reference teams)
+        if teams_manager and hasattr(teams_manager, 'load_initial_data'):
+            teams_manager.load_initial_data(db)
+
+        # Load Projects after Teams
+        if projects_manager and hasattr(projects_manager, 'load_initial_data'):
+            projects_manager.load_initial_data(db)
+
+        # Now load other feature data that may depend on domains and teams
         if data_contracts_manager and hasattr(data_contracts_manager, 'load_initial_data'):
             data_contracts_manager.load_initial_data(db)
         if data_product_manager and hasattr(data_product_manager, 'load_initial_data'):

@@ -1,5 +1,7 @@
 import logging
 import json
+import yaml
+from pathlib import Path
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -12,11 +14,14 @@ from src.models.projects import (
     ProjectRead,
     ProjectSummary,
     UserProjectAccess,
-    ProjectTeamAssignment
+    ProjectTeamAssignment,
+    ProjectAccessRequest,
+    ProjectAccessRequestResponse
 )
 from src.db_models.projects import ProjectDb
 from src.common.logging import get_logger
 from src.common.errors import ConflictError, NotFoundError
+from src.models.notifications import NotificationType
 
 logger = get_logger(__name__)
 
@@ -117,7 +122,18 @@ class ProjectsManager:
         logger.debug(f"Fetching accessible projects for user: {user_identifier}")
 
         try:
-            db_projects = self.project_repo.get_projects_for_user(db, user_identifier, user_groups)
+            # Check if user is admin
+            is_admin = "admin" in [group.lower() for group in user_groups] if user_groups else False
+            logger.debug(f"User {user_identifier} admin status: {is_admin}")
+
+            if is_admin:
+                # Admins see all projects
+                logger.debug(f"User {user_identifier} is admin, showing all projects")
+                db_projects = self.project_repo.get_multi(db)
+            else:
+                # Non-admins only see projects they have team access to
+                db_projects = self.project_repo.get_projects_for_user(db, user_identifier, user_groups)
+
             project_summaries = [self._convert_db_to_summary_model(project) for project in db_projects]
 
             return UserProjectAccess(
@@ -248,6 +264,169 @@ class ProjectsManager:
 
         user_projects = self.project_repo.get_projects_for_user(db, user_identifier, user_groups)
         return any(project.id == project_id for project in user_projects)
+
+    async def request_project_access(self, db: Session, user_identifier: str, user_groups: List[str], request: ProjectAccessRequest, notifications_manager) -> ProjectAccessRequestResponse:
+        """Request access to a project by sending notifications to project team members."""
+        logger.debug(f"Processing project access request from user {user_identifier} for project {request.project_id}")
+
+        # Verify project exists
+        db_project = self.project_repo.get(db, request.project_id)
+        if not db_project:
+            raise NotFoundError(f"Project with id '{request.project_id}' not found.")
+
+        # Check if user already has access
+        if self.check_user_project_access(db, user_identifier, user_groups, request.project_id):
+            raise ConflictError(f"User already has access to project '{db_project.name}'.")
+
+        # Get all teams assigned to the project
+        project_teams = self.project_repo.get_team_assignments(db, request.project_id)
+
+        if not project_teams:
+            raise ConflictError(f"Project '{db_project.name}' has no assigned teams. Cannot request access.")
+
+        # Send notifications to all team members of assigned teams
+        notifications_sent = 0
+
+        for team in project_teams:
+            # Get team with members using team repository
+            team_with_members = self.team_repo.get_with_members(db, team.id)
+            if not team_with_members or not team_with_members.members:
+                logger.warning(f"Team {team.name} has no members, skipping notifications")
+                continue
+
+            for member in team_with_members.members:
+                try:
+                    # Create notification for each team member
+                    notification_title = f"Project Access Request"
+                    notification_description = (
+                        f"User {user_identifier} is requesting access to project '{db_project.name}'"
+                        f"{' - ' + request.message if request.message else ''}. "
+                        f"Please contact an administrator to grant access if appropriate."
+                    )
+
+                    # Create notification using the async method
+                    notification = await notifications_manager.create_notification(
+                        db=db,
+                        user_id=member.member_identifier,
+                        title=notification_title,
+                        subtitle=f"From: {user_identifier}",
+                        description=notification_description,
+                        link=f"/projects/{request.project_id}",
+                        type=NotificationType.INFO,
+                        action_type="project_access_request",
+                        action_payload={
+                            "project_id": request.project_id,
+                            "requester": user_identifier,
+                            "team_id": team.id
+                        }
+                    )
+                    notifications_sent += 1
+                    logger.debug(f"Sent project access request notification to {member.member_identifier}")
+
+                except Exception as e:
+                    logger.warning(f"Failed to send notification to team member {member.member_identifier}: {e}")
+                    continue
+
+        if notifications_sent == 0:
+            raise ConflictError(f"Could not send notifications to any team members for project '{db_project.name}'.")
+
+        logger.info(f"Sent {notifications_sent} project access request notifications for project '{db_project.name}' from user {user_identifier}")
+
+        return ProjectAccessRequestResponse(
+            message=f"Access request sent successfully. {notifications_sent} team members have been notified.",
+            project_name=db_project.name
+        )
+
+    def load_initial_data(self, db: Session) -> bool:
+        """Load projects from YAML file if projects table is empty."""
+        logger.debug("ProjectsManager: Checking if projects table is empty...")
+
+        try:
+            # Check if projects already exist
+            existing_projects = self.project_repo.get_multi(db, limit=1)
+            if existing_projects:
+                logger.info("Projects table is not empty. Skipping initial data loading.")
+                return False
+        except Exception as e:
+            logger.error(f"Error checking if projects table is empty: {e}", exc_info=True)
+            return False
+
+        # Load projects from YAML
+        yaml_path = Path(__file__).parent.parent / "data" / "projects.yaml"
+        if not yaml_path.exists():
+            logger.info(f"Projects YAML file not found at {yaml_path}. Skipping initial data loading.")
+            return False
+
+        logger.info(f"Projects table is empty. Loading initial data from {yaml_path}...")
+
+        try:
+            with open(yaml_path, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+
+            if not data or 'projects' not in data:
+                logger.warning("No 'projects' section found in YAML file.")
+                return False
+
+            projects_data = data['projects']
+            created_projects = {}  # Track project name -> project_id mapping
+
+            # Create projects first (without team assignments)
+            for project_data in projects_data:
+                try:
+                    # Extract project creation data (excluding assigned_teams)
+                    project_create_data = {
+                        'name': project_data['name'],
+                        'title': project_data.get('title', ''),
+                        'description': project_data.get('description', ''),
+                        'tags': project_data.get('tags', []),
+                        'metadata': project_data.get('metadata', {}),
+                        'team_ids': []  # Will assign teams separately
+                    }
+
+                    project_create = ProjectCreate(**project_create_data)
+                    created_project = self.create_project(db, project_create, current_user_id="system@startup.ucapp")
+                    created_projects[project_data['name']] = created_project.id
+
+                    logger.debug(f"Created project: {project_data['name']} with ID: {created_project.id}")
+
+                except Exception as e:
+                    logger.error(f"Error creating project '{project_data.get('name', 'unknown')}': {e}", exc_info=True)
+                    continue
+
+            # Assign teams to projects
+            for project_data in projects_data:
+                project_name = project_data['name']
+                project_id = created_projects.get(project_name)
+
+                if not project_id:
+                    logger.warning(f"Project '{project_name}' not found in created projects, skipping team assignments.")
+                    continue
+
+                assigned_teams = project_data.get('assigned_teams', [])
+                for team_name in assigned_teams:
+                    try:
+                        # Look up team by name
+                        team_db = self.team_repo.get_by_name(db, name=team_name)
+                        if not team_db:
+                            logger.warning(f"Team '{team_name}' not found for project '{project_name}', skipping.")
+                            continue
+
+                        # Assign team to project
+                        self.assign_team_to_project(db, project_id, team_db.id, assigned_by="system@startup.ucapp")
+                        logger.debug(f"Assigned team '{team_name}' to project '{project_name}'")
+
+                    except Exception as e:
+                        logger.error(f"Error assigning team '{team_name}' to project '{project_name}': {e}", exc_info=True)
+                        continue
+
+            db.commit()
+            logger.info(f"Successfully loaded {len(created_projects)} projects with team assignments from YAML file.")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error loading projects from YAML: {e}", exc_info=True)
+            db.rollback()
+            return False
 
 
 # Singleton instance

@@ -17,14 +17,14 @@ class DataDomainBasicInfo(BaseModel):
 class DataDomainBase(BaseModel):
     name: str = Field(..., min_length=1, description="Name of the data domain.")
     description: Optional[str] = Field(None, description="Optional description for the domain.")
-    owner: List[str] = Field(..., min_items=1, description="List of owners (principals - users/groups) for the domain.")
+    owner_team_id: Optional[str] = Field(None, description="UUID of the team that owns the domain.")
     tags: Optional[List[str]] = Field(None, description="Optional list of tags associated with the domain.")
     parent_id: Optional[UUID] = Field(None, description="ID of the parent data domain, if any.")
 
-    @validator('owner', 'tags', pre=True, each_item=True)
+    @validator('tags', pre=True, each_item=True)
     def check_string_not_empty(cls, v):
         if isinstance(v, str) and not v.strip():
-            raise ValueError("Owner and tag strings cannot be empty")
+            raise ValueError("Tag strings cannot be empty")
         return v
 
 # --- Create Model --- #
@@ -36,14 +36,14 @@ class DataDomainCreate(DataDomainBase):
 class DataDomainUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, description="New name for the data domain.")
     description: Optional[str] = Field(None, description="New description for the domain.")
-    owner: Optional[List[str]] = Field(None, min_items=1, description="New list of owners for the domain.")
+    owner_team_id: Optional[str] = Field(None, description="New UUID of the team that owns the domain.")
     tags: Optional[List[str]] = Field(None, description="New list of tags for the domain.")
     parent_id: Optional[UUID] = Field(None, description="New parent ID for the data domain. Set to null to remove parent.")
 
-    @validator('owner', 'tags', pre=True, each_item=True)
+    @validator('tags', pre=True, each_item=True)
     def check_update_string_not_empty(cls, v):
         if isinstance(v, str) and not v.strip():
-            raise ValueError("Owner and tag strings cannot be empty")
+            raise ValueError("Tag strings cannot be empty")
         return v
 
 # --- Read Model (includes DB fields) --- #
@@ -58,7 +58,7 @@ class DataDomainRead(DataDomainBase):
     children_info: List[DataDomainBasicInfo] = Field(default_factory=list, description="List of basic info for direct child domains.")
 
     # Validator to parse stringified list from DB before standard validation
-    @field_validator('owner', 'tags', mode='before')
+    @field_validator('tags', mode='before')
     def parse_stringified_list(cls, value):
         if value is None: 
             return None # Allow optional tags to be None

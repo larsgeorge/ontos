@@ -34,7 +34,7 @@ import {
 import { Loader2, Plus, Trash2, User, Users } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
-import { TeamRead, TeamCreate, TeamUpdate, MemberType } from '@/types/team';
+import { TeamRead, TeamCreate, TeamUpdate, MemberType, TeamMember } from '@/types/team';
 import { DataDomain } from '@/types/data-domain';
 
 // Form schema
@@ -74,7 +74,7 @@ export function TeamFormDialog({
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { get: apiGet, post: apiPost, put: apiPut } = useApi();
+  const { get: apiGet, post: apiPost, put: apiPut, delete: apiDelete } = useApi();
   const { toast } = useToast();
 
   const form = useForm<TeamFormData>({
@@ -186,19 +186,34 @@ export function TeamFormDialog({
         };
         response = await apiPut<TeamRead>(`/api/teams/${team.id}`, updateData);
 
-        // Handle members separately using dedicated member endpoints
-        if (cleanedData.members && cleanedData.members.length > 0) {
-          for (const member of cleanedData.members) {
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        // For updates, clear existing members and add new ones
+        // First, get current members
+        const currentMembersResponse = await apiGet<TeamMember[]>(`/api/teams/${team.id}/members`);
+        if (currentMembersResponse.data && !currentMembersResponse.error) {
+          // Remove all current members
+          for (const currentMember of currentMembersResponse.data) {
             try {
-              await apiPost(`/api/teams/${team.id}/members`, {
-                member_type: member.member_type,
-                member_identifier: member.member_identifier,
-                app_role_override: member.app_role_override
-              });
-            } catch (memberError) {
-              // Continue with other members if one fails (might already exist)
-              console.warn('Failed to add member:', memberError);
+              await apiDelete(`/api/teams/${team.id}/members/${encodeURIComponent(currentMember.member_identifier)}`);
+            } catch (removeError) {
+              console.warn('Failed to remove existing member:', removeError);
             }
+          }
+        }
+
+        // Add new members
+        for (const member of cleanedData.members) {
+          try {
+            await apiPost(`/api/teams/${team.id}/members`, {
+              member_type: member.member_type,
+              member_identifier: member.member_identifier,
+              app_role_override: member.app_role_override
+            });
+          } catch (memberError) {
+            console.warn('Failed to add member:', memberError);
           }
         }
       } else {
@@ -213,8 +228,12 @@ export function TeamFormDialog({
         };
         response = await apiPost<TeamRead>('/api/teams', createData);
 
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
         // Add members separately after team creation
-        if (response.data && !response.error && cleanedData.members && cleanedData.members.length > 0) {
+        if (response.data && cleanedData.members && cleanedData.members.length > 0) {
           const teamId = (response.data as TeamRead).id;
           for (const member of cleanedData.members) {
             try {
@@ -231,9 +250,6 @@ export function TeamFormDialog({
         }
       }
 
-      if (response.error) {
-        throw new Error(response.error);
-      }
 
       toast({
         title: team ? 'Team Updated' : 'Team Created',

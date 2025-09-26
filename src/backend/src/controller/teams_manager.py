@@ -1,5 +1,7 @@
 import logging
 import json
+import yaml
+from pathlib import Path
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -251,6 +253,96 @@ class TeamsManager:
         """Gets all members of a team."""
         db_members = self.team_member_repo.get_members_by_team(db, team_id)
         return [TeamMemberRead.model_validate(member) for member in db_members]
+
+    def load_initial_data(self, db: Session) -> bool:
+        """Load teams from YAML file if teams table is empty."""
+        logger.debug("TeamsManager: Checking if teams table is empty...")
+
+        try:
+            # Check if teams already exist
+            existing_teams = self.team_repo.get_multi(db, limit=1)
+            if existing_teams:
+                logger.info("Teams table is not empty. Skipping initial data loading.")
+                return False
+        except Exception as e:
+            logger.error(f"Error checking if teams table is empty: {e}", exc_info=True)
+            return False
+
+        # Load teams from YAML
+        yaml_path = Path(__file__).parent.parent / "data" / "teams.yaml"
+        if not yaml_path.exists():
+            logger.info(f"Teams YAML file not found at {yaml_path}. Skipping initial data loading.")
+            return False
+
+        logger.info(f"Teams table is empty. Loading initial data from {yaml_path}...")
+
+        try:
+            with open(yaml_path, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+
+            if not data or 'teams' not in data:
+                logger.warning("No 'teams' section found in YAML file.")
+                return False
+
+            teams_data = data['teams']
+            created_teams = {}  # Track team name -> team_id mapping
+
+            # Create teams first (without members)
+            for team_data in teams_data:
+                try:
+                    # Extract team creation data (excluding members)
+                    team_create_data = {
+                        'name': team_data['name'],
+                        'title': team_data.get('title', ''),
+                        'description': team_data.get('description', ''),
+                        'domain_id': team_data.get('domain_id'),
+                        'tags': team_data.get('tags', []),
+                        'metadata': team_data.get('metadata', {})
+                    }
+
+                    team_create = TeamCreate(**team_create_data)
+                    created_team = self.create_team(db, team_create, current_user_id="system@startup.ucapp")
+                    created_teams[team_data['name']] = created_team.id
+
+                    logger.debug(f"Created team: {team_data['name']} with ID: {created_team.id}")
+
+                except Exception as e:
+                    logger.error(f"Error creating team '{team_data.get('name', 'unknown')}': {e}", exc_info=True)
+                    continue
+
+            # Add members to teams
+            for team_data in teams_data:
+                team_name = team_data['name']
+                team_id = created_teams.get(team_name)
+
+                if not team_id:
+                    logger.warning(f"Team '{team_name}' not found in created teams, skipping members.")
+                    continue
+
+                members_data = team_data.get('members', [])
+                for member_data in members_data:
+                    try:
+                        member_create = TeamMemberCreate(
+                            member_type=member_data['member_type'],
+                            member_identifier=member_data['member_identifier'],
+                            app_role_override=member_data.get('app_role_override')
+                        )
+
+                        self.add_team_member(db, team_id, member_create, current_user_id="system@startup.ucapp")
+                        logger.debug(f"Added member {member_data['member_identifier']} to team {team_name}")
+
+                    except Exception as e:
+                        logger.error(f"Error adding member {member_data.get('member_identifier', 'unknown')} to team {team_name}: {e}", exc_info=True)
+                        continue
+
+            db.commit()
+            logger.info(f"Successfully loaded {len(created_teams)} teams with members from YAML file.")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error loading teams from YAML: {e}", exc_info=True)
+            db.rollback()
+            return False
 
 
 # Singleton instance

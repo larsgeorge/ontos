@@ -50,7 +50,7 @@ export interface OutputPort extends Port {
 // Interface for Info (matching Pydantic Info model)
 export interface Info {
   title: string;
-  owner: string;
+  owner_team_id?: string; // UUID of the owning team
   domain?: string;
   description?: string;
   status?: string;

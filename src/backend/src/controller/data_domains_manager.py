@@ -37,17 +37,8 @@ class DataDomainManager:
             for child_db_obj in db_domain.children:
                 children_info_data.append(DataDomainBasicInfo.model_validate(child_db_obj))
 
-        # Ensure tags and owner are lists when converting from JSON string
-        # The DataDomainRead model's validator will handle JSON string parsing if it gets a string.
-        # If already parsed by repository or earlier, it should be a list.
-        # For safety, let's ensure it. This might be redundant if DataDomainRead validator is robust.
-        owner_list = db_domain.owner
-        if isinstance(db_domain.owner, str):
-            try:
-                owner_list = json.loads(db_domain.owner.replace("'", '"'))
-            except json.JSONDecodeError:
-                logger.warning(f"Could not parse owner field for domain {db_domain.id}: {db_domain.owner}")
-                owner_list = [] # Default to empty list on parsing error
+        # Get the owner team ID (no JSON parsing needed for UUID)
+        owner_team_id = db_domain.owner_team_id
 
         tags_list = db_domain.tags
         if db_domain.tags and isinstance(db_domain.tags, str):
@@ -63,7 +54,7 @@ class DataDomainManager:
             id=db_domain.id,
             name=db_domain.name,
             description=db_domain.description,
-            owner=owner_list,
+            owner_team_id=owner_team_id,
             tags=tags_list,
             parent_id=db_domain.parent_id,
             created_at=db_domain.created_at,
@@ -87,8 +78,7 @@ class DataDomainManager:
         db_obj_data = domain_in.model_dump(exclude_unset=True) # Use model_dump for Pydantic v2
         db_obj_data['created_by'] = current_user_id
 
-        if isinstance(db_obj_data.get('owner'), list):
-            db_obj_data['owner'] = json.dumps(db_obj_data['owner'])
+        # owner_team_id is already a string UUID, no JSON serialization needed
         if isinstance(db_obj_data.get('tags'), list):
             db_obj_data['tags'] = json.dumps(db_obj_data['tags'])
 
@@ -187,8 +177,7 @@ class DataDomainManager:
         update_data = domain_in.model_dump(exclude_unset=True)
 
         # Serialize lists to JSON strings if they are provided in the update
-        if 'owner' in update_data and isinstance(update_data['owner'], list):
-            update_data['owner'] = json.dumps(update_data['owner'])
+        # owner_team_id is already a string UUID, no JSON serialization needed
         if 'tags' in update_data and isinstance(update_data['tags'], list):
             update_data['tags'] = json.dumps(update_data['tags'])
 
@@ -278,6 +267,24 @@ class DataDomainManager:
             raise
 
     # --- Demo Data Loading --- #
+    def _resolve_team_name_to_id(self, db: Session, team_name: str) -> Optional[str]:
+        """Helper method to resolve team name to team UUID."""
+        if not team_name:
+            return None
+
+        try:
+            from src.repositories.teams_repository import team_repo
+            team = team_repo.get_by_name(db, name=team_name)
+            if team:
+                logger.info(f"Successfully resolved team '{team_name}' to ID: {team.id}")
+                return str(team.id)
+            else:
+                logger.warning(f"Team '{team_name}' not found")
+                return None
+        except Exception as e:
+            logger.warning(f"Failed to resolve team '{team_name}': {e}")
+            return None
+
     def load_initial_data(self, db: Session) -> None:
         """Loads initial data domains from a YAML file if the table is empty."""
         logger.debug("DataDomainManager: Checking if data domains table is empty...")
@@ -317,14 +324,23 @@ class DataDomainManager:
 
             for domain_data in data['domains']:
                 try:
-                    if 'name' not in domain_data or 'owner' not in domain_data:
+                    if 'name' not in domain_data:
                          logger.warning(f"Skipping domain entry due to missing required fields: {domain_data.get('name', 'N/A')}")
                          continue
-                    
+
                     # Create a copy for mutation, remove parent_name if it exists
                     create_data = domain_data.copy()
                     parent_name_to_resolve = create_data.pop('parent_name', None)
                     create_data.pop('id', None) # remove id if present, we generate it
+
+                    # Resolve owner_team_id if present (new format)
+                    if 'owner_team_id' in create_data:
+                        owner_team_name = create_data.pop('owner_team_id')  # Remove from create_data
+                        owner_team_id = self._resolve_team_name_to_id(db, owner_team_name)
+                        if owner_team_id:
+                            create_data['owner_team_id'] = owner_team_id
+                        else:
+                            logger.warning(f"Could not resolve owner_team_id '{owner_team_name}' for domain '{create_data.get('name')}'. Domain will be created without team ownership.")
 
                     # If parent_id is directly provided and valid UUID, use it.
                     # If parent_name is provided, we will resolve it later.
@@ -385,8 +401,7 @@ class DataDomainManager:
 
         db_obj_data = domain_in.model_dump(exclude_unset=True)
         db_obj_data['created_by'] = current_user_id
-        if isinstance(db_obj_data.get('owner'), list):
-            db_obj_data['owner'] = json.dumps(db_obj_data['owner'])
+        # owner_team_id is already a string UUID, no JSON serialization needed
         if isinstance(db_obj_data.get('tags'), list):
             db_obj_data['tags'] = json.dumps(db_obj_data['tags'])
         

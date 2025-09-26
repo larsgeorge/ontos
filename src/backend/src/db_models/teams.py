@@ -18,7 +18,7 @@ class TeamDb(Base):
 
     # Optional parent domain relationship
     domain_id = Column(String, ForeignKey('data_domains.id'), nullable=True)
-    domain = relationship("DataDomain", lazy="select")
+    domain = relationship("DataDomain", foreign_keys=[domain_id], lazy="select")
 
     # Metadata fields (stored as JSON strings)
     tags = Column(String, nullable=True, default='[]')  # JSON array of tags

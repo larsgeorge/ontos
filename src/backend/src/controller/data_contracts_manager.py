@@ -133,7 +133,7 @@ class DataContractsManager(SearchableAsset):
                     'contract_text': c.contract_text,
                     'format': c.format,
                     'version': c.version,
-                    'owner': c.owner,
+                    'owner_team_id': c.owner_team_id,
                     'description': c.description,
                     'status': c.status,
                     'created_at': c.created_at.isoformat(),
@@ -1157,6 +1157,24 @@ class DataContractsManager(SearchableAsset):
         return odcs
 
     # --- App startup data loader ---
+    def _resolve_team_name_to_id(self, db, team_name: str) -> Optional[str]:
+        """Helper method to resolve team name to team UUID."""
+        if not team_name:
+            return None
+
+        try:
+            from src.repositories.teams_repository import team_repo
+            team = team_repo.get_by_name(db, name=team_name)
+            if team:
+                logger.info(f"Successfully resolved team '{team_name}' to ID: {team.id}")
+                return str(team.id)
+            else:
+                logger.warning(f"Team '{team_name}' not found")
+                return None
+        except Exception as e:
+            logger.warning(f"Failed to resolve team '{team_name}': {e}")
+            return None
+
     def load_initial_data(self, db) -> None:
         """Load example contracts from YAML into the database if not present.
 
@@ -1261,6 +1279,14 @@ class DataContractsManager(SearchableAsset):
                     except Exception:
                         continue
 
+                # Resolve owner_team to owner_team_id if provided
+                owner_team_id = None
+                owner_team = c.get('owner_team')
+                if owner_team:
+                    owner_team_id = self._resolve_team_name_to_id(db, owner_team)
+                    if not owner_team_id:
+                        logger.warning(f"Could not resolve owner_team '{owner_team}' for contract '{name}'. Contract will be created without team ownership.")
+
                 # Determine if entry is legacy (embedded doc) or normalized (ODCS-like)
                 contract_text = c.get('contract_text')
                 format_val = c.get('format')
@@ -1272,7 +1298,7 @@ class DataContractsManager(SearchableAsset):
                         name=name,
                         version=version,
                         status=c.get('status') or 'draft',
-                        owner=c.get('owner') or 'unknown@local',
+                        owner_team_id=owner_team_id,
                         kind=c.get('kind') or 'DataContract',
                         api_version=c.get('apiVersion') or 'v3.0.2',
                         domain_id=domain_id,
@@ -1292,7 +1318,7 @@ class DataContractsManager(SearchableAsset):
                     name=name,
                     version=version,
                     status=c.get('status') or 'draft',
-                    owner=c.get('owner') or 'unknown@local',
+                    owner_team_id=owner_team_id,
                     kind=c.get('kind') or 'DataContract',
                     api_version=c.get('apiVersion') or 'v3.0.2',
                     domain_id=domain_id,

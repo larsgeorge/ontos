@@ -329,6 +329,24 @@ class DataProductsManager(SearchableAsset):
             logger.error(f"Failed to send Genie Space completion notification: {e}", exc_info=True)
             # No explicit rollback needed due to context manager
 
+    def _resolve_team_name_to_id(self, db: Session, team_name: str) -> Optional[str]:
+        """Helper method to resolve team name to team UUID."""
+        if not team_name:
+            return None
+
+        try:
+            from src.repositories.teams_repository import team_repo
+            team = team_repo.get_by_name(db, name=team_name)
+            if team:
+                logger.info(f"Successfully resolved team '{team_name}' to ID: {team.id}")
+                return str(team.id)
+            else:
+                logger.warning(f"Team '{team_name}' not found")
+                return None
+        except Exception as e:
+            logger.warning(f"Failed to resolve team '{team_name}': {e}")
+            return None
+
     def load_initial_data(self, db: Session) -> bool:
         """Load data products from the default YAML file into the database if empty."""
         # Check if products already exist
@@ -378,6 +396,17 @@ class DataProductsManager(SearchableAsset):
                     now = datetime.utcnow()
                     product_dict.setdefault('created_at', now)
                     product_dict.setdefault('updated_at', now)
+
+                    # Resolve owner_team to owner_team_id if present
+                    if 'info' in product_dict and isinstance(product_dict['info'], dict):
+                        info_dict = product_dict['info']
+                        if 'owner_team' in info_dict:
+                            owner_team = info_dict.pop('owner_team')  # Remove owner_team
+                            owner_team_id = self._resolve_team_name_to_id(db, owner_team)
+                            if owner_team_id:
+                                info_dict['owner_team_id'] = owner_team_id
+                            else:
+                                logger.warning(f"Could not resolve owner_team '{owner_team}' for product ID {product_dict.get('id')}. Product will be created without team ownership.")
 
                     # Validate data using the API model
                     product_api = DataProductApi(**product_dict)

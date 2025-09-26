@@ -249,7 +249,7 @@ class ODCSContract(BaseModel):
     tenant: Optional[str] = None
     domain: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
-    owner: Optional[str] = None
+    owner_team_id: Optional[str] = Field(None, alias='ownerTeamId')
     description: Optional[ContractDescription] = None
 
     # ODCS v3.0.2 top-level fields
@@ -292,7 +292,7 @@ class DataContractBase(BaseModel):
     name: str  # Required for app usability
     version: str = Field('v1.0')
     status: str = Field('draft')
-    owner: Optional[str] = None
+    owner_team_id: Optional[str] = Field(None, alias='ownerTeamId')
     kind: str = Field('DataContract')  # Required by ODCS
     apiVersion: str = Field('v3.0.2', alias='api_version')  # Required by ODCS
     domainId: Optional[str] = Field(None, alias='domain_id')
@@ -350,7 +350,7 @@ class DataContractCreate(DataContractBase):
             name=self.name,
             version=self.version,
             status=self.status,
-            owner=self.owner,
+            owner_team_id=self.owner_team_id,
             domain=self.domain,
             tenant=self.tenant,
             dataProduct=self.dataProduct,
@@ -363,7 +363,7 @@ class DataContractUpdate(BaseModel):
     name: Optional[str] = None
     version: Optional[str] = None
     status: Optional[str] = None
-    owner: Optional[str] = None
+    owner_team_id: Optional[str] = Field(None, alias='ownerTeamId')
     kind: Optional[str] = None
     apiVersion: Optional[str] = Field(None, alias='api_version')
     domainId: Optional[str] = Field(None, alias='domain_id')
@@ -385,7 +385,7 @@ class DataContractRead(BaseModel):
     name: str  # Required for app usability
     version: str  # Required by ODCS
     status: str  # Required by ODCS
-    owner: Optional[str] = None
+    owner_team_id: Optional[str] = Field(None, alias='ownerTeamId')
     kind: str = Field('DataContract')  # Required by ODCS
     # Ensure JSON uses camelCase key 'apiVersion' so frontend reads it
     apiVersion: str = Field('v3.0.2', alias='apiVersion')  # Required by ODCS

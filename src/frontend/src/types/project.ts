@@ -50,3 +50,13 @@ export interface UserProjectAccess {
 export interface ProjectContext {
   project_id?: string | null;
 }
+
+export interface ProjectAccessRequest {
+  project_id: string;
+  message?: string | null;
+}
+
+export interface ProjectAccessRequestResponse {
+  message: string;
+  project_name: string;
+}

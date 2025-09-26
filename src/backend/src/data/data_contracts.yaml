@@ -2,7 +2,7 @@ contracts:
 - id: 1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p
   name: Customer Data Contract
   version: '1.0'
-  owner: data.team@company.com
+  owner_team: data-engineering
   status: active
   kind: DataContract
   apiVersion: v3.0.2
@@ -246,7 +246,7 @@ contracts:
 - id: 2b3c4d5e-6f7g-8h9i-0j1k-2l3m4n5o6p7q
   name: Product Catalog Contract
   version: '1.0'
-  owner: product.team@company.com
+  owner_team: analytics-team
   status: deprecated
   kind: DataContract
   apiVersion: v3.0.2
@@ -547,7 +547,7 @@ contracts:
 - id: 3c4d5e6f-7g8h-9i0j-1k2l-3m4n5o6p7q8r
   name: Data Sharing Agreement
   version: '2.0'
-  owner: legal.team@company.com
+  owner_team: governance-team
   status: active
   kind: DataContract
   apiVersion: v3.0.2
@@ -560,7 +560,7 @@ contracts:
 - id: 4d5e6f7g-8h9i-0j1k-2l3m-4n5o6p7q8r9s
   name: IoT Device Data Contract
   version: '1.1'
-  owner: iot.team@company.com
+  owner_team: data-science
   status: active
   kind: DataContract
   apiVersion: v3.0.2
@@ -906,7 +906,7 @@ contracts:
 - id: 5e6f7g8h-9i0j-1k2l-3m4n-5o6p7q8r9s0t
   name: IoT Sensor Data Contract
   version: '2.0'
-  owner: iot.team@company.com
+  owner_team: data-science
   status: archived
   kind: DataContract
   apiVersion: v3.0.2
@@ -943,7 +943,7 @@ contracts:
 - id: 6f7g8h9i-0j1k-2l3m-4n5o-6p7q8r9s0t1u
   name: Financial Transactions Contract
   version: '1.0'
-  owner: finance.team@company.com
+  owner_team: governance-team
   status: draft
   kind: DataContract
   apiVersion: v3.0.2
@@ -980,7 +980,7 @@ contracts:
 - id: 7g8h9i0j-1k2l-3m4n-5o6p-7q8r9s0t1u2v
   name: Inventory Management Contract
   version: '1.2'
-  owner: logistics.team@company.com
+  owner_team: analytics-team
   status: deprecated
   kind: DataContract
   apiVersion: v3.0.2

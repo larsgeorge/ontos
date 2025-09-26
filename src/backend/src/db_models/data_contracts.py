@@ -24,7 +24,7 @@ class DataContractDb(Base):
     api_version = Column(String, nullable=False, default="v3.0.2")
     version = Column(String, nullable=False, index=True)
     status = Column(String, nullable=False, default="draft", index=True)
-    owner = Column(String, nullable=True, index=True)  # Optional per ODCS v3.0.2
+    owner_team_id = Column(String, ForeignKey('teams.id'), nullable=True, index=True)  # Team UUID reference
     tenant = Column(String, nullable=True)
     data_product = Column(String, nullable=True)
     domain_id = Column(String, ForeignKey("data_domains.id"), nullable=True, index=True)
@@ -47,6 +47,7 @@ class DataContractDb(Base):
     updated_by = Column(String, nullable=True)
 
     # Relationships
+    owner_team = relationship("TeamDb", foreign_keys=[owner_team_id])
     tags = relationship("DataContractTagDb", back_populates="contract", cascade="all, delete-orphan")
     servers = relationship("DataContractServerDb", back_populates="contract", cascade="all, delete-orphan")
     roles = relationship("DataContractRoleDb", back_populates="contract", cascade="all, delete-orphan")
