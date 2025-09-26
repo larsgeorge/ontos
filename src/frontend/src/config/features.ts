@@ -103,7 +103,7 @@ import {
       description: 'Review and approve Databricks assets like tables, views, and functions.',
       icon: ClipboardCheck,
       group: 'Governance',
-      maturity: 'alpha',
+      maturity: 'beta',
       showInLanding: true,
     },
     // Operations - Ongoing monitoring and technical management
@@ -165,7 +165,7 @@ import {
       description: 'Manage access privileges through personas and groups.',
       icon: Shield,
       group: 'Security',
-      maturity: 'beta',
+      maturity: 'alpha',
       showInLanding: true,
     },
     {
