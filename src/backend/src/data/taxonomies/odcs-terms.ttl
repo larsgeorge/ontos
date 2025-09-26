@@ -1,0 +1,512 @@
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix dc: <http://purl.org/dc/terms/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+# ODCS Terms
+@prefix odcs: <http://odcs.bitol.io/terms#> .
+
+# ============================================================================
+# OPEN DATA CONTRACT STANDARD (ODCS) TERMS
+# Based on ODCS v3.0.2 specification
+# ============================================================================
+
+# Ontology Header
+odcs: a owl:Ontology ;
+    rdfs:label "Open Data Contract Standard Terms" ;
+    rdfs:comment "Vocabulary for Open Data Contract Standard v3.0.2 entities" ;
+    owl:versionInfo "3.0.2" ;
+    dc:created "2024-09-22" ;
+    dc:creator "BITOL.io Open Data Contract Standard" ;
+    dc:source "https://github.com/bitol-io/open-data-contract-standard" .
+
+# ============================================================================
+# ROOT CLASS
+# ============================================================================
+
+odcs:ODCSEntity a rdfs:Class ;
+    rdfs:label "ODCS Entity" ;
+    rdfs:comment "Root class for all Open Data Contract Standard entities" .
+
+# ============================================================================
+# DATA CONTRACT CORE
+# ============================================================================
+
+odcs:DataContract a rdfs:Class ;
+    rdfs:subClassOf odcs:ODCSEntity ;
+    rdfs:label "Data Contract" ;
+    rdfs:comment "Core data contract specification defining agreements between data providers and consumers" ;
+    skos:definition "Formal specification of data structure, quality, and operational requirements" .
+
+odcs:ContractInfo a rdfs:Class ;
+    rdfs:subClassOf odcs:ODCSEntity ;
+    rdfs:label "Contract Info" ;
+    rdfs:comment "Metadata and descriptive information about the data contract" .
+
+# ============================================================================
+# SCHEMA DEFINITIONS
+# ============================================================================
+
+odcs:SchemaObject a rdfs:Class ;
+    rdfs:subClassOf odcs:ODCSEntity ;
+    rdfs:label "Schema Object" ;
+    rdfs:comment "Data structure definition containing fields and their specifications" ;
+    skos:definition "Defines the structure, types, and constraints of data entities" .
+
+odcs:SchemaProperty a rdfs:Class ;
+    rdfs:subClassOf odcs:ODCSEntity ;
+    rdfs:label "Schema Property" ;
+    rdfs:comment "Individual field or column definition within a schema" ;
+    skos:definition "Specifies data type, constraints, and metadata for individual data elements" .
+
+odcs:ClassificationLevel a rdfs:Class ;
+    rdfs:subClassOf odcs:ODCSEntity ;
+    rdfs:label "Classification Level" ;
+    rdfs:comment "Data classification and sensitivity level specification" .
+
+# ============================================================================
+# SERVER AND INFRASTRUCTURE
+# ============================================================================
+
+odcs:Server a rdfs:Class ;
+    rdfs:subClassOf odcs:ODCSEntity ;
+    rdfs:label "Server" ;
+    rdfs:comment "Base class for data infrastructure servers" .
+
+odcs:BigQueryServer a rdfs:Class ;
+    rdfs:subClassOf odcs:Server ;
+    rdfs:label "BigQuery Server" ;
+    rdfs:comment "Google BigQuery data warehouse server configuration" .
+
+odcs:RedshiftServer a rdfs:Class ;
+    rdfs:subClassOf odcs:Server ;
+    rdfs:label "Redshift Server" ;
+    rdfs:comment "Amazon Redshift data warehouse server configuration" .
+
+odcs:SnowflakeServer a rdfs:Class ;
+    rdfs:subClassOf odcs:Server ;
+    rdfs:label "Snowflake Server" ;
+    rdfs:comment "Snowflake cloud data platform server configuration" .
+
+odcs:SqlServerServer a rdfs:Class ;
+    rdfs:subClassOf odcs:Server ;
+    rdfs:label "SQL Server Server" ;
+    rdfs:comment "Microsoft SQL Server database server configuration" .
+
+odcs:PostgresServer a rdfs:Class ;
+    rdfs:subClassOf odcs:Server ;
+    rdfs:label "Postgres Server" ;
+    rdfs:comment "PostgreSQL database server configuration" .
+
+odcs:OracleServer a rdfs:Class ;
+    rdfs:subClassOf odcs:Server ;
+    rdfs:label "Oracle Server" ;
+    rdfs:comment "Oracle Database server configuration" .
+
+odcs:MySqlServer a rdfs:Class ;
+    rdfs:subClassOf odcs:Server ;
+    rdfs:label "MySQL Server" ;
+    rdfs:comment "MySQL database server configuration" .
+
+odcs:DatabricksServer a rdfs:Class ;
+    rdfs:subClassOf odcs:Server ;
+    rdfs:label "Databricks Server" ;
+    rdfs:comment "Databricks unified analytics platform server configuration" .
+
+odcs:S3Server a rdfs:Class ;
+    rdfs:subClassOf odcs:Server ;
+    rdfs:label "S3 Server" ;
+    rdfs:comment "Amazon S3 object storage server configuration" .
+
+odcs:GcsServer a rdfs:Class ;
+    rdfs:subClassOf odcs:Server ;
+    rdfs:label "GCS Server" ;
+    rdfs:comment "Google Cloud Storage server configuration" .
+
+odcs:AzureBlobServer a rdfs:Class ;
+    rdfs:subClassOf odcs:Server ;
+    rdfs:label "Azure Blob Server" ;
+    rdfs:comment "Microsoft Azure Blob Storage server configuration" .
+
+odcs:SftpServer a rdfs:Class ;
+    rdfs:subClassOf odcs:Server ;
+    rdfs:label "SFTP Server" ;
+    rdfs:comment "Secure File Transfer Protocol server configuration" .
+
+odcs:HttpServer a rdfs:Class ;
+    rdfs:subClassOf odcs:Server ;
+    rdfs:label "HTTP Server" ;
+    rdfs:comment "HTTP API server configuration" .
+
+odcs:KafkaServer a rdfs:Class ;
+    rdfs:subClassOf odcs:Server ;
+    rdfs:label "Kafka Server" ;
+    rdfs:comment "Apache Kafka streaming platform server configuration" .
+
+# ============================================================================
+# TEAM AND ROLE MANAGEMENT
+# ============================================================================
+
+odcs:TeamMemberDefinition a rdfs:Class ;
+    rdfs:subClassOf odcs:ODCSEntity ;
+    rdfs:label "Team Member Definition" ;
+    rdfs:comment "Individual team member specification with roles and contact information" .
+
+odcs:RoleDefinition a rdfs:Class ;
+    rdfs:subClassOf odcs:ODCSEntity ;
+    rdfs:label "Role Definition" ;
+    rdfs:comment "Role specification defining responsibilities and permissions" .
+
+# ============================================================================
+# SERVICE LEVEL AGREEMENTS
+# ============================================================================
+
+odcs:SLAProperty a rdfs:Class ;
+    rdfs:subClassOf odcs:ODCSEntity ;
+    rdfs:label "SLA Property" ;
+    rdfs:comment "Service Level Agreement specification for data availability and performance" .
+
+# ============================================================================
+# SUPPORT AND OPERATIONS
+# ============================================================================
+
+odcs:SupportChannel a rdfs:Class ;
+    rdfs:subClassOf odcs:ODCSEntity ;
+    rdfs:label "Support Channel" ;
+    rdfs:comment "Support communication channel specification" .
+
+# ============================================================================
+# PRICING AND ECONOMICS
+# ============================================================================
+
+odcs:PricingInfo a rdfs:Class ;
+    rdfs:subClassOf odcs:ODCSEntity ;
+    rdfs:label "Pricing Info" ;
+    rdfs:comment "Pricing model and cost information for data access" .
+
+# ============================================================================
+# DATA QUALITY
+# ============================================================================
+
+odcs:QualityRule a rdfs:Class ;
+    rdfs:subClassOf odcs:ODCSEntity ;
+    rdfs:label "Quality Rule" ;
+    rdfs:comment "Data quality validation rule and constraint specification" .
+
+odcs:QualityCheck a rdfs:Class ;
+    rdfs:subClassOf odcs:ODCSEntity ;
+    rdfs:label "Quality Check" ;
+    rdfs:comment "Executable data quality validation check" .
+
+# ============================================================================
+# OBJECT PROPERTIES - HIERARCHICAL RELATIONSHIPS
+# ============================================================================
+
+odcs:hasSchema a rdf:Property ;
+    rdfs:label "has schema" ;
+    rdfs:comment "Associates a data contract with its schema definitions" ;
+    rdfs:domain odcs:DataContract ;
+    rdfs:range odcs:SchemaObject .
+
+odcs:hasProperty a rdf:Property ;
+    rdfs:label "has property" ;
+    rdfs:comment "Associates a schema object with its field definitions" ;
+    rdfs:domain odcs:SchemaObject ;
+    rdfs:range odcs:SchemaProperty .
+
+odcs:hasServer a rdf:Property ;
+    rdfs:label "has server" ;
+    rdfs:comment "Associates a data contract with its infrastructure server" ;
+    rdfs:domain odcs:DataContract ;
+    rdfs:range odcs:Server .
+
+odcs:hasTeamMember a rdf:Property ;
+    rdfs:label "has team member" ;
+    rdfs:comment "Associates a data contract with its team members" ;
+    rdfs:domain odcs:DataContract ;
+    rdfs:range odcs:TeamMemberDefinition .
+
+odcs:hasRole a rdf:Property ;
+    rdfs:label "has role" ;
+    rdfs:comment "Associates a team member with their role definition" ;
+    rdfs:domain odcs:TeamMemberDefinition ;
+    rdfs:range odcs:RoleDefinition .
+
+odcs:hasSLA a rdf:Property ;
+    rdfs:label "has SLA" ;
+    rdfs:comment "Associates a data contract with service level agreements" ;
+    rdfs:domain odcs:DataContract ;
+    rdfs:range odcs:SLAProperty .
+
+odcs:hasPricing a rdf:Property ;
+    rdfs:label "has pricing" ;
+    rdfs:comment "Associates a data contract with pricing information" ;
+    rdfs:domain odcs:DataContract ;
+    rdfs:range odcs:PricingInfo .
+
+odcs:hasQualityRule a rdf:Property ;
+    rdfs:label "has quality rule" ;
+    rdfs:comment "Associates a schema property with quality validation rules" ;
+    rdfs:domain odcs:SchemaProperty ;
+    rdfs:range odcs:QualityRule .
+
+odcs:hasSupportChannel a rdf:Property ;
+    rdfs:label "has support channel" ;
+    rdfs:comment "Associates a data contract with support channels" ;
+    rdfs:domain odcs:DataContract ;
+    rdfs:range odcs:SupportChannel .
+
+odcs:hasClassification a rdf:Property ;
+    rdfs:label "has classification" ;
+    rdfs:comment "Associates a schema property with classification level" ;
+    rdfs:domain odcs:SchemaProperty ;
+    rdfs:range odcs:ClassificationLevel .
+
+# ============================================================================
+# DATA PROPERTIES - IDENTIFIERS
+# ============================================================================
+
+odcs:contractId a rdf:Property ;
+    rdfs:label "contract ID" ;
+    rdfs:comment "Unique identifier for data contract" ;
+    rdfs:domain odcs:DataContract ;
+    rdfs:range xsd:string .
+
+odcs:schemaName a rdf:Property ;
+    rdfs:label "schema name" ;
+    rdfs:comment "Name of the schema object" ;
+    rdfs:domain odcs:SchemaObject ;
+    rdfs:range xsd:string .
+
+odcs:propertyName a rdf:Property ;
+    rdfs:label "property name" ;
+    rdfs:comment "Name of the schema property" ;
+    rdfs:domain odcs:SchemaProperty ;
+    rdfs:range xsd:string .
+
+# ============================================================================
+# DATA PROPERTIES - SCHEMA SPECIFICATIONS
+# ============================================================================
+
+odcs:dataType a rdf:Property ;
+    rdfs:label "data type" ;
+    rdfs:comment "Data type specification for schema property" ;
+    rdfs:domain odcs:SchemaProperty ;
+    rdfs:range xsd:string ;
+    skos:example "string, integer, decimal, boolean, date, timestamp" .
+
+odcs:isRequired a rdf:Property ;
+    rdfs:label "is required" ;
+    rdfs:comment "Whether the schema property is required" ;
+    rdfs:domain odcs:SchemaProperty ;
+    rdfs:range xsd:boolean .
+
+odcs:isPrimaryKey a rdf:Property ;
+    rdfs:label "is primary key" ;
+    rdfs:comment "Whether the schema property is part of the primary key" ;
+    rdfs:domain odcs:SchemaProperty ;
+    rdfs:range xsd:boolean .
+
+odcs:isBusinessKey a rdf:Property ;
+    rdfs:label "is business key" ;
+    rdfs:comment "Whether the schema property is a business key" ;
+    rdfs:domain odcs:SchemaProperty ;
+    rdfs:range xsd:boolean .
+
+odcs:maxLength a rdf:Property ;
+    rdfs:label "max length" ;
+    rdfs:comment "Maximum length constraint for string properties" ;
+    rdfs:domain odcs:SchemaProperty ;
+    rdfs:range xsd:integer .
+
+odcs:precision a rdf:Property ;
+    rdfs:label "precision" ;
+    rdfs:comment "Precision specification for numeric properties" ;
+    rdfs:domain odcs:SchemaProperty ;
+    rdfs:range xsd:integer .
+
+odcs:scale a rdf:Property ;
+    rdfs:label "scale" ;
+    rdfs:comment "Scale specification for decimal properties" ;
+    rdfs:domain odcs:SchemaProperty ;
+    rdfs:range xsd:integer .
+
+# ============================================================================
+# DATA PROPERTIES - CONTRACT METADATA
+# ============================================================================
+
+odcs:contractVersion a rdf:Property ;
+    rdfs:label "contract version" ;
+    rdfs:comment "Version of the data contract" ;
+    rdfs:domain odcs:DataContract ;
+    rdfs:range xsd:string .
+
+odcs:contractStatus a rdf:Property ;
+    rdfs:label "contract status" ;
+    rdfs:comment "Current status of the data contract" ;
+    rdfs:domain odcs:DataContract ;
+    rdfs:range xsd:string ;
+    skos:example "draft, active, deprecated, retired" .
+
+odcs:datasetType a rdf:Property ;
+    rdfs:label "dataset type" ;
+    rdfs:comment "Type classification of the dataset" ;
+    rdfs:domain odcs:DataContract ;
+    rdfs:range xsd:string ;
+    skos:example "table, view, stream, api" .
+
+# ============================================================================
+# DATA PROPERTIES - TEAM AND CONTACT
+# ============================================================================
+
+odcs:memberName a rdf:Property ;
+    rdfs:label "member name" ;
+    rdfs:comment "Full name of the team member" ;
+    rdfs:domain odcs:TeamMemberDefinition ;
+    rdfs:range xsd:string .
+
+odcs:memberEmail a rdf:Property ;
+    rdfs:label "member email" ;
+    rdfs:comment "Email address of the team member" ;
+    rdfs:domain odcs:TeamMemberDefinition ;
+    rdfs:range xsd:string .
+
+odcs:roleName a rdf:Property ;
+    rdfs:label "role name" ;
+    rdfs:comment "Name of the role" ;
+    rdfs:domain odcs:RoleDefinition ;
+    rdfs:range xsd:string .
+
+odcs:roleDescription a rdf:Property ;
+    rdfs:label "role description" ;
+    rdfs:comment "Description of role responsibilities" ;
+    rdfs:domain odcs:RoleDefinition ;
+    rdfs:range xsd:string .
+
+# ============================================================================
+# DATA PROPERTIES - SERVER CONNECTION
+# ============================================================================
+
+odcs:serverType a rdf:Property ;
+    rdfs:label "server type" ;
+    rdfs:comment "Type of the server infrastructure" ;
+    rdfs:domain odcs:Server ;
+    rdfs:range xsd:string .
+
+odcs:connectionString a rdf:Property ;
+    rdfs:label "connection string" ;
+    rdfs:comment "Connection configuration for the server" ;
+    rdfs:domain odcs:Server ;
+    rdfs:range xsd:string .
+
+odcs:hostname a rdf:Property ;
+    rdfs:label "hostname" ;
+    rdfs:comment "Server hostname or endpoint" ;
+    rdfs:domain odcs:Server ;
+    rdfs:range xsd:string .
+
+odcs:port a rdf:Property ;
+    rdfs:label "port" ;
+    rdfs:comment "Server port number" ;
+    rdfs:domain odcs:Server ;
+    rdfs:range xsd:integer .
+
+# ============================================================================
+# DATA PROPERTIES - QUALITY AND SLA
+# ============================================================================
+
+odcs:qualityMetric a rdf:Property ;
+    rdfs:label "quality metric" ;
+    rdfs:comment "Quality measurement specification" ;
+    rdfs:domain odcs:QualityRule ;
+    rdfs:range xsd:string .
+
+odcs:qualityThreshold a rdf:Property ;
+    rdfs:label "quality threshold" ;
+    rdfs:comment "Minimum acceptable quality threshold" ;
+    rdfs:domain odcs:QualityRule ;
+    rdfs:range xsd:decimal .
+
+odcs:availabilityTarget a rdf:Property ;
+    rdfs:label "availability target" ;
+    rdfs:comment "Target availability percentage for SLA" ;
+    rdfs:domain odcs:SLAProperty ;
+    rdfs:range xsd:decimal .
+
+odcs:responseTimeTarget a rdf:Property ;
+    rdfs:label "response time target" ;
+    rdfs:comment "Target response time for data access" ;
+    rdfs:domain odcs:SLAProperty ;
+    rdfs:range xsd:duration .
+
+# ============================================================================
+# DATA PROPERTIES - SUPPORT AND PRICING
+# ============================================================================
+
+odcs:supportType a rdf:Property ;
+    rdfs:label "support type" ;
+    rdfs:comment "Type of support channel" ;
+    rdfs:domain odcs:SupportChannel ;
+    rdfs:range xsd:string ;
+    skos:example "email, slack, phone, ticket" .
+
+odcs:supportContact a rdf:Property ;
+    rdfs:label "support contact" ;
+    rdfs:comment "Contact information for support" ;
+    rdfs:domain odcs:SupportChannel ;
+    rdfs:range xsd:string .
+
+odcs:pricingModel a rdf:Property ;
+    rdfs:label "pricing model" ;
+    rdfs:comment "Pricing strategy for data access" ;
+    rdfs:domain odcs:PricingInfo ;
+    rdfs:range xsd:string ;
+    skos:example "free, subscription, pay-per-use, enterprise" .
+
+odcs:priceAmount a rdf:Property ;
+    rdfs:label "price amount" ;
+    rdfs:comment "Monetary amount for data access" ;
+    rdfs:domain odcs:PricingInfo ;
+    rdfs:range xsd:decimal .
+
+# ============================================================================
+# USAGE EXAMPLES AND DOCUMENTATION
+# ============================================================================
+
+# ODCS DATA CONTRACT HIERARCHY EXAMPLE
+
+# 1. Data Contract
+# odcs:customer-data-contract a odcs:DataContract ;
+#     odcs:contractId "customer-data-v1" ;
+#     odcs:contractVersion "1.0.0" ;
+#     odcs:contractStatus "active" ;
+#     odcs:datasetType "table" .
+
+# 2. Schema Object (contained in contract)
+# odcs:customer-schema a odcs:SchemaObject ;
+#     odcs:schemaName "customer_profile" .
+
+# 3. Schema Properties (contained in schema)
+# odcs:customer-id-prop a odcs:SchemaProperty ;
+#     odcs:propertyName "customer_id" ;
+#     odcs:dataType "string" ;
+#     odcs:isRequired true ;
+#     odcs:isPrimaryKey true ;
+#     odcs:maxLength 50 .
+
+# 4. Server Configuration
+# odcs:databricks-prod a odcs:DatabricksServer ;
+#     odcs:serverType "databricks" ;
+#     odcs:hostname "adb-123456789.azuredatabricks.net" .
+
+# 5. Team Member
+# odcs:data-engineer a odcs:TeamMemberDefinition ;
+#     odcs:memberName "John Smith" ;
+#     odcs:memberEmail "john.smith@company.com" .
+
+# 6. Role Definition
+# odcs:data-owner-role a odcs:RoleDefinition ;
+#     odcs:roleName "Data Owner" ;
+#     odcs:roleDescription "Responsible for data governance and quality" .

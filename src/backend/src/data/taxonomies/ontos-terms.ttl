@@ -1,0 +1,410 @@
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix dc: <http://purl.org/dc/terms/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+# Ontos Application Terms
+@prefix ontos: <http://ontos.app/terms#> .
+
+# ============================================================================
+# ONTOS APPLICATION TERMS
+# Vocabulary for Ontos data governance application entities
+# ============================================================================
+
+# Ontology Header
+ontos: a owl:Ontology ;
+    rdfs:label "Ontos Application Terms" ;
+    rdfs:comment "Vocabulary for Ontos data governance application entities" ;
+    owl:versionInfo "1.0.0" ;
+    dc:created "2024-09-22" ;
+    dc:creator "Ontos Data Governance Platform" .
+
+# ============================================================================
+# ROOT CLASSES
+# ============================================================================
+
+ontos:Entity a rdfs:Class ;
+    rdfs:label "Entity" ;
+    rdfs:comment "Root class for all Ontos application entities" .
+
+# ============================================================================
+# ORGANIZATIONAL UNITS
+# ============================================================================
+
+ontos:OrganizationalUnit a rdfs:Class ;
+    rdfs:subClassOf ontos:Entity ;
+    rdfs:label "Organizational Unit" ;
+    rdfs:comment "Base class for organizational structures that contain and organize data assets" .
+
+ontos:DataDomain a rdfs:Class ;
+    rdfs:subClassOf ontos:OrganizationalUnit ;
+    rdfs:label "Data Domain" ;
+    rdfs:comment "Logical organizational unit for grouping related data products and assets" ;
+    skos:example "Customer Domain, Financial Domain, Product Domain" .
+
+ontos:DataProduct a rdfs:Class ;
+    rdfs:subClassOf ontos:DataDomain ;
+    rdfs:label "Data Product" ;
+    rdfs:comment "Curated collection of Databricks assets belonging to a domain, grouped by tags" ;
+    skos:example "Customer 360 View, Real-time Fraud Detection" ;
+    skos:definition "Products are contained within domains and implement data contracts" .
+
+ontos:Team a rdfs:Class ;
+    rdfs:subClassOf ontos:OrganizationalUnit ;
+    rdfs:label "Team" ;
+    rdfs:comment "Collection of users and groups with specific roles and domain assignments" ;
+    skos:example "Data Engineering Team, Analytics Team" .
+
+ontos:Project a rdfs:Class ;
+    rdfs:subClassOf ontos:OrganizationalUnit ;
+    rdfs:label "Project" ;
+    rdfs:comment "Workspace container that assigns teams to specific initiatives with isolation boundaries" ;
+    skos:example "Customer Analytics Platform, Risk Reporting System" .
+
+ontos:TeamMember a rdfs:Class ;
+    rdfs:subClassOf ontos:Entity ;
+    rdfs:label "Team Member" ;
+    rdfs:comment "Individual user or group membership within a team with optional role overrides" .
+
+# ============================================================================
+# GOVERNANCE ARTIFACTS
+# ============================================================================
+
+ontos:GovernanceArtifact a rdfs:Class ;
+    rdfs:subClassOf ontos:Entity ;
+    rdfs:label "Governance Artifact" ;
+    rdfs:comment "Base class for governance, compliance, and documentation artifacts" .
+
+ontos:BusinessGlossary a rdfs:Class ;
+    rdfs:subClassOf ontos:GovernanceArtifact ;
+    rdfs:label "Business Glossary" ;
+    rdfs:comment "Hierarchical collection of business terms with organizational scope" ;
+    skos:definition "Supports inheritance from corporate → LOB → department → team levels" .
+
+ontos:GlossaryTerm a rdfs:Class ;
+    rdfs:subClassOf ontos:GovernanceArtifact ;
+    rdfs:label "Glossary Term" ;
+    rdfs:comment "Business term definition with synonyms, examples, and tagged assets" ;
+    skos:example "Customer, Revenue, Product Category" .
+
+ontos:AssetReview a rdfs:Class ;
+    rdfs:subClassOf ontos:GovernanceArtifact ;
+    rdfs:label "Asset Review" ;
+    rdfs:comment "Approval workflow for Databricks assets including review status and comments" .
+
+# ============================================================================
+# SEMANTIC LINKING
+# ============================================================================
+
+ontos:SemanticLink a rdfs:Class ;
+    rdfs:subClassOf ontos:Entity ;
+    rdfs:label "Semantic Link" ;
+    rdfs:comment "Association between application entities and ontology concepts via IRIs" ;
+    skos:definition "Enables semantic enrichment and knowledge graph navigation" .
+
+ontos:OntologyConcept a rdfs:Class ;
+    rdfs:subClassOf ontos:Entity ;
+    rdfs:label "Ontology Concept" ;
+    rdfs:comment "RDF/RDFS concept from loaded taxonomies with hierarchical relationships" .
+
+ontos:SemanticModel a rdfs:Class ;
+    rdfs:subClassOf ontos:Entity ;
+    rdfs:label "Semantic Model" ;
+    rdfs:comment "Conceptual model linking data structures to business semantics and ontology concepts" .
+
+# ============================================================================
+# OBJECT PROPERTIES - ORGANIZATIONAL RELATIONSHIPS
+# ============================================================================
+
+ontos:belongsToDomain a rdf:Property ;
+    rdfs:label "belongs to domain" ;
+    rdfs:comment "Associates an entity with its parent data domain" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range ontos:DataDomain .
+
+ontos:assignedToTeam a rdf:Property ;
+    rdfs:label "assigned to team" ;
+    rdfs:comment "Associates a project with one or more assigned teams" ;
+    rdfs:domain ontos:Project ;
+    rdfs:range ontos:Team .
+
+ontos:hasParentDomain a rdf:Property ;
+    rdfs:label "has parent domain" ;
+    rdfs:comment "Defines hierarchical relationship between data domains" ;
+    rdfs:domain ontos:DataDomain ;
+    rdfs:range ontos:DataDomain .
+
+ontos:memberOfTeam a rdf:Property ;
+    rdfs:label "member of team" ;
+    rdfs:comment "Associates a team member with their team" ;
+    rdfs:domain ontos:TeamMember ;
+    rdfs:range ontos:Team .
+
+ontos:containsProduct a rdf:Property ;
+    rdfs:label "contains product" ;
+    rdfs:comment "Associates a data domain with its contained data products" ;
+    rdfs:domain ontos:DataDomain ;
+    rdfs:range ontos:DataProduct .
+
+# ============================================================================
+# OBJECT PROPERTIES - SEMANTIC RELATIONSHIPS
+# ============================================================================
+
+ontos:hasSemanticConcept a rdf:Property ;
+    rdfs:label "has semantic concept" ;
+    rdfs:comment "Links an entity to ontology concepts for semantic enrichment" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range ontos:OntologyConcept .
+
+ontos:linkedToIRI a rdf:Property ;
+    rdfs:label "linked to IRI" ;
+    rdfs:comment "Direct reference to external ontology concept IRI" ;
+    rdfs:domain ontos:SemanticLink .
+
+ontos:derivedFromGlossary a rdf:Property ;
+    rdfs:label "derived from glossary" ;
+    rdfs:comment "Links an ontology concept to its source glossary term" ;
+    rdfs:domain ontos:OntologyConcept ;
+    rdfs:range ontos:GlossaryTerm .
+
+ontos:parentGlossary a rdf:Property ;
+    rdfs:label "parent glossary" ;
+    rdfs:comment "Defines hierarchical inheritance between business glossaries" ;
+    rdfs:domain ontos:BusinessGlossary ;
+    rdfs:range ontos:BusinessGlossary .
+
+# ============================================================================
+# OBJECT PROPERTIES - GOVERNANCE RELATIONSHIPS
+# ============================================================================
+
+ontos:reviewedBy a rdf:Property ;
+    rdfs:label "reviewed by" ;
+    rdfs:comment "Associates an asset with its review process" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range ontos:AssetReview .
+
+ontos:taggedWithConcept a rdf:Property ;
+    rdfs:label "tagged with concept" ;
+    rdfs:comment "Associates a glossary term with tagged Databricks assets" ;
+    rdfs:domain ontos:GlossaryTerm .
+
+# ============================================================================
+# DATA PROPERTIES - IDENTIFIERS AND NAMES
+# ============================================================================
+
+ontos:entityId a rdf:Property ;
+    rdfs:label "entity ID" ;
+    rdfs:comment "Unique identifier for application entities" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string .
+
+ontos:name a rdf:Property ;
+    rdfs:label "name" ;
+    rdfs:comment "Human-readable name of the entity" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string .
+
+ontos:displayTitle a rdf:Property ;
+    rdfs:label "display title" ;
+    rdfs:comment "Optional display title for presentation purposes" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string .
+
+ontos:physicalName a rdf:Property ;
+    rdfs:label "physical name" ;
+    rdfs:comment "Physical implementation name (e.g., table name, column name)" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string .
+
+# ============================================================================
+# DATA PROPERTIES - DESCRIPTIONS AND METADATA
+# ============================================================================
+
+ontos:description a rdf:Property ;
+    rdfs:label "description" ;
+    rdfs:comment "Human-readable description of the entity" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string .
+
+ontos:purpose a rdf:Property ;
+    rdfs:label "purpose" ;
+    rdfs:comment "Intended purpose or business objective" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string .
+
+ontos:usage a rdf:Property ;
+    rdfs:label "usage" ;
+    rdfs:comment "Intended usage patterns and guidelines" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string .
+
+ontos:limitations a rdf:Property ;
+    rdfs:label "limitations" ;
+    rdfs:comment "Known limitations or constraints" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string .
+
+# ============================================================================
+# DATA PROPERTIES - LIFECYCLE AND STATUS
+# ============================================================================
+
+ontos:lifecycle a rdf:Property ;
+    rdfs:label "lifecycle" ;
+    rdfs:comment "Current lifecycle stage of the entity" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string ;
+    skos:example "draft, active, deprecated, retired" .
+
+ontos:status a rdf:Property ;
+    rdfs:label "status" ;
+    rdfs:comment "Current operational status" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string .
+
+ontos:version a rdf:Property ;
+    rdfs:label "version" ;
+    rdfs:comment "Version identifier for versioned entities" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string .
+
+# ============================================================================
+# DATA PROPERTIES - ORGANIZATIONAL SCOPE
+# ============================================================================
+
+ontos:organizationalScope a rdf:Property ;
+    rdfs:label "organizational scope" ;
+    rdfs:comment "Organizational level of applicability" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string ;
+    skos:example "company, lob, department, team" .
+
+ontos:organizationalUnit a rdf:Property ;
+    rdfs:label "organizational unit" ;
+    rdfs:comment "Specific organizational unit identifier" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string .
+
+# ============================================================================
+# DATA PROPERTIES - OWNERSHIP AND RESPONSIBILITY
+# ============================================================================
+
+ontos:owner a rdf:Property ;
+    rdfs:label "owner" ;
+    rdfs:comment "Primary owner or responsible party" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string .
+
+ontos:createdBy a rdf:Property ;
+    rdfs:label "created by" ;
+    rdfs:comment "User who created the entity" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string .
+
+ontos:updatedBy a rdf:Property ;
+    rdfs:label "updated by" ;
+    rdfs:comment "User who last updated the entity" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:string .
+
+# ============================================================================
+# DATA PROPERTIES - TEMPORAL
+# ============================================================================
+
+ontos:createdAt a rdf:Property ;
+    rdfs:label "created at" ;
+    rdfs:comment "Timestamp when entity was created" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:dateTime .
+
+ontos:updatedAt a rdf:Property ;
+    rdfs:label "updated at" ;
+    rdfs:comment "Timestamp when entity was last updated" ;
+    rdfs:domain ontos:Entity ;
+    rdfs:range xsd:dateTime .
+
+# ============================================================================
+# DATA PROPERTIES - TEAM AND MEMBERSHIP
+# ============================================================================
+
+ontos:memberType a rdf:Property ;
+    rdfs:label "member type" ;
+    rdfs:comment "Type of team member (user or group)" ;
+    rdfs:domain ontos:TeamMember ;
+    rdfs:range xsd:string ;
+    skos:example "user, group" .
+
+ontos:memberIdentifier a rdf:Property ;
+    rdfs:label "member identifier" ;
+    rdfs:comment "Email for users, name for groups" ;
+    rdfs:domain ontos:TeamMember ;
+    rdfs:range xsd:string .
+
+ontos:roleOverride a rdf:Property ;
+    rdfs:label "role override" ;
+    rdfs:comment "Optional application role override for team member" ;
+    rdfs:domain ontos:TeamMember ;
+    rdfs:range xsd:string .
+
+# ============================================================================
+# DATA PROPERTIES - SEMANTIC LINKING
+# ============================================================================
+
+ontos:conceptIRI a rdf:Property ;
+    rdfs:label "concept IRI" ;
+    rdfs:comment "IRI reference to external ontology concept" ;
+    rdfs:domain ontos:SemanticLink ;
+    rdfs:range xsd:anyURI .
+
+ontos:conceptLabel a rdf:Property ;
+    rdfs:label "concept label" ;
+    rdfs:comment "Human-readable label for the linked concept" ;
+    rdfs:domain ontos:SemanticLink ;
+    rdfs:range xsd:string .
+
+ontos:linkingContext a rdf:Property ;
+    rdfs:label "linking context" ;
+    rdfs:comment "Context or reason for the semantic link" ;
+    rdfs:domain ontos:SemanticLink ;
+    rdfs:range xsd:string .
+
+# ============================================================================
+# USAGE EXAMPLES AND DOCUMENTATION
+# ============================================================================
+
+# ONTOS ENTITY HIERARCHY EXAMPLE
+
+# 1. Customer Data Domain
+# ontos:customer-domain a ontos:DataDomain ;
+#     ontos:name "Customer Domain" ;
+#     ontos:description "Domain for customer-related data assets and processes" ;
+#     ontos:owner "customer-data-team@company.com" .
+
+# 2. Customer 360 Data Product (contained in domain)
+# ontos:customer-360-product a ontos:DataProduct ;
+#     ontos:name "Customer 360 Product" ;
+#     ontos:description "Comprehensive customer view data product" .
+
+# 3. Data Engineering Team
+# ontos:data-eng-team a ontos:Team ;
+#     ontos:name "Data Engineering Team" ;
+#     ontos:belongsToDomain ontos:customer-domain ;
+#     ontos:description "Team responsible for data pipeline development" .
+
+# 4. Customer Analytics Project
+# ontos:customer-analytics-project a ontos:Project ;
+#     ontos:name "Customer Analytics Platform" ;
+#     ontos:assignedToTeam ontos:data-eng-team ;
+#     ontos:description "Platform for analyzing customer behavior" .
+
+# 5. Business Glossary Term
+# ontos:customer-term a ontos:GlossaryTerm ;
+#     ontos:name "Customer" ;
+#     ontos:description "Individual or organization that purchases goods or services" .
+
+# 6. Semantic Link Example
+# ontos:customer-concept-link a ontos:SemanticLink ;
+#     ontos:conceptIRI <http://schema.org/Customer> ;
+#     ontos:conceptLabel "Customer" ;
+#     ontos:linkingContext "Primary business entity for customer domain" .
