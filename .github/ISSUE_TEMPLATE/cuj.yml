@@ -1,6 +1,6 @@
 name: CUJ Request / Improvement
 description: Document a Critical User Journey (CUJ) or propose an improvement
-
+title: '[CUJ]: '
 labels: ["cuj", "triage"]
 
 body:
