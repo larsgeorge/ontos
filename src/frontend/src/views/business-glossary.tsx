@@ -287,26 +287,28 @@ const UnifiedConceptTree: React.FC<UnifiedConceptTreeProps> = ({
     if (selectedConcept && treeData.conceptMap.has(selectedConcept.iri)) {
       // Use a timeout to ensure tree is fully loaded
       const expandPath = () => {
-        // Find parent concepts and expand them in the tree
-        selectedConcept.parent_concepts.forEach(parentIri => {
-          if (treeData.conceptMap.has(parentIri)) {
-            // Find the tree item by iterating through all items
-            const items = tree.getItems();
-            const parentItem = items.find(item => item.getId() === parentIri);
-            if (parentItem && !parentItem.isExpanded()) {
-              parentItem.expand();
-            }
+        // Expand all ancestor concepts of the selected concept
+        // Build a set of all ancestors by walking parent_concepts recursively
+        const ancestorsToExpand = new Set<string>();
+        const stack: string[] = [...selectedConcept.parent_concepts];
+        while (stack.length > 0) {
+          const current = stack.pop() as string;
+          if (!treeData.conceptMap.has(current)) continue;
+          if (ancestorsToExpand.has(current)) continue;
+          ancestorsToExpand.add(current);
+          const parentConcept = treeData.conceptMap.get(current)!;
+          parentConcept.parent_concepts.forEach((p) => stack.push(p));
+        }
+
+        // Expand any ancestor items that already exist in the tree; repeated calls
+        // will progressively expand deeper ancestors as they are created
+        const items = tree.getItems();
+        items.forEach((item) => {
+          const id = item.getId();
+          if (ancestorsToExpand.has(id) && !item.isExpanded()) {
+            item.expand();
           }
         });
-        
-        // Also expand Corporate Term if it contains our selected concept
-        const items = tree.getItems();
-        const corporateTermItem = items.find(item => 
-          item.getId() === 'http://example.com/corporate/taxonomy#CorporateTerm'
-        );
-        if (corporateTermItem && !corporateTermItem.isExpanded()) {
-          corporateTermItem.expand();
-        }
       };
       
       // Execute immediately and also with a small delay to handle async tree loading
