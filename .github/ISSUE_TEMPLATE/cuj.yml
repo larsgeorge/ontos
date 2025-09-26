@@ -1,0 +1,91 @@
+name: CUJ Request / Improvement
+description: Document a Critical User Journey (CUJ) or propose an improvement
+
+labels: ["cuj", "triage"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Please fill in the details for a CUJ (Critical User Journey) or JTBD (Jobs to Be Done) request or improvement.
+        This will help us track and prioritize end-to-end user flows and actual goals, beyond isolated features.
+
+        Example CUJ: Collaboratively working on a data contract schema within a team (draft → review → approve → publish).
+
+  - type: input
+    id: cuj-title
+    attributes:
+      label: Title
+      description: A short summary of the user journey or job to be done.
+      placeholder: "E.g. Collaboratively define a data contract schema within a team"
+
+  - type: input
+    id: role
+    attributes:
+      label: Role/User Type
+      description: Who is the user going through this journey? (E.g. Data Producer, Data Consumer, Data Steward, Data Governance Officer)
+      placeholder: "E.g. Data Producer (Team Member), Data Steward, Data Consumer"
+
+  - type: textarea
+    id: circumstance
+    attributes:
+      label: Circumstance
+      description: What situation or context is the user in before starting the journey? Be specific.
+      placeholder: "Team needs to align on a new data contract schema (e.g., customer_events); an initial draft exists; work happens in a project with an owner team assigned."
+
+  - type: textarea
+    id: goals
+    attributes:
+      label: Goals
+      description: What outcome does the user want to achieve? Describe the true goal, not just the feature.
+      placeholder: "Agree on schema and validations, assign owner team, obtain approvals, publish a new contract version, and notify impacted consumers"
+
+  - type: textarea
+    id: user-journey
+    attributes:
+      label: User Journey Steps
+      description: Provide a step-by-step description of how the user moves from circumstance to goal, crossing product boundaries if needed.
+      placeholder: |
+        1. Open the target data contract and draft schema changes
+        2. Add inline comments on fields and constraints
+        3. Mention teammates by @name to request feedback
+        4. Run schema inference/validation against sample data
+        5. Assign owner team and set approvers/reviewers
+        6. Address feedback, resolve comments, and re-run validation
+        7. Capture approval and publish a new contract version
+        8. Notify subscribed consumers/projects about the change
+
+  - type: textarea
+    id: journey-breaks
+    attributes:
+      label: Broken Steps or Gaps
+      description: Identify steps where the journey breaks or becomes inefficient (e.g. notifications not sent, sharing not possible).
+      placeholder: "E.g. Team mentions don’t notify; cannot set owner team; unclear validation errors; approvals not tracked; no publish notifications"
+
+  - type: textarea
+    id: metrics
+    attributes:
+      label: Success Metrics
+      description: How do we measure the effectiveness of this journey? Suggest metrics (funnel completion rates, time, satisfaction, tickets, etc.)
+      placeholder: "E.g. Time from draft to publish; # review iterations; review latency; % contracts with owner team set; notification delivery/click-through"
+
+  - type: textarea
+    id: proposed-improvement
+    attributes:
+      label: Proposed Solution or Improvement
+      description: Propose a solution, fix, or improvement for the broken steps, ideally impacting metrics and goals.
+      placeholder: "E.g. Team-mention notifications, approval workflow, clearer validation errors with line refs, owner team field, publish notifications to subscribers"
+
+  - type: input
+    id: related-product
+    attributes:
+      label: Related Product / Feature Areas
+      description: What products or features does this CUJ touch? List all relevant components.
+      placeholder: "E.g. Data Contracts, Teams & Projects, Comments, Notifications, Approvals, Schema Validation, Publishing"
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context or Reference
+      description: Add extra details, references to designs, user feedback, interview notes, etc.
+      placeholder: "Links to `src/backend/src/data/data_contracts.yaml`, screenshots of review UI, audit log snippets, customer feedback."
