@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
@@ -33,7 +33,7 @@ class TeamMemberRead(TeamMemberBase):
     """Model for reading team members"""
     id: str
     team_id: str
-    member_name: str = Field(..., description="Display name for the member")
+    member_name: Optional[str] = Field(None, description="Display name for the member")
     created_at: datetime
     updated_at: datetime
     added_by: str
@@ -42,12 +42,34 @@ class TeamMemberRead(TeamMemberBase):
         "from_attributes": True
     }
 
+    @field_validator('member_type', mode='before')
+    @classmethod
+    def convert_member_type(cls, value):
+        """Convert member_type from various formats to string"""
+        if value is None:
+            return None
+
+        # Handle enum objects (both Python enum and Pydantic str enum)
+        if hasattr(value, 'value'):
+            return value.value
+        elif hasattr(value, 'name'):
+            return value.name.lower() if hasattr(value.name, 'lower') else str(value.name)
+
+        # Handle string values
+        if isinstance(value, str):
+            return value.lower() if value.lower() in ['user', 'group'] else value
+
+        # Fallback - convert to string
+        return str(value).lower()
+
     @classmethod
     def model_validate(cls, obj, **kwargs):
-        # Set member_name to member_identifier for display
-        if hasattr(obj, 'member_identifier'):
-            obj.member_name = obj.member_identifier
-        return super().model_validate(obj, **kwargs)
+        # Create the instance first
+        instance = super().model_validate(obj, **kwargs)
+        # Set member_name to member_identifier if not already set
+        if not instance.member_name and hasattr(obj, 'member_identifier'):
+            instance.member_name = obj.member_identifier
+        return instance
 
 
 class TeamBase(BaseModel):

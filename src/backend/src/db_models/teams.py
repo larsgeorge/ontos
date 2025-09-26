@@ -1,16 +1,9 @@
 from uuid import uuid4
-from sqlalchemy import Column, String, DateTime, Text, Enum, ForeignKey
+from sqlalchemy import Column, String, DateTime, Text, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-import enum
 
 from src.common.database import Base
-
-
-class MemberType(enum.Enum):
-    """Enum for team member types"""
-    USER = "user"
-    GROUP = "group"
 
 
 class TeamDb(Base):
@@ -53,7 +46,7 @@ class TeamMemberDb(Base):
     team_id = Column(String, ForeignKey('teams.id'), nullable=False)
 
     # Member identification
-    member_type = Column(Enum(MemberType), nullable=False)  # user or group
+    member_type = Column(String, nullable=False)  # user or group
     member_identifier = Column(String, nullable=False)  # email for user, name for group
 
     # Optional app role override (takes precedence over group-based role)

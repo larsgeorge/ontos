@@ -6,7 +6,7 @@ from .audit_log import AuditLogDb
 from .data_asset_reviews import DataAssetReviewRequestDb, ReviewedAssetDb
 from .data_domains import DataDomain
 from .tags import TagDb, TagNamespaceDb, TagNamespacePermissionDb, EntityTagAssociationDb
-from .teams import TeamDb, TeamMemberDb, MemberType
+from .teams import TeamDb, TeamMemberDb
 from .projects import ProjectDb, project_team_association
 
 __all__ = [
@@ -22,7 +22,6 @@ __all__ = [
     "EntityTagAssociationDb",
     "TeamDb",
     "TeamMemberDb",
-    "MemberType",
     "ProjectDb",
     "project_team_association",
 ] 

@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import { useProjectContext } from '@/stores/project-store';
 
 export default function DataContracts() {
   const { toast } = useToast();
@@ -60,6 +61,7 @@ export default function DataContracts() {
 
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
+  const { currentProject, hasProjectContext } = useProjectContext();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -73,7 +75,7 @@ export default function DataContracts() {
         setStaticSegments([]);
         setDynamicTitle(null);
     };
-  }, [setStaticSegments, setDynamicTitle]);
+  }, [setStaticSegments, setDynamicTitle, hasProjectContext, currentProject]);
 
   // Removed ODCS schema load for inline JSON validation
   // Removed inline JSON validation
@@ -84,7 +86,14 @@ export default function DataContracts() {
   const fetchContracts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/data-contracts');
+
+      // Build URL with project context if available
+      let endpoint = '/api/data-contracts';
+      if (hasProjectContext && currentProject) {
+        endpoint += `?project_id=${currentProject.id}`;
+      }
+
+      const response = await fetch(endpoint);
       if (!response.ok) throw new Error('Failed to fetch contracts');
       const data = await response.json();
       setContracts(data);

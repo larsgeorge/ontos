@@ -15,6 +15,7 @@ import { DataAssetReviewRequest, ReviewRequestStatus } from '@/types/data-asset-
 
 // Import the Create Dialog
 import CreateReviewRequestDialog from '@/components/data-asset-reviews/create-review-request-dialog';
+import { useProjectContext } from '@/stores/project-store';
 
 // Helper function to check API response (reuse if available globally)
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string }, name: string): T => {
@@ -40,12 +41,19 @@ export default function DataAssetReviews() {
     const { get, delete: deleteApi } = api;
     const navigate = useNavigate();
     const { toast } = useToast();
+    const { currentProject, hasProjectContext } = useProjectContext();
 
     const fetchRequests = async () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await get<DataAssetReviewRequest[]>('/api/data-asset-reviews');
+            // Build URL with project context if available
+            let endpoint = '/api/data-asset-reviews';
+            if (hasProjectContext && currentProject) {
+                endpoint += `?project_id=${currentProject.id}`;
+            }
+
+            const response = await get<DataAssetReviewRequest[]>(endpoint);
             const requestsData = checkApiResponse(response, 'Review Requests');
             setRequests(Array.isArray(requestsData) ? requestsData : []);
         } catch (err: any) {
@@ -59,7 +67,7 @@ export default function DataAssetReviews() {
 
     useEffect(() => {
         fetchRequests();
-    }, [get]);
+    }, [get, hasProjectContext, currentProject]);
 
     const handleOpenCreateDialog = () => {
         setIsCreateDialogOpen(true);

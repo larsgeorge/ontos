@@ -23,6 +23,7 @@ import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { useNavigate } from 'react-router-dom';
 import DataDomainGraphView from '@/components/data-domains/data-domain-graph-view';
 import { ViewModeToggle } from '@/components/common/view-mode-toggle';
+import { useProjectContext } from '@/stores/project-store';
 
 // Placeholder for Graph View
 // const DataDomainGraphViewPlaceholder = () => (
@@ -59,6 +60,7 @@ export default function DataDomainsView() {
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
+  const { currentProject, hasProjectContext } = useProjectContext();
 
   const featureId = 'data-domains';
   const canRead = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_ONLY);
@@ -72,7 +74,13 @@ export default function DataDomainsView() {
     }
     setComponentError(null);
     try {
-      const response = await apiGet<DataDomain[]>('/api/data-domains');
+      // Build URL with project context if available
+      let endpoint = '/api/data-domains';
+      if (hasProjectContext && currentProject) {
+        endpoint += `?project_id=${currentProject.id}`;
+      }
+
+      const response = await apiGet<DataDomain[]>(endpoint);
       const data = checkApiResponse(response, 'Data Domains');
       const domainsData = Array.isArray(data) ? data : [];
       setDomains(domainsData);
@@ -86,7 +94,7 @@ export default function DataDomainsView() {
       setDomains([]);
       toast({ variant: "destructive", title: "Error fetching domains", description: err.message });
     }
-  }, [canRead, permissionsLoading, apiGet, toast, setComponentError]);
+  }, [canRead, permissionsLoading, apiGet, toast, setComponentError, hasProjectContext, currentProject]);
 
   useEffect(() => {
     fetchDataDomains();

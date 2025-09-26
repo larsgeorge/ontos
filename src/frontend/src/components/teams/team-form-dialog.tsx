@@ -60,6 +60,7 @@ interface TeamFormDialogProps {
   onOpenChange: (open: boolean) => void;
   team?: TeamRead | null;
   onSubmitSuccess: (team: TeamRead) => void;
+  initialDomainId?: string;
 }
 
 export function TeamFormDialog({
@@ -67,6 +68,7 @@ export function TeamFormDialog({
   onOpenChange,
   team,
   onSubmitSuccess,
+  initialDomainId,
 }: TeamFormDialogProps) {
   const [domains, setDomains] = useState<DataDomain[]>([]);
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
@@ -113,18 +115,18 @@ export function TeamFormDialog({
           })) || [],
         });
       } else {
-        // Create mode - reset form
+        // Create mode - reset form with initial domain if provided
         form.reset({
           name: '',
           title: '',
           description: '',
-          domain_id: 'none',
+          domain_id: initialDomainId || 'none',
           tags: [],
           members: [],
         });
       }
     }
-  }, [isOpen, team, form]);
+  }, [isOpen, team, form, initialDomainId]);
 
   const fetchDomains = async () => {
     try {
@@ -184,20 +186,49 @@ export function TeamFormDialog({
         };
         response = await apiPut<TeamRead>(`/api/teams/${team.id}`, updateData);
 
-        // Handle members separately if needed (depending on API design)
-        // For now, assume the team update includes members
+        // Handle members separately using dedicated member endpoints
+        if (cleanedData.members && cleanedData.members.length > 0) {
+          for (const member of cleanedData.members) {
+            try {
+              await apiPost(`/api/teams/${team.id}/members`, {
+                member_type: member.member_type,
+                member_identifier: member.member_identifier,
+                app_role_override: member.app_role_override
+              });
+            } catch (memberError) {
+              // Continue with other members if one fails (might already exist)
+              console.warn('Failed to add member:', memberError);
+            }
+          }
+        }
       } else {
-        // Create new team
-        const createData: TeamCreate & { members?: typeof cleanedData.members } = {
+        // Create new team (without members)
+        const createData: TeamCreate = {
           name: cleanedData.name,
           title: cleanedData.title || undefined,
           description: cleanedData.description || undefined,
           domain_id: cleanedData.domain_id || undefined,
           tags: cleanedData.tags,
           metadata: undefined,
-          members: cleanedData.members,
         };
         response = await apiPost<TeamRead>('/api/teams', createData);
+
+        // Add members separately after team creation
+        if (response.data && !response.error && cleanedData.members && cleanedData.members.length > 0) {
+          const teamId = (response.data as TeamRead).id;
+          for (const member of cleanedData.members) {
+            try {
+              await apiPost(`/api/teams/${teamId}/members`, {
+                member_type: member.member_type,
+                member_identifier: member.member_identifier,
+                app_role_override: member.app_role_override
+              });
+            } catch (memberError) {
+              // Continue with other members if one fails
+              console.warn('Failed to add member during creation:', memberError);
+            }
+          }
+        }
       }
 
       if (response.error) {

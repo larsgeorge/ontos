@@ -21,6 +21,7 @@ import { useNotificationsStore } from '@/stores/notifications-store';
 import DataProductGraphView from '@/components/data-products/data-product-graph-view';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { useDomains } from '@/hooks/use-domains';
+import { useProjectContext } from '@/stores/project-store';
 
 // --- Helper Function Type Definition --- 
 type CheckApiResponseFn = <T>(
@@ -78,6 +79,9 @@ export default function DataProducts() {
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const featureId = 'data-products'; // ID for this feature
 
+  // Get project context
+  const { currentProject, hasProjectContext } = useProjectContext();
+
   // Determine if user has specific access levels
   const canRead = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_ONLY);
   const canWrite = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_WRITE);
@@ -93,9 +97,15 @@ export default function DataProducts() {
       setLoading(true);
       setError(null);
       try {
+        // Build URL with project context if available
+        let productsEndpoint = '/api/data-products';
+        if (hasProjectContext && currentProject) {
+          productsEndpoint += `?project_id=${currentProject.id}`;
+        }
+
         // Fetch products and dropdown values concurrently
         const [productsResp, statusesResp, ownersResp, typesResp] = await Promise.all([
-          get<DataProduct[]>('/api/data-products'),
+          get<DataProduct[]>(productsEndpoint),
           get<DataProductStatus[]>('/api/data-products/statuses'),
           get<DataProductOwner[]>('/api/data-products/owners'),
           get<string[]>('/api/data-products/types'), // Fetch product types
@@ -141,20 +151,26 @@ export default function DataProducts() {
         setStaticSegments([]);
         setDynamicTitle(null);
     };
-  }, [get, canRead, permissionsLoading, setStaticSegments, setDynamicTitle]);
+  }, [get, canRead, permissionsLoading, setStaticSegments, setDynamicTitle, hasProjectContext, currentProject]);
 
   // Function to refetch products list
   const fetchProducts = async () => {
     if (!canRead) return;
     try {
-      const response = await get<DataProduct[]>('/api/data-products');
+      // Build URL with project context if available
+      let endpoint = '/api/data-products';
+      if (hasProjectContext && currentProject) {
+        endpoint += `?project_id=${currentProject.id}`;
+      }
+
+      const response = await get<DataProduct[]>(endpoint);
       const productsData = checkApiResponse(response, 'Products Refetch');
       setProducts(Array.isArray(productsData) ? productsData : []);
     } catch (err: any) {
       console.error('Error refetching products:', err);
       setError(err.message || 'Failed to refresh products list');
       toast({ title: 'Error', description: `Failed to refresh products: ${err.message}`, variant: 'destructive' });
-    } 
+    }
   };
 
   // --- Wizard Open Handler ---

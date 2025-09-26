@@ -9,7 +9,7 @@ import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, Edit3, Users, Tag, Hash, CalendarDays, UserCircle, ListTree, ChevronsUpDown } from 'lucide-react';
+import { ArrowLeft, Edit3, Users, Tag, Hash, CalendarDays, UserCircle, ListTree, ChevronsUpDown, Plus } from 'lucide-react';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips';
 import type { EntitySemanticLink } from '@/types/semantic-link';
@@ -23,6 +23,8 @@ import { CommentSidebar } from '@/components/comments';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import { useDomains } from '@/hooks/use-domains';
+import { TeamFormDialog } from '@/components/teams/team-form-dialog';
+import { Team, TeamSummary, MemberType } from '@/types/team';
 
 // Helper to check API response (can be moved to a shared util if used in many places)
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
@@ -74,6 +76,54 @@ const createChildDomainsColumns = (navigate: (path: string) => void): ColumnDef<
       <code className="text-xs bg-muted px-2 py-1 rounded">
         {row.getValue("id")}
       </code>
+    ),
+  },
+];
+
+// Column definitions for teams table
+const createTeamsColumns = (navigate: (path: string) => void, onEdit: (teamId: string) => void): ColumnDef<TeamSummary>[] => [
+  {
+    accessorKey: "name",
+    header: "Team Name",
+    cell: ({ row }) => (
+      <Link
+        to={`/teams/${row.original.id}`}
+        className="font-medium text-primary hover:underline"
+      >
+        {row.getValue("name")}
+      </Link>
+    ),
+  },
+  {
+    accessorKey: "title",
+    header: "Title",
+    cell: ({ row }) => {
+      const title = row.getValue("title") as string;
+      return title || <span className="text-muted-foreground italic">No title</span>;
+    },
+  },
+  {
+    accessorKey: "member_count",
+    header: "Members",
+    cell: ({ row }) => (
+      <Badge variant="secondary" className="text-xs">
+        {row.getValue("member_count")} members
+      </Badge>
+    ),
+  },
+  {
+    id: "actions",
+    header: "Actions",
+    cell: ({ row }) => (
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => onEdit(row.original.id)}
+        className="text-xs px-2 py-1"
+      >
+        <Edit3 className="w-3 h-3 mr-1" />
+        Edit
+      </Button>
     ),
   },
 ];
@@ -183,6 +233,9 @@ export default function DataDomainDetailsView() {
   const [parentSemanticLinks, setParentSemanticLinks] = useState<EntitySemanticLink[]>([]);
   const [hierarchyConceptIris, setHierarchyConceptIris] = useState<string[]>([]);
   const [linkedAssets, setLinkedAssets] = useState<any[]>([]);
+  const [domainTeams, setDomainTeams] = useState<TeamSummary[]>([]);
+  const [teamDialogOpen, setTeamDialogOpen] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
 
   // Metadata: Rich Texts, Links, Documents
   interface RichTextItem { id: string; entity_id: string; entity_type: string; title: string; short_description?: string | null; content_markdown: string; created_at?: string; }
@@ -394,11 +447,56 @@ export default function DataDomainDetailsView() {
     }
   }, [get, toast]);
 
+  const fetchDomainTeams = useCallback(async (domainId: string) => {
+    try {
+      const response = await get<TeamSummary[]>(`/api/teams?domain_id=${domainId}`);
+      if (response.data && !response.error) {
+        const teams = Array.isArray(response.data) ? response.data : [];
+        setDomainTeams(teams);
+      } else {
+        setDomainTeams([]);
+      }
+    } catch (error) {
+      console.error('Error fetching domain teams:', error);
+      setDomainTeams([]);
+    }
+  }, [get]);
+
+  const handleTeamDialogSuccess = (team: Team) => {
+    // Refresh domain teams after successful team operation
+    if (domainId) {
+      fetchDomainTeams(domainId);
+    }
+    setSelectedTeam(null);
+  };
+
+  const handleEditTeam = async (teamId: string) => {
+    try {
+      const response = await get<Team>(`/api/teams/${teamId}`);
+      if (response.data && !response.error) {
+        setSelectedTeam(response.data);
+        setTeamDialogOpen(true);
+      }
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to load team details for editing.',
+      });
+    }
+  };
+
+  const handleCreateTeam = () => {
+    setSelectedTeam(null);
+    setTeamDialogOpen(true);
+  };
+
   useEffect(() => {
     setStaticSegments([{ label: 'Data Domains', path: '/data-domains' }]);
     if (domainId) {
       fetchDomainDetails(domainId);
       fetchMetadata(domainId);
+      fetchDomainTeams(domainId);
     } else {
       setError("No Domain ID provided.");
       setDynamicTitle("Invalid Domain");
@@ -408,7 +506,7 @@ export default function DataDomainDetailsView() {
         setStaticSegments([]);
         setDynamicTitle(null);
     };
-  }, [domainId, fetchDomainDetails, fetchMetadata, setStaticSegments, setDynamicTitle]);
+  }, [domainId, fetchDomainDetails, fetchMetadata, fetchDomainTeams, setStaticSegments, setDynamicTitle]);
 
   useEffect(() => {
     if (domain) {
@@ -569,6 +667,57 @@ export default function DataDomainDetailsView() {
         </Card>
       )}
 
+      {/* Domain Teams Section */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-xl flex items-center justify-between">
+            <div className="flex items-center">
+              <Users className="mr-2 h-5 w-5 text-primary"/>
+              Domain Teams
+              <Badge variant="secondary" className="ml-3 text-xs">
+                {domainTeams.length} teams
+              </Badge>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCreateTeam}
+              className="flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Create Team
+            </Button>
+          </CardTitle>
+          <CardDescription>
+            Teams assigned to this data domain. Teams inherit domain-specific permissions and responsibilities.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {domainTeams.length > 0 ? (
+            <DataTable
+              columns={createTeamsColumns(navigate, handleEditTeam)}
+              data={domainTeams}
+              searchColumn="name"
+            />
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <Users className="mx-auto h-12 w-12 mb-4 opacity-30" />
+              <p className="text-lg font-medium">No teams assigned</p>
+              <p className="text-sm">Create a team to assign it to this data domain.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCreateTeam}
+                className="mt-4"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create First Team
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Linked Assets Section */}
       <Card className="mb-6">
         <CardHeader>
@@ -593,6 +742,14 @@ export default function DataDomainDetailsView() {
         onOpenChange={setIriDialogOpen}
         onSelect={addIri}
         parentConceptIris={hierarchyConceptIris}
+      />
+
+      <TeamFormDialog
+        isOpen={teamDialogOpen}
+        onOpenChange={setTeamDialogOpen}
+        team={selectedTeam}
+        onSubmitSuccess={handleTeamDialogSuccess}
+        initialDomainId={selectedTeam ? undefined : domainId}
       />
     </div>
   );
