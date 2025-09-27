@@ -6,7 +6,6 @@ from .config import Settings, get_settings
 from .database import InMemorySession, get_db
 from .git import GitService, get_git_service
 from .job_runner import JobRunner, get_job_runner
-from .notifications import NotificationService, get_notification_service
 from .search import SearchService, get_search_service
 
 
@@ -22,9 +21,6 @@ def get_db_dep() -> Generator[InMemorySession, None, None]:
     finally:
         db.commit()
 
-def get_notification_service_dep() -> NotificationService:
-    """Get notification service."""
-    return get_notification_service()
 
 def get_search_service_dep() -> SearchService:
     """Get search service."""

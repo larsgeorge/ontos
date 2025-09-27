@@ -31,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Plus, Trash2, User, Users } from 'lucide-react';
+import { Loader2, Plus, Trash2, User, Users, X } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { TeamRead, TeamCreate, TeamUpdate, MemberType, TeamMember } from '@/types/team';
@@ -92,6 +92,11 @@ export function TeamFormDialog({
   const { fields: memberFields, append: addMember, remove: removeMember } = useFieldArray({
     control: form.control,
     name: 'members',
+  });
+
+  const { fields: tagFields, append: addTag, remove: removeTag } = useFieldArray({
+    control: form.control,
+    name: 'tags',
   });
 
   // Fetch data when dialog opens
@@ -157,6 +162,10 @@ export function TeamFormDialog({
       member_identifier: '',
       app_role_override: 'none',
     });
+  };
+
+  const handleAddTag = () => {
+    addTag('');
   };
 
   const handleSubmit = async (data: TeamFormData) => {
@@ -476,6 +485,81 @@ export function TeamFormDialog({
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* Tags */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium">Tags</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddTag}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Tag
+                </Button>
+              </div>
+
+              {tagFields.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  No tags added yet. Click "Add Tag" to add team tags.
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {tagFields.map((field, index) => {
+                    const tagValue = form.watch(`tags.${index}`) || '';
+                    if (!tagValue.trim()) {
+                      return (
+                        <div key={field.id} className="flex items-center gap-1">
+                          <FormField
+                            control={form.control}
+                            name={`tags.${index}`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input
+                                    placeholder="Enter tag"
+                                    className="w-24 h-8 text-xs"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeTag(index)}
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      );
+                    }
+                    return (
+                      <Badge
+                        key={field.id}
+                        variant="outline"
+                        className="flex items-center gap-1 px-2 py-1"
+                      >
+                        {tagValue}
+                        <button
+                          type="button"
+                          onClick={() => removeTag(index)}
+                          className="ml-1 hover:bg-destructive hover:text-destructive-foreground rounded-full p-0.5"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    );
+                  })}
                 </div>
               )}
             </div>

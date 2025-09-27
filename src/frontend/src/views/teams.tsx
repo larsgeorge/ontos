@@ -21,6 +21,8 @@ import { Toaster } from "@/components/ui/toaster";
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { useProjectContext } from '@/stores/project-store';
 import { TeamFormDialog } from '@/components/teams/team-form-dialog';
+import { useNavigate } from 'react-router-dom';
+import { useDomains } from '@/hooks/use-domains';
 
 // Check API response helper
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
@@ -45,6 +47,8 @@ export default function TeamsView() {
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
+  const navigate = useNavigate();
+  const { getDomainName } = useDomains();
   const { currentProject, hasProjectContext } = useProjectContext();
 
   const featureId = 'teams';
@@ -150,12 +154,19 @@ export default function TeamsView() {
       header: "Name",
       cell: ({ row }) => {
         const team = row.original;
+        const domainName = team.domain_name || getDomainName(team.domain_id);
         return (
           <div>
             <span className="font-medium">{team.name}</span>
-            {team.domain_name && (
-              <div className="text-xs text-muted-foreground">
-                Domain: {team.domain_name}
+            {domainName && team.domain_id && (
+              <div
+                className="text-xs text-muted-foreground cursor-pointer hover:underline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/data-domains/${team.domain_id}`);
+                }}
+              >
+                ↳ Domain: {domainName}
               </div>
             )}
           </div>
@@ -250,7 +261,7 @@ export default function TeamsView() {
         );
       },
     },
-  ], [canWrite, canAdmin]);
+  ], [canWrite, canAdmin, getDomainName, navigate]);
 
   return (
     <div className="py-6">

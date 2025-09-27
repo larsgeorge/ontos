@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Plus, Trash2, FolderOpen } from 'lucide-react';
+import { Loader2, Plus, Trash2, FolderOpen, Users, X } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { ProjectRead, ProjectCreate, ProjectUpdate } from '@/types/project';
@@ -311,6 +311,7 @@ export function ProjectFormDialog({
                         variant="secondary"
                         className="flex items-center gap-1 px-2 py-1"
                       >
+                        <Users className="w-3 h-3" />
                         {team.name}
                         <button
                           type="button"
@@ -320,7 +321,7 @@ export function ProjectFormDialog({
                           }}
                           className="ml-1 hover:bg-destructive hover:text-destructive-foreground rounded-full p-0.5"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <X className="w-3 h-3" />
                         </button>
                       </Badge>
                     ))}
@@ -349,35 +350,57 @@ export function ProjectFormDialog({
                   No tags added yet. Click "Add Tag" to add project tags.
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {tagFields.map((field, index) => (
-                    <div key={field.id} className="flex items-center gap-3">
-                      <FormField
-                        control={form.control}
-                        name={`tags.${index}`}
-                        render={({ field }) => (
-                          <FormItem className="flex-1">
-                            <FormControl>
-                              <Input
-                                placeholder="Enter tag"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeTag(index)}
-                        className="text-red-600 hover:text-red-700"
+                <div className="flex flex-wrap gap-2">
+                  {tagFields.map((field, index) => {
+                    const tagValue = form.watch(`tags.${index}`) || '';
+                    if (!tagValue.trim()) {
+                      return (
+                        <div key={field.id} className="flex items-center gap-1">
+                          <FormField
+                            control={form.control}
+                            name={`tags.${index}`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input
+                                    placeholder="Enter tag"
+                                    className="w-24 h-8 text-xs"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeTag(index)}
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      );
+                    }
+                    return (
+                      <Badge
+                        key={field.id}
+                        variant="outline"
+                        className="flex items-center gap-1 px-2 py-1"
                       >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
+                        {tagValue}
+                        <button
+                          type="button"
+                          onClick={() => removeTag(index)}
+                          className="ml-1 hover:bg-destructive hover:text-destructive-foreground rounded-full p-0.5"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    );
+                  })}
                 </div>
               )}
             </div>

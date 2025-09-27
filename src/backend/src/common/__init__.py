@@ -18,7 +18,6 @@ from .deps import (
     get_db_dep,
     get_git_service_dep,
     get_job_runner_dep,
-    get_notification_service_dep,
     get_search_service_dep,
     get_user_id,
     require_user_id,
@@ -27,7 +26,6 @@ from .git import GitService, get_git_service
 from .job_runner import JobRunner, get_job_runner
 from .logging import get_logger
 from .middleware import ErrorHandlingMiddleware, LoggingMiddleware
-from .notifications import NotificationService, get_notification_service
 from .search import SearchService, get_search_service
 from .workspace_client import CachingWorkspaceClient, get_workspace_client
 
@@ -42,12 +40,9 @@ __all__ = [
     'get_job_runner',
     'SearchService',
     'get_search_service',
-    'NotificationService',
-    'get_notification_service',
     'GitService',
     'get_git_service',
     'get_db_dep',
-    'get_notification_service_dep',
     'get_search_service_dep',
     'get_job_runner_dep',
     'get_git_service_dep',

@@ -2,7 +2,7 @@ teams:
   - name: "data-engineering"
     title: "Data Engineering Team"
     description: "Responsible for data pipeline development and infrastructure"
-    domain_id: null  # Standalone team
+    domain_name: "Core"
     tags: ["engineering", "data", "infrastructure"]
     metadata:
       slack_channel: "https://company.slack.com/channels/data-eng"
@@ -10,18 +10,18 @@ teams:
     members:
       - member_type: "user"
         member_identifier: "john.doe@company.com"
-        app_role_override: "Data Engineer Lead"
+        app_role_override: "Data Producer"
       - member_type: "group"
         member_identifier: "data-engineers"
         app_role_override: null
       - member_type: "user"
         member_identifier: "jane.smith@company.com"
-        app_role_override: "Senior Data Engineer"
+        app_role_override: "Data Producer"
 
   - name: "analytics-team"
     title: "Analytics Team"
     description: "Business analytics and reporting team"
-    domain_id: null  # Will be linked to a domain programmatically
+    domain_name: "Retail Analytics"
     tags: ["analytics", "reporting", "business"]
     metadata:
       slack_channel: "https://company.slack.com/channels/analytics"
@@ -29,7 +29,7 @@ teams:
     members:
       - member_type: "user"
         member_identifier: "alice.johnson@company.com"
-        app_role_override: "Analytics Lead"
+        app_role_override: "Data Consumer"
       - member_type: "group"
         member_identifier: "analysts"
         app_role_override: null
@@ -37,7 +37,7 @@ teams:
   - name: "data-science"
     title: "Data Science Team"
     description: "Machine learning and advanced analytics"
-    domain_id: null
+    domain_name: "Product"
     tags: ["data-science", "ml", "ai"]
     metadata:
       slack_channel: "https://company.slack.com/channels/data-science"
@@ -45,18 +45,18 @@ teams:
     members:
       - member_type: "user"
         member_identifier: "bob.wilson@company.com"
-        app_role_override: "Data Science Lead"
+        app_role_override: "Data Producer"
       - member_type: "group"
         member_identifier: "data-scientists"
         app_role_override: null
       - member_type: "user"
         member_identifier: "carol.brown@company.com"
-        app_role_override: "Senior Data Scientist"
+        app_role_override: "Data Producer"
 
   - name: "governance-team"
     title: "Data Governance Team"
     description: "Data quality, compliance, and governance oversight"
-    domain_id: null
+    domain_name: "Compliance"
     tags: ["governance", "compliance", "quality"]
     metadata:
       slack_channel: "https://company.slack.com/channels/data-governance"
@@ -64,7 +64,7 @@ teams:
     members:
       - member_type: "user"
         member_identifier: "david.garcia@company.com"
-        app_role_override: "Data Steward Lead"
+        app_role_override: "Data Steward"
       - member_type: "group"
         member_identifier: "data-stewards"
         app_role_override: null

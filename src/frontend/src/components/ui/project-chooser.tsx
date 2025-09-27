@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Check, ChevronDown, FolderOpen, Plus, X } from 'lucide-react';
+import { Check, ChevronDown, FolderOpen, Plus, X, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -19,11 +19,14 @@ export function ProjectChooser() {
   const {
     currentProject,
     availableProjects,
+    allProjects,
     isLoading,
     error,
     hasProjectContext,
     fetchUserProjects,
+    fetchAllProjects,
     switchProject,
+    requestProjectAccess,
     clearProject,
   } = useProjectContext();
 
@@ -34,9 +37,10 @@ export function ProjectChooser() {
   const canManageProjects = hasPermission('projects', FeatureAccessLevel.READ_WRITE);
 
   useEffect(() => {
-    // Fetch user projects on component mount
+    // Fetch user projects and all projects on component mount
     fetchUserProjects();
-  }, [fetchUserProjects]);
+    fetchAllProjects();
+  }, [fetchUserProjects, fetchAllProjects]);
 
   const handleProjectSwitch = async (projectId: string) => {
     try {
@@ -71,6 +75,27 @@ export function ProjectChooser() {
       });
     }
   };
+
+  const handleRequestProjectAccess = async (projectId: string, projectName: string) => {
+    try {
+      const response = await requestProjectAccess({ project_id: projectId });
+      setIsOpen(false);
+      toast({
+        title: 'Access request sent',
+        description: response.message,
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to request access',
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
+    }
+  };
+
+  // Calculate projects user can join (not in available projects)
+  const availableProjectIds = new Set(availableProjects.map(p => p.id));
+  const joinableProjects = allProjects.filter(project => !availableProjectIds.has(project.id));
 
   // Don't render if user has no projects and can't manage them
   if (!isLoading && availableProjects.length === 0 && !canManageProjects) {
@@ -166,6 +191,37 @@ export function ProjectChooser() {
           <DropdownMenuItem disabled className="text-muted-foreground">
             No projects available
           </DropdownMenuItem>
+        )}
+
+        {joinableProjects.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              Request Access To
+            </DropdownMenuLabel>
+            {joinableProjects.map((project) => (
+              <DropdownMenuItem
+                key={project.id}
+                onClick={() => handleRequestProjectAccess(project.id, project.name)}
+                className="flex items-center justify-between"
+              >
+                <div className="flex items-center min-w-0 flex-1">
+                  <UserPlus className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate">{project.name}</div>
+                    {project.title && (
+                      <div className="text-xs text-muted-foreground truncate">
+                        {project.title}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <Badge variant="secondary" className="text-xs ml-2">
+                  Join
+                </Badge>
+              </DropdownMenuItem>
+            ))}
+          </>
         )}
 
         {canManageProjects && (

@@ -46,6 +46,7 @@ export const useProjectStore = create<ProjectState>()(
     (set, get) => ({
       currentProject: null,
       availableProjects: [],
+      allProjects: [],
       isLoading: false,
       error: null,
 
@@ -55,6 +56,10 @@ export const useProjectStore = create<ProjectState>()(
 
       setAvailableProjects: (projects) => {
         set({ availableProjects: projects });
+      },
+
+      setAllProjects: (projects) => {
+        set({ allProjects: projects });
       },
 
       fetchUserProjects: async () => {
@@ -80,6 +85,24 @@ export const useProjectStore = create<ProjectState>()(
           setError(error instanceof Error ? error.message : 'Failed to fetch projects');
           setAvailableProjects([]);
           setCurrentProject(null);
+        } finally {
+          setLoading(false);
+        }
+      },
+
+      fetchAllProjects: async () => {
+        const { setLoading, setError, setAllProjects } = get();
+
+        try {
+          setLoading(true);
+          setError(null);
+
+          const data: ProjectSummary[] = await apiCall('/projects/summary');
+          setAllProjects(data || []);
+        } catch (error) {
+          console.error('Failed to fetch all projects:', error);
+          setError(error instanceof Error ? error.message : 'Failed to fetch all projects');
+          setAllProjects([]);
         } finally {
           setLoading(false);
         }
@@ -129,6 +152,29 @@ export const useProjectStore = create<ProjectState>()(
         });
       },
 
+      requestProjectAccess: async (request: ProjectAccessRequest): Promise<ProjectAccessRequestResponse> => {
+        const { setLoading, setError } = get();
+
+        try {
+          setLoading(true);
+          setError(null);
+
+          const response = await apiCall('/user/request-project-access', {
+            method: 'POST',
+            body: JSON.stringify(request),
+          });
+
+          return response;
+        } catch (error) {
+          console.error('Failed to request project access:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Failed to request project access';
+          setError(errorMessage);
+          throw error;
+        } finally {
+          setLoading(false);
+        }
+      },
+
       setLoading: (loading) => {
         set({ isLoading: loading });
       },
@@ -153,11 +199,14 @@ export const useProjectContext = () => {
   return {
     currentProject: store.currentProject,
     availableProjects: store.availableProjects,
+    allProjects: store.allProjects,
     isLoading: store.isLoading,
     error: store.error,
     hasProjectContext: !!store.currentProject,
     fetchUserProjects: store.fetchUserProjects,
+    fetchAllProjects: store.fetchAllProjects,
     switchProject: store.switchProject,
+    requestProjectAccess: store.requestProjectAccess,
     clearProject: store.clearProject,
   };
 };

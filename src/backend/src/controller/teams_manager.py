@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from src.repositories.teams_repository import team_repo, team_member_repo
+from src.repositories.data_domain_repository import data_domain_repo
 from src.models.teams import (
     TeamCreate,
     TeamUpdate,
@@ -27,6 +28,7 @@ class TeamsManager:
     def __init__(self):
         self.team_repo = team_repo
         self.team_member_repo = team_member_repo
+        self.domain_repo = data_domain_repo
         logger.debug("TeamsManager initialized.")
 
     def _serialize_list_fields(self, data: dict) -> dict:
@@ -37,9 +39,20 @@ class TeamsManager:
             data['metadata'] = json.dumps(data['metadata'])
         return data
 
-    def _convert_db_to_read_model(self, db_team: TeamDb) -> TeamRead:
+    def _convert_db_to_read_model(self, db_team: TeamDb, db: Optional[Session] = None) -> TeamRead:
         """Helper to convert DB model to Read model."""
-        return TeamRead.model_validate(db_team)
+        team_read = TeamRead.model_validate(db_team)
+
+        # Populate domain_name if domain_id exists and we have a session
+        if db and db_team.domain_id:
+            try:
+                domain = self.domain_repo.get(db, db_team.domain_id)
+                if domain:
+                    team_read.domain_name = domain.name
+            except Exception as e:
+                logger.warning(f"Failed to resolve domain name for domain_id {db_team.domain_id}: {e}")
+
+        return team_read
 
     def _convert_db_to_summary_model(self, db_team: TeamDb) -> TeamSummary:
         """Helper to convert DB model to Summary model."""
@@ -50,6 +63,22 @@ class TeamsManager:
             domain_id=db_team.domain_id,
             member_count=len(db_team.members) if db_team.members else 0
         )
+
+    def _resolve_domain_name_to_id(self, db: Session, domain_name: str) -> Optional[str]:
+        """Helper to resolve domain name to domain ID."""
+        if not domain_name:
+            return None
+        try:
+            # Get all domains and find by name
+            domains = self.domain_repo.get_multi(db, limit=1000)
+            for domain in domains:
+                if domain.name == domain_name:
+                    return domain.id
+            logger.warning(f"Domain '{domain_name}' not found")
+            return None
+        except Exception as e:
+            logger.error(f"Error resolving domain name '{domain_name}': {e}")
+            return None
 
     # Team CRUD operations
     def create_team(self, db: Session, team_in: TeamCreate, current_user_id: str) -> TeamRead:
@@ -74,7 +103,7 @@ class TeamsManager:
             db.flush()
             db.refresh(db_team)
             logger.info(f"Successfully created team '{db_team.name}' with id: {db_team.id}")
-            return self._convert_db_to_read_model(db_team)
+            return self._convert_db_to_read_model(db_team, db)
         except IntegrityError as e:
             db.rollback()
             logger.warning(f"Integrity error creating team '{team_in.name}': {e}")
@@ -92,13 +121,13 @@ class TeamsManager:
         db_team = self.team_repo.get_with_members(db, team_id)
         if not db_team:
             return None
-        return self._convert_db_to_read_model(db_team)
+        return self._convert_db_to_read_model(db_team, db)
 
     def get_all_teams(self, db: Session, skip: int = 0, limit: int = 100, domain_id: Optional[str] = None) -> List[TeamRead]:
         """Gets a list of all teams, optionally filtered by domain."""
         logger.debug(f"Fetching teams with skip={skip}, limit={limit}, domain_id={domain_id}")
         db_teams = self.team_repo.get_multi_with_members(db, skip=skip, limit=limit, domain_id=domain_id)
-        return [self._convert_db_to_read_model(team) for team in db_teams]
+        return [self._convert_db_to_read_model(team, db) for team in db_teams]
 
     def get_teams_summary(self, db: Session, domain_id: Optional[str] = None) -> List[TeamSummary]:
         """Gets a summary list of teams for dropdowns/selection."""
@@ -109,17 +138,17 @@ class TeamsManager:
     def get_teams_by_domain(self, db: Session, domain_id: str) -> List[TeamRead]:
         """Gets all teams belonging to a specific domain."""
         db_teams = self.team_repo.get_teams_by_domain(db, domain_id)
-        return [self._convert_db_to_read_model(team) for team in db_teams]
+        return [self._convert_db_to_read_model(team, db) for team in db_teams]
 
     def get_standalone_teams(self, db: Session) -> List[TeamRead]:
         """Gets all standalone teams (not assigned to a domain)."""
         db_teams = self.team_repo.get_standalone_teams(db)
-        return [self._convert_db_to_read_model(team) for team in db_teams]
+        return [self._convert_db_to_read_model(team, db) for team in db_teams]
 
     def get_teams_for_user(self, db: Session, user_identifier: str) -> List[TeamRead]:
         """Gets all teams where a user is a member."""
         db_teams = self.team_repo.get_teams_for_user(db, user_identifier)
-        return [self._convert_db_to_read_model(team) for team in db_teams]
+        return [self._convert_db_to_read_model(team, db) for team in db_teams]
 
     def update_team(self, db: Session, team_id: str, team_in: TeamUpdate, current_user_id: str) -> Optional[TeamRead]:
         """Updates an existing team."""
@@ -164,7 +193,7 @@ class TeamsManager:
         if not db_team:
             raise NotFoundError(f"Team with id '{team_id}' not found.")
 
-        read_model = self._convert_db_to_read_model(db_team)
+        read_model = self._convert_db_to_read_model(db_team, db)
 
         try:
             self.team_repo.remove(db=db, id=team_id)
@@ -291,11 +320,18 @@ class TeamsManager:
             for team_data in teams_data:
                 try:
                     # Extract team creation data (excluding members)
+                    domain_id = team_data.get('domain_id')
+                    domain_name = team_data.get('domain_name')
+
+                    # Resolve domain name to ID if provided
+                    if domain_name and not domain_id:
+                        domain_id = self._resolve_domain_name_to_id(db, domain_name)
+
                     team_create_data = {
                         'name': team_data['name'],
                         'title': team_data.get('title', ''),
                         'description': team_data.get('description', ''),
-                        'domain_id': team_data.get('domain_id'),
+                        'domain_id': domain_id,
                         'tags': team_data.get('tags', []),
                         'metadata': team_data.get('metadata', {})
                     }

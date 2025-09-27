@@ -287,15 +287,25 @@ class ProjectsManager:
         # Send notifications to all team members of assigned teams
         notifications_sent = 0
 
+        logger.debug(f"Found {len(project_teams)} teams assigned to project '{db_project.name}'")
         for team in project_teams:
+            logger.debug(f"Processing team: {team.name} (ID: {team.id})")
+
             # Get team with members using team repository
             team_with_members = self.team_repo.get_with_members(db, team.id)
-            if not team_with_members or not team_with_members.members:
+            if not team_with_members:
+                logger.warning(f"Could not fetch team {team.name} with members")
+                continue
+
+            if not team_with_members.members:
                 logger.warning(f"Team {team.name} has no members, skipping notifications")
                 continue
 
+            logger.debug(f"Team {team.name} has {len(team_with_members.members)} members")
             for member in team_with_members.members:
                 try:
+                    logger.debug(f"Attempting to send notification to member: {member.member_identifier}")
+
                     # Create notification for each team member
                     notification_title = f"Project Access Request"
                     notification_description = (
@@ -321,10 +331,10 @@ class ProjectsManager:
                         }
                     )
                     notifications_sent += 1
-                    logger.debug(f"Sent project access request notification to {member.member_identifier}")
+                    logger.debug(f"Successfully sent project access request notification to {member.member_identifier}")
 
                 except Exception as e:
-                    logger.warning(f"Failed to send notification to team member {member.member_identifier}: {e}")
+                    logger.error(f"Failed to send notification to team member {member.member_identifier}: {e}", exc_info=True)
                     continue
 
         if notifications_sent == 0:
