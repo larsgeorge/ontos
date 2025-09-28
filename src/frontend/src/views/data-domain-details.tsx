@@ -8,6 +8,7 @@ import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 // Preview handled in EntityMetadataPanel
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import TagChip from '@/components/ui/tag-chip';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Edit3, Users, Tag, Hash, CalendarDays, UserCircle, ListTree, ChevronsUpDown, Plus } from 'lucide-react';
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog';
@@ -601,7 +602,7 @@ export default function DataDomainDetailsView() {
             <InfoItem label="Tags" icon={<Tag />}>
               {domain.tags && domain.tags.length > 0 ? (
                 <div className="flex flex-wrap gap-1 mt-1">
-                  {domain.tags.map((t, i) => <Badge key={i} variant="secondary">{t}</Badge>)}
+                  {domain.tags.map((tag, i) => <TagChip key={i} tag={tag} size="sm" />)}
                 </div>
               ) : 'N/A'}
             </InfoItem>

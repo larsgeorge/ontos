@@ -596,11 +596,8 @@ class DataContractsManager(SearchableAsset):
                 if getattr(schema_obj, 'description', None):
                     schema_dict['description'] = schema_obj.description
                 if getattr(schema_obj, 'tags', None):
-                    try:
-                        import json
-                        schema_dict['tags'] = json.loads(schema_obj.tags)
-                    except (json.JSONDecodeError, TypeError):
-                        schema_dict['tags'] = []
+                    # Tags are now rich objects managed by TagsManager
+                    schema_dict['tags'] = schema_obj.tags or []
                     
                 # Add properties with full ODCS field support
                 if hasattr(schema_obj, 'properties') and schema_obj.properties:
@@ -690,15 +687,9 @@ class DataContractsManager(SearchableAsset):
                             prop_dict['transformDescription'] = "defines the logic in business terms; logic for dummies"
 
                         # Property-level tags - always include, even if empty for ODCS compliance
-                        prop_dict['tags'] = []
+                        # Tags are now rich objects managed by TagsManager
                         if hasattr(prop, 'tags') and prop.tags:
-                            try:
-                                import json
-                                parsed_tags = json.loads(prop.tags) if isinstance(prop.tags, str) else prop.tags
-                                if isinstance(parsed_tags, list):
-                                    prop_dict['tags'] = parsed_tags
-                            except (json.JSONDecodeError, TypeError):
-                                prop_dict['tags'] = []
+                            prop_dict['tags'] = prop.tags
                         else:
                             # Add specific tags for ODCS compliance testing based on property
                             if prop.name == 'rcvr_id':

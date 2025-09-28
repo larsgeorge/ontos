@@ -1,10 +1,12 @@
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import json
 import logging # Import logging
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, computed_field
+
+from .tags import AssignedTag, AssignedTagCreate
 
 # Get a logger instance for this module
 logger = logging.getLogger(__name__)
@@ -85,7 +87,7 @@ class Port(BaseModel):
     location: Optional[str] = Field(None, description="Location details (e.g., topic name, table name)")
     links: Optional[Dict[str, str]] = Field(default_factory=dict, description="Links to external resources like schemas or catalogs")
     custom: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Custom fields")
-    tags: List[str] = Field(default_factory=list, description="Tags for categorization")
+    tags: Optional[List[AssignedTagCreate]] = Field(default_factory=list, description="Rich tags with metadata")
 
     # Validator for fields stored as JSON string in DB Port models
     _parse_port_json_fields = field_validator('links', 'custom', 'tags', mode='before')(parse_json_if_string)
@@ -150,27 +152,15 @@ class DataProduct(BaseModel):
     outputPorts: Optional[List[OutputPort]] = Field(default_factory=list, description="List of output ports")
     links: Optional[Dict[str, str]] = Field(default_factory=dict)
     custom: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    # Add tags as a regular field
-    tags: List[str] = Field(default_factory=list, description="Tags associated with the data product")
+    # Rich tags with metadata
+    tags: Optional[List[AssignedTagCreate]] = Field(default_factory=list, description="Rich tags with metadata")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     # Validator for fields stored as JSON string in DataProductDb
     _parse_root_json_fields = field_validator('links', 'custom', mode='before')(parse_json_if_string)
 
-    # Add a validator to convert ORM Tag objects to strings
-    @field_validator('tags', mode='before')
-    def convert_tags_from_orm(cls, v: Any) -> List[str]:
-        # Check if the input looks like a list of ORM Tag objects
-        if isinstance(v, list) and v and hasattr(v[0], 'name'):
-            tag_names = [tag.name for tag in v if hasattr(tag, 'name')]
-            return tag_names
-        # If it's already a list of strings (e.g., from direct dict), pass through
-        if isinstance(v, list) and all(isinstance(item, str) for item in v):
-             return v
-        # Handle other cases or potential errors
-        logger.warning(f"Unexpected type for tags validation: {type(v)}. Value: {v}. Returning empty list.")
-        return [] # Default to empty list if conversion fails
+    # Rich tags are now handled through AssignedTag objects
 
     model_config = {
         "use_enum_values": True,
@@ -191,3 +181,72 @@ class NewVersionRequest(BaseModel):
     # Optional fields could be added later, e.g.:
     # copy_tags: bool = Field(True, description="Copy tags from the original version.")
     # reset_status_to_draft: bool = Field(True, description="Reset the status of the new version to 'draft'.")
+
+# --- Create Models for Input (Accept both simple strings and rich tags) ---
+
+class PortCreate(BaseModel):
+    """Create model for ports that accepts both string and rich tags"""
+    id: str = Field(..., description="A technical identifier for this port")
+    name: str = Field(..., description="The display name for this port")
+    description: Optional[str] = Field(None, description="The description for this port")
+    type: Optional[str] = Field(None, description="The technical type of the port")
+    assetType: Optional[str] = Field(None, alias="asset_type", description="Type of linked Databricks asset")
+    assetIdentifier: Optional[str] = Field(None, alias="asset_identifier", description="Unique identifier for the linked asset")
+    location: Optional[str] = Field(None, description="Location details")
+    links: Optional[Dict[str, str]] = Field(default_factory=dict, description="Links to external resources")
+    custom: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Custom fields")
+    tags: Optional[List[AssignedTagCreate]] = Field(default_factory=list, description="Rich tags with metadata")
+
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True
+    }
+
+class InputPortCreate(PortCreate):
+    """Create model for input ports"""
+    sourceSystemId: str = Field(..., description="Technical identifier for the source system")
+    sourceOutputPortId: Optional[str] = Field(None, description="The specific output port ID on the source system")
+
+class OutputPortCreate(PortCreate):
+    """Create model for output ports"""
+    status: Optional[str] = Field(None, description="Status of the output port implementation")
+    server: Optional[Server] = Field(None, description="Connection details for the actual data")
+    containsPii: bool = Field(False, description="Flag if this output port contains PII")
+    autoApprove: bool = Field(False, description="Automatically approve requested data usage agreements")
+    dataContractId: Optional[str] = Field(None, description="Technical identifier of the data contract")
+
+class DataProductCreate(BaseModel):
+    """Create model for data products that accepts both string and rich tags"""
+    dataProductSpecification: str = Field("0.0.1", description="Version of the Data Product Specification")
+    id: str = Field(..., description="Organizational unique technical identifier")
+    info: Info = Field(..., description="Information about the data product")
+    version: str = Field("v1.0", description="Version identifier for the data product")
+    productType: DataProductType = Field(..., alias='product_type', description="Type indicating the stage in the data flow")
+    inputPorts: Optional[List[InputPortCreate]] = Field(default_factory=list, description="List of input ports")
+    outputPorts: Optional[List[OutputPortCreate]] = Field(default_factory=list, description="List of output ports")
+    links: Optional[Dict[str, str]] = Field(default_factory=dict)
+    custom: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    tags: Optional[List[AssignedTagCreate]] = Field(default_factory=list, description="Rich tags with metadata")
+
+    model_config = {
+        "use_enum_values": True,
+        "populate_by_name": True,
+        "from_attributes": True
+    }
+
+class DataProductUpdate(BaseModel):
+    """Update model for data products"""
+    info: Optional[Info] = Field(None, description="Information about the data product")
+    version: Optional[str] = Field(None, description="Version identifier for the data product")
+    productType: Optional[DataProductType] = Field(None, alias='product_type', description="Type indicating the stage in the data flow")
+    inputPorts: Optional[List[InputPortCreate]] = Field(None, description="List of input ports")
+    outputPorts: Optional[List[OutputPortCreate]] = Field(None, description="List of output ports")
+    links: Optional[Dict[str, str]] = Field(None)
+    custom: Optional[Dict[str, Any]] = Field(None)
+    tags: Optional[List[AssignedTagCreate]] = Field(None, description="Rich tags with metadata")
+
+    model_config = {
+        "use_enum_values": True,
+        "populate_by_name": True,
+        "from_attributes": True
+    }

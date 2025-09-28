@@ -87,7 +87,7 @@ class InputPortDb(Base):
     sourceOutputPortId = Column(String, nullable=True) # Nullable for external sources or if link not specified
     links = Column(String, nullable=True, default='{}') # JSON String
     custom = Column(String, nullable=True, default='{}') # JSON String
-    tags = Column(String, nullable=True, default='[]') # JSON String
+    # tags: Moved to EntityTagAssociationDb for rich tag support
     
     # Relationship back to DataProductDb (Corrected reference)
     data_product = relationship("DataProductDb", back_populates="inputPorts")
@@ -111,7 +111,7 @@ class OutputPortDb(Base):
     dataContractId = Column(String, nullable=True)
     links = Column(String, nullable=True, default='{}') # JSON String
     custom = Column(String, nullable=True, default='{}') # JSON String
-    tags = Column(String, nullable=True, default='[]') # JSON String
+    # tags: Moved to EntityTagAssociationDb for rich tag support
     
     # Relationship back to DataProductDb (Corrected reference)
     data_product = relationship("DataProductDb", back_populates="outputPorts") 

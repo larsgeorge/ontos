@@ -13,48 +13,48 @@ from src.common.logging import get_logger
 from src.common.errors import ConflictError, NotFoundError, AppError # Import custom errors, AppError for validation
 from src.controller.change_log_manager import change_log_manager
 from src.controller.comments_manager import CommentsManager
+from src.controller.tags_manager import TagsManager
 # from src.controller.audit_log_manager import AuditLogManager # Placeholder
 
 logger = get_logger(__name__)
 
 class DataDomainManager:
-    def __init__(self, repository: DataDomainRepository):
+    def __init__(self, repository: DataDomainRepository, tags_manager: Optional[TagsManager] = None):
         self.repository = repository
+        self.tags_manager = tags_manager or TagsManager()
         # self.audit_log_manager = AuditLogManager() # Placeholder: Inject later
         logger.debug("DataDomainManager initialized.")
 
-    def _convert_db_to_read_model(self, db_domain: DataDomain) -> DataDomainRead:
+    def _convert_db_to_read_model(self, db_domain: DataDomain, db: Optional[Session] = None) -> DataDomainRead:
         """Helper to convert DB model to Read model, populating parent_name and children_count."""
         parent_name = None
         parent_info_data: Optional[DataDomainBasicInfo] = None
         if db_domain.parent: # Assuming parent is loaded
             parent_name = db_domain.parent.name
             parent_info_data = DataDomainBasicInfo.model_validate(db_domain.parent) # Use model_validate for Pydantic v2
-        
+
         children_count = len(db_domain.children) # Assuming children are loaded or counted
         children_info_data: List[DataDomainBasicInfo] = []
         if db_domain.children:
             for child_db_obj in db_domain.children:
                 children_info_data.append(DataDomainBasicInfo.model_validate(child_db_obj))
 
-        # Get the owner team ID (no JSON parsing needed for UUID)
-        owner_team_id = db_domain.owner_team_id
-
-        tags_list = db_domain.tags
-        if db_domain.tags and isinstance(db_domain.tags, str):
+        # Load tags from TagsManager
+        tags_list = []
+        if db:
             try:
-                tags_list = json.loads(db_domain.tags.replace("'", '"'))
-            except json.JSONDecodeError:
-                logger.warning(f"Could not parse tags field for domain {db_domain.id}: {db_domain.tags}")
-                tags_list = [] # Default to empty list on parsing error
-        elif not db_domain.tags:
-            tags_list = None # Keep it None if it's None
+                assigned_tags = self.tags_manager.list_assigned_tags(
+                    db, entity_id=db_domain.id, entity_type="data_domain"
+                )
+                tags_list = assigned_tags
+            except Exception as e:
+                logger.warning(f"Failed to load tags for data domain {db_domain.id}: {e}")
+                tags_list = []
 
         return DataDomainRead(
             id=db_domain.id,
             name=db_domain.name,
             description=db_domain.description,
-            owner_team_id=owner_team_id,
             tags=tags_list,
             parent_id=db_domain.parent_id,
             created_at=db_domain.created_at,
@@ -75,12 +75,10 @@ class DataDomainManager:
             if not parent_domain:
                 raise NotFoundError(f"Parent domain with id '{domain_in.parent_id}' not found.")
 
-        db_obj_data = domain_in.model_dump(exclude_unset=True) # Use model_dump for Pydantic v2
+        db_obj_data = domain_in.model_dump(exclude_unset=True, exclude={'tags'}) # Use model_dump for Pydantic v2
         db_obj_data['created_by'] = current_user_id
 
-        # owner_team_id is already a string UUID, no JSON serialization needed
-        if isinstance(db_obj_data.get('tags'), list):
-            db_obj_data['tags'] = json.dumps(db_obj_data['tags'])
+        # Tags are now handled by TagsManager - no serialization needed
 
         db_domain = DataDomain(**db_obj_data)
 
@@ -125,7 +123,7 @@ class DataDomainManager:
             # For simplicity here, assume children relationship can be counted via len().
             # db.refresh(db_domain, with_for_update=None, attribute_names=['children']) # This reloads ALL children objects.
 
-            return self._convert_db_to_read_model(db_domain)
+            return self._convert_db_to_read_model(db_domain, db)
         except IntegrityError as e:
             db.rollback()
             logger.warning(f"Integrity error creating data domain '{domain_in.name}': {e}")
@@ -149,14 +147,14 @@ class DataDomainManager:
         if not db_domain:
             logger.warning(f"Data domain with id {domain_id} not found.")
             return None
-        return self._convert_db_to_read_model(db_domain)
+        return self._convert_db_to_read_model(db_domain, db)
 
     def get_all_domains(self, db: Session, skip: int = 0, limit: int = 100) -> List[DataDomainRead]:
         """Gets a list of all data domains, including parent name and children count."""
         logger.debug(f"Fetching all data domains with skip={skip}, limit={limit}")
         # Same as get_domain_by_id, ensure repository loads necessary data efficiently.
         db_domains = self.repository.get_multi_with_details(db, skip=skip, limit=limit) # Assume repo method loads details
-        return [self._convert_db_to_read_model(domain) for domain in db_domains]
+        return [self._convert_db_to_read_model(domain, db) for domain in db_domains]
 
     def update_domain(self, db: Session, domain_id: UUID, domain_in: DataDomainUpdate, current_user_id: str) -> Optional[DataDomainRead]:
         """Updates an existing data domain."""
@@ -176,10 +174,7 @@ class DataDomainManager:
         # obj_in here is Pydantic model, repository.update expects a dict or Pydantic model
         update_data = domain_in.model_dump(exclude_unset=True)
 
-        # Serialize lists to JSON strings if they are provided in the update
-        # owner_team_id is already a string UUID, no JSON serialization needed
-        if 'tags' in update_data and isinstance(update_data['tags'], list):
-            update_data['tags'] = json.dumps(update_data['tags'])
+        # Tags are now handled by TagsManager - no serialization needed
 
         try:
             # The CRUDBase update method takes obj_in which can be a dict or Pydantic model.
@@ -204,7 +199,7 @@ class DataDomainManager:
             except Exception as log_error:
                 logger.warning(f"Failed to log change for domain update: {log_error}")
             
-            return self._convert_db_to_read_model(updated_db_domain)
+            return self._convert_db_to_read_model(updated_db_domain, db)
         except IntegrityError as e:
              db.rollback()
              logger.warning(f"Integrity error updating data domain {domain_id}: {e}")
@@ -239,7 +234,7 @@ class DataDomainManager:
             # raise ConflictError(f"Cannot delete domain '{db_domain_to_delete.name}' because it has child domains. Please delete or re-parent children first.")
             pass # Current setup allows cascade delete.
 
-        read_model_of_deleted = self._convert_db_to_read_model(db_domain_to_delete)
+        read_model_of_deleted = self._convert_db_to_read_model(db_domain_to_delete, db)
         
         try:
             # The repository.remove(db, id) should work.
@@ -267,24 +262,6 @@ class DataDomainManager:
             raise
 
     # --- Demo Data Loading --- #
-    def _resolve_team_name_to_id(self, db: Session, team_name: str) -> Optional[str]:
-        """Helper method to resolve team name to team UUID."""
-        if not team_name:
-            return None
-
-        try:
-            from src.repositories.teams_repository import team_repo
-            team = team_repo.get_by_name(db, name=team_name)
-            if team:
-                logger.info(f"Successfully resolved team '{team_name}' to ID: {team.id}")
-                return str(team.id)
-            else:
-                logger.warning(f"Team '{team_name}' not found")
-                return None
-        except Exception as e:
-            logger.warning(f"Failed to resolve team '{team_name}': {e}")
-            return None
-
     def load_initial_data(self, db: Session) -> None:
         """Loads initial data domains from a YAML file if the table is empty."""
         logger.debug("DataDomainManager: Checking if data domains table is empty...")
@@ -333,14 +310,6 @@ class DataDomainManager:
                     parent_name_to_resolve = create_data.pop('parent_name', None)
                     create_data.pop('id', None) # remove id if present, we generate it
 
-                    # Resolve owner_team_id if present (new format)
-                    if 'owner_team_id' in create_data:
-                        owner_team_name = create_data.pop('owner_team_id')  # Remove from create_data
-                        owner_team_id = self._resolve_team_name_to_id(db, owner_team_name)
-                        if owner_team_id:
-                            create_data['owner_team_id'] = owner_team_id
-                        else:
-                            logger.warning(f"Could not resolve owner_team_id '{owner_team_name}' for domain '{create_data.get('name')}'. Domain will be created without team ownership.")
 
                     # If parent_id is directly provided and valid UUID, use it.
                     # If parent_name is provided, we will resolve it later.
@@ -399,11 +368,9 @@ class DataDomainManager:
             if not parent_domain:
                 raise NotFoundError(f"Parent domain with id '{domain_in.parent_id}' not found.")
 
-        db_obj_data = domain_in.model_dump(exclude_unset=True)
+        db_obj_data = domain_in.model_dump(exclude_unset=True, exclude={'tags'})
         db_obj_data['created_by'] = current_user_id
-        # owner_team_id is already a string UUID, no JSON serialization needed
-        if isinstance(db_obj_data.get('tags'), list):
-            db_obj_data['tags'] = json.dumps(db_obj_data['tags'])
+        # Tags are now handled by TagsManager - no serialization needed
         
         db_domain = DataDomain(**db_obj_data)
         try:

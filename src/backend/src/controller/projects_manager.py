@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from src.repositories.projects_repository import project_repo
 from src.repositories.teams_repository import team_repo
+from src.controller.tags_manager import TagsManager
 from src.models.projects import (
     ProjectCreate,
     ProjectUpdate,
@@ -18,6 +19,7 @@ from src.models.projects import (
     ProjectAccessRequest,
     ProjectAccessRequestResponse
 )
+from src.models.tags import AssignedTag, AssignedTagCreate
 from src.db_models.projects import ProjectDb
 from src.common.logging import get_logger
 from src.common.errors import ConflictError, NotFoundError
@@ -27,22 +29,41 @@ logger = get_logger(__name__)
 
 
 class ProjectsManager:
-    def __init__(self):
+    def __init__(self, tags_manager: Optional[TagsManager] = None):
         self.project_repo = project_repo
         self.team_repo = team_repo
+        self.tags_manager = tags_manager or TagsManager()
         logger.debug("ProjectsManager initialized.")
 
     def _serialize_list_fields(self, data: dict) -> dict:
         """Helper to serialize list fields to JSON strings for database storage."""
-        if 'tags' in data and isinstance(data['tags'], list):
-            data['tags'] = json.dumps(data['tags'])
+        # Tags are now handled through TagsManager, remove from data
+        if 'tags' in data:
+            del data['tags']
         if 'metadata' in data and isinstance(data['metadata'], dict):
             data['metadata'] = json.dumps(data['metadata'])
         return data
 
-    def _convert_db_to_read_model(self, db_project: ProjectDb) -> ProjectRead:
+    def _convert_db_to_read_model(self, db_project: ProjectDb, db: Optional[Session] = None) -> ProjectRead:
         """Helper to convert DB model to Read model."""
-        return ProjectRead.model_validate(db_project)
+        project_read = ProjectRead.model_validate(db_project)
+
+        # Set owner_team_name from the owner_team relationship
+        if db_project.owner_team:
+            project_read.owner_team_name = db_project.owner_team.name
+
+        # Load tags from TagsManager
+        if db:
+            try:
+                assigned_tags = self.tags_manager.list_assigned_tags(
+                    db, entity_id=db_project.id, entity_type="project"
+                )
+                project_read.tags = assigned_tags
+            except Exception as e:
+                logger.warning(f"Failed to load tags for project {db_project.id}: {e}")
+                project_read.tags = []
+
+        return project_read
 
     def _convert_db_to_summary_model(self, db_project: ProjectDb) -> ProjectSummary:
         """Helper to convert DB model to Summary model."""
@@ -67,6 +88,9 @@ class ProjectsManager:
         db_obj_data = project_in.model_dump(exclude_unset=True, exclude={'team_ids'})
         db_obj_data['created_by'] = current_user_id
         db_obj_data['updated_by'] = current_user_id
+
+        # Extract tags before serialization
+        tags_data = db_obj_data.get('tags', [])
         self._serialize_list_fields(db_obj_data)
 
         db_project = ProjectDb(**db_obj_data)
@@ -75,6 +99,22 @@ class ProjectsManager:
             db.add(db_project)
             db.flush()
             db.refresh(db_project)
+
+            # Handle tags if provided
+            if tags_data:
+                # Convert string tags to AssignedTagCreate objects
+                tag_creates = []
+                for tag in tags_data:
+                    if isinstance(tag, str):
+                        tag_creates.append(AssignedTagCreate(tag_fqn=tag))
+                    elif isinstance(tag, dict):
+                        tag_creates.append(AssignedTagCreate(**tag))
+
+                if tag_creates:
+                    self.tags_manager.set_tags_for_entity(
+                        db, entity_id=db_project.id, entity_type="project",
+                        tags=tag_creates, user_email=current_user_id
+                    )
 
             # Assign initial teams if provided
             if project_in.team_ids:
@@ -85,7 +125,7 @@ class ProjectsManager:
 
             # Reload with teams
             db_project = self.project_repo.get_with_teams(db, db_project.id)
-            return self._convert_db_to_read_model(db_project)
+            return self._convert_db_to_read_model(db_project, db)
         except IntegrityError as e:
             db.rollback()
             logger.warning(f"Integrity error creating project '{project_in.name}': {e}")
@@ -160,17 +200,36 @@ class ProjectsManager:
 
         update_data = project_in.model_dump(exclude_unset=True)
         update_data['updated_by'] = current_user_id
+
+        # Extract tags before serialization
+        tags_data = update_data.get('tags')
         self._serialize_list_fields(update_data)
 
         try:
             updated_db_project = self.project_repo.update(db=db, db_obj=db_project, obj_in=update_data)
             db.flush()
             db.refresh(updated_db_project)
+
+            # Handle tags if provided
+            if tags_data is not None:  # Allow empty list to clear tags
+                # Convert string tags to AssignedTagCreate objects
+                tag_creates = []
+                for tag in tags_data:
+                    if isinstance(tag, str):
+                        tag_creates.append(AssignedTagCreate(tag_fqn=tag))
+                    elif isinstance(tag, dict):
+                        tag_creates.append(AssignedTagCreate(**tag))
+
+                self.tags_manager.set_tags_for_entity(
+                    db, entity_id=updated_db_project.id, entity_type="project",
+                    tags=tag_creates, user_email=current_user_id
+                )
+
             logger.info(f"Successfully updated project '{updated_db_project.name}' (id: {project_id})")
 
             # Reload with teams
             updated_db_project = self.project_repo.get_with_teams(db, project_id)
-            return self._convert_db_to_read_model(updated_db_project)
+            return self._convert_db_to_read_model(updated_db_project, db)
         except IntegrityError as e:
             db.rollback()
             logger.warning(f"Integrity error updating project {project_id}: {e}")
@@ -392,6 +451,16 @@ class ProjectsManager:
                         'metadata': project_data.get('metadata', {}),
                         'team_ids': []  # Will assign teams separately
                     }
+
+                    # Resolve owner_team_name to owner_team_id if provided
+                    owner_team_name = project_data.get('owner_team_name')
+                    if owner_team_name:
+                        owner_team_db = self.team_repo.get_by_name(db, name=owner_team_name)
+                        if owner_team_db:
+                            project_create_data['owner_team_id'] = owner_team_db.id
+                            logger.debug(f"Resolved owner team '{owner_team_name}' to ID: {owner_team_db.id} for project '{project_data['name']}'")
+                        else:
+                            logger.warning(f"Owner team '{owner_team_name}' not found for project '{project_data['name']}', creating project without owner.")
 
                     project_create = ProjectCreate(**project_create_data)
                     created_project = self.create_project(db, project_create, current_user_id="system@startup.ucapp")

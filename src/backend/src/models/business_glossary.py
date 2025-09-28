@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from pydantic import BaseModel
+from .tags import AssignedTag
 
 
 class TaggedAsset(BaseModel):
@@ -26,7 +27,7 @@ class GlossaryTerm:
     abbreviation: Optional[str] = None
     synonyms: List[str] = field(default_factory=list)
     examples: List[str] = field(default_factory=list)
-    tags: List[str] = field(default_factory=list)
+    tags: List[AssignedTag] = field(default_factory=list)
     owner: str = ""
     status: str = "draft"
     created_at: datetime = field(default_factory=datetime.utcnow)
@@ -62,7 +63,7 @@ class BusinessGlossary:
     domain: str
     parent_glossary_ids: List[str] = field(default_factory=list)
     terms: Dict[str, GlossaryTerm] = field(default_factory=dict)
-    tags: List[str] = field(default_factory=list)
+    tags: List[AssignedTag] = field(default_factory=list)
     owner: str = ""
     status: str = "active"
     created_at: datetime = field(default_factory=datetime.utcnow)

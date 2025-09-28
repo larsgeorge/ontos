@@ -16,6 +16,7 @@ from databricks.sdk.errors import NotFound, PermissionDenied
 from src.models.data_products import (
     DataOutput,
     DataProduct as DataProductApi,
+    DataProductCreate,
     DataProductStatus,
     DataProductType,
     DataSource,
@@ -35,6 +36,10 @@ from src.common.search_registry import searchable_asset
 # Import NotificationsManager (adjust path if necessary)
 from src.controller.notifications_manager import NotificationsManager
 
+# Import TagsManager and entity tag repository for tag integration
+from src.controller.tags_manager import TagsManager
+from src.repositories.tags_repository import entity_tag_repo
+
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -49,7 +54,7 @@ from pathlib import Path
 # Inherit from SearchableAsset
 @searchable_asset
 class DataProductsManager(SearchableAsset):
-    def __init__(self, db: Session, ws_client: Optional[WorkspaceClient] = None, notifications_manager: Optional[NotificationsManager] = None):
+    def __init__(self, db: Session, ws_client: Optional[WorkspaceClient] = None, notifications_manager: Optional[NotificationsManager] = None, tags_manager: Optional[TagsManager] = None):
         """
         Initializes the DataProductsManager.
 
@@ -57,15 +62,20 @@ class DataProductsManager(SearchableAsset):
             db: SQLAlchemy Session for database operations.
             ws_client: Optional Databricks WorkspaceClient for SDK operations.
             notifications_manager: Optional NotificationsManager instance.
+            tags_manager: Optional TagsManager for tag operations.
         """
         self._db = db
         self._ws_client = ws_client
         self._repo = data_product_repo
         self._notifications_manager = notifications_manager
+        self._tags_manager = tags_manager
+        self._entity_tag_repo = entity_tag_repo
         if not self._ws_client:
              logger.warning("WorkspaceClient was not provided to DataProductsManager. SDK operations might fail.")
         if not self._notifications_manager:
              logger.warning("NotificationsManager was not provided to DataProductsManager. Notifications will not be sent.")
+        if not self._tags_manager:
+             logger.warning("TagsManager was not provided to DataProductsManager. Tag operations will not be available.")
 
     def get_types(self) -> List[str]:
         """Get all available data product types"""
@@ -99,12 +109,23 @@ class DataProductsManager(SearchableAsset):
                  # Raise a specific error or handle as needed
                  raise ValueError(f"Invalid data provided for product creation: {e}") from e
 
+            # Extract tags before creating the product (tags are handled separately)
+            tags_data = product_data.get('tags', [])
+
             # Now pass the validated Pydantic model to the repository
             # The repository's create method expects the Pydantic model (DataProductCreate alias)
             created_db_obj = self._repo.create(db=self._db, obj_in=product_api_model)
 
-            # Return the validated API model from the ORM object
-            return DataProductApi.from_orm(created_db_obj)
+            # Handle tag assignments if tags are provided and tags_manager is available
+            if tags_data and self._tags_manager:
+                try:
+                    self._assign_tags_to_product(created_db_obj.id, tags_data)
+                except Exception as e:
+                    logger.error(f"Failed to assign tags to product {created_db_obj.id}: {e}")
+                    # Note: We don't rollback the product creation, just log the error
+
+            # Load and return the product with its tags
+            return self._load_product_with_tags(created_db_obj)
 
         except SQLAlchemyError as e:
             logger.error(f"Database error creating data product: {e}")
@@ -121,8 +142,7 @@ class DataProductsManager(SearchableAsset):
         try:
             product_db = self._repo.get(db=self._db, id=product_id)
             if product_db:
-                product_api = DataProductApi.from_orm(product_db)
-                return product_api
+                return self._load_product_with_tags(product_db)
             return None
         except SQLAlchemyError as e:
             logger.error(f"Database error getting product {product_id}: {e}")
@@ -138,7 +158,12 @@ class DataProductsManager(SearchableAsset):
         """List data products using the repository."""
         try:
             products_db = self._repo.get_multi(db=self._db, skip=skip, limit=limit)
-            return parse_obj_as(List[DataProductApi], products_db)
+            # Load each product with its tags
+            products_with_tags = []
+            for product_db in products_db:
+                product_with_tags = self._load_product_with_tags(product_db)
+                products_with_tags.append(product_with_tags)
+            return products_with_tags
         except SQLAlchemyError as e:
             logger.error(f"Database error listing products: {e}")
             raise
@@ -157,6 +182,9 @@ class DataProductsManager(SearchableAsset):
             if not db_obj:
                 logger.warning(f"Attempted to update non-existent product: {product_id}")
                 return None
+
+            # Extract tags before updating the product (tags are handled separately)
+            tags_data = product_data_dict.get('tags', [])
 
             # Prepare the dictionary for Pydantic validation
             update_payload = product_data_dict.copy()
@@ -181,8 +209,34 @@ class DataProductsManager(SearchableAsset):
 
             # Pass the validated Pydantic model to the repository's update method
             updated_db_obj = self._repo.update(db=self._db, db_obj=db_obj, obj_in=product_update_model)
-            
-            return DataProductApi.from_orm(updated_db_obj)
+
+            # Handle tag updates if tags are provided and tags_manager is available
+            if tags_data is not None and self._tags_manager:  # Check explicitly for None since empty list is valid
+                try:
+                    # First, remove all existing tags for this product
+                    existing_tags = self._entity_tag_repo.get_assigned_tags(
+                        db=self._db,
+                        entity_id=product_id,
+                        entity_type="data_product"
+                    )
+                    for existing_tag in existing_tags:
+                        self._entity_tag_repo.remove_tag_from_entity(
+                            db=self._db,
+                            tag_id=existing_tag.get('tag_id'),
+                            entity_id=product_id,
+                            entity_type="data_product"
+                        )
+
+                    # Then assign the new tags
+                    if tags_data:  # Only assign if there are tags to assign
+                        self._assign_tags_to_product(product_id, tags_data)
+
+                except Exception as e:
+                    logger.error(f"Failed to update tags for product {product_id}: {e}")
+                    # Note: We don't rollback the product update, just log the error
+
+            # Load and return the product with its tags
+            return self._load_product_with_tags(updated_db_obj)
             
         except SQLAlchemyError as e:
             logger.error(f"Database error updating data product {product_id}: {e}")
@@ -408,7 +462,29 @@ class DataProductsManager(SearchableAsset):
                             else:
                                 logger.warning(f"Could not resolve owner_team '{owner_team}' for product ID {product_dict.get('id')}. Product will be created without team ownership.")
 
-                    # Validate data using the API model
+                    # Pre-process tags: Convert tag_fqn format to AssignedTagCreate format
+                    self._preprocess_tags_for_yaml_loading(product_dict)
+
+                    # Extract and store all tags before model creation
+                    tags_data = []
+                    port_tags_data = {}
+
+                    # Extract product-level tags
+                    if 'tags' in product_dict:
+                        tags_data = product_dict.pop('tags', [])
+
+                    # Extract port-level tags
+                    if 'inputPorts' in product_dict:
+                        for i, port in enumerate(product_dict['inputPorts']):
+                            if 'tags' in port:
+                                port_tags_data[f"input_{i}"] = port.pop('tags', [])
+
+                    if 'outputPorts' in product_dict:
+                        for i, port in enumerate(product_dict['outputPorts']):
+                            if 'tags' in port:
+                                port_tags_data[f"output_{i}"] = port.pop('tags', [])
+
+                    # Now create the API model with cleaned data (no tags)
                     product_api = DataProductApi(**product_dict)
                     
                     # Check if product exists using the current session 'db'
@@ -424,15 +500,26 @@ class DataProductsManager(SearchableAsset):
                         logger.warning(f"DataProductsManager: Product ID {product_api.id} exists, attempting update from YAML using current session.")
                         # We need an update method that uses the repo and the passed db session.
                         # Pass the validated API model 'product_api' to the repo's update.
-                        self._repo.update(db=db, db_obj=existing_db, obj_in=product_api) # Use passed db session
+                        updated_product = self._repo.update(db=db, db_obj=existing_db, obj_in=product_api) # Use passed db session
+                        # Assign tags after update
+                        if tags_data and self._tags_manager:
+                            self._assign_tags_to_product(product_api.id, tags_data)
                     else:
                         logger.info(f"DataProductsManager: Creating product ID {product_api.id} from YAML using current session.")
                         # Pass the validated API model 'product_api' to the repo's create.
-                        self._repo.create(db=db, obj_in=product_api) # Use passed db session
-                        
+                        created_product = self._repo.create(db=db, obj_in=product_api) # Use passed db session
+                        # Assign tags after creation
+                        if tags_data and self._tags_manager:
+                            self._assign_tags_to_product(product_api.id, tags_data)
+
                     loaded_count += 1
-                except (ValidationError, ValueError, SQLAlchemyError) as e: 
-                    logger.error(f"DataProductsManager: Error processing product from YAML (ID: {product_dict.get('id', 'N/A')}): {e}")
+                except (ValidationError, ValueError, SQLAlchemyError) as e:
+                    if isinstance(e, ValidationError):
+                        logger.error(f"DataProductsManager: Validation error processing product from YAML (ID: {product_dict.get('id', 'N/A')}): {len(e.errors())} validation errors")
+                        for i, error in enumerate(e.errors()):
+                            logger.error(f"  Validation Error {i+1}: {error}")
+                    else:
+                        logger.error(f"DataProductsManager: Error processing product from YAML (ID: {product_dict.get('id', 'N/A')}): {e}")
                     db.rollback() # Rollback this specific product's transaction part
                     errors += 1
                 except Exception as inner_e: # Catch unexpected errors per product
@@ -564,3 +651,184 @@ class DataProductsManager(SearchableAsset):
         except Exception as e:
             logger.error(f"Error fetching or mapping data products for search: {e}", exc_info=True)
             return [] # Return empty list on error
+
+    # --- Tag Integration Methods ---
+
+    def _assign_tags_to_product(self, product_id: str, tags_data: List[Dict[str, Any]]) -> None:
+        """Helper method to assign tags to a data product."""
+        if not self._tags_manager:
+            logger.warning("TagsManager not available, cannot assign tags")
+            return
+
+        for tag_data in tags_data:
+            try:
+                # Handle both tag_id and tag_fqn formats
+                if isinstance(tag_data, dict):
+                    tag_id = tag_data.get('tag_id')
+                    tag_fqn = tag_data.get('tag_fqn')
+                    assigned_value = tag_data.get('assigned_value')
+                else:
+                    # Legacy format - assume it's a tag name/fqn string
+                    tag_fqn = str(tag_data)
+                    tag_id = None
+                    assigned_value = None
+
+                # Use the tags manager to assign the tag
+                if tag_id:
+                    self._entity_tag_repo.assign_tag_to_entity(
+                        db=self._db,
+                        tag_id=tag_id,
+                        entity_id=product_id,
+                        entity_type="data_product",
+                        assigned_value=assigned_value,
+                        assigned_by="system"  # Could be passed from user context
+                    )
+                elif tag_fqn:
+                    # Resolve FQN to tag_id first
+                    tag = self._tags_manager.get_tag_by_fqn(self._db, fqn=tag_fqn)
+                    if tag:
+                        self._entity_tag_repo.assign_tag_to_entity(
+                            db=self._db,
+                            tag_id=tag.id,
+                            entity_id=product_id,
+                            entity_type="data_product",
+                            assigned_value=assigned_value,
+                            assigned_by="system"
+                        )
+                    else:
+                        logger.warning(f"Tag with FQN '{tag_fqn}' not found, cannot assign to product {product_id}")
+
+            except Exception as e:
+                logger.error(f"Failed to assign tag {tag_data} to product {product_id}: {e}")
+
+    def _load_product_with_tags(self, db_obj) -> DataProductApi:
+        """Helper method to load a data product with its associated tags."""
+        try:
+            # Convert DB object to API model
+            product_api = DataProductApi.from_orm(db_obj)
+
+            # Load associated tags if tags_manager is available
+            if self._tags_manager:
+                try:
+                    assigned_tags = self._entity_tag_repo.get_assigned_tags(
+                        db=self._db,
+                        entity_id=db_obj.id,
+                        entity_type="data_product"
+                    )
+                    # Convert to the expected format
+                    product_api.tags = assigned_tags
+                except Exception as e:
+                    logger.error(f"Failed to load tags for product {db_obj.id}: {e}")
+                    # Set empty tags list on error
+                    product_api.tags = []
+            else:
+                product_api.tags = []
+
+            return product_api
+
+        except Exception as e:
+            logger.error(f"Failed to load product with tags: {e}")
+            # Fallback to basic conversion
+            return DataProductApi.from_orm(db_obj)
+
+    def assign_tag_to_product(self, product_id: str, tag_id: str, assigned_value: Optional[str] = None, assigned_by: str = "system") -> bool:
+        """Public method to assign a tag to a data product."""
+        if not self._tags_manager:
+            logger.error("TagsManager not available, cannot assign tag")
+            return False
+
+        try:
+            self._entity_tag_repo.assign_tag_to_entity(
+                db=self._db,
+                tag_id=tag_id,
+                entity_id=product_id,
+                entity_type="data_product",
+                assigned_value=assigned_value,
+                assigned_by=assigned_by
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to assign tag {tag_id} to product {product_id}: {e}")
+            return False
+
+    def remove_tag_from_product(self, product_id: str, tag_id: str) -> bool:
+        """Public method to remove a tag from a data product."""
+        if not self._tags_manager:
+            logger.error("TagsManager not available, cannot remove tag")
+            return False
+
+        try:
+            return self._entity_tag_repo.remove_tag_from_entity(
+                db=self._db,
+                tag_id=tag_id,
+                entity_id=product_id,
+                entity_type="data_product"
+            )
+        except Exception as e:
+            logger.error(f"Failed to remove tag {tag_id} from product {product_id}: {e}")
+            return False
+
+    def get_product_tags(self, product_id: str) -> List[Dict[str, Any]]:
+        """Public method to get all tags assigned to a data product."""
+        if not self._tags_manager:
+            logger.warning("TagsManager not available, returning empty tags list")
+            return []
+
+        try:
+            return self._entity_tag_repo.get_assigned_tags(
+                db=self._db,
+                entity_id=product_id,
+                entity_type="data_product"
+            )
+        except Exception as e:
+            logger.error(f"Failed to get tags for product {product_id}: {e}")
+            return []
+
+    def _preprocess_tags_for_yaml_loading(self, product_dict: Dict[str, Any]) -> None:
+        """
+        Convert tag_fqn format in YAML to AssignedTagCreate format for DataProductCreate validation.
+
+        Converts:
+            tags:
+              - tag_fqn: "default/source"
+              - tag_fqn: "default/pos"
+
+        To:
+            tags:
+              - tag_fqn: "default/source"
+              - tag_fqn: "default/pos"
+
+        This ensures the YAML structure is compatible with AssignedTagCreate models.
+        """
+        def process_tags_in_dict(obj: Dict[str, Any]):
+            """Recursively process tags in nested dictionaries."""
+            if 'tags' in obj and isinstance(obj['tags'], list):
+                new_tags = []
+                for tag_item in obj['tags']:
+                    if isinstance(tag_item, dict) and 'tag_fqn' in tag_item:
+                        # Ensure assigned_value is present for AssignedTagCreate
+                        if 'assigned_value' not in tag_item:
+                            tag_item['assigned_value'] = None
+                        new_tags.append(tag_item)
+                    elif isinstance(tag_item, str):
+                        # Convert string to tag_fqn format with assigned_value
+                        new_tags.append({"tag_fqn": tag_item, "assigned_value": None})
+                    else:
+                        # Assume it's already in correct format but ensure assigned_value
+                        if isinstance(tag_item, dict) and 'assigned_value' not in tag_item:
+                            tag_item['assigned_value'] = None
+                        new_tags.append(tag_item)
+                obj['tags'] = new_tags
+
+            # Recursively process nested dictionaries
+            for key, value in obj.items():
+                if isinstance(value, dict):
+                    process_tags_in_dict(value)
+                elif isinstance(value, list):
+                    for item in value:
+                        if isinstance(item, dict):
+                            process_tags_in_dict(item)
+
+        # Process the main product dictionary
+        process_tags_in_dict(product_dict)
+

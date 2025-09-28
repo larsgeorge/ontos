@@ -110,6 +110,10 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'name': 'Semantic Models',
         'allowed_levels': READ_WRITE_ADMIN_LEVELS
     },
+    'tags': {
+        'name': 'Tags',
+        'allowed_levels': ADMIN_ONLY_LEVELS # Only admins can manage the tag taxonomy
+    },
     # 'about': { ... } # About page doesn't need explicit permissions here
 
 }

@@ -20,14 +20,11 @@ class DataDomain(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     name = Column(String, nullable=False, unique=True)
     description = Column(Text, nullable=True)
-    # Store owners and tags as String, assuming JSON serialization happens elsewhere
-    owner_team_id = Column(String, ForeignKey('teams.id'), nullable=True, index=True)  # Team UUID reference
-    tags = Column(String, nullable=True) # Represents List[str]
-    
+    # tags: Moved to EntityTagAssociationDb for rich tag support
+
     parent_id = Column(String, ForeignKey('data_domains.id'), nullable=True)
 
     # Relationships
-    owner_team = relationship("TeamDb", foreign_keys=[owner_team_id])
     parent = relationship("DataDomain", remote_side=[id], back_populates="children", lazy="select")
     children = relationship("DataDomain", back_populates="parent", lazy="select", cascade="all, delete-orphan")
     

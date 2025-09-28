@@ -1,8 +1,10 @@
-from typing import List, Optional, Union
+from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel, Field, validator, field_validator
+from pydantic import BaseModel, Field, field_validator
 import json # For parsing stringified lists
+
+from .tags import AssignedTag, AssignedTagCreate
 
 # --- Basic Info Model (New) --- #
 class DataDomainBasicInfo(BaseModel):
@@ -17,14 +19,14 @@ class DataDomainBasicInfo(BaseModel):
 class DataDomainBase(BaseModel):
     name: str = Field(..., min_length=1, description="Name of the data domain.")
     description: Optional[str] = Field(None, description="Optional description for the domain.")
-    owner_team_id: Optional[str] = Field(None, description="UUID of the team that owns the domain.")
-    tags: Optional[List[str]] = Field(None, description="Optional list of tags associated with the domain.")
+    tags: Optional[List[AssignedTagCreate]] = Field(None, description="Optional list of rich tags with metadata")
     parent_id: Optional[UUID] = Field(None, description="ID of the parent data domain, if any.")
 
-    @validator('tags', pre=True, each_item=True)
-    def check_string_not_empty(cls, v):
-        if isinstance(v, str) and not v.strip():
-            raise ValueError("Tag strings cannot be empty")
+    @field_validator('tags', mode='before')
+    def validate_tags(cls, v):
+        if v is None:
+            return v
+        # All tags should now be AssignedTagCreate objects
         return v
 
 # --- Create Model --- #
@@ -36,14 +38,14 @@ class DataDomainCreate(DataDomainBase):
 class DataDomainUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, description="New name for the data domain.")
     description: Optional[str] = Field(None, description="New description for the domain.")
-    owner_team_id: Optional[str] = Field(None, description="New UUID of the team that owns the domain.")
-    tags: Optional[List[str]] = Field(None, description="New list of tags for the domain.")
+    tags: Optional[List[AssignedTagCreate]] = Field(None, description="New list of rich tags with metadata")
     parent_id: Optional[UUID] = Field(None, description="New parent ID for the data domain. Set to null to remove parent.")
 
-    @validator('tags', pre=True, each_item=True)
-    def check_update_string_not_empty(cls, v):
-        if isinstance(v, str) and not v.strip():
-            raise ValueError("Tag strings cannot be empty")
+    @field_validator('tags', mode='before')
+    def validate_update_tags(cls, v):
+        if v is None:
+            return v
+        # All tags should now be AssignedTagCreate objects
         return v
 
 # --- Read Model (includes DB fields) --- #
@@ -57,11 +59,18 @@ class DataDomainRead(DataDomainBase):
     parent_info: Optional[DataDomainBasicInfo] = Field(None, description="Basic info of the parent domain.")
     children_info: List[DataDomainBasicInfo] = Field(default_factory=list, description="List of basic info for direct child domains.")
 
+    # Override tags field to return AssignedTag objects
+    tags: Optional[List[AssignedTag]] = Field(default_factory=list, description="List of assigned tags with rich metadata")
+
     # Validator to parse stringified list from DB before standard validation
     @field_validator('tags', mode='before')
     def parse_stringified_list(cls, value):
-        if value is None: 
-            return None # Allow optional tags to be None
+        if value is None:
+            return []
+        # If it's already a list of AssignedTag objects, return as-is
+        if isinstance(value, list) and value and hasattr(value[0], 'tag_id'):
+            return value
+        # Legacy support for JSON strings (should not be used anymore)
         if isinstance(value, str):
             try:
                 # Attempt to parse the string as a JSON list
@@ -85,7 +94,7 @@ class DataDomainRead(DataDomainBase):
                 return [] # Or raise ValueError(f"Invalid list format: {value}")
         # If it's already a list (or None), pass it through
         if isinstance(value, list):
-             return value
+             return value or []
         # Handle unexpected types
         raise ValueError(f"Unexpected type for list field: {type(value)}")
 

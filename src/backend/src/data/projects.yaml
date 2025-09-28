@@ -2,7 +2,11 @@ projects:
   - name: "customer-360"
     title: "Customer 360 Initiative"
     description: "Comprehensive customer data platform and analytics"
-    tags: ["customer", "analytics", "platform"]
+    owner_team_name: "analytics-team"
+    tags:
+      - tag_fqn: "default/customer"
+      - tag_fqn: "default/analytics"
+      - tag_fqn: "default/platform"
     metadata:
       budget: "$500K"
       timeline: "6 months"
@@ -16,7 +20,11 @@ projects:
   - name: "financial-reporting"
     title: "Financial Reporting Modernization"
     description: "Modernize financial reporting infrastructure and processes"
-    tags: ["finance", "reporting", "compliance"]
+    owner_team_name: "governance-team"
+    tags:
+      - tag_fqn: "default/finance"
+      - tag_fqn: "default/reporting"
+      - tag_fqn: "default/compliance"
     metadata:
       budget: "$300K"
       timeline: "4 months"
@@ -30,7 +38,11 @@ projects:
   - name: "ml-platform"
     title: "Machine Learning Platform"
     description: "Build and deploy ML infrastructure and services"
-    tags: ["ml", "platform", "infrastructure"]
+    owner_team_name: "data-science"
+    tags:
+      - tag_fqn: "default/ml"
+      - tag_fqn: "default/platform"
+      - tag_fqn: "default/infrastructure"
     metadata:
       budget: "$750K"
       timeline: "8 months"
@@ -43,7 +55,11 @@ projects:
   - name: "data-governance-pilot"
     title: "Data Governance Pilot Program"
     description: "Pilot program for implementing data governance best practices"
-    tags: ["governance", "pilot", "compliance"]
+    owner_team_name: "governance-team"
+    tags:
+      - tag_fqn: "default/governance"
+      - tag_fqn: "default/pilot"
+      - tag_fqn: "default/compliance"
     metadata:
       budget: "$200K"
       timeline: "3 months"
@@ -56,7 +72,11 @@ projects:
   - name: "real-time-analytics"
     title: "Real-time Analytics Platform"
     description: "Build real-time streaming analytics capabilities"
-    tags: ["real-time", "streaming", "analytics"]
+    owner_team_name: "data-engineering"
+    tags:
+      - tag_fqn: "default/real-time"
+      - tag_fqn: "default/streaming"
+      - tag_fqn: "default/analytics"
     metadata:
       budget: "$400K"
       timeline: "5 months"

@@ -1,10 +1,11 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 import json
 
 from .teams import TeamSummary
+from .tags import AssignedTag, AssignedTagCreate
 
 
 class ProjectBase(BaseModel):
@@ -12,7 +13,8 @@ class ProjectBase(BaseModel):
     name: str = Field(..., min_length=1, description="Unique name of the project")
     title: Optional[str] = Field(None, description="Display title for the project")
     description: Optional[str] = Field(None, description="Optional description of the project")
-    tags: Optional[List[str]] = Field(None, description="Optional list of tags")
+    owner_team_id: Optional[str] = Field(None, description="UUID of the team that manages this project")
+    tags: Optional[List[AssignedTagCreate]] = Field(None, description="Optional list of rich tags with metadata")
     metadata: Optional[dict] = Field(None, description="Optional metadata (links, images, etc.)")
 
 
@@ -26,7 +28,8 @@ class ProjectUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, description="Updated name of the project")
     title: Optional[str] = Field(None, description="Updated display title")
     description: Optional[str] = Field(None, description="Updated description")
-    tags: Optional[List[str]] = Field(None, description="Updated list of tags")
+    owner_team_id: Optional[str] = Field(None, description="Updated UUID of the team that manages this project")
+    tags: Optional[List[AssignedTagCreate]] = Field(None, description="Updated list of rich tags with metadata")
     metadata: Optional[dict] = Field(None, description="Updated metadata")
 
 
@@ -42,13 +45,21 @@ class ProjectRead(ProjectBase):
     updated_at: datetime
     created_by: str
     updated_by: str
+    owner_team_name: Optional[str] = Field(None, description="Name of the team that manages this project")
     teams: List[TeamSummary] = Field(default_factory=list, description="Assigned teams")
+
+    # Override tags field to return AssignedTag objects
+    tags: Optional[List[AssignedTag]] = Field(default_factory=list, description="List of assigned tags with rich metadata")
 
     # Field validators to parse JSON strings from database
     @field_validator('tags', mode='before')
     def parse_tags(cls, value):
         if value is None:
-            return None
+            return []
+        # If it's already a list of AssignedTag objects, return as-is
+        if isinstance(value, list) and value and hasattr(value[0], 'tag_id'):
+            return value
+        # Legacy support for JSON strings (should not be used anymore)
         if isinstance(value, str):
             try:
                 parsed = json.loads(value)
@@ -57,7 +68,7 @@ class ProjectRead(ProjectBase):
             except (json.JSONDecodeError, ValueError):
                 pass
             return []
-        return value
+        return value or []
 
     @field_validator('metadata', mode='before')
     def parse_metadata(cls, value):

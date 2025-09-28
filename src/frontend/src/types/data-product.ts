@@ -1,4 +1,5 @@
 import { type } from "os";
+import { AssignedTag } from '@/components/ui/tag-chip';
 
 // Based on dataproduct_schema_v0_0_1.json defined in Pydantic
 
@@ -29,7 +30,7 @@ export interface Port {
   location?: string;
   links?: { [key: string]: string };
   custom?: { [key: string]: any };
-  tags?: string[];
+  tags?: (string | AssignedTag)[];
 }
 
 // Interface for InputPort
@@ -73,7 +74,7 @@ export interface DataProduct {
   outputPorts: OutputPort[];
   links: Record<string, Link>;
   custom: Record<string, any>;
-  tags: string[];
+  tags: AssignedTag[];
   created_at?: string;
   updated_at: string;
   version: string;

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import TagSelector from '@/components/ui/tag-selector';
 import {
   Dialog,
   DialogContent,
@@ -49,7 +50,7 @@ const teamFormSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
   domain_id: z.string().optional(),
-  tags: z.array(z.string()).optional(),
+  tags: z.array(z.any()).optional(),
   members: z.array(teamMemberSchema).optional(),
 });
 
@@ -92,11 +93,6 @@ export function TeamFormDialog({
   const { fields: memberFields, append: addMember, remove: removeMember } = useFieldArray({
     control: form.control,
     name: 'members',
-  });
-
-  const { fields: tagFields, append: addTag, remove: removeTag } = useFieldArray({
-    control: form.control,
-    name: 'tags',
   });
 
   // Fetch data when dialog opens
@@ -164,9 +160,6 @@ export function TeamFormDialog({
     });
   };
 
-  const handleAddTag = () => {
-    addTag('');
-  };
 
   const handleSubmit = async (data: TeamFormData) => {
     setIsSubmitting(true);
@@ -175,7 +168,7 @@ export function TeamFormDialog({
       const cleanedData = {
         ...data,
         domain_id: data.domain_id === 'none' ? undefined : data.domain_id,
-        tags: data.tags?.filter(tag => tag.trim() !== '') || [],
+        tags: data.tags || [],
         members: data.members?.filter(member => member.member_identifier.trim() !== '').map(member => ({
           ...member,
           app_role_override: member.app_role_override === 'none' ? undefined : member.app_role_override?.trim() || undefined,
@@ -490,79 +483,27 @@ export function TeamFormDialog({
             </div>
 
             {/* Tags */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium">Tags</h3>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddTag}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Tag
-                </Button>
-              </div>
-
-              {tagFields.length === 0 ? (
-                <div className="text-center py-4 text-muted-foreground">
-                  No tags added yet. Click "Add Tag" to add team tags.
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {tagFields.map((field, index) => {
-                    const tagValue = form.watch(`tags.${index}`) || '';
-                    if (!tagValue.trim()) {
-                      return (
-                        <div key={field.id} className="flex items-center gap-1">
-                          <FormField
-                            control={form.control}
-                            name={`tags.${index}`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <Input
-                                    placeholder="Enter tag"
-                                    className="w-24 h-8 text-xs"
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeTag(index)}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                          >
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      );
-                    }
-                    return (
-                      <Badge
-                        key={field.id}
-                        variant="outline"
-                        className="flex items-center gap-1 px-2 py-1"
-                      >
-                        {tagValue}
-                        <button
-                          type="button"
-                          onClick={() => removeTag(index)}
-                          className="ml-1 hover:bg-destructive hover:text-destructive-foreground rounded-full p-0.5"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </Badge>
-                    );
-                  })}
-                </div>
+            <FormField
+              control={form.control}
+              name="tags"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tags</FormLabel>
+                  <FormControl>
+                    <TagSelector
+                      value={field.value || []}
+                      onChange={field.onChange}
+                      placeholder="Search and select tags for this team..."
+                      allowCreate={true}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Add tags to categorize and organize this team
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
               )}
-            </div>
+            />
 
             <DialogFooter>
               <Button

@@ -1,77 +1,107 @@
 domains:
   - name: Core
     description: "General, cross-company business concepts."
-    owner_team_id: "governance-team"
-    tags: ["enterprise", "standard"]
+    tags:
+      - tag_fqn: "default/enterprise"
+      - tag_fqn: "default/standard"
 
   - name: Finance
     description: "Financial accounting, reporting, and metrics."
-    owner_team_id: "governance-team"
-    tags: ["finance", "reporting", "metrics"]
+    tags:
+      - tag_fqn: "default/finance"
+      - tag_fqn: "default/reporting"
+      - tag_fqn: "default/metrics"
     parent_name: "Core"
 
   - name: Sales
     description: "Sales processes, opportunities, leads, and performance."
-    owner_team_id: "operations-team"
-    tags: ["sales", "crm", "pipeline"]
+    tags:
+      - tag_fqn: "default/sales"
+      - tag_fqn: "default/crm"
+      - tag_fqn: "default/pipeline"
     parent_name: "Core"
 
   - name: Marketing
     description: "Customer acquisition, campaigns, engagement, and branding."
-    owner_team_id: "marketing-team"
-    tags: ["marketing", "campaigns", "customer"]
+    tags:
+      - tag_fqn: "default/marketing"
+      - tag_fqn: "default/campaigns"
+      - tag_fqn: "default/customer"
     parent_name: "Core"
 
   - name: Retail
     description: "All data related to retail business line, including operations and analytics."
-    owner_team_id: "operations-team"
-    tags: ["retail", "business-line"]
+    tags:
+      - tag_fqn: "default/retail"
+      - tag_fqn: "default/business-line"
     parent_name: "Core"
 
   - name: Retail Operations
     description: "Store operations, point-of-sale (POS), inventory, and logistics (source systems focus)."
-    owner_team_id: "data-engineering"
-    tags: ["retail", "operations", "pos", "inventory", "source"]
+    tags:
+      - tag_fqn: "default/retail"
+      - tag_fqn: "default/operations"
+      - tag_fqn: "default/pos"
+      - tag_fqn: "default/inventory"
+      - tag_fqn: "default/source"
     parent_name: "Retail"
 
   - name: Retail Analytics
     description: "Analytics derived from retail operations data, including sales, demand, pricing."
-    owner_team_id: "analytics-team"
-    tags: ["retail", "analytics", "sales", "forecasting", "pricing"]
+    tags:
+      - tag_fqn: "default/retail"
+      - tag_fqn: "default/analytics"
+      - tag_fqn: "default/sales"
+      - tag_fqn: "default/forecasting"
+      - tag_fqn: "default/pricing"
     parent_name: "Retail"
 
   - name: Supply Chain
     description: "Logistics, inventory management, reordering, and supplier relations."
-    owner_team_id: "operations-team"
-    tags: ["logistics", "inventory", "supplier"]
+    tags:
+      - tag_fqn: "default/logistics"
+      - tag_fqn: "default/inventory"
+      - tag_fqn: "default/supplier"
     parent_name: "Core"
 
   - name: Customer
     description: "Direct customer information, profiles, segmentation, and interactions (often overlaps Marketing/Sales)."
-    owner_team_id: "marketing-team"
-    tags: ["customer", "crm", "profile", "segmentation"]
+    tags:
+      - tag_fqn: "default/customer"
+      - tag_fqn: "default/crm"
+      - tag_fqn: "default/profile"
+      - tag_fqn: "default/segmentation"
     parent_name: "Core"
 
   - name: Product
     description: "Product catalog, features, lifecycle, and development."
-    owner_team_id: "data-science"
-    tags: ["product", "catalog", "development"]
+    tags:
+      - tag_fqn: "default/product"
+      - tag_fqn: "default/catalog"
+      - tag_fqn: "default/development"
     parent_name: "Core"
 
   - name: Human Resources
     description: "Human resources, employee data, payroll, and recruitment."
-    owner_team_id: "governance-team"
-    tags: ["hr", "employee", "payroll"]
+    tags:
+      - tag_fqn: "default/hr"
+      - tag_fqn: "default/employee"
+      - tag_fqn: "default/payroll"
     parent_name: "Core"
 
   - name: IoT
     description: "Data from Internet of Things devices, sensors, and telemetry."
-    owner_team_id: "data-engineering"
-    tags: ["iot", "sensor", "telemetry"]
+    tags:
+      - tag_fqn: "default/iot"
+      - tag_fqn: "default/sensor"
+      - tag_fqn: "default/telemetry"
     parent_name: "Core"
 
   - name: Compliance
     description: "Data related to legal, regulatory, and internal compliance requirements."
-    owner_team_id: "governance-team"
-    tags: ["compliance", "legal", "governance", "audit"]
+    tags:
+      - tag_fqn: "default/compliance"
+      - tag_fqn: "default/legal"
+      - tag_fqn: "default/governance"
+      - tag_fqn: "default/audit"
     parent_name: "Core" 

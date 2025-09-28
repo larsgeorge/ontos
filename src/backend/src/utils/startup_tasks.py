@@ -149,11 +149,6 @@ def initialize_managers(app: FastAPI):
 
         # Feature Managers
         app.state.data_asset_review_manager = DataAssetReviewManager(
-            db=db_session, 
-            ws_client=ws_client,
-            notifications_manager=app.state.notifications_manager 
-        )
-        app.state.data_products_manager = DataProductsManager(
             db=db_session,
             ws_client=ws_client,
             notifications_manager=app.state.notifications_manager
@@ -214,6 +209,15 @@ def initialize_managers(app: FastAPI):
             app.state.tags_manager = tags_manager
             SEARCHABLE_ASSET_MANAGERS.append(tags_manager) # Register for search
             logger.info("TagsManager initialized and registered for search.")
+
+            # Now instantiate DataProductsManager with TagsManager dependency
+            app.state.data_products_manager = DataProductsManager(
+                db=db_session,
+                ws_client=ws_client,
+                notifications_manager=app.state.notifications_manager,
+                tags_manager=tags_manager
+            )
+            logger.info("DataProductsManager initialized with TagsManager integration.")
 
             # Ensure default tag namespace exists (using a new session for this setup task)
             with session_factory() as setup_db:
@@ -381,15 +385,16 @@ def load_initial_data(app: FastAPI) -> None:
             settings_manager.load_initial_data(db)
         if auth_manager and hasattr(auth_manager, 'load_initial_data'):
             auth_manager.load_initial_data(db)
-        # Ensure Data Domains are loaded FIRST so name->id lookups work for dependent entities
+
+        # Load Data Domains FIRST (teams reference domains via domain_id)
         if data_domain_manager and hasattr(data_domain_manager, 'load_initial_data'):
             data_domain_manager.load_initial_data(db)
 
-        # Load Teams BEFORE Projects (projects reference teams)
+        # Load Teams AFTER domains (teams belong to domains)
         if teams_manager and hasattr(teams_manager, 'load_initial_data'):
             teams_manager.load_initial_data(db)
 
-        # Load Projects after Teams
+        # Load Projects after Teams (projects reference teams via owner_team_id and team assignments)
         if projects_manager and hasattr(projects_manager, 'load_initial_data'):
             projects_manager.load_initial_data(db)
 

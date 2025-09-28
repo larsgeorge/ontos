@@ -1,3 +1,5 @@
+import { AssignedTag } from '@/components/ui/tag-chip';
+
 export interface DataDomainBasicInfo {
   id: string;
   name: string;
@@ -8,7 +10,7 @@ export interface DataDomain {
   name: string;
   description?: string | null;
   owner_team_id?: string | null; // UUID of the owning team
-  tags?: string[] | null; // Added tags based on Pydantic model
+  tags?: AssignedTag[] | null; // Rich tags with metadata
   parent_id?: string | null;
   parent_name?: string | null; // Kept for now, but parent_info should be primary
   children_count?: number;
@@ -23,7 +25,7 @@ export interface DataDomainCreate {
   name: string;
   description?: string | null;
   owner_team_id?: string | null; // UUID of the owning team
-  tags?: string[] | null;
+  tags?: (string | AssignedTag)[] | null;
   parent_id?: string | null;
 }
 

@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field, field_validator
 from enum import Enum
 import json
 
+from .tags import AssignedTag, AssignedTagCreate
+
 
 class MemberType(str, Enum):
     """Enum for team member types"""
@@ -78,7 +80,7 @@ class TeamBase(BaseModel):
     title: Optional[str] = Field(None, description="Display title for the team")
     description: Optional[str] = Field(None, description="Optional description of the team")
     domain_id: Optional[str] = Field(None, description="Optional parent data domain ID")
-    tags: Optional[List[str]] = Field(None, description="Optional list of tags")
+    tags: Optional[List[AssignedTagCreate]] = Field(None, description="Optional list of rich tags with metadata")
     metadata: Optional[dict] = Field(None, description="Optional metadata (links, images, etc.)")
 
 
@@ -93,7 +95,7 @@ class TeamUpdate(BaseModel):
     title: Optional[str] = Field(None, description="Updated display title")
     description: Optional[str] = Field(None, description="Updated description")
     domain_id: Optional[str] = Field(None, description="Updated parent data domain ID")
-    tags: Optional[List[str]] = Field(None, description="Updated list of tags")
+    tags: Optional[List[AssignedTagCreate]] = Field(None, description="Updated list of rich tags with metadata")
     metadata: Optional[dict] = Field(None, description="Updated metadata")
 
 
@@ -107,11 +109,18 @@ class TeamRead(TeamBase):
     updated_by: str
     members: List[TeamMemberRead] = Field(default_factory=list, description="Team members")
 
+    # Override tags field to return AssignedTag objects
+    tags: Optional[List[AssignedTag]] = Field(default_factory=list, description="List of assigned tags with rich metadata")
+
     # Field validators to parse JSON strings from database
     @field_validator('tags', mode='before')
     def parse_tags(cls, value):
         if value is None:
-            return None
+            return []
+        # If it's already a list of AssignedTag objects, return as-is
+        if isinstance(value, list) and value and hasattr(value[0], 'tag_id'):
+            return value
+        # Legacy support for JSON strings (should not be used anymore)
         if isinstance(value, str):
             try:
                 parsed = json.loads(value)
@@ -120,7 +129,7 @@ class TeamRead(TeamBase):
             except (json.JSONDecodeError, ValueError):
                 pass
             return []
-        return value
+        return value or []
 
     @field_validator('metadata', mode='before')
     def parse_metadata(cls, value):

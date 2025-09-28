@@ -34,6 +34,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { useApi } from '@/hooks/use-api';
+import TagSelector from '@/components/ui/tag-selector';
 
 // --- Prop Types --- 
 interface DataProductFormDialogProps {
@@ -1047,13 +1048,11 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                               name={`inputPorts.${index}.tags`}
                                               control={control}
                                               render={({ field }) => (
-                                                <Input 
-                                                    placeholder="Comma-separated tags"
-                                                    value={Array.isArray(field.value) ? field.value.join(', ') : ''}
-                                                    onChange={(e) => {
-                                                        const tags = e.target.value.split(',').map(tag => tag.trim()).filter(Boolean);
-                                                        field.onChange(tags);
-                                                    }}
+                                                <TagSelector
+                                                    value={field.value || []}
+                                                    onChange={field.onChange}
+                                                    placeholder="Search and select tags for this input port..."
+                                                    allowCreate={true}
                                                 />
                                               )}
                                           />
@@ -1120,13 +1119,11 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                                 name={`outputPorts.${index}.tags`}
                                                 control={control}
                                                 render={({ field }) => (
-                                                  <Input 
-                                                      placeholder="Comma-separated tags"
-                                                      value={Array.isArray(field.value) ? field.value.join(', ') : ''}
-                                                      onChange={(e) => {
-                                                          const tags = e.target.value.split(',').map(tag => tag.trim()).filter(Boolean);
-                                                          field.onChange(tags);
-                                                      }}
+                                                  <TagSelector
+                                                      value={field.value || []}
+                                                      onChange={field.onChange}
+                                                      placeholder="Search and select tags for this output port..."
+                                                      allowCreate={true}
                                                   />
                                                 )}
                                             />
@@ -1169,13 +1166,11 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                     name="tags"
                                     control={control}
                                     render={({ field }) => (
-                                      <Input 
-                                          placeholder="e.g., finance, customer, pii"
-                                          value={Array.isArray(field.value) ? field.value.join(', ') : ''}
-                                          onChange={(e) => {
-                                              const tags = e.target.value.split(',').map(tag => tag.trim()).filter(Boolean);
-                                              field.onChange(tags);
-                                          }}
+                                      <TagSelector
+                                          value={field.value || []}
+                                          onChange={field.onChange}
+                                          placeholder="Search and select tags for this data product..."
+                                          allowCreate={true}
                                       />
                                     )}
                                 />

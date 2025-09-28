@@ -49,21 +49,20 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         # 3. Create InputPortDb objects
         if obj_in.inputPorts: # Check if the list exists
             for port_in in obj_in.inputPorts: # port_in is an InputPort Pydantic model
-                # Convert Pydantic model to dict, keep sourceOutputPortId
-                port_data = port_in.dict(exclude_none=True) # exclude_none might be useful
-                
+                # Convert Pydantic model to dict, exclude tags since DB model doesn't have tags field
+                port_data = port_in.dict(exclude_none=True, exclude={'tags'}) # exclude tags for DB model
+
                 # Rename 'type' key if present
                 if 'type' in port_data:
                     port_data['port_type'] = port_data.pop('type')
-                
+
                 # Map assetType and assetIdentifier
                 port_data['asset_type'] = port_in.assetType
                 port_data['asset_identifier'] = port_in.assetIdentifier
-                
+
                 # Ensure JSON fields are strings
                 port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
                 port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
-                port_data['tags'] = json.dumps(port_data.get('tags')) if port_data.get('tags') else '[]'
 
                 # sourceOutputPortId is already correctly named from Pydantic model
 
@@ -73,10 +72,11 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
         # 4. Create OutputPortDb objects
         if obj_in.outputPorts: # Check if the list exists
             for port_in in obj_in.outputPorts: # port_in is an OutputPort Pydantic model
-                port_data = port_in.dict(exclude_none=True)
+                # Convert Pydantic model to dict, exclude tags since DB model doesn't have tags field
+                port_data = port_in.dict(exclude_none=True, exclude={'tags'}) # exclude tags for DB model
                 if 'type' in port_data:
                     port_data['port_type'] = port_data.pop('type')
-                
+
                 # Map assetType and assetIdentifier
                 port_data['asset_type'] = port_in.assetType
                 port_data['asset_identifier'] = port_in.assetIdentifier
@@ -84,7 +84,6 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 port_data['server'] = json.dumps(port_data.get('server')) if port_data.get('server') else '{}'
                 port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
                 port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
-                port_data['tags'] = json.dumps(port_data.get('tags')) if port_data.get('tags') else '[]'
                 port_obj = OutputPortDb(**port_data)
                 db_obj.outputPorts.append(port_obj)
             
@@ -245,7 +244,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
     def get_distinct_owners(self, db: Session) -> List[str]:
         logger.debug("Querying distinct owners from DB (normalized)...")
         try:
-             result = db.execute(select(distinct(InfoDb.owner)).where(InfoDb.owner.isnot(None))).scalars().all()
+             result = db.execute(select(distinct(InfoDb.owner_team_id)).where(InfoDb.owner_team_id.isnot(None))).scalars().all()
              return sorted(list(result))
         except Exception as e:
              logger.error(f"Error querying distinct owners (normalized): {e}", exc_info=True)

@@ -1,330 +1,413 @@
 glossaries:
   # Company-wide glossary
-  - id: "1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p"
-    name: "Enterprise Data Glossary"
-    description: "Company-wide standard business terminology"
-    scope: "company"
-    org_unit: "enterprise"
-    domain: "Core"
-    tags: ["enterprise", "standard"]
-    owner: "data.governance@company.com"
-    status: "active"
-    created_at: "2023-01-01T00:00:00Z"
-    updated_at: "2024-03-01T12:00:00Z"
+  - id: 1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p
+    name: Enterprise Data Glossary
+    description: Company-wide standard business terminology
+    scope: company
+    org_unit: enterprise
+    domain: Core
+    tags:
+      - tag_fqn: default/enterprise
+      - tag_fqn: default/standard
+    owner: data.governance@company.com
+    status: active
+    created_at: 2023-01-01T00:00:00Z
+    updated_at: 2024-03-01T12:00:00Z
     terms:
-      - id: "term-001"
-        name: "Customer"
-        definition: "An individual or organization that purchases or uses our products/services"
-        domain: "Customer"
-        tags: ["core", "customer"]
-        owner: "customer.data@company.com"
-        status: "active"
-        examples: ["Retail customer", "Business customer"]
-        created_at: "2023-01-01T00:00:00Z"
-        updated_at: "2023-06-15T10:30:00Z"
+      - id: term-001
+        name: Customer
+        definition: An individual or organization that purchases or uses our products/services
+        domain: Customer
+        tags:
+      - tag_fqn: default/core
+      - tag_fqn: default/customer
+        owner: customer.data@company.com
+        status: active
+        examples: [Retail customer
+      - tag_fqn: default/Business customer]
+        created_at: 2023-01-01T00:00:00Z
+        updated_at: 2023-06-15T10:30:00Z
         taggedAssets:
-          - id: "table-001"
-            name: "customers"
-            type: "table"
-            path: "warehouse.public.customers"
-          - id: "table-002"
-            name: "customer_orders"
-            type: "table"
-            path: "warehouse.public.customer_orders"
-          - id: "dashboard-001"
-            name: "Customer Overview"
-            type: "dashboard"
-            path: "dashboards/customer-overview"
-      - id: "term-002"
-        name: "Product"
-        definition: "Any good or service offered by the company"
-        domain: "Product"
-        tags: ["core", "product"]
-        owner: "product.team@company.com"
-        status: "active"
-        examples: ["Software license", "Professional services"]
-        created_at: "2023-01-01T00:00:00Z"
-        updated_at: "2023-06-15T10:30:00Z"
-      - id: "term-003"
-        name: "Employee"
-        definition: "Individual employed by the company"
-        domain: "HR"
-        tags: ["core", "hr"]
-        owner: "hr.data@company.com"
-        status: "active"
-        examples: ["Full-time employee", "Contractor"]
-        created_at: "2023-01-01T00:00:00Z"
-        updated_at: "2023-06-15T10:30:00Z"
-      - id: "term-004"
-        name: "Department"
-        definition: "Organizational unit within the company"
-        domain: "Core"
-        tags: ["core", "organization"]
-        owner: "org.data@company.com"
-        status: "active"
-        examples: ["Sales department", "Engineering department"]
-        created_at: "2023-01-01T00:00:00Z"
-        updated_at: "2023-06-15T10:30:00Z"
-      - id: "term-005"
-        name: "Region"
-        definition: "Geographical area of business operations"
-        domain: "Core"
-        tags: ["core", "geography"]
-        owner: "operations@company.com"
-        status: "active"
-        examples: ["EMEA", "North America"]
-        created_at: "2023-01-01T00:00:00Z"
-        updated_at: "2023-06-15T10:30:00Z"
-      - id: "term-006"
-        name: "Business Unit"
-        definition: "Major functional division of the company"
-        domain: "Core"
-        tags: ["core", "organization"]
-        owner: "org.data@company.com"
-        status: "active"
-        examples: ["Enterprise Solutions", "Consumer Division"]
-        created_at: "2023-01-01T00:00:00Z"
-        updated_at: "2023-06-15T10:30:00Z"
-      - id: "term-007"
-        name: "Partner"
-        definition: "External organization with formal business relationship"
-        domain: "Core"
-        tags: ["core", "partnership"]
-        owner: "partnerships@company.com"
-        status: "active"
-        examples: ["Technology partner", "Distribution partner"]
-        created_at: "2023-01-01T00:00:00Z"
-        updated_at: "2023-06-15T10:30:00Z"
-      - id: "term-008"
-        name: "Vendor"
-        definition: "External supplier of goods or services"
-        domain: "Core"
-        tags: ["core", "procurement"]
-        owner: "procurement@company.com"
-        status: "active"
-        examples: ["Software vendor", "Office supplies vendor"]
-        created_at: "2023-01-01T00:00:00Z"
-        updated_at: "2023-06-15T10:30:00Z"
+          - id: table-001
+            name: customers
+            type: table
+            path: warehouse.public.customers
+          - id: table-002
+            name: customer_orders
+            type: table
+            path: warehouse.public.customer_orders
+          - id: dashboard-001
+            name: Customer Overview
+            type: dashboard
+            path: dashboards/customer-overview
+      - id: term-002
+        name: Product
+        definition: Any good or service offered by the company
+        domain: Product
+        tags:
+      - tag_fqn: default/core
+      - tag_fqn: default/product
+        owner: product.team@company.com
+        status: active
+        examples: [Software license
+      - tag_fqn: default/Professional services]
+        created_at: 2023-01-01T00:00:00Z
+        updated_at: 2023-06-15T10:30:00Z
+      - id: term-003
+        name: Employee
+        definition: Individual employed by the company
+        domain: HR
+        tags:
+      - tag_fqn: default/core
+      - tag_fqn: default/hr
+        owner: hr.data@company.com
+        status: active
+        examples: [Full-time employee
+      - tag_fqn: default/Contractor]
+        created_at: 2023-01-01T00:00:00Z
+        updated_at: 2023-06-15T10:30:00Z
+      - id: term-004
+        name: Department
+        definition: Organizational unit within the company
+        domain: Core
+        tags:
+      - tag_fqn: default/core
+      - tag_fqn: default/organization
+        owner: org.data@company.com
+        status: active
+        examples: [Sales department
+      - tag_fqn: default/Engineering department]
+        created_at: 2023-01-01T00:00:00Z
+        updated_at: 2023-06-15T10:30:00Z
+      - id: term-005
+        name: Region
+        definition: Geographical area of business operations
+        domain: Core
+        tags:
+      - tag_fqn: default/core
+      - tag_fqn: default/geography
+        owner: operations@company.com
+        status: active
+        examples: [EMEA
+      - tag_fqn: default/North America]
+        created_at: 2023-01-01T00:00:00Z
+        updated_at: 2023-06-15T10:30:00Z
+      - id: term-006
+        name: Business Unit
+        definition: Major functional division of the company
+        domain: Core
+        tags:
+      - tag_fqn: default/core
+      - tag_fqn: default/organization
+        owner: org.data@company.com
+        status: active
+        examples: [Enterprise Solutions
+      - tag_fqn: default/Consumer Division]
+        created_at: 2023-01-01T00:00:00Z
+        updated_at: 2023-06-15T10:30:00Z
+      - id: term-007
+        name: Partner
+        definition: External organization with formal business relationship
+        domain: Core
+        tags:
+      - tag_fqn: default/core
+      - tag_fqn: default/partnership
+        owner: partnerships@company.com
+        status: active
+        examples: [Technology partner
+      - tag_fqn: default/Distribution partner]
+        created_at: 2023-01-01T00:00:00Z
+        updated_at: 2023-06-15T10:30:00Z
+      - id: term-008
+        name: Vendor
+        definition: External supplier of goods or services
+        domain: Core
+        tags:
+      - tag_fqn: default/core
+      - tag_fqn: default/procurement
+        owner: procurement@company.com
+        status: active
+        examples: [Software vendor
+      - tag_fqn: default/Office supplies vendor]
+        created_at: 2023-01-01T00:00:00Z
+        updated_at: 2023-06-15T10:30:00Z
 
   # Finance division glossary
-  - id: "2b3c4d5e-6f7g-8h9i-0j1k-2l3m4n5o6p7q"
-    name: "Finance Division Glossary"
-    description: "Financial terms and metrics"
-    scope: "division"
-    org_unit: "finance"
-    domain: "Finance"
-    parent_glossary_ids: ["1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p"]
-    tags: ["finance", "metrics"]
-    owner: "finance.team@company.com"
-    status: "active"
-    created_at: "2023-02-01T00:00:00Z"
-    updated_at: "2024-02-15T14:20:00Z"
+  - id: 2b3c4d5e-6f7g-8h9i-0j1k-2l3m4n5o6p7q
+    name: Finance Division Glossary
+    description: Financial terms and metrics
+    scope: division
+    org_unit: finance
+    domain: Finance
+    parent_glossary_ids: [1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p]
+    tags:
+      - tag_fqn: default/finance
+      - tag_fqn: default/metrics
+    owner: finance.team@company.com
+    status: active
+    created_at: 2023-02-01T00:00:00Z
+    updated_at: 2024-02-15T14:20:00Z
     terms:
-      - id: "term-101"
-        name: "Revenue"
-        definition: "Income generated from normal business operations"
-        domain: "Finance"
-        abbreviation: "Rev"
-        tags: ["finance", "metrics"]
-        owner: "finance.team@company.com"
-        status: "active"
-        examples: ["Monthly recurring revenue", "Annual revenue"]
-        created_at: "2023-02-01T00:00:00Z"
-        updated_at: "2023-08-20T09:15:00Z"
-      - id: "term-102"
-        name: "Operating Expenses"
-        definition: "Day-to-day costs of running the business"
-        domain: "Finance"
-        abbreviation: "OpEx"
-        tags: ["finance", "costs"]
-        owner: "finance.team@company.com"
-        status: "active"
-        examples: ["Salaries", "Office rent", "Utilities"]
-        created_at: "2023-02-01T00:00:00Z"
-        updated_at: "2023-08-20T09:15:00Z"
-      - id: "term-103"
-        name: "Gross Margin"
-        definition: "Revenue minus cost of goods sold"
-        domain: "Finance"
-        tags: ["finance", "profitability"]
-        owner: "finance.team@company.com"
-        status: "active"
-        examples: ["Product margin", "Service margin"]
-        created_at: "2023-02-01T00:00:00Z"
-        updated_at: "2023-08-20T09:15:00Z"
-      - id: "term-104"
-        name: "EBITDA"
-        definition: "Earnings Before Interest, Taxes, Depreciation, and Amortization"
-        domain: "Finance"
-        tags: ["finance", "earnings"]
-        owner: "finance.team@company.com"
-        status: "active"
-        examples: ["Quarterly EBITDA", "Annual EBITDA"]
-        created_at: "2023-02-01T00:00:00Z"
-        updated_at: "2023-08-20T09:15:00Z"
-      - id: "term-105"
-        name: "Working Capital"
-        definition: "Current assets minus current liabilities"
-        domain: "Finance"
-        tags: ["finance", "liquidity"]
-        owner: "finance.team@company.com"
-        status: "active"
-        examples: ["Net working capital", "Working capital ratio"]
-        created_at: "2023-02-01T00:00:00Z"
-        updated_at: "2023-08-20T09:15:00Z"
-      - id: "term-106"
-        name: "Accounts Receivable"
-        definition: "Money owed by customers for goods/services delivered"
-        domain: "Finance"
-        abbreviation: "AR"
-        tags: ["finance", "receivables"]
-        owner: "finance.team@company.com"
-        status: "active"
-        examples: ["30-day AR", "90-day AR"]
-        created_at: "2023-02-01T00:00:00Z"
-        updated_at: "2023-08-20T09:15:00Z"
-      - id: "term-107"
-        name: "Accounts Payable"
-        definition: "Money owed to suppliers for goods/services received"
-        domain: "Finance"
-        abbreviation: "AP"
-        tags: ["finance", "payables"]
-        owner: "finance.team@company.com"
-        status: "active"
-        examples: ["Current AP", "Overdue AP"]
-        created_at: "2023-02-01T00:00:00Z"
-        updated_at: "2023-08-20T09:15:00Z"
-      - id: "term-108"
-        name: "Cash Flow"
-        definition: "Net movement of cash and cash equivalents"
-        domain: "Finance"
-        tags: ["finance", "cash"]
-        owner: "finance.team@company.com"
-        status: "active"
-        examples: ["Operating cash flow", "Free cash flow"]
-        created_at: "2023-02-01T00:00:00Z"
-        updated_at: "2023-08-20T09:15:00Z"
+      - id: term-101
+        name: Revenue
+        definition: Income generated from normal business operations
+        domain: Finance
+        abbreviation: Rev
+        tags:
+      - tag_fqn: default/finance
+      - tag_fqn: default/metrics
+        owner: finance.team@company.com
+        status: active
+        examples: [Monthly recurring revenue
+      - tag_fqn: default/Annual revenue]
+        created_at: 2023-02-01T00:00:00Z
+        updated_at: 2023-08-20T09:15:00Z
+      - id: term-102
+        name: Operating Expenses
+        definition: Day-to-day costs of running the business
+        domain: Finance
+        abbreviation: OpEx
+        tags:
+      - tag_fqn: default/finance
+      - tag_fqn: default/costs
+        owner: finance.team@company.com
+        status: active
+        examples: [Salaries
+      - tag_fqn: default/Office rent
+      - tag_fqn: default/Utilities]
+        created_at: 2023-02-01T00:00:00Z
+        updated_at: 2023-08-20T09:15:00Z
+      - id: term-103
+        name: Gross Margin
+        definition: Revenue minus cost of goods sold
+        domain: Finance
+        tags:
+      - tag_fqn: default/finance
+      - tag_fqn: default/profitability
+        owner: finance.team@company.com
+        status: active
+        examples: [Product margin
+      - tag_fqn: default/Service margin]
+        created_at: 2023-02-01T00:00:00Z
+        updated_at: 2023-08-20T09:15:00Z
+      - id: term-104
+        name: EBITDA
+        definition: Earnings Before Interest, Taxes, Depreciation, and Amortization
+        domain: Finance
+        tags:
+      - tag_fqn: default/finance
+      - tag_fqn: default/earnings
+        owner: finance.team@company.com
+        status: active
+        examples: [Quarterly EBITDA
+      - tag_fqn: default/Annual EBITDA]
+        created_at: 2023-02-01T00:00:00Z
+        updated_at: 2023-08-20T09:15:00Z
+      - id: term-105
+        name: Working Capital
+        definition: Current assets minus current liabilities
+        domain: Finance
+        tags:
+      - tag_fqn: default/finance
+      - tag_fqn: default/liquidity
+        owner: finance.team@company.com
+        status: active
+        examples: [Net working capital
+      - tag_fqn: default/Working capital ratio]
+        created_at: 2023-02-01T00:00:00Z
+        updated_at: 2023-08-20T09:15:00Z
+      - id: term-106
+        name: Accounts Receivable
+        definition: Money owed by customers for goods/services delivered
+        domain: Finance
+        abbreviation: AR
+        tags:
+      - tag_fqn: default/finance
+      - tag_fqn: default/receivables
+        owner: finance.team@company.com
+        status: active
+        examples: [30-day AR
+      - tag_fqn: default/90-day AR]
+        created_at: 2023-02-01T00:00:00Z
+        updated_at: 2023-08-20T09:15:00Z
+      - id: term-107
+        name: Accounts Payable
+        definition: Money owed to suppliers for goods/services received
+        domain: Finance
+        abbreviation: AP
+        tags:
+      - tag_fqn: default/finance
+      - tag_fqn: default/payables
+        owner: finance.team@company.com
+        status: active
+        examples: [Current AP
+      - tag_fqn: default/Overdue AP]
+        created_at: 2023-02-01T00:00:00Z
+        updated_at: 2023-08-20T09:15:00Z
+      - id: term-108
+        name: Cash Flow
+        definition: Net movement of cash and cash equivalents
+        domain: Finance
+        tags:
+      - tag_fqn: default/finance
+      - tag_fqn: default/cash
+        owner: finance.team@company.com
+        status: active
+        examples: [Operating cash flow
+      - tag_fqn: default/Free cash flow]
+        created_at: 2023-02-01T00:00:00Z
+        updated_at: 2023-08-20T09:15:00Z
 
   # Sales department glossary
-  - id: "3c4d5e6f-7g8h-9i0j-1k2l-3m4n5o6p7q8r"
-    name: "Sales Department Glossary"
-    description: "Sales-specific terminology and metrics"
-    scope: "department"
-    org_unit: "sales"
-    domain: "Sales"
-    parent_glossary_ids: ["1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p"]
-    tags: ["sales", "metrics"]
-    owner: "sales.ops@company.com"
-    status: "active"
-    created_at: "2023-03-01T00:00:00Z"
-    updated_at: "2024-01-10T16:45:00Z"
+  - id: 3c4d5e6f-7g8h-9i0j-1k2l-3m4n5o6p7q8r
+    name: Sales Department Glossary
+    description: Sales-specific terminology and metrics
+    scope: department
+    org_unit: sales
+    domain: Sales
+    parent_glossary_ids: [1a2b3c4d-5e6f-7g8h-9i0j-1k2l3m4n5o6p]
+    tags:
+      - tag_fqn: default/sales
+      - tag_fqn: default/metrics
+    owner: sales.ops@company.com
+    status: active
+    created_at: 2023-03-01T00:00:00Z
+    updated_at: 2024-01-10T16:45:00Z
     terms:
-      - id: "term-201"
-        name: "Opportunity"
-        definition: "A potential sale or deal in the pipeline"
-        domain: "Sales"
-        tags: ["sales", "pipeline"]
-        owner: "sales.ops@company.com"
-        status: "active"
-        examples: ["New business opportunity", "Expansion opportunity"]
-        created_at: "2023-03-01T00:00:00Z"
-        updated_at: "2023-11-05T11:30:00Z"
-      - id: "term-202"
-        name: "Pipeline Value"
-        definition: "Total value of all active opportunities"
-        domain: "Sales"
-        tags: ["sales", "metrics"]
-        owner: "sales.ops@company.com"
-        status: "active"
-        examples: ["Q1 pipeline", "Enterprise pipeline"]
-        created_at: "2023-03-01T00:00:00Z"
-        updated_at: "2023-11-05T11:30:00Z"
-      - id: "term-203"
-        name: "Lead"
-        definition: "Potential customer showing interest"
-        domain: "Sales"
-        tags: ["sales", "pipeline"]
-        owner: "sales.ops@company.com"
-        status: "active"
-        examples: ["Marketing qualified lead", "Sales qualified lead"]
-        created_at: "2023-03-01T00:00:00Z"
-        updated_at: "2023-11-05T11:30:00Z"
-      - id: "term-204"
-        name: "Win Rate"
-        definition: "Percentage of opportunities won vs. total closed"
-        domain: "Sales"
-        tags: ["sales", "metrics"]
-        owner: "sales.ops@company.com"
-        status: "active"
-        examples: ["Monthly win rate", "Product win rate"]
-        created_at: "2023-03-01T00:00:00Z"
-        updated_at: "2023-11-05T11:30:00Z"
-      - id: "term-205"
-        name: "Sales Cycle"
-        definition: "Average time to close a deal"
-        domain: "Sales"
-        tags: ["sales", "metrics"]
-        owner: "sales.ops@company.com"
-        status: "active"
-        examples: ["Enterprise sales cycle", "SMB sales cycle"]
-        created_at: "2023-03-01T00:00:00Z"
-        updated_at: "2023-11-05T11:30:00Z"
-      - id: "term-206"
-        name: "Deal Size"
-        definition: "Total value of a single sales opportunity"
-        domain: "Sales"
-        tags: ["sales", "metrics"]
-        owner: "sales.ops@company.com"
-        status: "active"
-        examples: ["Average deal size", "Maximum deal size"]
-        created_at: "2023-03-01T00:00:00Z"
-        updated_at: "2023-11-05T11:30:00Z"
-      - id: "term-207"
-        name: "Sales Territory"
-        definition: "Geographic or account-based area of responsibility"
-        domain: "Sales"
-        tags: ["sales", "organization"]
-        owner: "sales.ops@company.com"
-        status: "active"
-        examples: ["EMEA territory", "Enterprise accounts territory"]
-        created_at: "2023-03-01T00:00:00Z"
-        updated_at: "2023-11-05T11:30:00Z"
-      - id: "term-208"
-        name: "Quota"
-        definition: "Sales target assigned to a salesperson or team"
-        domain: "Sales"
-        tags: ["sales", "targets"]
-        owner: "sales.ops@company.com"
-        status: "active"
-        examples: ["Annual quota", "Quarterly quota"]
-        created_at: "2023-03-01T00:00:00Z"
-        updated_at: "2023-11-05T11:30:00Z"
+      - id: term-201
+        name: Opportunity
+        definition: A potential sale or deal in the pipeline
+        domain: Sales
+        tags:
+      - tag_fqn: default/sales
+      - tag_fqn: default/pipeline
+        owner: sales.ops@company.com
+        status: active
+        examples: [New business opportunity
+      - tag_fqn: default/Expansion opportunity]
+        created_at: 2023-03-01T00:00:00Z
+        updated_at: 2023-11-05T11:30:00Z
+      - id: term-202
+        name: Pipeline Value
+        definition: Total value of all active opportunities
+        domain: Sales
+        tags:
+      - tag_fqn: default/sales
+      - tag_fqn: default/metrics
+        owner: sales.ops@company.com
+        status: active
+        examples: [Q1 pipeline
+      - tag_fqn: default/Enterprise pipeline]
+        created_at: 2023-03-01T00:00:00Z
+        updated_at: 2023-11-05T11:30:00Z
+      - id: term-203
+        name: Lead
+        definition: Potential customer showing interest
+        domain: Sales
+        tags:
+      - tag_fqn: default/sales
+      - tag_fqn: default/pipeline
+        owner: sales.ops@company.com
+        status: active
+        examples: [Marketing qualified lead
+      - tag_fqn: default/Sales qualified lead]
+        created_at: 2023-03-01T00:00:00Z
+        updated_at: 2023-11-05T11:30:00Z
+      - id: term-204
+        name: Win Rate
+        definition: Percentage of opportunities won vs. total closed
+        domain: Sales
+        tags:
+      - tag_fqn: default/sales
+      - tag_fqn: default/metrics
+        owner: sales.ops@company.com
+        status: active
+        examples: [Monthly win rate
+      - tag_fqn: default/Product win rate]
+        created_at: 2023-03-01T00:00:00Z
+        updated_at: 2023-11-05T11:30:00Z
+      - id: term-205
+        name: Sales Cycle
+        definition: Average time to close a deal
+        domain: Sales
+        tags:
+      - tag_fqn: default/sales
+      - tag_fqn: default/metrics
+        owner: sales.ops@company.com
+        status: active
+        examples: [Enterprise sales cycle
+      - tag_fqn: default/SMB sales cycle]
+        created_at: 2023-03-01T00:00:00Z
+        updated_at: 2023-11-05T11:30:00Z
+      - id: term-206
+        name: Deal Size
+        definition: Total value of a single sales opportunity
+        domain: Sales
+        tags:
+      - tag_fqn: default/sales
+      - tag_fqn: default/metrics
+        owner: sales.ops@company.com
+        status: active
+        examples: [Average deal size
+      - tag_fqn: default/Maximum deal size]
+        created_at: 2023-03-01T00:00:00Z
+        updated_at: 2023-11-05T11:30:00Z
+      - id: term-207
+        name: Sales Territory
+        definition: Geographic or account-based area of responsibility
+        domain: Sales
+        tags:
+      - tag_fqn: default/sales
+      - tag_fqn: default/organization
+        owner: sales.ops@company.com
+        status: active
+        examples: [EMEA territory
+      - tag_fqn: default/Enterprise accounts territory]
+        created_at: 2023-03-01T00:00:00Z
+        updated_at: 2023-11-05T11:30:00Z
+      - id: term-208
+        name: Quota
+        definition: Sales target assigned to a salesperson or team
+        domain: Sales
+        tags:
+      - tag_fqn: default/sales
+      - tag_fqn: default/targets
+        owner: sales.ops@company.com
+        status: active
+        examples: [Annual quota
+      - tag_fqn: default/Quarterly quota]
+        created_at: 2023-03-01T00:00:00Z
+        updated_at: 2023-11-05T11:30:00Z
 
   # Marketing department glossary
-  - id: "4d5e6f7g-8h9i-0j1k-2l3m-4n5o6p7q8r9s"
-    name: "Marketing Glossary"
-    description: "Terms related to marketing activities"
-    scope: "department"
-    org_unit: "marketing"
-    domain: "Marketing"
+  - id: 4d5e6f7g-8h9i-0j1k-2l3m-4n5o6p7q8r9s
+    name: Marketing Glossary
+    description: Terms related to marketing activities
+    scope: department
+    org_unit: marketing
+    domain: Marketing
     terms:
-      "term1-id":
-        id: "term1-id"
-        name: "CAC"
-        definition: "Customer Acquisition Cost"
-        domain: "Marketing"
-        abbreviation: "CAC"
+      term1-id:
+        id: term1-id
+        name: CAC
+        definition: Customer Acquisition Cost
+        domain: Marketing
+        abbreviation: CAC
         synonyms: []
         examples: []
-        tags: ["metric", "cost"]
-        owner: "marketing-team"
-        status: "approved"
-        created_at: "2024-01-01T00:00:00Z"
-        updated_at: "2024-01-01T00:00:00Z"
-    tags: ["marketing", "metrics"]
-    owner: "marketing-lead"
-    status: "active"
-    created_at: "2024-01-01T00:00:00Z"
-    updated_at: "2024-01-01T00:00:00Z"
+        tags:
+      - tag_fqn: default/metric
+      - tag_fqn: default/cost
+        owner: marketing-team
+        status: approved
+        created_at: 2024-01-01T00:00:00Z
+        updated_at: 2024-01-01T00:00:00Z
+    tags:
+      - tag_fqn: default/marketing
+      - tag_fqn: default/metrics
+    owner: marketing-lead
+    status: active
+    created_at: 2024-01-01T00:00:00Z
+    updated_at: 2024-01-01T00:00:00Z
 
 

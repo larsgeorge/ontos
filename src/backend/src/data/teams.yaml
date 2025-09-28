@@ -3,7 +3,10 @@ teams:
     title: "Data Engineering Team"
     description: "Responsible for data pipeline development and infrastructure"
     domain_name: "Core"
-    tags: ["engineering", "data", "infrastructure"]
+    tags:
+      - tag_fqn: "default/engineering"
+      - tag_fqn: "default/data"
+      - tag_fqn: "default/infrastructure"
     metadata:
       slack_channel: "https://company.slack.com/channels/data-eng"
       lead: "john.doe@company.com"
@@ -22,7 +25,10 @@ teams:
     title: "Analytics Team"
     description: "Business analytics and reporting team"
     domain_name: "Retail Analytics"
-    tags: ["analytics", "reporting", "business"]
+    tags:
+      - tag_fqn: "default/analytics"
+      - tag_fqn: "default/reporting"
+      - tag_fqn: "default/business"
     metadata:
       slack_channel: "https://company.slack.com/channels/analytics"
       tools: ["Tableau", "Power BI", "SQL"]
@@ -38,7 +44,10 @@ teams:
     title: "Data Science Team"
     description: "Machine learning and advanced analytics"
     domain_name: "Product"
-    tags: ["data-science", "ml", "ai"]
+    tags:
+      - tag_fqn: "default/data-science"
+      - tag_fqn: "default/ml"
+      - tag_fqn: "default/ai"
     metadata:
       slack_channel: "https://company.slack.com/channels/data-science"
       research_areas: ["NLP", "Computer Vision", "Recommendation Systems"]
@@ -57,7 +66,10 @@ teams:
     title: "Data Governance Team"
     description: "Data quality, compliance, and governance oversight"
     domain_name: "Compliance"
-    tags: ["governance", "compliance", "quality"]
+    tags:
+      - tag_fqn: "default/governance"
+      - tag_fqn: "default/compliance"
+      - tag_fqn: "default/quality"
     metadata:
       slack_channel: "https://company.slack.com/channels/data-governance"
       responsibilities: ["Data Quality", "Privacy Compliance", "Access Control"]

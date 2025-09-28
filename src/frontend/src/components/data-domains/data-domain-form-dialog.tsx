@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DataDomain, DataDomainCreate, DataDomainUpdate } from '@/types/data-domain';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import TagSelector from '@/components/ui/tag-selector';
 
 interface DataDomainFormDialogProps {
   domain?: DataDomain | null;
@@ -33,7 +34,7 @@ const formSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }).max(100),
   description: z.string().max(500, { message: "Description must not exceed 500 characters." }).optional().nullable(),
   owner: z.string().min(1, { message: "Owner(s) are required. Enter comma-separated values." }),
-  tags: z.string().optional().nullable(),
+  tags: z.array(z.any()).optional(),
   parent_id: z.string().uuid().optional().nullable().or(z.literal(NO_PARENT_VALUE)), // Allow NO_PARENT_VALUE
 });
 
@@ -55,7 +56,7 @@ export function DataDomainFormDialog({
       name: domain?.name || "",
       description: domain?.description || "",
       owner: domain?.owner?.join(', ') || "",
-      tags: domain?.tags?.join(', ') || "",
+      tags: domain?.tags || [],
       parent_id: domain?.parent_id ?? NO_PARENT_VALUE, // Use NO_PARENT_VALUE for null/undefined
     },
   });
@@ -66,7 +67,7 @@ export function DataDomainFormDialog({
         name: domain?.name || "",
         description: domain?.description || "",
         owner: domain?.owner?.join(', ') || "",
-        tags: domain?.tags?.join(', ') || "",
+        tags: domain?.tags || [],
         parent_id: domain?.parent_id ?? NO_PARENT_VALUE, // Use NO_PARENT_VALUE for null/undefined
       });
     }
@@ -80,7 +81,7 @@ export function DataDomainFormDialog({
       name: values.name,
       description: values.description,
       owner: values.owner.split(',').map(s => s.trim()).filter(s => s !== ""),
-      tags: values.tags ? values.tags.split(',').map(s => s.trim()).filter(s => s !== "") : null,
+      tags: values.tags || [],
       parent_id: values.parent_id === NO_PARENT_VALUE ? null : values.parent_id, // Convert back to null for API
     };
 
@@ -177,9 +178,13 @@ export function DataDomainFormDialog({
               <FormItem>
                 <FormLabel>Tags</FormLabel>
                 <FormControl>
-                  <Input placeholder="finance, pii, core-data" {...field} value={field.value ?? ''} />
+                  <TagSelector
+                    value={field.value || []}
+                    onChange={field.onChange}
+                    placeholder="Search and select tags for this data domain..."
+                    allowCreate={true}
+                  />
                 </FormControl>
-                <FormDescription>Comma-separated list of tags.</FormDescription>
                 <FormMessage />
               </FormItem>
             )}

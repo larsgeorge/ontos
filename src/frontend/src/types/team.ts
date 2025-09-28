@@ -1,3 +1,5 @@
+import { AssignedTag } from '@/components/ui/tag-chip';
+
 export enum MemberType {
   USER = "user",
   GROUP = "group"
@@ -33,7 +35,7 @@ export interface Team {
   description?: string | null;
   domain_id?: string | null;
   domain_name?: string | null; // For display
-  tags?: string[] | null;
+  tags?: AssignedTag[] | null;
   metadata?: Record<string, any> | null;
   created_at: string;
   updated_at: string;
@@ -50,7 +52,7 @@ export interface TeamCreate {
   title?: string | null;
   description?: string | null;
   domain_id?: string | null;
-  tags?: string[] | null;
+  tags?: (string | AssignedTag)[] | null;
   metadata?: Record<string, any> | null;
 }
 
@@ -59,7 +61,7 @@ export interface TeamUpdate {
   title?: string | null;
   description?: string | null;
   domain_id?: string | null;
-  tags?: string[] | null;
+  tags?: (string | AssignedTag)[] | null;
   metadata?: Record<string, any> | null;
 }
 

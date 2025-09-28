@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from src.repositories.teams_repository import team_repo, team_member_repo
 from src.repositories.data_domain_repository import data_domain_repo
+from src.controller.tags_manager import TagsManager
 from src.models.teams import (
     TeamCreate,
     TeamUpdate,
@@ -17,6 +18,7 @@ from src.models.teams import (
     TeamMemberUpdate,
     TeamMemberRead
 )
+from src.models.tags import AssignedTag, AssignedTagCreate
 from src.db_models.teams import TeamDb, TeamMemberDb
 from src.common.logging import get_logger
 from src.common.errors import ConflictError, NotFoundError
@@ -25,16 +27,18 @@ logger = get_logger(__name__)
 
 
 class TeamsManager:
-    def __init__(self):
+    def __init__(self, tags_manager: Optional[TagsManager] = None):
         self.team_repo = team_repo
         self.team_member_repo = team_member_repo
         self.domain_repo = data_domain_repo
+        self.tags_manager = tags_manager or TagsManager()
         logger.debug("TeamsManager initialized.")
 
     def _serialize_list_fields(self, data: dict) -> dict:
         """Helper to serialize list fields to JSON strings for database storage."""
-        if 'tags' in data and isinstance(data['tags'], list):
-            data['tags'] = json.dumps(data['tags'])
+        # Tags are now handled through TagsManager, remove from data
+        if 'tags' in data:
+            del data['tags']
         if 'metadata' in data and isinstance(data['metadata'], dict):
             data['metadata'] = json.dumps(data['metadata'])
         return data
@@ -51,6 +55,17 @@ class TeamsManager:
                     team_read.domain_name = domain.name
             except Exception as e:
                 logger.warning(f"Failed to resolve domain name for domain_id {db_team.domain_id}: {e}")
+
+        # Load tags from TagsManager
+        if db:
+            try:
+                assigned_tags = self.tags_manager.list_assigned_tags(
+                    db, entity_id=db_team.id, entity_type="team"
+                )
+                team_read.tags = assigned_tags
+            except Exception as e:
+                logger.warning(f"Failed to load tags for team {db_team.id}: {e}")
+                team_read.tags = []
 
         return team_read
 
@@ -94,6 +109,9 @@ class TeamsManager:
         db_obj_data = team_in.model_dump(exclude_unset=True)
         db_obj_data['created_by'] = current_user_id
         db_obj_data['updated_by'] = current_user_id
+
+        # Extract tags before serialization
+        tags_data = db_obj_data.get('tags', [])
         self._serialize_list_fields(db_obj_data)
 
         db_team = TeamDb(**db_obj_data)
@@ -102,6 +120,23 @@ class TeamsManager:
             db.add(db_team)
             db.flush()
             db.refresh(db_team)
+
+            # Handle tags if provided
+            if tags_data:
+                # Convert string tags to AssignedTagCreate objects
+                tag_creates = []
+                for tag in tags_data:
+                    if isinstance(tag, str):
+                        tag_creates.append(AssignedTagCreate(tag_fqn=tag))
+                    elif isinstance(tag, dict):
+                        tag_creates.append(AssignedTagCreate(**tag))
+
+                if tag_creates:
+                    self.tags_manager.set_tags_for_entity(
+                        db, entity_id=db_team.id, entity_type="team",
+                        tags=tag_creates, user_email=current_user_id
+                    )
+
             logger.info(f"Successfully created team '{db_team.name}' with id: {db_team.id}")
             return self._convert_db_to_read_model(db_team, db)
         except IntegrityError as e:
@@ -166,14 +201,33 @@ class TeamsManager:
 
         update_data = team_in.model_dump(exclude_unset=True)
         update_data['updated_by'] = current_user_id
+
+        # Extract tags before serialization
+        tags_data = update_data.get('tags')
         self._serialize_list_fields(update_data)
 
         try:
             updated_db_team = self.team_repo.update(db=db, db_obj=db_team, obj_in=update_data)
             db.flush()
             db.refresh(updated_db_team)
+
+            # Handle tags if provided
+            if tags_data is not None:  # Allow empty list to clear tags
+                # Convert string tags to AssignedTagCreate objects
+                tag_creates = []
+                for tag in tags_data:
+                    if isinstance(tag, str):
+                        tag_creates.append(AssignedTagCreate(tag_fqn=tag))
+                    elif isinstance(tag, dict):
+                        tag_creates.append(AssignedTagCreate(**tag))
+
+                self.tags_manager.set_tags_for_entity(
+                    db, entity_id=updated_db_team.id, entity_type="team",
+                    tags=tag_creates, user_email=current_user_id
+                )
+
             logger.info(f"Successfully updated team '{updated_db_team.name}' (id: {team_id})")
-            return self._convert_db_to_read_model(updated_db_team)
+            return self._convert_db_to_read_model(updated_db_team, db)
         except IntegrityError as e:
             db.rollback()
             logger.warning(f"Integrity error updating team {team_id}: {e}")

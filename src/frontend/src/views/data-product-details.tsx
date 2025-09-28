@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader2, Pencil, Trash2, AlertCircle, Sparkles, CopyPlus, ArrowLeft, Package, KeyRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import TagChip from '@/components/ui/tag-chip';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
@@ -434,8 +435,8 @@ export default function DataProductDetails() {
             <Label>Tags:</Label>
             <div className="flex flex-wrap gap-1 mt-1">
               {(product.tags || []).length > 0 ? (
-                product.tags.map((tag: string) => (
-                  <Badge key={tag} variant="secondary">{tag}</Badge>
+                product.tags.map((tag, index) => (
+                  <TagChip key={index} tag={tag} size="sm" />
                 ))
               ) : (
                 <span className="text-sm text-muted-foreground">No tags</span>

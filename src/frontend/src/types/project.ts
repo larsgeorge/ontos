@@ -1,11 +1,12 @@
 import { TeamSummary } from './team';
+import { AssignedTag } from '@/components/ui/tag-chip';
 
 export interface Project {
   id: string;
   name: string;
   title?: string | null;
   description?: string | null;
-  tags?: string[] | null;
+  tags?: AssignedTag[] | null;
   metadata?: Record<string, any> | null;
   created_at: string;
   updated_at: string;
@@ -18,7 +19,7 @@ export interface ProjectCreate {
   name: string;
   title?: string | null;
   description?: string | null;
-  tags?: string[] | null;
+  tags?: (string | AssignedTag)[] | null;
   metadata?: Record<string, any> | null;
   team_ids?: string[] | null;
 }
@@ -27,7 +28,7 @@ export interface ProjectUpdate {
   name?: string;
   title?: string | null;
   description?: string | null;
-  tags?: string[] | null;
+  tags?: (string | AssignedTag)[] | null;
   metadata?: Record<string, any> | null;
 }
 

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from "@/components/ui/badge";
+import TagChip from '@/components/ui/tag-chip';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { Toaster } from "@/components/ui/toaster";
@@ -225,7 +226,7 @@ export default function DataDomainsView() {
         return (
             <div className="flex flex-wrap gap-1">
                 {tags.map((tag, index) => (
-                    <Badge key={index} variant="secondary" className="text-xs">{tag}</Badge>
+                    <TagChip key={index} tag={tag} size="sm" />
                 ))}
             </div>
         );

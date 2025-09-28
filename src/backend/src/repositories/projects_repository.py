@@ -17,12 +17,13 @@ class ProjectRepository(CRUDBase[ProjectDb, ProjectCreate, ProjectUpdate]):
         logger.info("ProjectRepository initialized.")
 
     def get_with_teams(self, db: Session, id: str) -> Optional[ProjectDb]:
-        """Gets a single project by ID, eager loading teams."""
+        """Gets a single project by ID, eager loading teams and owner team."""
         logger.debug(f"Fetching {self.model.__name__} with teams for id: {id}")
         try:
             return (
                 db.query(self.model)
                 .options(selectinload(self.model.teams))
+                .options(selectinload(self.model.owner_team))
                 .filter(self.model.id == id)
                 .first()
             )
@@ -34,12 +35,13 @@ class ProjectRepository(CRUDBase[ProjectDb, ProjectCreate, ProjectUpdate]):
     def get_multi_with_teams(
         self, db: Session, *, skip: int = 0, limit: int = 100
     ) -> List[ProjectDb]:
-        """Gets multiple projects, eager loading teams."""
+        """Gets multiple projects, eager loading teams and owner teams."""
         logger.debug(f"Fetching multiple {self.model.__name__} with teams, skip={skip}, limit={limit}")
         try:
             return (
                 db.query(self.model)
                 .options(selectinload(self.model.teams))
+                .options(selectinload(self.model.owner_team))
                 .order_by(self.model.name)
                 .offset(skip)
                 .limit(limit)
@@ -75,6 +77,7 @@ class ProjectRepository(CRUDBase[ProjectDb, ProjectCreate, ProjectUpdate]):
             return (
                 db.query(self.model)
                 .options(selectinload(self.model.teams))
+                .options(selectinload(self.model.owner_team))
                 .join(project_team_association)
                 .join(TeamDb)
                 .join(TeamMemberDb)

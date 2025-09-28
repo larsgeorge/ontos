@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Settings as SettingsIcon } from 'lucide-react';
 import RolesSettings from '@/components/settings/roles-settings';
 import SemanticModelsSettings from '@/components/settings/semantic-models-settings';
+import TagsSettings from '@/components/settings/tags-settings';
 
 interface AppSettings {
   id: string;
@@ -154,6 +155,7 @@ export default function Settings() {
           <TabsTrigger value="git">Git</TabsTrigger>
           <TabsTrigger value="jobs">Background Jobs</TabsTrigger>
           <TabsTrigger value="roles">Roles</TabsTrigger>
+          <TabsTrigger value="tags">Tags</TabsTrigger>
           <TabsTrigger value="semantic-models">Semantic Models</TabsTrigger>
         </TabsList>
 
@@ -320,6 +322,9 @@ export default function Settings() {
 
         <TabsContent value="roles">
             <RolesSettings />
+        </TabsContent>
+        <TabsContent value="tags">
+            <TagsSettings />
         </TabsContent>
         <TabsContent value="semantic-models">
             <SemanticModelsSettings />

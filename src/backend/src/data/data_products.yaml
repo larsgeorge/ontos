@@ -20,8 +20,16 @@
       server:
         host: "kafka.example.com"
         topic: "pos-transactions-raw-v1"
-      tags: ["kafka", "realtime", "pos", "raw"]
-  tags: ["source", "pos", "transactions", "v1"]
+      tags:
+        - tag_fqn: "default/kafka"
+        - tag_fqn: "default/realtime"
+        - tag_fqn: "default/pos"
+        - tag_fqn: "default/raw"
+  tags:
+    - tag_fqn: "default/source"
+    - tag_fqn: "default/pos"
+    - tag_fqn: "default/transactions"
+    - tag_fqn: "default/v1"
   links:
     sourceSystemDocs: "https://wiki.example.com/systems/pos-system"
 
@@ -43,7 +51,9 @@
       sourceSystemId: "data-product:retail-pos-source-v1" # Correct: Links to source product
       sourceOutputPortId: "pos-kafka-stream-v1"
       type: "data-product"
-      tags: ["pos", "raw"]
+      tags:
+        - tag_fqn: "default/pos"
+        - tag_fqn: "default/raw"
   outputPorts:
     - id: "prepared-sales-delta-v1"
       name: "prepared_sales_delta"
@@ -57,8 +67,18 @@
         # database: "prepared_db"
         # table: "sales_transactions_v1"
       containsPii: true # Example flag
-      tags: ["delta", "s3", "prepared", "sales", "pii"]
-  tags: ["prepared", "sales", "transactions", "analytics-ready", "v1"]
+      tags:
+        - tag_fqn: "default/delta"
+        - tag_fqn: "default/s3"
+        - tag_fqn: "default/prepared"
+        - tag_fqn: "default/sales"
+        - tag_fqn: "default/pii"
+  tags:
+    - tag_fqn: "default/prepared"
+    - tag_fqn: "default/sales"
+    - tag_fqn: "default/transactions"
+    - tag_fqn: "default/analytics-ready"
+    - tag_fqn: "default/v1"
   links:
     etlJob: "https://jobs.example.com/jobs/prepare-sales-v1"
     qualityDashboard: "https://dq.example.com/dash/prepared-sales-v1"
@@ -81,7 +101,9 @@
       sourceSystemId: "data-product:retail-sales-prepared-v1" # Correct: Links to prepared product
       sourceOutputPortId: "prepared-sales-delta-v1"
       type: "data-product"
-      tags: ["sales", "prepared"]
+      tags:
+        - tag_fqn: "default/sales"
+        - tag_fqn: "default/prepared"
     # Example of another input - could be another data product or an external source
     # - id: "weather-data-input-v1"
     #   name: "Historical Weather Data"
@@ -98,8 +120,17 @@
         format: "delta"
         # database: "analytics_db"
         # table: "demand_forecast_v1"
-      tags: ["delta", "s3", "forecast", "predictive"]
-  tags: ["forecasting", "demand", "analytics", "ml", "v1"]
+      tags:
+        - tag_fqn: "default/delta"
+        - tag_fqn: "default/s3"
+        - tag_fqn: "default/forecast"
+        - tag_fqn: "default/predictive"
+  tags:
+    - tag_fqn: "default/forecasting"
+    - tag_fqn: "default/demand"
+    - tag_fqn: "default/analytics"
+    - tag_fqn: "default/ml"
+    - tag_fqn: "default/v1"
   links:
     modelTrainingNotebook: "https://notebooks.example.com/models/demand-forecast-v1"
     modelCard: "https://models.example.com/cards/demand-forecast-v1"
@@ -122,7 +153,8 @@
       sourceSystemId: "data-product:retail-demand-forecast-v1" # Correct: Links to forecast product
       sourceOutputPortId: "forecast-table-v1"
       type: "data-product"
-      tags: ["forecast"]
+      tags:
+        - tag_fqn: "default/forecast"
     # Example: Could also take current inventory snapshot as input
     # - id: "current-inventory-input-v1"
     #   name: "Current Inventory Levels"
@@ -136,13 +168,22 @@
       status: "active"
       server:
         location: "https://api.example.com/inventory/reorder/v1" # URL of the API
-      tags: ["api", "inventory", "reorder", "action"]
+      tags:
+        - tag_fqn: "default/api"
+        - tag_fqn: "default/inventory"
+        - tag_fqn: "default/reorder"
+        - tag_fqn: "default/action"
     # Could also have a table output showing current recommendations
     # - id: "inventory-recommendations-table-v1"
     #   name: "inventory_recommendations_table"
     #   type: "table"
     #   ...
-  tags: ["inventory", "optimization", "supply-chain", "recommendations", "v1"]
+  tags:
+    - tag_fqn: "default/inventory"
+    - tag_fqn: "default/optimization"
+    - tag_fqn: "default/supply-chain"
+    - tag_fqn: "default/recommendations"
+    - tag_fqn: "default/v1"
 
 # --- 5. Aggregate Product: Price Optimization ---
 - dataProductSpecification: "0.0.1"
@@ -168,7 +209,10 @@
       sourceSystemId: "external:competitor-scraper" # Identifier for the external source
       type: "feed" # Example type for an external feed
       location: "sftp://datafeeds.example.com/incoming/competitor_prices.csv"
-      tags: ["external", "competitor", "pricing"]
+      tags:
+        - tag_fqn: "default/external"
+        - tag_fqn: "default/competitor"
+        - tag_fqn: "default/pricing"
   outputPorts:
     - id: "price-recommendations-table-v1"
       name: "price_recommendations_table"
@@ -178,8 +222,17 @@
       server:
         location: "s3://data-analytics/retail/pricing/v1"
         format: "delta"
-      tags: ["delta", "s3", "pricing", "recommendations"]
-  tags: ["pricing", "optimization", "analytics", "ml", "v1"]
+      tags:
+        - tag_fqn: "default/delta"
+        - tag_fqn: "default/s3"
+        - tag_fqn: "default/pricing"
+        - tag_fqn: "default/recommendations"
+  tags:
+    - tag_fqn: "default/pricing"
+    - tag_fqn: "default/optimization"
+    - tag_fqn: "default/analytics"
+    - tag_fqn: "default/ml"
+    - tag_fqn: "default/v1"
 
 # --- 6. Consumer-Aligned Product: Personalized Marketing ---
 - dataProductSpecification: "0.0.1"
@@ -205,7 +258,9 @@
       sourceSystemId: "crm_db:customer_profiles" # Identifier for the CRM source
       type: "database"
       location: "jdbc:postgresql://crm-db:5432/profiles"
-      tags: ["crm", "customer"]
+      tags:
+        - tag_fqn: "default/crm"
+        - tag_fqn: "default/customer"
   outputPorts:
     - id: "marketing-campaign-target-v1"
       name: "marketing_campaign_list"
@@ -215,8 +270,18 @@
       server:
         location: "s3://data-marketing/retail/campaigns/v1/targets.csv"
         format: "csv"
-      tags: ["csv", "s3", "marketing", "campaign", "target-list"]
-  tags: ["marketing", "recommendations", "personalization", "customer", "v1"]
+      tags:
+        - tag_fqn: "default/csv"
+        - tag_fqn: "default/s3"
+        - tag_fqn: "default/marketing"
+        - tag_fqn: "default/campaign"
+        - tag_fqn: "default/target-list"
+  tags:
+    - tag_fqn: "default/marketing"
+    - tag_fqn: "default/recommendations"
+    - tag_fqn: "default/personalization"
+    - tag_fqn: "default/customer"
+    - tag_fqn: "default/v1"
 
 # --- 7. Consumer-Aligned Product: BI Dashboard Data ---
 - dataProductSpecification: "0.0.1"
@@ -257,8 +322,17 @@
         location: "https://bi.example.com/dashboards/retail-perf-v1"
         # database: "bi_reporting_db"
         # table: "retail_summary_v1"
-      tags: ["dashboard", "tableau", "powerbi", "reporting"]
-  tags: ["bi", "reporting", "dashboard", "kpi", "v1"]
+      tags:
+        - tag_fqn: "default/dashboard"
+        - tag_fqn: "default/tableau"
+        - tag_fqn: "default/powerbi"
+        - tag_fqn: "default/reporting"
+  tags:
+    - tag_fqn: "default/bi"
+    - tag_fqn: "default/reporting"
+    - tag_fqn: "default/dashboard"
+    - tag_fqn: "default/kpi"
+    - tag_fqn: "default/v1"
   links:
     dashboardUrl: "https://bi.example.com/dashboards/retail-perf-v1"
 

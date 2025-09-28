@@ -3,8 +3,9 @@ import { ColumnDef } from '@tanstack/react-table';
 import { MoreHorizontal, PlusCircle, Loader2, AlertCircle, FolderOpen } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
-import { ProjectRead } from '@/types/project';
+import { Project } from '@/types/project';
 import { useApi } from '@/hooks/use-api';
+import TagChip from '@/components/ui/tag-chip';
 import { useToast } from "@/hooks/use-toast";
 import { RelativeDate } from '@/components/common/relative-date';
 import {
@@ -197,10 +198,8 @@ export default function ProjectsView() {
         if (!tags || tags.length === 0) return '-';
         return (
           <div className="flex flex-wrap gap-1">
-            {tags.slice(0, 2).map((tag, index) => (
-              <Badge key={index} variant="outline" className="text-xs">
-                {tag}
-              </Badge>
+            {tags.slice(0, 2).map((tag: any, index: number) => (
+              <TagChip key={index} tag={tag} size="sm" />
             ))}
             {tags.length > 2 && (
               <Badge variant="outline" className="text-xs">

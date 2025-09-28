@@ -26,8 +26,11 @@ class ProjectDb(Base):
     title = Column(String, nullable=True)
     description = Column(Text, nullable=True)
 
+    # Project ownership
+    owner_team_id = Column(String, ForeignKey('teams.id'), nullable=True, index=True)  # Team that manages this project
+
     # Metadata fields (stored as JSON strings)
-    tags = Column(String, nullable=True, default='[]')  # JSON array of tags
+    # tags: Moved to EntityTagAssociationDb for rich tag support
     extra_metadata = Column(String, nullable=True, default='{}')  # JSON object for links, images, etc.
 
     # Audit fields
@@ -37,6 +40,7 @@ class ProjectDb(Base):
     updated_by = Column(String, nullable=False)  # User email/ID
 
     # Relationships
+    owner_team = relationship("TeamDb", foreign_keys=[owner_team_id])
     teams = relationship("TeamDb", secondary=project_team_association, lazy="selectin")
 
     def __repr__(self):

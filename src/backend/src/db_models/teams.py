@@ -21,7 +21,7 @@ class TeamDb(Base):
     domain = relationship("DataDomain", foreign_keys=[domain_id], lazy="select")
 
     # Metadata fields (stored as JSON strings)
-    tags = Column(String, nullable=True, default='[]')  # JSON array of tags
+    # tags: Moved to EntityTagAssociationDb for rich tag support
     extra_metadata = Column(String, nullable=True, default='{}')  # JSON object for links, images, etc.
 
     # Audit fields

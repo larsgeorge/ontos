@@ -3,6 +3,8 @@ from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
+from .tags import AssignedTag, AssignedTagCreate
+
 if TYPE_CHECKING:
     pass  # Used to avoid circular imports if needed
 
@@ -63,7 +65,7 @@ class SchemaObject(BaseModel):
     physicalType: Optional[str] = None  # table, view, etc.
     description: Optional[str] = None
     dataGranularityDescription: Optional[str] = None
-    tags: Optional[List[str]] = Field(default_factory=list)
+    tags: Optional[List[AssignedTagCreate]] = Field(default_factory=list)
     authoritativeDefinitions: Optional[List['AuthoritativeDefinition']] = Field(default_factory=list)
     customProperties: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
     quality: Optional[List['QualityRule']] = Field(default_factory=list)  # ODCS quality rules are schema-nested
@@ -253,7 +255,7 @@ class ODCSContract(BaseModel):
     description: Optional[ContractDescription] = None
 
     # ODCS v3.0.2 top-level fields
-    tags: Optional[List[str]] = Field(default_factory=list)
+    tags: Optional[List[AssignedTag]] = Field(default_factory=list)
     contractCreatedTs: Optional[str] = None  # ISO datetime string
 
     # Schema section
@@ -313,7 +315,7 @@ class DataContractCreate(DataContractBase):
     schema: Optional[List[SchemaObject]] = Field(None)
 
     # ODCS v3.0.2 top-level fields
-    tags: Optional[List[str]] = Field(default_factory=list)
+    tags: Optional[List[AssignedTagCreate]] = Field(default_factory=list)
     contractCreatedTs: Optional[str] = None
 
     # SLA section (ODCS v3.0.2 structure)
@@ -396,7 +398,7 @@ class DataContractRead(BaseModel):
     description: Optional[ContractDescription] = None
 
     # ODCS v3.0.2 top-level fields
-    tags: Optional[List[str]] = Field(default_factory=list)
+    tags: Optional[List[AssignedTagCreate]] = Field(default_factory=list)
     contractCreatedTs: Optional[str] = None
 
     # Schema section

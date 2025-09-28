@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import TagChip from '@/components/ui/tag-chip';
 import { Plus, Pencil, Trash2, AlertCircle, Database, ChevronDown, Upload, X, Loader2, Sparkles, Table, Workflow, KeyRound } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -461,8 +462,8 @@ export default function DataProducts() {
         const tags = row.original.tags || [];
         return (
           <div className="flex flex-wrap gap-1">
-            {tags.map((tag: string) => (
-              <Badge key={tag} variant="secondary">{tag}</Badge>
+            {tags.map((tag, index) => (
+              <TagChip key={index} tag={tag} size="sm" />
             ))}
           </div>
         );

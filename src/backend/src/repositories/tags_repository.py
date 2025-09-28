@@ -372,12 +372,14 @@ class EntityTagAssociationRepository(CRUDBase[EntityTagAssociationDb, BaseModel,
                 namespace_name_from_fqn = parts[0] if len(parts) > 1 else None
                 
                 tag_db_obj = tag_repo.find_or_create_tag(
-                    db, 
-                    tag_name=tag_name_from_fqn, 
+                    db,
+                    tag_name=tag_name_from_fqn,
                     namespace_name=namespace_name_from_fqn,
                     user_email=user_email,
                     default_namespace_id=default_namespace.id
                 )
+                # Flush to get database-generated values if tag was just created
+                db.flush()
             else:
                 # Should be caught by Pydantic validator, but good to be safe
                 logger.warning(f"Skipping tag assignment for {entity_id} due to missing tag_id or tag_fqn.")
@@ -389,15 +391,19 @@ class EntityTagAssociationRepository(CRUDBase[EntityTagAssociationDb, BaseModel,
             
             updated_tag_ids.add(tag_db_obj.id)
             assoc = self.add_tag_to_entity(
-                db, 
-                entity_id=entity_id, 
-                entity_type=entity_type, 
-                tag_id=tag_db_obj.id, 
+                db,
+                entity_id=entity_id,
+                entity_type=entity_type,
+                tag_id=tag_db_obj.id,
                 assigned_value=tag_assign_data.assigned_value,
                 assigned_by=user_email
             )
+
+            # Flush to get database-generated values (like assigned_at timestamp)
+            db.flush()
+
             # Re-fetch namespace if it wasn't loaded on tag_db_obj (e.g. from create)
-            if not tag_db_obj.namespace: 
+            if not tag_db_obj.namespace:
                 tag_db_obj.namespace = ns_repo.get(db, id=tag_db_obj.namespace_id)
                 
             final_assigned_tags.append(AssignedTag(
