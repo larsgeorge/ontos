@@ -653,12 +653,12 @@ export default function TagsSettings() {
               </div>
               <div>
                 <Label htmlFor="tag-parent">Parent Tag</Label>
-                <Select value={tagForm.parent_id || ''} onValueChange={(value) => setTagForm({ ...tagForm, parent_id: value || undefined })}>
+                <Select value={tagForm.parent_id || '__none__'} onValueChange={(value) => setTagForm({ ...tagForm, parent_id: value === '__none__' ? undefined : value })}>
                   <SelectTrigger id="tag-parent">
                     <SelectValue placeholder="None" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="__none__">None</SelectItem>
                     {tags.filter(t => t.id !== editingTag?.id).map((tag) => (
                       <SelectItem key={tag.id} value={tag.id}>
                         {tag.name}
