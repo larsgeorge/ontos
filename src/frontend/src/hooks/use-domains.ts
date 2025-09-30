@@ -16,31 +16,81 @@ let globalDomainsCache: DataDomain[] | null = null
 let globalCachePromise: Promise<DataDomain[]> | null = null
 let cachedServerVersion: number | null = null
 
+// Persist server and domain cache versions to survive HMR/frontend reloads
+const SERVER_VERSION_KEY = 'ucapp_server_cache_version'
+const DOMAINS_VERSION_KEY = 'ucapp_domains_cache_version'
+
+// Hydrate cachedServerVersion from localStorage on module load
+try {
+  const stored = typeof window !== 'undefined' ? window.localStorage.getItem(SERVER_VERSION_KEY) : null
+  if (stored != null) {
+    const parsed = Number(stored)
+    if (!Number.isNaN(parsed)) {
+      cachedServerVersion = parsed
+    }
+  }
+} catch {
+  // Ignore storage access errors
+}
+
 const checkCacheVersion = async (): Promise<boolean> => {
   try {
     const response = await fetch('/api/cache-version')
     if (!response.ok) {
-      // If we can't get cache version, assume cache is valid to avoid unnecessary refetches
-      return true
+      // If we can't get cache version, treat existing in-memory cache as stale to be safe
+      return false
     }
     const data = await response.json()
     const serverVersion = data.version
 
-    if (cachedServerVersion === null) {
-      cachedServerVersion = serverVersion
-      return true
+    // Persist latest seen server version
+    cachedServerVersion = serverVersion
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(SERVER_VERSION_KEY, String(serverVersion))
+      }
+    } catch {
+      // Ignore storage access errors
     }
 
-    return cachedServerVersion === serverVersion
+    // Compare the domains cache version with server version
+    let storedDomainsVersion: number | null = null
+    try {
+      const stored = typeof window !== 'undefined' ? window.localStorage.getItem(DOMAINS_VERSION_KEY) : null
+      if (stored != null) {
+        const parsed = Number(stored)
+        if (!Number.isNaN(parsed)) {
+          storedDomainsVersion = parsed
+        }
+      }
+    } catch {
+      // Ignore storage access errors
+    }
+
+    // If we have a domains cache in memory but no stored version, treat as stale
+    if (globalDomainsCache && storedDomainsVersion === null) {
+      return false
+    }
+
+    // Otherwise, valid only if versions match
+    return storedDomainsVersion === serverVersion
   } catch (error) {
-    // If cache version check fails, assume cache is valid
-    return true
+    // If cache version check fails, be conservative: mark as stale
+    return false
   }
 }
 
 const invalidateCache = () => {
   globalDomainsCache = null
   cachedServerVersion = null
+  try {
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(DOMAINS_VERSION_KEY)
+      // Do not remove server version; it reflects last seen server boot
+    }
+  } catch {
+    // Ignore storage access errors
+  }
 }
 
 export const useDomains = () => {
@@ -86,6 +136,15 @@ export const useDomains = () => {
           if (versionResponse.ok) {
             const versionData = await versionResponse.json()
             cachedServerVersion = versionData.version
+            // Persist both server version and domains cache version
+            try {
+              if (typeof window !== 'undefined') {
+                window.localStorage.setItem(SERVER_VERSION_KEY, String(cachedServerVersion))
+                window.localStorage.setItem(DOMAINS_VERSION_KEY, String(cachedServerVersion))
+              }
+            } catch {
+              // Ignore storage access errors
+            }
           }
         } catch (error) {
           // If cache version update fails, continue without it
@@ -170,11 +229,11 @@ export const useDomains = () => {
 
   // Memoized domain ID lookup by name function
   const getDomainIdByName = useMemo(() => {
-    const domainNameMap = new Map(state.domains.map(domain => [domain.name, domain.id]))
+    const domainNameMap = new Map(state.domains.map(domain => [domain.name.toLowerCase(), domain.id]))
 
     return (domainName: string | undefined | null): string | null => {
       if (!domainName) return null
-      return domainNameMap.get(domainName) || null
+      return domainNameMap.get(domainName.toLowerCase()) || null
     }
   }, [state.domains])
 

@@ -34,7 +34,7 @@ export const useDataContractsStore = create<State>()(
 export function defaultDraft(): DataContractDraft {
   return {
     name: '',
-    version: 'v1.0',
+    version: '1.0.0',
     status: 'draft',
     owner: '',
     kind: 'DataContract',

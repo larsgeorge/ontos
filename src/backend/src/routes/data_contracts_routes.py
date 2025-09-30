@@ -350,9 +350,9 @@ async def create_contract(
         # Create main contract record
         db_obj = DataContractDb(
             name=contract_data.name,
-            version=contract_data.version or 'v1.0',
+            version=contract_data.version or '1.0.0',
             status=contract_data.status or 'draft',
-            owner=contract_data.owner or (current_user.username if current_user else 'unknown'),
+            owner_team_id=contract_data.owner_team_id,
             kind=contract_data.kind or 'DataContract',
             api_version=contract_data.apiVersion or 'v3.0.2',
             tenant=contract_data.tenant,
@@ -570,7 +570,7 @@ async def update_contract(
             'name': contract_data.name,
             'version': contract_data.version,
             'status': contract_data.status,
-            'owner': contract_data.owner,
+            'owner_team_id': contract_data.owner_team_id,
             'tenant': contract_data.tenant,
             'data_product': contract_data.dataProduct,
             'description_usage': contract_data.descriptionUsage,
@@ -627,7 +627,7 @@ async def update_contract(
                         # Replace existing links for this property entity id
                         prop_entity_id = f"{contract_id}#{schema_obj_data.name}#{prop_data.name}"
                         for link in semantic_manager.list_for_entity(entity_id=prop_entity_id, entity_type='data_contract_property'):
-                            semantic_manager.remove(link.id)
+                            semantic_manager.remove(link.id, removed_by=(current_user.username if current_user else None))
                         if getattr(prop_data, 'authoritativeDefinitions', None):
                             process_property_semantic_links(
                                 semantic_manager=semantic_manager,
@@ -645,7 +645,7 @@ async def update_contract(
                 # Replace existing links for this schema entity id
                 schema_entity_id = f"{contract_id}#{schema_obj_data.name}"
                 for link in semantic_manager.list_for_entity(entity_id=schema_entity_id, entity_type='data_contract_schema'):
-                    semantic_manager.remove(link.id)
+                    semantic_manager.remove(link.id, removed_by=(current_user.username if current_user else None))
                 if getattr(schema_obj_data, 'authoritativeDefinitions', None):
                     process_schema_semantic_links(
                         semantic_manager=semantic_manager,
@@ -664,7 +664,7 @@ async def update_contract(
             # Remove existing contract-level semantic links
             existing_links = semantic_manager.list_for_entity(entity_id=contract_id, entity_type='data_contract')
             for link in existing_links:
-                semantic_manager.remove(link.id)
+                semantic_manager.remove(link.id, removed_by=(current_user.username if current_user else None))
 
             process_contract_semantic_links(
                 semantic_manager=semantic_manager,
@@ -769,7 +769,7 @@ async def upload_contract(
                 # For text format, create a minimal structure
                 parsed = {
                     "name": filename.replace('.txt', '').replace('.', '_'),
-                    "version": "v1.0",
+                    "version": "1.0.0",
                     "status": "draft", 
                     "owner": current_user.username if current_user else 'unknown',
                     "description": {
@@ -780,7 +780,7 @@ async def upload_contract(
             # If parsing fails, treat as text
             parsed = {
                 "name": filename.replace('.', '_'),
-                "version": "v1.0", 
+                "version": "1.0.0", 
                 "status": "draft",
                 "owner": current_user.username if current_user else 'unknown',
                 "description": {
@@ -809,7 +809,7 @@ async def upload_contract(
             parsed.get('id') or
             filename.replace('.', '_').replace('-', '_')
         )
-        version_val = parsed.get('version') or 'v1.0'
+        version_val = parsed.get('version') or '1.0.0'
         status_val = parsed.get('status') or 'draft'
 
         # Enhanced owner field extraction with better fallbacks
@@ -878,12 +878,27 @@ async def upload_contract(
             except Exception:
                 provided_id = None
 
+        # Try to resolve owner as team name
+        owner_team_id = None
+        if owner_val:
+            try:
+                # Reuse the same team resolution logic as in the manager
+                from src.repositories.teams_repository import team_repo
+                team = team_repo.get_by_name(db, name=owner_val)
+                if team:
+                    owner_team_id = str(team.id)
+                    logger.info(f"Successfully resolved team '{owner_val}' to ID: {team.id}")
+                else:
+                    logger.warning(f"Team '{owner_val}' not found")
+            except Exception as e:
+                logger.warning(f"Failed to resolve team '{owner_val}': {e}")
+
         db_obj = DataContractDb(
             id=provided_id if provided_id else None,
             name=name_val,
             version=version_val,
             status=status_val,
-            owner=owner_val,
+            owner_team_id=owner_team_id,
             kind=kind_val,
             api_version=api_version_val,
             tenant=parsed.get('tenant'),
@@ -1499,7 +1514,7 @@ async def create_version(
             name=original.name,
             version=new_version,
             status='draft',
-            owner=original.owner,
+            owner_team_id=original.owner_team_id,
             kind=original.kind,
             api_version=original.api_version,
             tenant=original.tenant,
@@ -1516,7 +1531,7 @@ async def create_version(
         db.commit()
         success = True
         response_status_code = 201
-        return {"id": clone.id, "name": clone.name, "version": clone.version, "status": clone.status, "owner": clone.owner}
+        return {"id": clone.id, "name": clone.name, "version": clone.version, "status": clone.status, "owner_team_id": clone.owner_team_id}
     except HTTPException:
         raise
     except Exception as e:

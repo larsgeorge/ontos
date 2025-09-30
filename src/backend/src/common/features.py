@@ -96,6 +96,18 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'name': 'Data Asset Review',
         'allowed_levels': READ_WRITE_ADMIN_LEVELS # Stewards review, admins manage
     },
+    # Observability / Logs
+    'audit': {
+        'name': 'Audit & Change Logs',
+        # Allow read-only, full (if used), and admin; write requires at least READ_WRITE but routes use explicit checks
+        'allowed_levels': [
+            FeatureAccessLevel.NONE,
+            FeatureAccessLevel.READ_ONLY,
+            FeatureAccessLevel.READ_WRITE,
+            FeatureAccessLevel.FULL,
+            FeatureAccessLevel.ADMIN,
+        ]
+    },
     # Tools
     'catalog-commander': {
         'name': 'Catalog Commander',

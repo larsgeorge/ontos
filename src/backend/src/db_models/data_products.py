@@ -34,7 +34,7 @@ class DataProductDb(Base):
     dataProductSpecification = Column(String, nullable=False, default="0.0.1")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-    version = Column(String, nullable=False, default="v1.0", index=True)
+    version = Column(String, nullable=False, default="1.0.0", index=True)
     product_type = Column(String, nullable=True, index=True)
 
     # Project relationship (nullable for backward compatibility)

@@ -99,7 +99,7 @@ const dataProductSchema = z.object({
     status: z.string().optional(), // Make optional, can be set
     // archetype: z.string().optional(), // Maybe remove if type covers it
   }),
-  version: z.string().min(1, "Version is required").default("v1.0"), // Default for creation
+  version: z.string().min(1, "Version is required").default("1.0.0"), // Default for creation
 
   // Step 3 (conditionally required)
   inputPorts: z.array(inputPortSchema).optional(),
@@ -206,7 +206,7 @@ export default function DataProductWizardDialog({
           description: '',
           status: statuses?.[0] || '',
         },
-        version: "v1.0", // Explicit default
+        version: "1.0.0", // Explicit default
         productType: productTypes[0],
         inputPorts: [],
         outputPorts: [],

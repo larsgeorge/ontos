@@ -41,9 +41,9 @@ async def add_link(current_user: AuditCurrentUserDep, payload: EntitySemanticLin
 
 
 @router.delete("/{link_id}")
-async def delete_link(link_id: str, db: DBSessionDep = None, manager: SemanticLinksManager = Depends(get_manager)):
+async def delete_link(link_id: str, current_user: AuditCurrentUserDep, db: DBSessionDep = None, manager: SemanticLinksManager = Depends(get_manager)):
     try:
-        ok = manager.remove(link_id)
+        ok = manager.remove(link_id, removed_by=(current_user.username if current_user else None))
         if not ok:
             raise HTTPException(status_code=404, detail="Link not found")
         if db is not None:

@@ -176,7 +176,7 @@ const createDefaultProduct = (): DataProduct => {
     // id is generated on submit if needed
     info: { title: "", owner: "" },
     inputPorts: [],
-    version: "v1.0", // Default version
+    version: "1.0.0", // Default version
     productType: "", // Default type (user should select)
     outputPorts: [],
     links: {}, 
@@ -856,7 +856,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                   readOnly={isEditMode}
                                   disabled={isEditMode || isSubmitting}
                                   className={isEditMode ? "bg-muted cursor-not-allowed" : ""}
-                                  placeholder="e.g., v1.0"
+                                  placeholder="e.g., 1.0.0"
                                 />
                                 {errors.version && <p className="text-sm text-red-600 mt-1">{errors.version.message}</p>}
                               </div>

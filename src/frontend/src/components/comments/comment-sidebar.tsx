@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MessageSquare, X, Plus, Trash2, Edit, Send, Users, Filter, Clock, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApi } from '@/hooks/use-api';
@@ -64,6 +64,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
   isOpen,
   onToggle,
   className,
+  fetchCountOnMount = true,
 }) => {
   const { get, post, put, delete: deleteApi, loading } = useApi();
   const { toast } = useToast();
@@ -81,6 +82,28 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
 
   // Available groups for audience selection (in a real app, fetch from API)
   const availableGroups = ['admin', 'data-producers', 'data-consumers', 'data-stewards'];
+
+  const fetchCommentCount = useCallback(async () => {
+    if (!entityType || !entityId) {
+      console.debug('CommentSidebar: Skipping count fetch - missing entityType or entityId');
+      return;
+    }
+
+    console.debug(`CommentSidebar: Fetching count for ${entityType}/${entityId}`);
+
+    const response = await get<TimelineResponse>(
+      `/api/entities/${entityType}/${entityId}/timeline/count?filter_type=all`
+    );
+
+    if (response.error) {
+      console.warn(`CommentSidebar: Failed to load comment count for ${entityType}/${entityId}:`, response.error);
+      return;
+    }
+
+    const count = response.data?.total_count || 0;
+    console.debug(`CommentSidebar: Setting count to ${count} for ${entityType}/${entityId}`);
+    setTotalCount(count);
+  }, [entityType, entityId, get]);
 
   const fetchTimeline = async () => {
     const response = await get<TimelineResponse>(
@@ -171,6 +194,11 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
     setEditingComment(null);
     setIsFormOpen(false);
     await fetchTimeline();
+
+    // Update count if we're fetching it on mount (to keep button in sync)
+    if (fetchCountOnMount) {
+      await fetchCommentCount();
+    }
   };
 
   const handleDelete = async (commentId: string) => {
@@ -193,8 +221,13 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       title: 'Success',
       description: 'Comment deleted successfully',
     });
-    
+
     await fetchTimeline();
+
+    // Update count if we're fetching it on mount (to keep button in sync)
+    if (fetchCountOnMount) {
+      await fetchCommentCount();
+    }
   };
 
   const handleEdit = (comment: Comment) => {
@@ -212,6 +245,13 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
     setEditingComment(null);
     setIsFormOpen(false);
   };
+
+  // Fetch comment count on mount if requested
+  useEffect(() => {
+    if (fetchCountOnMount) {
+      fetchCommentCount();
+    }
+  }, [fetchCountOnMount, fetchCommentCount]);
 
   // Fetch timeline when sidebar opens or filter changes
   useEffect(() => {
@@ -340,6 +380,28 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
             {obj.message && (
               <div><span className="text-muted-foreground">Message:</span> {String(obj.message)}</div>
             )}
+          </div>
+        );
+      }
+      
+      // Special formatting for semantic link changes
+      if (action.startsWith('SEMANTIC_LINK_')) {
+        const operation = action === 'SEMANTIC_LINK_ADD'
+          ? 'linked'
+          : action === 'SEMANTIC_LINK_REMOVE'
+          ? 'unlinked'
+          : action.toLowerCase();
+        const iri = typeof obj?.iri === 'string' ? obj.iri : undefined;
+        const linkId = typeof obj?.link_id === 'string' ? obj.link_id : undefined;
+        return (
+          <div className="text-sm space-y-1">
+            {iri && (
+              <div><span className="text-muted-foreground">Iri:</span> {iri}</div>
+            )}
+            {linkId && (
+              <div><span className="text-muted-foreground">Link Id:</span> {linkId}</div>
+            )}
+            <div><span className="text-muted-foreground">Operation:</span> {operation}</div>
           </div>
         );
       }

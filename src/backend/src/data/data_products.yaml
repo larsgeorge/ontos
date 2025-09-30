@@ -2,7 +2,7 @@
 # --- 1. Source Product: POS Transactions ---
 - dataProductSpecification: "0.0.1"
   id: "retail-pos-source-v1"
-  version: "v1.0"
+  version: "1.0.0"
   productType: "source"
   info:
     title: "POS Transaction Stream v1"
@@ -36,7 +36,7 @@
 # --- 2. Source-Aligned Product: Prepared Sales Transactions ---
 - dataProductSpecification: "0.0.1"
   id: "retail-sales-prepared-v1"
-  version: "v1.0"
+  version: "1.0.0"
   productType: "source-aligned"
   info:
     title: "Prepared Sales Transactions v1"
@@ -86,7 +86,7 @@
 # --- 3. Aggregate Product: Demand Forecasting ---
 - dataProductSpecification: "0.0.1"
   id: "retail-demand-forecast-v1"
-  version: "v1.0"
+  version: "1.0.0"
   productType: "aggregate"
   info:
     title: "Demand Forecast Model Output v1"
@@ -138,7 +138,7 @@
 # --- 4. Consumer-Aligned Product: Inventory Optimization ---
 - dataProductSpecification: "0.0.1"
   id: "retail-inventory-optim-v1"
-  version: "v1.0"
+  version: "1.0.0"
   productType: "consumer-aligned"
   info:
     title: "Inventory Optimization Recommendations v1"
@@ -188,7 +188,7 @@
 # --- 5. Aggregate Product: Price Optimization ---
 - dataProductSpecification: "0.0.1"
   id: "retail-price-optim-v1"
-  version: "v1.0"
+  version: "1.0.0"
   productType: "aggregate" # Or consumer-aligned depending on primary consumer
   info:
     title: "Price Optimization Model Output v1"
@@ -237,7 +237,7 @@
 # --- 6. Consumer-Aligned Product: Personalized Marketing ---
 - dataProductSpecification: "0.0.1"
   id: "retail-customer-recs-v1"
-  version: "v1.0"
+  version: "1.0.0"
   productType: "consumer-aligned"
   info:
     title: "Customer Marketing Recommendations v1"
@@ -286,7 +286,7 @@
 # --- 7. Consumer-Aligned Product: BI Dashboard Data ---
 - dataProductSpecification: "0.0.1"
   id: "retail-performance-dashboard-v1"
-  version: "v1.0"
+  version: "1.0.0"
   productType: "consumer-aligned"
   info:
     title: "Retail Performance Dashboard Data v1"
@@ -339,7 +339,7 @@
 # --- Example Sink Product: Archival ---
 # - dataProductSpecification: "0.0.1"
 #   id: "retail-data-archival-v1"
-#   version: "v1.0"
+#   version: "1.0.0"
 #   productType: "sink"
 #   info:
 #     title: "Retail Data Archival Sink v1"

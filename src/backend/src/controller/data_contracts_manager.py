@@ -460,17 +460,23 @@ class DataContractsManager(SearchableAsset):
     # --- ODCS Helpers ---
     def create_from_odcs_dict(self, db, odcs: Dict[str, Any], current_username: Optional[str]) -> DataContractDb:
         name = odcs.get('name') or 'contract'
-        version = odcs.get('version') or 'v1.0'
+        version = odcs.get('version') or '1.0.0'
         status = odcs.get('status') or 'draft'
         owner = odcs.get('owner') or (current_username or 'unknown')
         kind = odcs.get('kind') or 'DataContract'
         api_version = odcs.get('apiVersion') or 'v3.0.1'
         description = odcs.get('description') or {}
+
+        # Try to resolve owner as team name
+        owner_team_id = None
+        if owner:
+            owner_team_id = self._resolve_team_name_to_id(db, owner)
+
         db_obj = DataContractDb(
             name=name,
             version=version,
             status=status,
-            owner=owner,
+            owner_team_id=owner_team_id,
             kind=kind,
             api_version=api_version,
             description_usage=description.get('usage'),
@@ -1183,7 +1189,7 @@ class DataContractsManager(SearchableAsset):
             created_count = 0
             for c in contracts:
                 name = c.get('name')
-                version = c.get('version') or 'v1.0'
+                version = c.get('version') or '1.0.0'
                 if not name:
                     continue
 

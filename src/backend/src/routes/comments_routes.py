@@ -83,6 +83,61 @@ async def list_comments(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/entities/{entity_type}/{entity_id}/timeline/count")
+async def get_entity_timeline_count(
+    entity_type: str,
+    entity_id: str,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
+    filter_type: str = Query("all", description="Filter type: 'all', 'comments', 'changes'"),
+    manager: CommentsManager = Depends(get_comments_manager),
+    _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
+):
+    """Get count of timeline entries for an entity without fetching full data."""
+    try:
+        total_count = 0
+
+        # Get user's groups for audience filtering
+        user_groups = await get_user_groups(current_user.email)
+        is_admin = "admin" in [group.lower() for group in user_groups] if user_groups else False
+
+        if filter_type in ("all", "comments"):
+            # Get comments count
+            if include_deleted and not is_admin:
+                include_deleted = False
+
+            comments_response = manager.list_comments(
+                db,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                user_groups=user_groups,
+                include_deleted=include_deleted
+            )
+            total_count += len(comments_response.comments)
+
+        if filter_type in ("all", "changes"):
+            # Get change log entries count
+            change_entries = change_log_manager.list_changes_for_entity(
+                db,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                limit=10000  # High limit to get actual count
+            )
+            total_count += len(change_entries)
+
+        return {
+            "total_count": total_count,
+            "filter_type": filter_type
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed getting entity timeline count")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/entities/{entity_type}/{entity_id}/timeline")
 async def get_entity_timeline(
     entity_type: str,
@@ -165,14 +220,17 @@ async def get_entity_timeline(
         
         # Sort by timestamp (newest first)
         timeline_entries.sort(key=lambda x: x["timestamp"], reverse=True)
-        
+
+        # Calculate total count before applying limit
+        total_count = len(timeline_entries)
+
         # Apply limit
         if len(timeline_entries) > limit:
             timeline_entries = timeline_entries[:limit]
-        
+
         return {
             "timeline": timeline_entries,
-            "total_count": len(timeline_entries),
+            "total_count": total_count,
             "filter_type": filter_type
         }
         

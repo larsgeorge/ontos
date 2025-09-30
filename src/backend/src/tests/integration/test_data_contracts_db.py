@@ -34,7 +34,6 @@ class TestDataContractDbModels:
             name="Test Contract",
             version="1.0.0",
             status="draft",
-            owner="test@example.com",
             description_usage="Test usage"
         )
 
@@ -55,15 +54,13 @@ class TestDataContractDbModels:
         contract1 = DataContractDb(
             name="Duplicate Contract",
             version="1.0.0",
-            status="draft",
-            owner="test1@example.com"
+            status="draft"
         )
 
         contract2 = DataContractDb(
             name="Duplicate Contract",
             version="1.0.0",
-            status="active",
-            owner="test2@example.com"
+            status="active"
         )
 
         db_session.add(contract1)

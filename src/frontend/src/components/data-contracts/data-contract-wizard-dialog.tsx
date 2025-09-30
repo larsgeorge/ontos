@@ -94,7 +94,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
 
   // Step fields
   const [name, setName] = useState(initial?.name || '')
-  const [version, setVersion] = useState(initial?.version || 'v1.0')
+  const [version, setVersion] = useState(initial?.version || '1.0.0')
   const [status, setStatus] = useState(initial?.status || 'draft')
   const [owner, setOwner] = useState(initial?.owner || '')
   const [domain, setDomain] = useState(initial?.domain || '')
@@ -181,7 +181,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         // Reset to defaults for new contract
         setStep(1)
         setName('')
-        setVersion('v1.0')
+        setVersion('1.0.0')
         setStatus('draft')
         setOwner('')
         setDomain('')
@@ -206,7 +206,7 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         // Initialize from provided data for editing
         setStep(1)
         setName(initial.name || '')
-        setVersion(initial.version || 'v1.0')
+        setVersion(initial.version || '1.0.0')
         setStatus(initial.status || 'draft')
         setOwner(initial.owner || '')
         setDomain(initial.domain || '')

@@ -31,7 +31,7 @@ class TestSemanticUploadIntegration:
         """Sample ODCS contract with semantic assignments at all levels."""
         return {
             "name": "semantic-test-contract",
-            "version": "v1.0",
+            "version": "1.0.0",
             "status": "draft",
             "owner": "test-user",
             "kind": "DataContract",
@@ -231,7 +231,7 @@ class TestSemanticUploadIntegration:
         """Test uploading a contract without semantic assignments creates no semantic links."""
         contract_without_semantics = {
             "name": "no-semantics-contract",
-            "version": "v1.0",
+            "version": "1.0.0",
             "status": "draft",
             "owner": "test-user",
             "description": {
@@ -273,7 +273,7 @@ class TestSemanticUploadIntegration:
         """Test that only semantic assignment types create semantic links, others are preserved."""
         contract_with_mixed_auth_defs = {
             "name": "mixed-auth-defs-contract",
-            "version": "v1.0",
+            "version": "1.0.0",
             "status": "draft",
             "owner": "test-user",
             "authoritativeDefinitions": [

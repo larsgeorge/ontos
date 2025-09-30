@@ -62,7 +62,7 @@ async def create_access_request(
             type=NotificationType.INFO,
             title="Access Request Submitted",
             subtitle=f"{payload.entity_type} ({len(payload.entity_ids)} item(s))",
-            description=payload.message or "Your access request has been submitted for review.",
+            description=f"Your access request has been submitted for review.{' Reason: ' + payload.message if payload.message else ''}",
             recipient=requester_email,
             can_delete=True,
         )
@@ -82,7 +82,7 @@ async def create_access_request(
                 type=NotificationType.ACTION_REQUIRED,
                 title="Access Request Received",
                 subtitle=f"From: {requester_email}",
-                description=f"Review access request for {payload.entity_type} {entity_id}",
+                description=f"Review access request for {payload.entity_type} {entity_id}" + (f"\n\nReason: {payload.message}" if payload.message else ""),
                 recipient="Admin",
                 action_type="handle_access_request",
                 action_payload=action_payload,
@@ -100,7 +100,9 @@ async def create_access_request(
                 details={
                     "requester_email": requester_email,
                     "message": payload.message,
+                    "reason": payload.message,  # Add explicit reason field for better display
                     "timestamp": now.isoformat(),
+                    "summary": f"Access request from {requester_email}" + (f": {payload.message}" if payload.message else ""),
                 },
             )
 
@@ -180,6 +182,8 @@ async def handle_access_request(
                 "requester_email": requester,
                 "decision": decision,
                 "message": request_data.message,
+                "admin_response": request_data.message,  # Add explicit admin response field
+                "summary": f"Access request {decision} for {requester}" + (f": {request_data.message}" if request_data.message else ""),
             },
         )
 

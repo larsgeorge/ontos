@@ -23,6 +23,7 @@ import type { EntitySemanticLink } from '@/types/semantic-link';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { CommentSidebar } from '@/components/comments';
 import { useDomains } from '@/hooks/use-domains';
+import RequestAccessDialog from '@/components/access/request-access-dialog';
 
 // Helper Function Type Definition (copied from DataProducts view for checking API responses)
 type CheckApiResponseFn = <T>(
@@ -64,6 +65,7 @@ export default function DataProductDetails() {
   const [iriDialogOpen, setIriDialogOpen] = useState(false);
   const [links, setLinks] = useState<EntitySemanticLink[]>([]);
   const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false);
+  const [isRequestAccessDialogOpen, setIsRequestAccessDialogOpen] = useState(false);
 
   // State for dropdown values needed by the dialog
   const [statuses, setStatuses] = useState<DataProductStatus[]>([]);
@@ -205,20 +207,9 @@ export default function DataProductDetails() {
   };
 
   // --- Request Access ---
-  const handleRequestAccess = async () => {
+  const handleRequestAccess = () => {
     if (!productId || !product) return;
-    try {
-      toast({ title: 'Submitting', description: 'Sending access request...' });
-      const res = await post(`/api/access-requests`, {
-        entity_type: 'data_product',
-        entity_ids: [productId],
-      });
-      if (res.error) throw new Error(res.error);
-      toast({ title: 'Request Sent', description: 'Access request submitted. You will be notified.' });
-      refreshNotifications();
-    } catch (e: any) {
-      toast({ title: 'Error', description: e.message || 'Failed to submit access request', variant: 'destructive' });
-    }
+    setIsRequestAccessDialogOpen(true);
   };
 
   const addIri = async (iri: string) => {
@@ -531,6 +522,17 @@ export default function DataProductDetails() {
       )}
 
       <ConceptSelectDialog isOpen={iriDialogOpen} onOpenChange={setIriDialogOpen} onSelect={addIri} />
+
+      {/* Request Access Dialog */}
+      {product && (
+        <RequestAccessDialog
+          isOpen={isRequestAccessDialogOpen}
+          onOpenChange={setIsRequestAccessDialogOpen}
+          entityType="data_product"
+          entityId={productId!}
+          entityName={product.info?.title}
+        />
+      )}
 
       <Toaster />
     </div>

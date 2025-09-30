@@ -6,6 +6,7 @@ from src.db_models.semantic_links import EntitySemanticLinkDb
 from src.models.semantic_links import EntitySemanticLink, EntitySemanticLinkCreate
 from src.repositories.semantic_links_repository import entity_semantic_links_repo
 from src.common.logging import get_logger
+from src.controller.change_log_manager import change_log_manager
 
 logger = get_logger(__name__)
 
@@ -110,9 +111,25 @@ class SemanticLinksManager:
                 SemanticModelsManager(db=self._db).on_models_changed()
         except Exception as e:
             logger.warning(f"Failed to update KG after link add: {e}")
+        
+        # Change log entry for semantic link addition
+        try:
+            change_log_manager.log_change_with_details(
+                self._db,
+                entity_type=payload.entity_type,
+                entity_id=payload.entity_id,
+                action="SEMANTIC_LINK_ADD",
+                username=created_by,
+                details={
+                    "iri": payload.iri,
+                    "link_id": str(db_obj.id),
+                },
+            )
+        except Exception as log_err:
+            logger.warning(f"Failed to log change for semantic link add: {log_err}")
         return self._to_api(db_obj)
 
-    def remove(self, link_id: str) -> bool:
+    def remove(self, link_id: str, removed_by: Optional[str] = None) -> bool:
         removed = entity_semantic_links_repo.remove(self._db, id=link_id)
         try:
             manager = None
@@ -128,6 +145,23 @@ class SemanticLinksManager:
                 SemanticModelsManager(db=self._db).on_models_changed()
         except Exception as e:
             logger.warning(f"Failed to update KG after link removal: {e}")
+        
+        # Change log entry for semantic link removal
+        try:
+            if removed is not None:
+                change_log_manager.log_change_with_details(
+                    self._db,
+                    entity_type=removed.entity_type,
+                    entity_id=removed.entity_id,
+                    action="SEMANTIC_LINK_REMOVE",
+                    username=removed_by,
+                    details={
+                        "iri": removed.iri,
+                        "link_id": str(link_id),
+                    },
+                )
+        except Exception as log_err:
+            logger.warning(f"Failed to log change for semantic link removal: {log_err}")
         return removed is not None
 
 

@@ -49,6 +49,7 @@ export interface CommentSidebarProps {
   isOpen: boolean;
   onToggle: () => void;
   className?: string;
+  fetchCountOnMount?: boolean;
 }
 
 export interface CommentItemProps {

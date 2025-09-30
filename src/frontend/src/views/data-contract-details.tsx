@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, Shapes, Columns2 } from 'lucide-react'
+import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, Shapes, Columns2, CopyPlus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -19,6 +19,8 @@ import { useDomains } from '@/hooks/use-domains'
 import type { EntitySemanticLink } from '@/types/semantic-link'
 import type { DataContract } from '@/types/data-contract'
 import useBreadcrumbStore from '@/stores/breadcrumb-store'
+import RequestAccessDialog from '@/components/access/request-access-dialog'
+import CreateVersionDialog from '@/components/data-products/create-version-dialog'
 
 // Define column structure for schema properties
 type SchemaProperty = {
@@ -126,6 +128,8 @@ export default function DataContractDetails() {
   const [isWizardOpen, setIsWizardOpen] = useState(false)
   const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false)
   const [iriDialogOpen, setIriDialogOpen] = useState(false)
+  const [isRequestAccessDialogOpen, setIsRequestAccessDialogOpen] = useState(false)
+  const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false)
   const [links, setLinks] = useState<EntitySemanticLink[]>([])
   const [selectedSchemaIndex, setSelectedSchemaIndex] = useState(0)
   const [schemaLinks, setSchemaLinks] = useState<Record<string, EntitySemanticLink[]>>({})
@@ -317,18 +321,40 @@ export default function DataContractDetails() {
     }
   }
 
-  const requestAccess = async () => {
+  const requestAccess = () => {
     if (!contractId || !contract) return
+    setIsRequestAccessDialogOpen(true)
+  }
+
+  const handleCreateNewVersion = () => {
+    if (!contractId || !contract) {
+      toast({ title: 'Permission Denied or Data Missing', description: 'Cannot create new version.', variant: 'destructive' })
+      return
+    }
+    setIsVersionDialogOpen(true)
+  }
+
+  const submitNewVersion = async (newVersionString: string) => {
+    if (!contractId) return
+    toast({ title: 'Creating New Version', description: `Creating version ${newVersionString}...` })
     try {
-      const res = await fetch(`/api/access-requests`, {
+      const res = await fetch(`/api/data-contracts/${contractId}/versions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entity_type: 'data_contract', entity_ids: [contractId] })
+        body: JSON.stringify({ new_version: newVersionString.trim() })
       })
-      if (!res.ok) throw new Error('Failed to submit access request')
-      toast({ title: 'Request Sent', description: 'Access request submitted. You will be notified.' })
-    } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to submit request', variant: 'destructive' })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(text || 'Failed to create new version.')
+      }
+      const data = await res.json()
+      const newId = data?.id
+      if (!newId) throw new Error('Invalid response when creating version.')
+      toast({ title: 'Success', description: `Version ${newVersionString} created successfully!` })
+      setIsVersionDialogOpen(false)
+      navigate(`/data-contracts/${newId}`)
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to create new version.', variant: 'destructive' })
     }
   }
 
@@ -364,6 +390,7 @@ export default function DataContractDetails() {
             className="h-8"
           />
           <Button variant="outline" onClick={requestAccess} size="sm"><KeyRound className="mr-2 h-4 w-4" /> Request Access</Button>
+          <Button variant="outline" onClick={handleCreateNewVersion} size="sm"><CopyPlus className="mr-2 h-4 w-4" /> Create New Version</Button>
           <Button variant="outline" onClick={() => setIsWizardOpen(true)} size="sm"><Pencil className="mr-2 h-4 w-4" /> Edit</Button>
           <Button variant="outline" onClick={exportOdcs} size="sm"><Download className="mr-2 h-4 w-4" /> Export ODCS</Button>
           <Button variant="destructive" onClick={handleDelete} size="sm"><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
@@ -380,7 +407,7 @@ export default function DataContractDetails() {
         <CardContent className="space-y-6">
           {/* Core Metadata */}
           <div className="grid md:grid-cols-4 gap-4">
-            <div className="space-y-1"><Label>Owner:</Label> <span className="text-sm block">{contract.owner}</span></div>
+            <div className="space-y-1"><Label>Owner:</Label> <span className="text-sm block">{(contract as any).owner || contract.owner_team_id || 'N/A'}</span></div>
             <div className="space-y-1"><Label>Status:</Label> <Badge variant="secondary" className="ml-1">{contract.status}</Badge></div>
             <div className="space-y-1"><Label>Version:</Label> <Badge variant="outline" className="ml-1">{contract.version}</Badge></div>
             <div className="space-y-1"><Label>API Version:</Label> <span className="text-sm block">{contract.apiVersion}</span></div>
@@ -742,7 +769,7 @@ export default function DataContractDetails() {
           name: contract.name,
           version: contract.version,
           status: contract.status,
-          owner: contract.owner,
+          owner: (contract as any).owner || contract.owner_team_id,
           domain: (contract as any).domain_id || contract.domainId, // Use domain_id (backend) or domainId (frontend)
           tenant: contract.tenant,
           dataProduct: contract.dataProduct,
@@ -829,6 +856,27 @@ export default function DataContractDetails() {
         onOpenChange={setIriDialogOpen}
         onSelect={addIri}
       />
+
+      {contract && (
+        <CreateVersionDialog
+          isOpen={isVersionDialogOpen}
+          onOpenChange={setIsVersionDialogOpen}
+          currentVersion={contract.version}
+          productTitle={contract.name}
+          onSubmit={submitNewVersion}
+        />
+      )}
+
+      {/* Request Access Dialog */}
+      {contract && (
+        <RequestAccessDialog
+          isOpen={isRequestAccessDialogOpen}
+          onOpenChange={setIsRequestAccessDialogOpen}
+          entityType="data_contract"
+          entityId={contractId!}
+          entityName={contract.name}
+        />
+      )}
     </div>
   )
 }

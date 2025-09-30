@@ -3,14 +3,15 @@ from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
-from src.common.dependencies import DBSessionDep, CurrentUserDep, require_permission
+from src.common.dependencies import DBSessionDep, CurrentUserDep
+from src.common.authorization import require_read_only, require_read_write
 from src.common.features import FeatureAccessLevel
 from src.controller.change_log_manager import change_log_manager
 
 router = APIRouter(prefix="/api", tags=["Change Log"]) 
 
 
-@router.post("/change-log", dependencies=[Depends(lambda: require_permission(feature='audit', level=FeatureAccessLevel.READ_WRITE))])
+@router.post("/change-log", dependencies=[Depends(require_read_write('audit'))])
 async def create_change_log(
     request: Request,
     db: DBSessionDep,
@@ -42,7 +43,7 @@ async def create_change_log(
 
 @router.get(
     "/change-log",
-    dependencies=[Depends(lambda: require_permission(feature='audit', level=FeatureAccessLevel.READ_ONLY))]
+    dependencies=[Depends(require_read_only('audit'))]
 )
 async def list_change_log(
     db: DBSessionDep,

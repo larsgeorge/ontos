@@ -146,7 +146,7 @@ class DataProduct(BaseModel):
     dataProductSpecification: str = Field("0.0.1", description="Version of the Data Product Specification")
     id: str = Field(..., description="Organizational unique technical identifier", example="search-queries-all")
     info: Info = Field(..., description="Information about the data product")
-    version: str = Field("v1.0", description="Version identifier for the data product", example="v1.0")
+    version: str = Field("1.0.0", description="Version identifier for the data product", example="1.0.0")
     productType: DataProductType = Field(..., alias='product_type', description="Type indicating the stage in the data flow", example=DataProductType.CONSUMER_ALIGNED)
     inputPorts: Optional[List[InputPort]] = Field(default_factory=list, description="List of input ports")
     outputPorts: Optional[List[OutputPort]] = Field(default_factory=list, description="List of output ports")
@@ -177,7 +177,7 @@ class GenieSpaceRequest(BaseModel):
 
 class NewVersionRequest(BaseModel):
     """Request model for creating a new version of a Data Product."""
-    new_version: str = Field(..., description="The new version string (e.g., v1.1, v2.0)", example="v1.1")
+    new_version: str = Field(..., description="The new version string (e.g., 1.1.0, 2.0.0)", example="1.1.0")
     # Optional fields could be added later, e.g.:
     # copy_tags: bool = Field(True, description="Copy tags from the original version.")
     # reset_status_to_draft: bool = Field(True, description="Reset the status of the new version to 'draft'.")
@@ -220,7 +220,7 @@ class DataProductCreate(BaseModel):
     dataProductSpecification: str = Field("0.0.1", description="Version of the Data Product Specification")
     id: str = Field(..., description="Organizational unique technical identifier")
     info: Info = Field(..., description="Information about the data product")
-    version: str = Field("v1.0", description="Version identifier for the data product")
+    version: str = Field("1.0.0", description="Version identifier for the data product")
     productType: DataProductType = Field(..., alias='product_type', description="Type indicating the stage in the data flow")
     inputPorts: Optional[List[InputPortCreate]] = Field(default_factory=list, description="List of input ports")
     outputPorts: Optional[List[OutputPortCreate]] = Field(default_factory=list, description="List of output ports")

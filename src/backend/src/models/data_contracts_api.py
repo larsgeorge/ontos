@@ -292,7 +292,7 @@ class ODCSContract(BaseModel):
 
 class DataContractBase(BaseModel):
     name: str  # Required for app usability
-    version: str = Field('v1.0')
+    version: str = Field('1.0.0')
     status: str = Field('draft')
     owner_team_id: Optional[str] = Field(None, alias='ownerTeamId')
     kind: str = Field('DataContract')  # Required by ODCS
