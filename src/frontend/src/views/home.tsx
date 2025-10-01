@@ -12,11 +12,11 @@ import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel, HomeSection } from '@/types/settings';
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import DiscoverySection from '@/components/home/DiscoverySection';
-import DataCurationSection from '@/components/home/DataCurationSection';
-import RequiredActionsSection from '@/components/home/RequiredActionsSection';
-import QuickActions from '@/components/home/QuickActions';
-import RecentActivity from '@/components/home/RecentActivity';
+import DiscoverySection from '@/components/home/discovery-section';
+import DataCurationSection from '@/components/home/data-curation-section';
+import RequiredActionsSection from '@/components/home/required-actions-section';
+import QuickActions from '@/components/home/quick-actions';
+import RecentActivity from '@/components/home/recent-activity';
 import { useUserStore } from '@/stores/user-store';
 
 interface Stats {
