@@ -1,0 +1,47 @@
+{
+  "app": {
+    "name": "Ontos",
+    "tagline": "Manage business glossaries, data contracts, data products, personas, and more"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "add": "Add",
+    "remove": "Remove",
+    "upload": "Upload",
+    "download": "Download",
+    "search": "Search",
+    "filter": "Filter",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "submit": "Submit",
+    "reset": "Reset",
+    "apply": "Apply",
+    "refresh": "Refresh",
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "deleting": "Deleting..."
+  },
+  "status": {
+    "success": "Success",
+    "error": "Error",
+    "warning": "Warning",
+    "info": "Info"
+  },
+  "validation": {
+    "required": "This field is required",
+    "invalid": "Invalid value",
+    "email": "Invalid email address",
+    "url": "Invalid URL"
+  },
+  "language": {
+    "label": "Language",
+    "english": "English",
+    "german": "German"
+  }
+}

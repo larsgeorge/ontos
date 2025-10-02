@@ -7,6 +7,7 @@ import { Toaster } from './components/ui/toaster';
 import { useUserStore } from './stores/user-store';
 import { usePermissions } from './stores/permissions-store';
 import { useNotificationsStore } from './stores/notifications-store';
+import './i18n/config'; // Initialize i18n
 
 // Import views
 import Home from './views/home';

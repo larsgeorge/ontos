@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,7 @@ interface SettingsApiResponse {
 }
 
 export default function Settings() {
+  const { t } = useTranslation(['settings', 'common']);
   const { toast } = useToast();
   const { get, post, put } = useApi();
   // Legacy general/databricks/git settings state (kept for existing tabs)
@@ -96,17 +98,17 @@ export default function Settings() {
       // Check if the API returned an error
       if (response.error) {
         toast({
-          title: 'Error',
+          title: t('common:status.error'),
           description: response.error,
           variant: 'destructive',
         });
         return;
       }
-      
+
       // Success case
       toast({
-        title: 'Success',
-        description: 'Settings saved successfully',
+        title: t('common:status.success'),
+        description: t('settings:jobs.messages.saveSuccess'),
       });
     } catch (error: any) {
       console.error('Settings save error:', error);
@@ -118,7 +120,7 @@ export default function Settings() {
       }
       
       toast({
-        title: 'Error',
+        title: t('common:status.error'),
         description: errorMessage,
         variant: 'destructive',
       });
@@ -145,18 +147,18 @@ export default function Settings() {
   return (
     <div className="py-6">
       <h1 className="text-3xl font-bold mb-6 flex items-center gap-2">
-        <SettingsIcon className="w-8 h-8" /> Settings
+        <SettingsIcon className="w-8 h-8" /> {t('settings:title')}
       </h1>
-      
+
       <Tabs defaultValue="general" className="space-y-4">
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="databricks">Databricks</TabsTrigger>
           <TabsTrigger value="git">Git</TabsTrigger>
-          <TabsTrigger value="jobs">Background Jobs</TabsTrigger>
-          <TabsTrigger value="roles">Roles</TabsTrigger>
-          <TabsTrigger value="tags">Tags</TabsTrigger>
-          <TabsTrigger value="semantic-models">Semantic Models</TabsTrigger>
+          <TabsTrigger value="jobs">{t('settings:tabs.jobs')}</TabsTrigger>
+          <TabsTrigger value="roles">{t('settings:tabs.roles')}</TabsTrigger>
+          <TabsTrigger value="tags">{t('settings:tabs.tags')}</TabsTrigger>
+          <TabsTrigger value="semantic-models">{t('settings:tabs.semanticModels')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
@@ -285,36 +287,39 @@ export default function Settings() {
         <TabsContent value="jobs">
           <Card>
             <CardHeader>
-              <CardTitle>Background Jobs</CardTitle>
-              <CardDescription>Manage background jobs for data processing</CardDescription>
+              <CardTitle>{t('settings:jobs.title')}</CardTitle>
+              <CardDescription>{t('settings:jobs.description')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="job-cluster-id">Job Cluster ID</Label>
+                <Label htmlFor="job-cluster-id">{t('settings:jobs.jobClusterId.label')}</Label>
                 <Input
                   id="job-cluster-id"
                   value={jobClusterId}
                   onChange={(e) => setJobClusterId(e.target.value)}
-                  placeholder="cluster-xxxxxxxxxxxxxxxx"
+                  placeholder={t('settings:jobs.jobClusterId.placeholder')}
                 />
-                <p className="text-sm text-muted-foreground">
-                  Enter a valid Databricks cluster ID. This cluster will be used to run background workflows.
-                </p>
               </div>
               {availableWorkflows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No workflows found in workspace.</p>
+                <p className="text-sm text-muted-foreground">{t('settings:jobs.noWorkflows')}</p>
               ) : (
-                availableWorkflows.map((wf) => (
-                  <div key={wf.id} className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium">{wf.name}</h3>
-                      {wf.description && (
-                        <p className="text-sm text-muted-foreground">{wf.description}</p>
-                      )}
-                    </div>
-                    <Switch checked={!!enabledJobs[wf.id]} onCheckedChange={() => toggleWorkflow(wf.id)} />
+                <>
+                  <div className="space-y-2">
+                    <Label>{t('settings:jobs.availableWorkflows.label')}</Label>
+                    <p className="text-sm text-muted-foreground">{t('settings:jobs.availableWorkflows.description')}</p>
                   </div>
-                ))
+                  {availableWorkflows.map((wf) => (
+                    <div key={wf.id} className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-medium">{wf.name}</h3>
+                        {wf.description && (
+                          <p className="text-sm text-muted-foreground">{wf.description}</p>
+                        )}
+                      </div>
+                      <Switch checked={!!enabledJobs[wf.id]} onCheckedChange={() => toggleWorkflow(wf.id)} />
+                    </div>
+                  ))}
+                </>
               )}
             </CardContent>
           </Card>
@@ -333,7 +338,7 @@ export default function Settings() {
 
       <div className="mt-6">
         <Button onClick={handleSave} disabled={isLoading}>
-          {isLoading ? 'Saving...' : 'Save Settings'}
+          {isLoading ? t('common:actions.saving') : t('settings:jobs.saveButton')}
         </Button>
       </div>
     </div>

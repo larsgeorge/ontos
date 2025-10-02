@@ -1,0 +1,47 @@
+{
+  "app": {
+    "name": "Ontos",
+    "tagline": "Verwalten Sie Geschäftsglossar, Datenverträge, Datenprodukte, Personas und mehr"
+  },
+  "actions": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "create": "Erstellen",
+    "add": "Hinzufügen",
+    "remove": "Entfernen",
+    "upload": "Hochladen",
+    "download": "Herunterladen",
+    "search": "Suchen",
+    "filter": "Filtern",
+    "close": "Schließen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "previous": "Vorherige",
+    "submit": "Absenden",
+    "reset": "Zurücksetzen",
+    "apply": "Anwenden",
+    "refresh": "Aktualisieren",
+    "loading": "Wird geladen...",
+    "saving": "Wird gespeichert...",
+    "deleting": "Wird gelöscht..."
+  },
+  "status": {
+    "success": "Erfolg",
+    "error": "Fehler",
+    "warning": "Warnung",
+    "info": "Info"
+  },
+  "validation": {
+    "required": "Dieses Feld ist erforderlich",
+    "invalid": "Ungültiger Wert",
+    "email": "Ungültige E-Mail-Adresse",
+    "url": "Ungültige URL"
+  },
+  "language": {
+    "label": "Sprache",
+    "english": "Englisch",
+    "german": "Deutsch"
+  }
+}

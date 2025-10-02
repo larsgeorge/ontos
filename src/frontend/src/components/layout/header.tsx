@@ -5,6 +5,7 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import NotificationBell from '@/components/ui/notification-bell';
 import SearchBar from '@/components/ui/search-bar';
 import { ProjectChooser } from '@/components/ui/project-chooser';
+import { LanguageSelector } from '@/components/common/language-selector';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -34,6 +35,7 @@ export function Header({ onToggleSidebar, isSidebarCollapsed }: HeaderProps) {
       <div className="ml-auto flex items-center gap-2 shrink-0">
           <ProjectChooser />
           <NotificationBell />
+          <LanguageSelector />
          <ThemeToggle />
         <UserInfo />
       </div>
