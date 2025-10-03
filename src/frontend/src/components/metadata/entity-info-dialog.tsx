@@ -106,7 +106,7 @@ export default function EntityInfoDialog({ entityType, entityId, open, onOpenCha
             )}
 
             {concatenatedMarkdown ? (
-              <div className="prose dark:prose-invert max-w-none">
+              <div className="max-w-none">
                 <MarkdownViewer markdown={concatenatedMarkdown} />
               </div>
             ) : (
