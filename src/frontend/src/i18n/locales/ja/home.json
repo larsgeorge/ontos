@@ -1,0 +1,146 @@
+{
+  "title": "Ontos",
+  "tagline": "ビジネス用語集、データ契約、データ製品、ペルソナなどを管理",
+  "search": {
+    "placeholder": "データ製品、ビジネス用語、契約を検索..."
+  },
+  "overview": {
+    "title": "概要",
+    "loading": "読み込み中...",
+    "noData": "選択した機能プレビューまたは権限に利用可能な概要データがありません。",
+    "error": "エラー",
+    "tiles": {
+      "compliance": {
+        "title": "コンプライアンス",
+        "description": "現在のコンプライアンススコア",
+        "notAvailable": "N/A"
+      },
+      "dataContracts": {
+        "title": "データ契約",
+        "description": "アクティブな契約"
+      },
+      "dataProducts": {
+        "title": "データ製品",
+        "description": "データ製品の合計"
+      },
+      "businessGlossary": {
+        "title": "ビジネス用語集",
+        "description": "用語集/用語"
+      },
+      "estates": {
+        "title": "エステート",
+        "description": "設定されたエステートはありません",
+        "lastSync": "最終同期: {{date}} ({{status}})",
+        "syncStatus": {
+          "success": "成功",
+          "failed": "失敗",
+          "in_progress": "進行中",
+          "unknown": "不明"
+        }
+      }
+    }
+  },
+  "complianceTrend": {
+    "title": "コンプライアンストレンド",
+    "period": "過去30日間",
+    "loading": "コンプライアンスデータを読み込み中...",
+    "error": "トレンドデータの読み込みエラー: {{error}}",
+    "noData": "選択した期間に利用可能なコンプライアンスデータがありません。",
+    "chartLabel": "コンプライアンススコア"
+  },
+  "noAccess": {
+    "message": "現在、特定のロールが割り当てられていません。",
+    "action": "機能にアクセスするには、",
+    "link": "ロールへのアクセスをリクエスト"
+  },
+  "quickActions": {
+    "title": "クイックアクション",
+    "loading": "読み込み中...",
+    "noActions": "利用可能なアクションはありません。",
+    "actions": {
+      "browseProducts": "データ製品を参照",
+      "browseGlossary": "ビジネス用語集を参照",
+      "createProduct": "データ製品を作成",
+      "defineContract": "データ契約を定義",
+      "reviewAssets": "データアセットをレビュー",
+      "manageEntitlements": "エンタイトルメントを管理",
+      "catalogCommander": "カタログコマンダー",
+      "settings": "設定"
+    }
+  },
+  "recentActivity": {
+    "title": "最近のアクティビティ",
+    "loading": "最近のアクティビティを読み込み中...",
+    "error": "最近のアクティビティの読み込みに失敗",
+    "noActivity": "最近のアクティビティはありません。",
+    "entityLabel": "エンティティ:",
+    "actionLabel": "アクション:",
+    "userLabel": "ユーザー:",
+    "timeLabel": "時刻:",
+    "iriLabel": "Iri:",
+    "linkIdLabel": "リンクID:",
+    "openButton": "開く",
+    "openDetails": "詳細を開く",
+    "noDetails": "詳細はありません",
+    "by": "作成者",
+    "at": "時刻"
+  },
+  "discoverySection": {
+    "title": "発見",
+    "dataDomains": "データドメイン",
+    "exactMatchOnly": "完全一致のみ",
+    "allDomains": "すべてのドメイン",
+    "clearFilter": "ドメインフィルタをクリア",
+    "selectDomain": "ドメインを選択して階層を表示し、製品をフィルタします。",
+    "popularProducts": "人気のデータ製品",
+    "loading": "製品を読み込み中...",
+    "error": "データ製品の読み込みに失敗",
+    "noProducts": "データ製品が見つかりません。",
+    "domain": "ドメイン",
+    "owner": "所有者",
+    "unknown": "不明",
+    "status": "N/A",
+    "untitled": "無題",
+    "info": "情報"
+  },
+  "dataCurationSection": {
+    "title": "データキュレーション",
+    "createDataProduct": {
+      "title": "データ製品を作成",
+      "description": "ウィザードを使用して新しいデータ製品を定義します。",
+      "button": "開く"
+    },
+    "defineDataContract": {
+      "title": "データ契約を定義",
+      "description": "技術契約を作成または更新します。",
+      "button": "開く"
+    },
+    "createDataset": {
+      "title": "データセットを作成",
+      "description": "マッチングとマスタリングのためのデータセットを管理します。",
+      "button": "開く"
+    },
+    "createSchema": {
+      "title": "スキーマを作成",
+      "description": "スキーマと権限を作成または管理します。",
+      "openButton": "開く",
+      "createButton": "作成"
+    },
+    "createCatalog": {
+      "title": "カタログを作成",
+      "description": "カタログをプロビジョニングし、アクセスを管理します。",
+      "openButton": "開く",
+      "createButton": "作成"
+    }
+  },
+  "requiredActionsSection": {
+    "title": "必要なアクション",
+    "pendingNotifications": "保留中の通知",
+    "loading": "読み込み中...",
+    "noActions": "保留中のアクションはありません。",
+    "openButton": "開く",
+    "markReadButton": "既読にする",
+    "readLabel": "既読",
+    "alertMessage": "このリストには、あなたのロールに割り当てられたアクション必須の通知のみが表示されます。"
+  }
+}

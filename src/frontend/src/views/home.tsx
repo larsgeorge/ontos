@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import SearchBar from '@/components/ui/search-bar';
 import { Card, CardContent, CardTitle, CardHeader, CardDescription } from '@/components/ui/card';
 import { Loader2, Database, TrendingUp, FileText as FileTextIcon, BookOpen, Scale, Globe, AlertCircle } from 'lucide-react';
@@ -41,6 +42,7 @@ interface ComplianceData {
 // Quick actions and recent activity are rendered via components
 
 export default function Home() {
+  const { t, i18n } = useTranslation(['home', 'common']);
   const [stats, setStats] = useState<Stats>({
     dataContracts: { count: 0, loading: true, error: null },
     dataProducts: { count: 0, loading: true, error: null },
@@ -214,65 +216,68 @@ export default function Home() {
       });
   }, []);
 
-  const baseSummaryTiles = [
+  const baseSummaryTiles = useMemo(() => [
     {
       id: 'compliance',
-      title: 'Compliance',
-      value: complianceData.length > 0 ? `${complianceData[complianceData.length - 1].compliance}%` : 'N/A',
+      title: t('home:overview.tiles.compliance.title'),
+      value: complianceData.length > 0 ? `${complianceData[complianceData.length - 1].compliance}%` : t('home:overview.tiles.compliance.notAvailable'),
       loading: complianceLoading,
       error: complianceError,
       link: '/compliance',
       icon: <Scale className="h-4 w-4" />,
-      description: 'Current compliance score',
+      description: t('home:overview.tiles.compliance.description'),
       maturity: 'ga',
     },
     {
       id: 'data-contracts',
-      title: 'Data Contracts',
+      title: t('home:overview.tiles.dataContracts.title'),
       value: stats.dataContracts.count,
       loading: stats.dataContracts.loading,
       error: stats.dataContracts.error,
       link: '/data-contracts',
       icon: <FileTextIcon className="h-4 w-4" />,
-      description: 'Active contracts',
+      description: t('home:overview.tiles.dataContracts.description'),
       maturity: 'ga',
     },
     {
       id: 'data-products',
-      title: 'Data Products',
+      title: t('home:overview.tiles.dataProducts.title'),
       value: stats.dataProducts.count,
       loading: stats.dataProducts.loading,
       error: stats.dataProducts.error,
       link: '/data-products',
       icon: <Database className="h-4 w-4" />,
-      description: 'Total data products',
+      description: t('home:overview.tiles.dataProducts.description'),
       maturity: 'ga',
     },
     {
       id: 'business-glossary',
-      title: 'Business Glossary',
+      title: t('home:overview.tiles.businessGlossary.title'),
       value: `${stats.glossaries.count.glossaries} / ${stats.glossaries.count.terms}`,
       loading: stats.glossaries.loading,
       error: stats.glossaries.error,
       link: '/business-glossary',
       icon: <BookOpen className="h-4 w-4" />,
-      description: 'Glossaries / Terms',
+      description: t('home:overview.tiles.businessGlossary.description'),
        maturity: 'ga',
     },
     {
       id: 'estate-manager',
-      title: 'Estates',
+      title: t('home:overview.tiles.estates.title'),
       value: stats.estates.count,
       loading: stats.estates.loading,
       error: stats.estates.error,
       link: '/estate-manager',
       icon: <Globe className="h-4 w-4" />,
       description: stats.estates.lastSync
-        ? `Last sync: ${stats.estates.lastSync} (${stats.estates.syncStatus?.replace('_', ' ') || 'unknown'})`
-        : 'No estates configured',
+        ? t('home:overview.tiles.estates.lastSync', {
+            date: stats.estates.lastSync,
+            status: t(`home:overview.tiles.estates.syncStatus.${stats.estates.syncStatus || 'unknown'}`)
+          })
+        : t('home:overview.tiles.estates.description'),
       maturity: 'ga',
     },
-  ];
+  ], [t, complianceData, complianceLoading, complianceError, stats]);
 
   const filteredSummaryTiles = useMemo(() => {
       if (permissionsLoading) return [];
@@ -332,22 +337,22 @@ export default function Home() {
         <div className="flex items-center justify-center mb-4">
           <UnityCatalogLogo />
           <h1 className="text-4xl font-bold ml-2">
-            Ontos
+            {t('home:title')}
           </h1>
         </div>
         <p className="text-lg text-muted-foreground mb-6">
-          Manage business glossaries, data contracts, data products, personas, and more
+          {t('home:tagline')}
         </p>
         <div className="mb-8">
           <SearchBar
             variant="large"
-            placeholder="Search for data products, business terms, contracts..."
+            placeholder={t('home:search.placeholder')}
           />
         </div>
       </div>
 
       <div className="mb-8">
-        <h2 className="text-2xl font-semibold mb-4">Overview</h2>
+        <h2 className="text-2xl font-semibold mb-4">{t('home:overview.title')}</h2>
          {permissionsLoading ? (
               <div className="flex justify-center items-center h-24 col-span-full">
                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -373,7 +378,7 @@ export default function Home() {
                         </div>
                         ) : tile.error ? (
                         <div className="text-center text-destructive mt-2">
-                            Error
+                            {t('home:overview.error')}
                         </div>
                         ) : (
                         <div className="text-2xl font-bold mt-2">{tile.value}</div>
@@ -389,7 +394,7 @@ export default function Home() {
             </div>
         ) : (
              <p className="text-muted-foreground text-center col-span-full">
-                 No overview data available for the selected feature previews or your permissions.
+                 {t('home:overview.noData')}
              </p>
          )}
       </div>
@@ -403,8 +408,8 @@ export default function Home() {
                         <TrendingUp className="h-6 w-6 text-primary" />
                     </div>
                     <div>
-                        <CardTitle>Compliance Trend</CardTitle>
-                        <CardDescription>Last 30 days</CardDescription>
+                        <CardTitle>{t('home:complianceTrend.title')}</CardTitle>
+                        <CardDescription>{t('home:complianceTrend.period')}</CardDescription>
                     </div>
                 </div>
             </CardHeader>
@@ -416,11 +421,11 @@ export default function Home() {
                     </div>
                 ) : complianceError ? (
                     <div className="flex items-center justify-center h-full text-destructive">
-                    Error loading trend data: {complianceError}
+                    {t('home:complianceTrend.error', { error: complianceError })}
                     </div>
                 ) : complianceData.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-muted-foreground">
-                        No compliance data available for the selected period.
+                        {t('home:complianceTrend.noData')}
                     </div>
                 ) : (
                     <ResponsiveContainer width="100%" height="100%">
@@ -428,7 +433,7 @@ export default function Home() {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis
                         dataKey="date"
-                        tickFormatter={(date) => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        tickFormatter={(date) => new Date(date).toLocaleDateString(i18n.language, { month: 'short', day: 'numeric' })}
                         axisLine={false}
                         tickLine={false}
                         style={{ fontSize: '0.75rem' }}
@@ -443,8 +448,8 @@ export default function Home() {
                         />
                         <Tooltip
                             contentStyle={{ fontSize: '0.875rem', borderRadius: '0.5rem', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}
-                            labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                            formatter={(value: number) => [`${value}%`, "Compliance Score"]}
+                            labelFormatter={(label) => new Date(label).toLocaleDateString(i18n.language, { year: 'numeric', month: 'long', day: 'numeric' })}
+                            formatter={(value: number) => [`${value}%`, t('home:complianceTrend.chartLabel')]}
                         />
                         <Line
                             type="monotone"
@@ -466,10 +471,9 @@ export default function Home() {
       {/* Message for users with no access */}
       {!permissionsLoading && !hasAnyAccess && (
           <Alert variant="default" className="mb-8 bg-blue-50 border-blue-200 text-blue-800">
-            <AlertCircle className="h-4 w-4 !text-blue-600" /> {/* Use ! to force color */} 
+            <AlertCircle className="h-4 w-4 !text-blue-600" /> {/* Use ! to force color */}
             <AlertDescription className="ml-2">
-                 You currently don't have a specific role assigned. 
-                 To access features, please <Link to="/settings?tab=roles" className="font-semibold underline hover:text-blue-900">request access to a role</Link>.
+                 {t('home:noAccess.message')} {t('home:noAccess.action')} <Link to="/settings?tab=roles" className="font-semibold underline hover:text-blue-900">{t('home:noAccess.link')}</Link>.
             </AlertDescription>
           </Alert>
       )}

@@ -1,0 +1,146 @@
+{
+  "title": "Ontos",
+  "tagline": "Verwalten Sie Geschäftsglossar, Datenverträge, Datenprodukte, Personas und mehr",
+  "search": {
+    "placeholder": "Suche nach Datenprodukten, Geschäftsbegriffen, Verträgen..."
+  },
+  "overview": {
+    "title": "Übersicht",
+    "loading": "Wird geladen...",
+    "noData": "Keine Übersichtsdaten verfügbar für die ausgewählten Feature-Vorschauen oder Ihre Berechtigungen.",
+    "error": "Fehler",
+    "tiles": {
+      "compliance": {
+        "title": "Compliance",
+        "description": "Aktueller Compliance-Score",
+        "notAvailable": "N/V"
+      },
+      "dataContracts": {
+        "title": "Datenverträge",
+        "description": "Aktive Verträge"
+      },
+      "dataProducts": {
+        "title": "Datenprodukte",
+        "description": "Gesamtzahl Datenprodukte"
+      },
+      "businessGlossary": {
+        "title": "Geschäftsglossar",
+        "description": "Glossare / Begriffe"
+      },
+      "estates": {
+        "title": "Estates",
+        "description": "Keine Estates konfiguriert",
+        "lastSync": "Letzte Synchronisation: {{date}} ({{status}})",
+        "syncStatus": {
+          "success": "erfolgreich",
+          "failed": "fehlgeschlagen",
+          "in_progress": "in Bearbeitung",
+          "unknown": "unbekannt"
+        }
+      }
+    }
+  },
+  "complianceTrend": {
+    "title": "Compliance-Trend",
+    "period": "Letzte 30 Tage",
+    "loading": "Compliance-Daten werden geladen...",
+    "error": "Fehler beim Laden der Trenddaten: {{error}}",
+    "noData": "Keine Compliance-Daten für den ausgewählten Zeitraum verfügbar.",
+    "chartLabel": "Compliance-Score"
+  },
+  "noAccess": {
+    "message": "Ihnen ist derzeit keine spezifische Rolle zugewiesen.",
+    "action": "Um auf Funktionen zuzugreifen, bitte",
+    "link": "Zugriff auf eine Rolle beantragen"
+  },
+  "quickActions": {
+    "title": "Schnellzugriff",
+    "loading": "Wird geladen...",
+    "noActions": "Keine Aktionen verfügbar.",
+    "actions": {
+      "browseProducts": "Datenprodukte durchsuchen",
+      "browseGlossary": "Geschäftsglossar durchsuchen",
+      "createProduct": "Datenprodukt erstellen",
+      "defineContract": "Datenvertrag definieren",
+      "reviewAssets": "Daten-Assets überprüfen",
+      "manageEntitlements": "Berechtigungen verwalten",
+      "catalogCommander": "Katalog-Commander",
+      "settings": "Einstellungen"
+    }
+  },
+  "recentActivity": {
+    "title": "Letzte Aktivitäten",
+    "loading": "Letzte Aktivitäten werden geladen...",
+    "error": "Fehler beim Laden der letzten Aktivitäten",
+    "noActivity": "Keine letzten Aktivitäten.",
+    "entityLabel": "Entität:",
+    "actionLabel": "Aktion:",
+    "userLabel": "Benutzer:",
+    "timeLabel": "Zeit:",
+    "iriLabel": "Iri:",
+    "linkIdLabel": "Link-ID:",
+    "openButton": "Öffnen",
+    "openDetails": "Details öffnen",
+    "noDetails": "Keine Details verfügbar",
+    "by": "von",
+    "at": "um"
+  },
+  "discoverySection": {
+    "title": "Entdeckung",
+    "dataDomains": "Daten-Domains",
+    "exactMatchOnly": "Nur exakte Übereinstimmungen",
+    "allDomains": "Alle Domains",
+    "clearFilter": "Domain-Filter löschen",
+    "selectDomain": "Wählen Sie eine Domain aus, um ihre Hierarchie anzuzeigen und Produkte zu filtern.",
+    "popularProducts": "Beliebte Datenprodukte",
+    "loading": "Produkte werden geladen...",
+    "error": "Fehler beim Laden der Datenprodukte",
+    "noProducts": "Keine Datenprodukte gefunden.",
+    "domain": "Domain",
+    "owner": "Eigentümer",
+    "unknown": "Unbekannt",
+    "status": "N/V",
+    "untitled": "Ohne Titel",
+    "info": "Info"
+  },
+  "dataCurationSection": {
+    "title": "Datenkuration",
+    "createDataProduct": {
+      "title": "Datenprodukt erstellen",
+      "description": "Verwenden Sie den Assistenten, um ein neues Datenprodukt zu definieren.",
+      "button": "Öffnen"
+    },
+    "defineDataContract": {
+      "title": "Datenvertrag definieren",
+      "description": "Erstellen oder aktualisieren Sie einen technischen Vertrag.",
+      "button": "Öffnen"
+    },
+    "createDataset": {
+      "title": "Datensatz erstellen",
+      "description": "Verwalten Sie Datensätze zum Abgleichen und Zusammenführen.",
+      "button": "Öffnen"
+    },
+    "createSchema": {
+      "title": "Schema erstellen",
+      "description": "Erstellen oder verwalten Sie Schemas und Berechtigungen.",
+      "openButton": "Öffnen",
+      "createButton": "Erstellen"
+    },
+    "createCatalog": {
+      "title": "Katalog erstellen",
+      "description": "Stellen Sie Kataloge bereit und verwalten Sie den Zugriff.",
+      "openButton": "Öffnen",
+      "createButton": "Erstellen"
+    }
+  },
+  "requiredActionsSection": {
+    "title": "Erforderliche Aktionen",
+    "pendingNotifications": "Ausstehende Benachrichtigungen",
+    "loading": "Wird geladen...",
+    "noActions": "Keine ausstehenden Aktionen.",
+    "openButton": "Öffnen",
+    "markReadButton": "Als gelesen markieren",
+    "readLabel": "Gelesen",
+    "alertMessage": "Diese Liste zeigt nur aktionserforderliche Benachrichtigungen, die Ihrer/Ihren Rolle(n) zugeordnet sind."
+  }
+}

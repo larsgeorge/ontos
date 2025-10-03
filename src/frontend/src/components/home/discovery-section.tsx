@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Database, BoxSelect, Star, AlertCircle, Info } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -16,6 +17,7 @@ interface DiscoverySectionProps {
 }
 
 export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProps) {
+  const { t } = useTranslation('home');
   const { domains, loading: domainsLoading, getDomainName } = useDomains();
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
   const [selectedDomainDetails, setSelectedDomainDetails] = useState<DataDomain | null>(null);
@@ -41,7 +43,7 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
         setAllProducts(Array.isArray(data) ? data : []);
         setProductsError(null);
       } catch (e: any) {
-        setProductsError(e.message || 'Failed to load data products');
+        setProductsError(e.message || t('discoverySection.error'));
         setAllProducts([]);
       } finally {
         setProductsLoading(false);
@@ -69,12 +71,12 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
       const data: DataDomain = await resp.json();
       setSelectedDomainDetails(data);
     } catch (e: any) {
-      setDomainError(e.message || 'Failed to load domain details');
+      setDomainError(e.message || t('discoverySection.error'));
       setSelectedDomainDetails(null);
     } finally {
       setDomainLoading(false);
     }
-  }, []);
+  }, [t]);
 
   // Load selected domain details whenever selection changes
   useEffect(() => {
@@ -161,19 +163,19 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
 
   return (
     <section className="mb-16">
-      <h2 className="text-2xl font-semibold mb-4">Discovery</h2>
+      <h2 className="text-2xl font-semibold mb-4">{t('discoverySection.title')}</h2>
 
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2"><BoxSelect className="h-5 w-5" /><span className="font-medium">Data Domains</span></div>
+          <div className="flex items-center gap-2"><BoxSelect className="h-5 w-5" /><span className="font-medium">{t('discoverySection.dataDomains')}</span></div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Exact Matches Only</span>
+              <span className="text-sm text-muted-foreground">{t('discoverySection.exactMatchOnly')}</span>
               <Switch checked={exactMatchesOnly} onCheckedChange={(v) => setExactMatchesOnly(!!v)} />
             </div>
             {selectedDomainId && (
-              <Button variant="outline" size="sm" onClick={() => setSelectedDomainId(null)} title="Clear domain filter">
-                All Domains
+              <Button variant="outline" size="sm" onClick={() => setSelectedDomainId(null)} title={t('discoverySection.clearFilter')}>
+                {t('discoverySection.allDomains')}
               </Button>
             )}
           </div>
@@ -198,19 +200,19 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
           </div>
         ) : (
           <div style={{ height: 220, margin: 'auto' }} className="border rounded-lg overflow-hidden bg-muted/20 w-full flex items-center justify-center text-muted-foreground">
-            Select a domain to view its hierarchy and filter products.
+            {t('discoverySection.selectDomain')}
           </div>
         )}
       </div>
 
       <div>
-        <div className="flex items-center gap-2 mb-3"><Star className="h-5 w-5 text-primary" /><span className="font-medium">Popular Data Products</span></div>
+        <div className="flex items-center gap-2 mb-3"><Star className="h-5 w-5 text-primary" /><span className="font-medium">{t('discoverySection.popularProducts')}</span></div>
         {productsLoading || matchesLoading ? (
           <div className="flex items-center justify-center h-32"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
         ) : productsError ? (
           <Alert variant="destructive" className="mb-4"><AlertCircle className="h-4 w-4" /><AlertDescription>{productsError}</AlertDescription></Alert>
         ) : filteredProducts.length === 0 ? (
-          <p className="text-center text-muted-foreground">No data products found.</p>
+          <p className="text-center text-muted-foreground">{t('discoverySection.noProducts')}</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredProducts
@@ -233,13 +235,13 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
                           <Database className="h-5 w-5 text-primary" />
                           <CardTitle className="truncate flex-1">
                             <Link to={p.id ? `/data-products/${p.id}` : '/data-products'} className="hover:underline">
-                              {p.info?.title || 'Untitled'}
+                              {p.info?.title || t('discoverySection.untitled')}
                             </Link>
                           </CardTitle>
                           <button
                             className="inline-flex items-center justify-center text-foreground/80 hover:text-foreground transition-colors"
-                            title="Info"
-                            aria-label="Info"
+                            title={t('discoverySection.info')}
+                            aria-label={t('discoverySection.info')}
                             onClick={() => { if (p.id) { setInfoProductId(p.id); setInfoProductTitle(p.info?.title); } }}
                           >
                             <Info className="h-4 w-4" />
@@ -251,11 +253,11 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
                       </CardHeader>
                       <CardContent>
                         <div className="text-xs text-muted-foreground mb-1 truncate" title={domainLabel || undefined}>
-                          Domain: {domainLabel || 'Unknown'}
+                          {t('discoverySection.domain')}: {domainLabel || t('discoverySection.unknown')}
                         </div>
                         <div className="flex justify-between text-xs text-muted-foreground">
-                          <span className="truncate max-w-[60%]">Owner: {p.info?.owner || 'Unknown'}</span>
-                          <span>{p.info?.status || 'N/A'}</span>
+                          <span className="truncate max-w-[60%]">{t('discoverySection.owner')}: {p.info?.owner || t('discoverySection.unknown')}</span>
+                          <span>{p.info?.status || t('discoverySection.status')}</span>
                         </div>
                       </CardContent>
                     </Card>

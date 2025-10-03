@@ -1,0 +1,146 @@
+{
+  "title": "Ontos",
+  "tagline": "Manage business glossaries, data contracts, data products, personas, and more",
+  "search": {
+    "placeholder": "Search for data products, business terms, contracts..."
+  },
+  "overview": {
+    "title": "Overview",
+    "loading": "Loading...",
+    "noData": "No overview data available for the selected feature previews or your permissions.",
+    "error": "Error",
+    "tiles": {
+      "compliance": {
+        "title": "Compliance",
+        "description": "Current compliance score",
+        "notAvailable": "N/A"
+      },
+      "dataContracts": {
+        "title": "Data Contracts",
+        "description": "Active contracts"
+      },
+      "dataProducts": {
+        "title": "Data Products",
+        "description": "Total data products"
+      },
+      "businessGlossary": {
+        "title": "Business Glossary",
+        "description": "Glossaries / Terms"
+      },
+      "estates": {
+        "title": "Estates",
+        "description": "No estates configured",
+        "lastSync": "Last sync: {{date}} ({{status}})",
+        "syncStatus": {
+          "success": "success",
+          "failed": "failed",
+          "in_progress": "in progress",
+          "unknown": "unknown"
+        }
+      }
+    }
+  },
+  "complianceTrend": {
+    "title": "Compliance Trend",
+    "period": "Last 30 days",
+    "loading": "Loading compliance data...",
+    "error": "Error loading trend data: {{error}}",
+    "noData": "No compliance data available for the selected period.",
+    "chartLabel": "Compliance Score"
+  },
+  "noAccess": {
+    "message": "You currently don't have a specific role assigned.",
+    "action": "To access features, please",
+    "link": "request access to a role"
+  },
+  "quickActions": {
+    "title": "Quick Actions",
+    "loading": "Loading...",
+    "noActions": "No actions available.",
+    "actions": {
+      "browseProducts": "Browse Data Products",
+      "browseGlossary": "Browse Business Glossary",
+      "createProduct": "Create Data Product",
+      "defineContract": "Define Data Contract",
+      "reviewAssets": "Review Data Assets",
+      "manageEntitlements": "Manage Entitlements",
+      "catalogCommander": "Catalog Commander",
+      "settings": "Settings"
+    }
+  },
+  "recentActivity": {
+    "title": "Recent Activity",
+    "loading": "Loading recent activity...",
+    "error": "Failed to load recent activity",
+    "noActivity": "No recent activity.",
+    "entityLabel": "Entity:",
+    "actionLabel": "Action:",
+    "userLabel": "User:",
+    "timeLabel": "Time:",
+    "iriLabel": "Iri:",
+    "linkIdLabel": "Link Id:",
+    "openButton": "Open",
+    "openDetails": "Open details",
+    "noDetails": "No details available",
+    "by": "by",
+    "at": "at"
+  },
+  "discoverySection": {
+    "title": "Discovery",
+    "dataDomains": "Data Domains",
+    "exactMatchOnly": "Exact Matches Only",
+    "allDomains": "All Domains",
+    "clearFilter": "Clear domain filter",
+    "selectDomain": "Select a domain to view its hierarchy and filter products.",
+    "popularProducts": "Popular Data Products",
+    "loading": "Loading products...",
+    "error": "Failed to load data products",
+    "noProducts": "No data products found.",
+    "domain": "Domain",
+    "owner": "Owner",
+    "unknown": "Unknown",
+    "status": "N/A",
+    "untitled": "Untitled",
+    "info": "Info"
+  },
+  "dataCurationSection": {
+    "title": "Data Curation",
+    "createDataProduct": {
+      "title": "Create Data Product",
+      "description": "Use the wizard to define a new data product.",
+      "button": "Open"
+    },
+    "defineDataContract": {
+      "title": "Define Data Contract",
+      "description": "Create or update a technical contract.",
+      "button": "Open"
+    },
+    "createDataset": {
+      "title": "Create Dataset",
+      "description": "Manage datasets for matching and mastering.",
+      "button": "Open"
+    },
+    "createSchema": {
+      "title": "Create Schema",
+      "description": "Create or manage schemas and permissions.",
+      "openButton": "Open",
+      "createButton": "Create"
+    },
+    "createCatalog": {
+      "title": "Create Catalog",
+      "description": "Provision catalogs and manage access.",
+      "openButton": "Open",
+      "createButton": "Create"
+    }
+  },
+  "requiredActionsSection": {
+    "title": "Required Actions",
+    "pendingNotifications": "Pending Notifications",
+    "loading": "Loading...",
+    "noActions": "No pending actions.",
+    "openButton": "Open",
+    "markReadButton": "Mark read",
+    "readLabel": "Read",
+    "alertMessage": "This list shows only action-required notifications assigned to your role(s)."
+  }
+}

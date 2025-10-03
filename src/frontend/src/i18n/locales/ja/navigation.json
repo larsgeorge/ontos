@@ -1,0 +1,10 @@
+{
+  "home": "ホーム",
+  "groups": {
+    "dataProducts": "データ製品",
+    "governance": "ガバナンス",
+    "operations": "運用",
+    "security": "セキュリティ",
+    "system": "システム"
+  }
+}

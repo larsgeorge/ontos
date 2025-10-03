@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, ArrowRightCircle, Loader2 } from 'lucide-react';
@@ -22,6 +23,7 @@ interface RecentActivityProps {
 }
 
 export default function RecentActivity({ limit = 10 }: RecentActivityProps) {
+  const { t } = useTranslation('home');
   const { isLoading: permissionsLoading, hasPermission } = usePermissions();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -60,17 +62,17 @@ export default function RecentActivity({ limit = 10 }: RecentActivityProps) {
         setError(null);
       } catch (e: any) {
         setEntries([]);
-        setError(e.message || 'Failed to load recent activity');
+        setError(e.message || t('recentActivity.error'));
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [permissionsLoading, hasPermission, limit]);
+  }, [permissionsLoading, hasPermission, limit, t]);
 
   return (
     <div>
-      <h2 className="text-2xl font-semibold mb-4">Recent Activity</h2>
+      <h2 className="text-2xl font-semibold mb-4">{t('recentActivity.title')}</h2>
       <Card>
         <CardContent className="p-6">
           {loading ? (
@@ -78,7 +80,7 @@ export default function RecentActivity({ limit = 10 }: RecentActivityProps) {
           ) : error ? (
             <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>
           ) : entries.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No recent activity.</p>
+            <p className="text-sm text-muted-foreground">{t('recentActivity.noActivity')}</p>
           ) : (
             <ul className="space-y-2">
               {entries.map(e => {
@@ -98,8 +100,8 @@ export default function RecentActivity({ limit = 10 }: RecentActivityProps) {
                 const summary = (
                   <span>
                     <span className="font-medium">{e.entity_type}</span> {e.entity_id} — {e.action}
-                    {e.username ? <> by <span className="italic">{e.username}</span></> : null}
-                    {e.timestamp ? <> at {new Date(e.timestamp).toLocaleString()}</> : null}
+                    {e.username ? <> {t('recentActivity.by')} <span className="italic">{e.username}</span></> : null}
+                    {e.timestamp ? <> {t('recentActivity.at')} {new Date(e.timestamp).toLocaleString()}</> : null}
                   </span>
                 );
 
@@ -114,14 +116,14 @@ export default function RecentActivity({ limit = 10 }: RecentActivityProps) {
                         </TooltipTrigger>
                         <TooltipContent side="left" className="max-w-md text-primary-foreground">
                           <div className="space-y-1">
-                            <div><span className="font-semibold">Entity:</span> {e.entity_type} / {e.entity_id}</div>
-                            <div><span className="font-semibold">Action:</span> {e.action}</div>
-                            {e.username && <div><span className="font-semibold">User:</span> {e.username}</div>}
-                            {e.timestamp && <div><span className="font-semibold">Time:</span> {new Date(e.timestamp).toLocaleString()}</div>}
+                            <div><span className="font-semibold">{t('recentActivity.entityLabel')}</span> {e.entity_type} / {e.entity_id}</div>
+                            <div><span className="font-semibold">{t('recentActivity.actionLabel')}</span> {e.action}</div>
+                            {e.username && <div><span className="font-semibold">{t('recentActivity.userLabel')}</span> {e.username}</div>}
+                            {e.timestamp && <div><span className="font-semibold">{t('recentActivity.timeLabel')}</span> {new Date(e.timestamp).toLocaleString()}</div>}
                             {(iri || linkId) && (
                               <div className="pt-1 space-y-0.5">
-                                {iri && <div><span className="font-semibold">Iri:</span> {iri}</div>}
-                                {linkId && <div><span className="font-semibold">Link Id:</span> {linkId}</div>}
+                                {iri && <div><span className="font-semibold">{t('recentActivity.iriLabel')}</span> {iri}</div>}
+                                {linkId && <div><span className="font-semibold">{t('recentActivity.linkIdLabel')}</span> {linkId}</div>}
                               </div>
                             )}
                             {path && (
@@ -130,7 +132,7 @@ export default function RecentActivity({ limit = 10 }: RecentActivityProps) {
                                   className="underline underline-offset-2"
                                   onClick={(ev) => { ev.preventDefault(); navigate(path); }}
                                 >
-                                  Open
+                                  {t('recentActivity.openButton')}
                                 </button>
                               </div>
                             )}
@@ -140,8 +142,8 @@ export default function RecentActivity({ limit = 10 }: RecentActivityProps) {
 
                       <button
                         className={`shrink-0 p-1 rounded hover:bg-accent ${path ? 'text-primary hover:text-primary' : 'opacity-40 cursor-not-allowed'}`}
-                        aria-label="Open details"
-                        title={path ? 'Open details' : 'No details available'}
+                        aria-label={t('recentActivity.openDetails')}
+                        title={path ? t('recentActivity.openDetails') : t('recentActivity.noDetails')}
                         onClick={() => { if (path) navigate(path); }}
                       >
                         <ArrowRightCircle className="h-4 w-4" />
