@@ -7,6 +7,23 @@ from databricks.sdk.errors import DatabricksError
 
 logger = logging.getLogger(__name__)
 
+# Example usage:
+# 
+# for check in checks:
+#     manager = DQRuleManager(
+#         check=check,
+#         df=current_df,
+#         spark=self.spark,
+#         engine_user_metadata=self.engine_user_metadata,
+#         run_time=self.run_time,
+#         ref_dfs=ref_dfs,
+#     )
+#     log_telemetry(self.ws, "check", check.check_func.__name__)
+#     result = manager.process()
+#     check_conditions.append(result.condition)
+#     # The DataFrame should contain any new columns added by the dataset-level checks
+#     # to satisfy the check condition.
+#     current_df = result.check_df
 
 def log_telemetry(ws: WorkspaceClient, key: str, value: str) -> None:
     """
