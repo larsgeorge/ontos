@@ -1,0 +1,102 @@
+metadata:
+  # Domain-level introductory note
+  - entity_type: data_domain
+    entity_name: "Marketing"
+    notes:
+      - title: "About the Marketing Domain"
+        short_description: "Scope, key concepts, and stakeholders for Marketing."
+        content_markdown: |
+          # Marketing Domain
+
+          The Marketing domain focuses on customer engagement, personalization, and campaign
+          effectiveness. Typical assets include customer profiles, segmentation models,
+          propensity and uplift scores, and activation datasets for outbound channels.
+
+          Core concepts often used across data products:
+          - Customer identity and householding
+          - Consent and channel preferences
+          - Campaign taxonomy and lifecycle
+          - Response and attribution measures
+
+          Governance highlights include consent management and PII handling standards.
+
+    links:
+      - title: "Domain Operating Model"
+        url: "https://wiki.example.com/domains/marketing/operating-model"
+        short_description: "Roles, responsibilities, workflows."
+
+  # Product-level notes, links and documents
+  - entity_type: data_product
+    entity_name: "Customer Marketing Recommendations v1"
+    notes:
+      - title: "Overview"
+        short_description: "What this product offers and who should use it."
+        content_markdown: |
+          # Customer Marketing Recommendations v1
+
+          This product provides targeted customer recommendations to support lifecycle and
+          promotional campaigns. It merges prepared sales signals, customer profile
+          attributes, and model outputs to produce actionable target lists.
+
+          ![Overview](file:customer_recs_overview.svg)
+
+          Service levels and ownership:
+          - Data Owner: Marketing Team
+          - SLOs: Daily build by 06:00 UTC; refresh-on-demand supported
+          - Data Quality: Monitored via rules on coverage, deduplication, and eligibility
+
+      - title: "Architecture & Flow"
+        short_description: "Inputs, transformations, and outputs at a glance."
+        content_markdown: |
+          ## Architecture and Flow
+
+          ![Data Flow](file:customer_recs_flow.svg)
+
+          Inputs include prepared sales transactions and CRM profile data. Core steps:
+          1. Feature assembly and feature freshness checks
+          2. Inference using latest recommendation model
+          3. Eligibility filtering (consent, channel, recency)
+          4. Packaging outputs for activation channels
+
+    output_port_notes:
+      - port_name: marketing_campaign_list
+        title: "Output: marketing_campaign_list"
+        short_description: "CSV customer targets for downstream activation."
+        content_markdown: |
+          ### marketing_campaign_list
+
+          A CSV export containing customer identifiers and recommended campaign context.
+
+          Columns include:
+          - customer_id
+          - campaign_id
+          - recommended_offer
+          - priority
+          - rationale
+
+          Delivery and usage:
+          - Location: s3://data-marketing/retail/campaigns/v1/targets.csv
+          - Cadence: Daily by 06:00 UTC; ad-hoc on-demand supported
+          - Consumers: Marketing orchestration platform; analytics review dashboard
+
+    links:
+      - title: "Runbook"
+        url: "https://runbooks.example.com/marketing/customer-recs-v1"
+        short_description: "Operational procedures and on-call."
+      - title: "Dashboard"
+        url: "https://bi.example.com/dashboards/customer-recs-quality"
+        short_description: "Quality and volume tracking."
+      - title: "Design Doc"
+        url: "https://docs.example.com/design/customer-recs-v1"
+        short_description: "Detailed design and decisions."
+
+    documents:
+      - title: "Overview"
+        original_filename: "customer_recs_overview.svg"
+        path: "images/customer_marketing_recos/overview.svg"
+        short_description: "Product overview visual."
+      - title: "Data Flow"
+        original_filename: "customer_recs_flow.svg"
+        path: "images/customer_marketing_recos/flow.svg"
+        short_description: "High-level data flow."
+

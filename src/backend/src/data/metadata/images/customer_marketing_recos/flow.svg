@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420">
+  <defs>
+    <style>
+      .title { font: bold 20px sans-serif; fill: #111827; }
+      .text { font: 14px sans-serif; fill: #374151; }
+      .box { fill: #eef2ff; stroke: #6366f1; stroke-width: 1; rx: 8; }
+      .arrow { stroke: #4b5563; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4b5563" />
+    </marker>
+  </defs>
+  <text class="title" x="20" y="40">Customer Marketing Recommendations v1 — Data Flow</text>
+  <rect class="box" x="40" y="70" width="220" height="80" />
+  <text class="text" x="56" y="104">Prepared Sales Transactions</text>
+  <rect class="box" x="40" y="180" width="220" height="80" />
+  <text class="text" x="56" y="214">Customer Profiles (CRM)</text>
+  <rect class="box" x="300" y="125" width="180" height="80" />
+  <text class="text" x="316" y="160">Feature Assembly</text>
+  <rect class="box" x="520" y="125" width="160" height="80" />
+  <text class="text" x="536" y="160">Recommendation Model</text>
+  <rect class="box" x="520" y="250" width="160" height="80" />
+  <text class="text" x="536" y="285">Eligibility/Packaging</text>
+
+  <line class="arrow" x1="260" y1="110" x2="300" y2="150" />
+  <line class="arrow" x1="260" y1="220" x2="300" y2="170" />
+  <line class="arrow" x1="480" y1="165" x2="520" y2="165" />
+  <line class="arrow" x1="600" y1="205" x2="600" y2="250" />
+
+  <text class="text" x="420" y="360">Output: marketing_campaign_list (CSV)</text>
+</svg>
+

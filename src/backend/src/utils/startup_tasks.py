@@ -72,6 +72,7 @@ from src.repositories.tags_repository import (
 from src.common.search_registry import SEARCHABLE_ASSET_MANAGERS
 from src.common.config import get_settings
 from src.common.logging import get_logger
+from src.utils.metadata_seed_loader import seed_metadata_from_yaml
 
 logger = get_logger(__name__)
 
@@ -430,6 +431,17 @@ def load_initial_data(app: FastAPI) -> None:
                 sm.on_models_changed()
         except Exception:
             pass
+
+        # Seed example metadata (rich text, links, documents) for products and domains
+        try:
+            yaml_path = Path(__file__).parent.parent / "data" / "metadata" / "product_metadata.yaml"
+            if yaml_path.exists():
+                seed_metadata_from_yaml(db, settings, yaml_path)
+                logger.info("Seeded example metadata from YAML during startup.")
+            else:
+                logger.debug(f"Metadata YAML not found at {yaml_path}; skipping metadata seeding.")
+        except Exception as e:
+            logger.error(f"Failed seeding example metadata at startup: {e}", exc_info=True)
 
         # No final commit needed here if managers commit internally or role creation already committed
         logger.info("Initial data loading process completed for all managers.")
