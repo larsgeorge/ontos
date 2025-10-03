@@ -3,7 +3,7 @@ requires = ["hatchling>=1.21.0", "hatch-requirements-txt~=0.4.1"]
 build-backend = "hatchling.build"
 
 [project]
-name = "rucsak"
+name = "ontos"
 version = "0.1.0"
 description = "Unified Catalog Application"
 readme = "../README.md"
@@ -46,8 +46,8 @@ include = [
 dev-frontend = "yarn dev:frontend"
 dev-backend = "uvicorn --app-dir backend src.app:app --reload --host=0.0.0.0 --port=8000"
 deploy-and-run = [
-  'databricks bundle deploy --var="catalog=app_data" --var="schema=app_ucsak"',
-  "databricks bundle run app_ucsak",
+  'databricks bundle deploy --var="catalog=app_data" --var="schema=app_ontos"',
+  "databricks bundle run app_ontos",
 ]
 
 [tool.hatch.envs.dev.env]

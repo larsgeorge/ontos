@@ -88,7 +88,7 @@ The application requires a `.env` file in the root directory for configuration. 
 | `POSTGRES_PORT`            | Port number for the PostgreSQL server (required if `DATABASE_TYPE` is `postgres`)                             | `5432`                                       | Cond.    |
 | `POSTGRES_USER`            | Username for connecting to PostgreSQL (required if `DATABASE_TYPE` is `postgres`)                             | `app_user`                                   | Cond.    |
 | `POSTGRES_PASSWORD`        | Password for the PostgreSQL user (required if `DATABASE_TYPE` is `postgres`)                                  | `your_secure_password`                     | Cond.    |
-| `POSTGRES_DB`              | Name of the PostgreSQL database to use (required if `DATABASE_TYPE` is `postgres`)                            | `app_ucsak_db`                               | Cond.    |
+| `POSTGRES_DB`              | Name of the PostgreSQL database to use (required if `DATABASE_TYPE` is `postgres`)                            | `app_ontos_db`                               | Cond.    |
 | `DB_SCHEMA`                | Database schema to use for application tables (Optional, defaults to `public` for PostgreSQL)                 | `myapp_schema`                               | No       |
 | `ENV`                      | Deployment environment (`LOCAL`, `DEV`, `PROD`)                                                               | `LOCAL`                                      | No       |
 | `DEBUG`                    | Enable debug mode for FastAPI                                                                                 | `True`                                       | No       |
@@ -183,13 +183,13 @@ If you want to use a local PostgreSQL instance for development, here are the ste
 3. Run the necessary commands to create resources
 
     ```sql
-    postgres=# CREATE ROLE rucsak_app_user WITH LOGIN PASSWORD '<my_password>';
-    postgres=# CREATE DATABASE app_ucsak;
-    postgres=# GRANT ALL PRIVILEGES ON DATABASE app_ucsak TO rucsak_app_user;
-    postgres=# GRANT USAGE ON SCHEMA public TO rucsak_app_user;
-    postgres=# GRANT CREATE ON SCHEMA public TO rucsak_app_user;
+    postgres=# CREATE ROLE ontos_app_user WITH LOGIN PASSWORD '<my_password>';
+    postgres=# CREATE DATABASE app_ontos;
+    postgres=# GRANT ALL PRIVILEGES ON DATABASE app_ontos TO ontos_app_user;
+    postgres=# GRANT USAGE ON SCHEMA public TO ontos_app_user;
+    postgres=# GRANT CREATE ON SCHEMA public TO ontos_app_user;
 
-    postgres=# 
+    postgres=#
     \q
     ```
 
@@ -198,12 +198,12 @@ If you want to use a local PostgreSQL instance for development, here are the ste
 4. Log in as the app user role and create remaining resources
 
     ```sql
-    ➜  ucapp git:(main) ✗ psql -U rucsak_app_user -d app_ucsak
+    ➜  ucapp git:(main) ✗ psql -U ontos_app_user -d app_ontos
     psql (16.9 (Homebrew))
     Type "help" for help.
-    app_ucsak=> CREATE SCHEMA app_ucsak;
-    app_ucsak=> GRANT USAGE ON SCHEMA app_ucsak TO rucsak_app_user;
-    app_ucsak=> GRANT ALL ON SCHEMA app_ucsak TO rucsak_app_user;
+    app_ontos=> CREATE SCHEMA app_ontos;
+    app_ontos=> GRANT USAGE ON SCHEMA app_ontos TO ontos_app_user;
+    app_ontos=> GRANT ALL ON SCHEMA app_ontos TO ontos_app_user;
     ```
 
 5. Configure app to use local database 
@@ -211,10 +211,10 @@ If you want to use a local PostgreSQL instance for development, here are the ste
     ```env
     POSTGRES_HOST=localhost
     POSTGRES_PORT=5432
-    POSTGRES_USER=rucsak_app_user
+    POSTGRES_USER=ontos_app_user
     POSTGRES_PASSWORD=<my_password>
-    POSTGRES_DB=app_ucsak
-    POSTGRES_DB_SCHEMA=app_ucsak
+    POSTGRES_DB=app_ontos
+    POSTGRES_DB_SCHEMA=app_ontos
     ```
 
     Note: Use the above `<my_password>` here

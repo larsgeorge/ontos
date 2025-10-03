@@ -1,5 +1,5 @@
 bundle:
-  name: rucsak
+  name: ontos
 
 variables:
   sql_warehouse_id:
@@ -11,7 +11,7 @@ variables:
     default: "app_data"
   schema_name:
     description: "Name of the schema to use"
-    default: "app_ucsak"
+    default: "app_ontos"
   volume_name:
     description: "Name of the volume to use"
     default: "app_files"
@@ -38,8 +38,8 @@ variables:
 
 resources:
   apps:
-    rucsak:
-      name: "rucsak"
+    ontos:
+      name: "ontos"
       description: "Ontos"
       source_code_path: "."
       config: ${var.app_config}
@@ -57,10 +57,10 @@ targets:
   dev:
     variables:
       catalog_name: "app_data_dev"
-      schema_name: "app_ucsak_dev"
+      schema_name: "app_ontos_dev"
       volume_name: "app_files_dev"
   prod:
     variables:
       catalog_name: "app_data_prod"
-      schema_name: "app_ucsak_prod"
+      schema_name: "app_ontos_prod"
       volume_name: "app_files_prod"
