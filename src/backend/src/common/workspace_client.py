@@ -1,14 +1,15 @@
 import logging
 import signal
 import time
-from functools import wraps
-from typing import Any, Callable, Dict, Optional
+from functools import cached_property, wraps
+from typing import Any, Callable, Dict, Optional, final
 
 from databricks import sql
 from databricks.sdk import WorkspaceClient
 from fastapi import Depends
 
 from .config import Settings, get_settings
+from src import __version__
 
 # Configure logging
 from src.common.logging import get_logger
@@ -172,15 +173,39 @@ class CachingWorkspaceClient(WorkspaceClient):
              raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}' - use the property")
         return getattr(self._client, name)
 
+@staticmethod
+@final
+def _verify_workspace_client(ws: WorkspaceClient) -> WorkspaceClient:
+    """
+    Verify the Databricks WorkspaceClient configuration and connectivity.
+    Sets product info for telemetry tracking.
+    """
+    # Using reflection to set right value for _product_info as ontos for telemetry
+    product_info = getattr(ws.config, '_product_info')
+    if product_info[0] != "ontos":
+        setattr(ws.config, '_product_info', ('ontos', __version__))
+        logger.info(f"Set workspace client product info to: ontos {__version__}")
+
+    # make sure Databricks workspace is accessible
+    # use api that works on all workspaces and clusters including group assigned clusters
+    try:
+        ws.clusters.select_spark_version()
+        logger.info("Workspace connectivity verified successfully")
+    except Exception as e:
+        logger.error(f"Failed to verify workspace connectivity: {e}")
+        raise
+
+    return ws
+
 def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30) -> WorkspaceClient:
     """Get a configured Databricks workspace client with caching.
-    
+
     Args:
         settings: Application settings (optional, will be fetched if not provided)
         timeout: Timeout in seconds for API calls
-        
+
     Returns:
-        Cached workspace client instance
+        Cached workspace client instance with verified connectivity and telemetry
     """
     if settings is None:
         settings = get_settings()
@@ -193,7 +218,11 @@ def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30)
         host=settings.DATABRICKS_HOST,
         token=settings.DATABRICKS_TOKEN
     )
-    return CachingWorkspaceClient(client, timeout=timeout)
+
+    # Verify connectivity and set telemetry headers
+    verified_client = _verify_workspace_client(client)
+
+    return CachingWorkspaceClient(verified_client, timeout=timeout)
 
 def get_workspace_client_dependency(timeout: int = 30):
     """Returns the actual dependency function for FastAPI."""
