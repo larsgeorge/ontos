@@ -43,13 +43,15 @@ async def get_job_status(
 @router.get('/jobs/runs')
 async def get_job_runs(
     workflow_installation_id: Optional[str] = None,
+    workflow_id: Optional[str] = None,
     limit: int = 10,
     db: Session = Depends(get_db)
 ) -> List[WorkflowJobRun]:
-    """Get recent job runs, optionally filtered by workflow installation.
+    """Get recent job runs, optionally filtered by workflow installation or workflow ID.
 
     Args:
-        workflow_installation_id: Optional filter by workflow installation
+        workflow_installation_id: Optional filter by workflow installation UUID
+        workflow_id: Optional filter by workflow ID (e.g., 'business-glossary-sync')
         limit: Maximum number of runs to return (default 10, max 100)
 
     Returns:
@@ -62,11 +64,16 @@ async def get_job_runs(
         runs = workflow_job_run_repo.get_recent_runs(
             db,
             workflow_installation_id=workflow_installation_id,
+            workflow_id=workflow_id,
             limit=limit
         )
 
-        # Convert to Pydantic models
-        return [WorkflowJobRun.from_orm(run) for run in runs]
+        logger.info(f"get_job_runs: Found {len(runs)} runs (workflow_id={workflow_id}, installation_id={workflow_installation_id})")
+
+        # Convert to Pydantic models (Pydantic v2)
+        result = [WorkflowJobRun.model_validate(run) for run in runs]
+        logger.info(f"get_job_runs: Returning {len(result)} validated runs")
+        return result
     except Exception as e:
         logger.error(f"Error getting job runs: {e}")
         raise HTTPException(

@@ -24,24 +24,38 @@ class WorkflowJobRunRepository(CRUDBase[WorkflowJobRunDb, WorkflowJobRunCreate, 
         db: Session,
         *,
         workflow_installation_id: Optional[str] = None,
+        workflow_id: Optional[str] = None,
         limit: int = 10
     ) -> List[WorkflowJobRunDb]:
-        """Retrieves recent job runs, optionally filtered by workflow installation.
+        """Retrieves recent job runs, optionally filtered by workflow installation or workflow ID.
 
         Args:
             db: Database session
-            workflow_installation_id: Optional filter by workflow installation
+            workflow_installation_id: Optional filter by workflow installation UUID
+            workflow_id: Optional filter by workflow ID (will look up installation)
             limit: Maximum number of runs to return (default 10)
 
         Returns:
             List of job runs ordered by start_time descending
         """
+        from src.db_models.workflow_installations import WorkflowInstallationDb
+
         query = db.query(self.model)
 
-        if workflow_installation_id:
+        # If workflow_id is provided, join with installations to filter
+        if workflow_id:
+            query = query.join(
+                WorkflowInstallationDb,
+                self.model.workflow_installation_id == WorkflowInstallationDb.id
+            ).filter(WorkflowInstallationDb.workflow_id == workflow_id)
+            logger.debug(f"Filtering runs by workflow_id: {workflow_id}")
+        elif workflow_installation_id:
             query = query.filter(self.model.workflow_installation_id == workflow_installation_id)
+            logger.debug(f"Filtering runs by workflow_installation_id: {workflow_installation_id}")
 
-        return query.order_by(desc(self.model.start_time)).limit(limit).all()
+        results = query.order_by(desc(self.model.start_time)).limit(limit).all()
+        logger.info(f"get_recent_runs returned {len(results)} runs (workflow_id={workflow_id}, installation_id={workflow_installation_id}, limit={limit})")
+        return results
 
     def mark_as_notified(self, db: Session, *, run_id: int) -> Optional[WorkflowJobRunDb]:
         """Marks a job run as notified by setting notified_at timestamp.
@@ -82,6 +96,7 @@ class WorkflowJobRunRepository(CRUDBase[WorkflowJobRunDb, WorkflowJobRunCreate, 
         Returns:
             Created or updated job run record
         """
+        logger.debug(f"Upserting run_id {run_id} with state: {run_data.get('life_cycle_state')} / {run_data.get('result_state')}")
         existing = self.get_by_run_id(db, run_id=run_id)
 
         # Calculate duration if we have both start and end times
@@ -100,6 +115,7 @@ class WorkflowJobRunRepository(CRUDBase[WorkflowJobRunDb, WorkflowJobRunCreate, 
             existing.run_name = run_data.get('run_name')
             db.commit()
             db.refresh(existing)
+            logger.info(f"Updated job run {run_id}: {existing.life_cycle_state} / {existing.result_state}")
             return existing
         else:
             # Create new record

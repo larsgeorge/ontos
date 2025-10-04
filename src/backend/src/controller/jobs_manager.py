@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import json
@@ -537,8 +537,16 @@ class JobsManager:
                         break
 
                     try:
-                        # Get recent runs for this job (limit to reasonable number to avoid overwhelming)
-                        runs = self._client.jobs.list_runs(job_id=installation.job_id, limit=10)
+                        # Calculate time range for backfill (default: last 7 days)
+                        backfill_days = self._settings.JOB_POLLING_BACKFILL_DAYS if self._settings else 7
+                        start_time_from = int((datetime.utcnow() - timedelta(days=backfill_days)).timestamp() * 1000)
+
+                        # Get runs from last N days (time range naturally limits results)
+                        # This enables backfilling missed runs after app restart/downtime
+                        runs = self._client.jobs.list_runs(
+                            job_id=installation.job_id,
+                            start_time_from=start_time_from
+                        )
                         if not runs:
                             continue
 

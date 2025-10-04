@@ -37,10 +37,9 @@ export function JobRunsDialog({ workflowId, workflowName, open, onOpenChange }: 
   const fetchRuns = async () => {
     setIsLoading(true);
     try {
-      // Note: We need to get workflow_installation_id from workflow_id
-      // For now, fetch all runs and filter by workflow name
-      // TODO: Update API to support filtering by workflow_id
-      const response = await get<WorkflowJobRun[]>('/api/jobs/runs?limit=50');
+      const response = await get<WorkflowJobRun[]>(
+        `/api/jobs/runs?workflow_id=${encodeURIComponent(workflowId)}&limit=50`
+      );
       setRuns(response.data || []);
     } catch (error) {
       console.error('Failed to fetch job runs:', error);

@@ -17,16 +17,56 @@ NotificationUpdate = Union[NotificationApi, Dict[str, Any]]
 class NotificationRepository(CRUDBase[NotificationDb, NotificationCreate, NotificationUpdate]):
     """Repository for Notification CRUD operations."""
 
+    def _deserialize_json_fields(self, db_obj: NotificationDb) -> NotificationDb:
+        """Deserialize JSON string fields back to Python objects."""
+        if db_obj.action_payload and isinstance(db_obj.action_payload, str):
+            try:
+                db_obj.action_payload = json.loads(db_obj.action_payload)
+            except (json.JSONDecodeError, TypeError):
+                pass  # Keep as string if deserialization fails
+
+        if db_obj.data and isinstance(db_obj.data, str):
+            try:
+                db_obj.data = json.loads(db_obj.data)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        if db_obj.target_roles and isinstance(db_obj.target_roles, str):
+            try:
+                db_obj.target_roles = json.loads(db_obj.target_roles)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        return db_obj
+
+    def get(self, db: Session, id: Any) -> Optional[NotificationDb]:
+        """Override get to deserialize JSON fields."""
+        db_obj = super().get(db, id)
+        if db_obj:
+            return self._deserialize_json_fields(db_obj)
+        return db_obj
+
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[NotificationDb]:
+        """Override get_multi to deserialize JSON fields."""
+        db_objs = super().get_multi(db, skip=skip, limit=limit)
+        return [self._deserialize_json_fields(obj) for obj in db_objs]
+
     # Override create and update to handle potential JSON string conversion for payload
     # and explicit Enum -> String conversion for the 'type' field.
     def create(self, db: Session, *, obj_in: NotificationCreate) -> NotificationDb:
         logger.debug(f"Creating Notification (DB layer)")
         obj_in_data = obj_in.model_dump(exclude_unset=True) 
 
-        # Convert action_payload dict to JSON string if present
+        # Convert dict/list fields to JSON strings if present
         if 'action_payload' in obj_in_data and isinstance(obj_in_data['action_payload'], dict):
             obj_in_data['action_payload'] = json.dumps(obj_in_data['action_payload'])
-            
+
+        if 'data' in obj_in_data and isinstance(obj_in_data['data'], dict):
+            obj_in_data['data'] = json.dumps(obj_in_data['data'])
+
+        if 'target_roles' in obj_in_data and isinstance(obj_in_data['target_roles'], list):
+            obj_in_data['target_roles'] = json.dumps(obj_in_data['target_roles'])
+
         # Explicitly convert Enum to its string value
         if 'type' in obj_in_data and isinstance(obj_in_data['type'], NotificationType):
             obj_in_data['type'] = obj_in_data['type'].value
@@ -39,10 +79,10 @@ class NotificationRepository(CRUDBase[NotificationDb, NotificationCreate, Notifi
             
         db_obj = self.model(**obj_in_data)
         db.add(db_obj)
-        # --- Flush and Refresh --- 
+        # --- Flush and Refresh ---
         db.flush()  # Send pending changes to DB (assigns defaults like 'read')
         db.refresh(db_obj) # Update the db_obj instance with DB state
-        return db_obj
+        return self._deserialize_json_fields(db_obj)
 
     def update(self, db: Session, *, db_obj: NotificationDb, obj_in: NotificationUpdate) -> NotificationDb:
         logger.debug(f"Updating Notification (DB layer) with id: {db_obj.id}")
@@ -51,10 +91,16 @@ class NotificationRepository(CRUDBase[NotificationDb, NotificationCreate, Notifi
         else:
             update_data = obj_in.model_dump(exclude_unset=True) 
 
-        # Convert action_payload dict to JSON string if present in update data
+        # Convert dict/list fields to JSON strings if present in update data
         if 'action_payload' in update_data and isinstance(update_data['action_payload'], dict):
             update_data['action_payload'] = json.dumps(update_data['action_payload'])
-            
+
+        if 'data' in update_data and isinstance(update_data['data'], dict):
+            update_data['data'] = json.dumps(update_data['data'])
+
+        if 'target_roles' in update_data and isinstance(update_data['target_roles'], list):
+            update_data['target_roles'] = json.dumps(update_data['target_roles'])
+
         # Explicitly convert Enum to its string value
         if 'type' in update_data and isinstance(update_data['type'], NotificationType):
             update_data['type'] = update_data['type'].value

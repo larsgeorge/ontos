@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     # If not set, will derive from __file__ path (works when app runs in workspace)
     # For local dev with remote jobs, set to workspace deployment path (e.g., /Workspace/Users/user@domain.com/app-name/src/backend/src)
     WORKSPACE_APP_PATH: Optional[str] = Field(None, env='WORKSPACE_APP_PATH')
+    # Number of days to look back when polling for job runs (for backfilling missed runs)
+    # On startup or after downtime, will fetch all runs from last N days
+    JOB_POLLING_BACKFILL_DAYS: int = Field(7, env='JOB_POLLING_BACKFILL_DAYS')
+    # Interval in seconds between job run polling cycles
+    # Lower values = more responsive updates but higher API load
+    JOB_POLLING_INTERVAL_SECONDS: int = Field(300, env='JOB_POLLING_INTERVAL_SECONDS')
     sync_enabled: bool = False
     sync_repository: Optional[str] = None
     enabled_jobs: List[str] = Field(default_factory=list)

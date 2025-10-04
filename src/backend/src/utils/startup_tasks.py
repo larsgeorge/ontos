@@ -273,9 +273,9 @@ def initialize_managers(app: FastAPI):
         # --- Start background job polling ---
         try:
             if app.state.jobs_manager:
-                # Poll every 5 minutes (300 seconds)
-                app.state.jobs_manager.start_background_polling(interval_seconds=300)
-                logger.info("Started background job polling")
+                # Use configured polling interval (default: 5 minutes)
+                app.state.jobs_manager.start_background_polling(interval_seconds=settings.JOB_POLLING_INTERVAL_SECONDS)
+                logger.info(f"Started background job polling (interval: {settings.JOB_POLLING_INTERVAL_SECONDS}s)")
         except Exception as e:
             logger.error(f"Failed to start background job polling: {e}", exc_info=True)
             # Don't fail startup if polling fails to start
