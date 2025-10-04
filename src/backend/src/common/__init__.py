@@ -17,13 +17,11 @@ from .database import InMemorySession, get_db
 from .deps import (
     get_db_dep,
     get_git_service_dep,
-    get_job_runner_dep,
     get_search_service_dep,
     get_user_id,
     require_user_id,
 )
 from .git import GitService, get_git_service
-from .job_runner import JobRunner, get_job_runner
 from .logging import get_logger
 from .middleware import ErrorHandlingMiddleware, LoggingMiddleware
 from .search import SearchService, get_search_service
@@ -36,15 +34,12 @@ __all__ = [
     "init_config",
     'get_db',
     'get_logger',
-    'JobRunner',
-    'get_job_runner',
     'SearchService',
     'get_search_service',
     'GitService',
     'get_git_service',
     'get_db_dep',
     'get_search_service_dep',
-    'get_job_runner_dep',
     'get_git_service_dep',
     'get_user_id',
     'require_user_id',

@@ -3,8 +3,8 @@ description: "Continuously sync data product metadata and status updates."
 format: "MULTI_TASK"
 tasks:
   - task_key: "data_product_sync"
-    notebook_task:
-      notebook_path: "data_product_sync.ipynb"
+    spark_python_task:
+      python_file: "data_product_sync.py"
     # existing_cluster_id will be injected from settings if not present
 
 # Run continuously as a streaming job

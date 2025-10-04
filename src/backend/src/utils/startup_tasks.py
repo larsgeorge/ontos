@@ -264,11 +264,21 @@ def initialize_managers(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed preloading compliance data at startup: {e}", exc_info=True)
 
-        # --- Commit session potentially used for default role creation --- 
-        # This commit is crucial AFTER all managers are initialized AND 
+        # --- Commit session potentially used for default role creation ---
+        # This commit is crucial AFTER all managers are initialized AND
         # default roles are potentially created by the SettingsManager
         db_session.commit()
         logger.info("Manager initialization and default role creation transaction committed.")
+
+        # --- Start background job polling ---
+        try:
+            if app.state.jobs_manager:
+                # Poll every 5 minutes (300 seconds)
+                app.state.jobs_manager.start_background_polling(interval_seconds=300)
+                logger.info("Started background job polling")
+        except Exception as e:
+            logger.error(f"Failed to start background job polling: {e}", exc_info=True)
+            # Don't fail startup if polling fails to start
 
     except Exception as e:
         logger.critical(f"Failed during application startup (manager init or default roles): {e}", exc_info=True)

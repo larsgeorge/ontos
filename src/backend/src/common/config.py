@@ -60,6 +60,8 @@ class Settings(BaseSettings):
 
     # Job settings
     # Track the Databricks job cluster ID (string). Do not scan clusters.
+    # If not set (None), jobs will use Databricks serverless compute.
+    # If set, jobs will use the specified cluster ID via new_cluster or existing_cluster_id.
     job_cluster_id: Optional[str] = None
     sync_enabled: bool = False
     sync_repository: Optional[str] = None

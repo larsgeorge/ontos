@@ -3,7 +3,10 @@ description: "Validate data contracts and quality rules across datasets."
 format: "MULTI_TASK"
 tasks:
   - task_key: "data_contract_validation"
-    notebook_task:
-      notebook_path: "data_contract_validation.ipynb"
+    spark_python_task:
+      python_file: "data_contract_validation.py"
     # existing_cluster_id will be injected from settings if not present
 
+tags:
+  environment: "development"
+  owner: "ontos"

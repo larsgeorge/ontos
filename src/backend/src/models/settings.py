@@ -19,14 +19,6 @@ class JobCluster(BaseModel):
     status: str
     workspace_id: str
 
-class WorkflowInstallation(BaseModel):
-    id: str
-    name: str
-    installed_at: datetime
-    updated_at: datetime
-    status: str
-    workspace_id: str
-
 # --- RBAC Models ---
 
 # Enum for Home Sections (kept in sync with frontend)

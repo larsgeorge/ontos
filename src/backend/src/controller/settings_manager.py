@@ -15,10 +15,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.controller.notifications_manager import NotificationsManager
 from src.models.notifications import NotificationType, Notification
-from src.models.settings import JobCluster, WorkflowInstallation, AppRole, AppRoleCreate, AppRoleUpdate, HomeSection
+from src.models.settings import JobCluster, AppRole, AppRoleCreate, AppRoleUpdate, HomeSection
+from src.models.workflow_installations import WorkflowInstallation
 from src.common.features import get_feature_config, FeatureAccessLevel, get_all_access_levels, APP_FEATURES
 from src.common.logging import get_logger
-from src.repositories.settings_repository import app_role_repo, AppRoleRepository
+from src.repositories.settings_repository import app_role_repo
+from src.repositories.workflow_installations_repository import workflow_installation_repo
 from src.db_models.settings import AppRoleDb
 
 logger = get_logger(__name__)
@@ -102,14 +104,47 @@ class SettingsManager:
         # Initialize available jobs from workflow directory
         try:
             from src.controller.jobs_manager import JobsManager
-            self._jobs = JobsManager(db=self._db, ws_client=self._client, notifications_manager=self._notifications_manager)
+            self._jobs = JobsManager(db=self._db, ws_client=self._client, notifications_manager=self._notifications_manager, settings=self._settings)
             self._available_jobs = [w["id"] for w in self._jobs.list_available_workflows()]
-        except Exception:
+
+            # Load installations from database
+            self._load_installations_from_db()
+        except Exception as e:
+            logger.error(f"Error initializing JobsManager: {e}")
             self._jobs = None
             self._available_jobs = []
 
     def set_notifications_manager(self, notifications_manager: 'NotificationsManager') -> None:
         self._notifications_manager = notifications_manager
+
+    def _load_installations_from_db(self):
+        """Load workflow installations from database into memory."""
+        try:
+            db_installations = workflow_installation_repo.get_all(self._db)
+            for db_inst in db_installations:
+                # Deserialize last_job_state from JSON if present
+                last_job_state = None
+                if db_inst.last_job_state:
+                    try:
+                        last_job_state = json.loads(db_inst.last_job_state)
+                    except json.JSONDecodeError:
+                        logger.warning(f"Invalid JSON in last_job_state for workflow {db_inst.workflow_id}")
+
+                installation = WorkflowInstallation(
+                    id=db_inst.id,
+                    workflow_id=db_inst.workflow_id,
+                    name=db_inst.name,
+                    job_id=db_inst.job_id,
+                    workspace_id=db_inst.workspace_id,
+                    status=db_inst.status,
+                    installed_at=db_inst.installed_at,
+                    updated_at=db_inst.updated_at
+                )
+                self._installations[db_inst.workflow_id] = installation
+
+            logger.info(f"Loaded {len(self._installations)} workflow installations from database")
+        except Exception as e:
+            logger.error(f"Error loading installations from database: {e}")
 
     def ensure_default_roles_exist(self):
         """Checks if default roles exist and creates them if necessary."""
@@ -258,6 +293,9 @@ class SettingsManager:
         to_install = sorted(list(set(desired_enabled) - set(current_enabled)))
         to_remove = sorted(list(set(current_enabled) - set(desired_enabled)))
 
+        logger.info(f"Current enabled: {current_enabled}, Desired enabled: {desired_enabled}")
+        logger.info(f"To install: {to_install}, To remove: {to_remove}")
+
         # Apply changes on Databricks and collect errors
         errors = []
         
@@ -266,16 +304,15 @@ class SettingsManager:
             if job_id in self._available_jobs:
                 try:
                     if self._jobs:
-                        # Check if cluster ID is valid before installing (use the new desired value)
-                        cluster_id_to_use = desired_cluster_id or self._settings.job_cluster_id
-                        if not cluster_id_to_use or cluster_id_to_use in ['cluster-id', '']:
-                            error_msg = f"Invalid cluster ID '{cluster_id_to_use}' for workflow '{job_id}'. Please configure a valid Databricks cluster ID."
-                            errors.append(error_msg)
-                            logger.error(error_msg)
-                            continue
-                            
+                        # Use the new desired cluster ID value, or fall back to current setting
+                        # If None or empty, workflow will use Databricks serverless compute
+                        cluster_id_to_use = desired_cluster_id if desired_cluster_id is not None else self._settings.job_cluster_id
+                        # Filter out placeholder values that indicate "not set"
+                        if cluster_id_to_use in ['cluster-id', '']:
+                            cluster_id_to_use = None
+
                         self._jobs.install_workflow(job_id, job_cluster_id=cluster_id_to_use)
-                        logger.info(f"Successfully installed workflow '{job_id}'")
+                        logger.info(f"Successfully installed workflow '{job_id}' with cluster_id={cluster_id_to_use or 'serverless'}")
                 except Exception as e:
                     error_msg = f"Failed to install workflow '{job_id}': {str(e)}"
                     errors.append(error_msg)
@@ -286,19 +323,32 @@ class SettingsManager:
                 logger.warning(error_msg)
 
         for job_id in to_remove:
+            logger.info(f"Processing removal of workflow '{job_id}'")
+
             if job_id in self._available_jobs:
                 try:
                     if self._jobs:
-                        job = self._find_job_by_name(job_id)
-                        if job:
-                            self._jobs.remove_workflow(job.job_id)
+                        # Look up from database instead of Databricks (much faster)
+                        logger.info(f"Looking up installation record for workflow: '{job_id}'")
+                        installation = workflow_installation_repo.get_by_workflow_id(self._db, workflow_id=job_id)
+
+                        if installation:
+                            logger.info(f"Found installation record, calling remove_workflow with job_id: {installation.job_id}")
+                            self._jobs.remove_workflow(installation.job_id)
                             logger.info(f"Successfully removed workflow '{job_id}'")
                         else:
-                            logger.warning(f"Job '{job_id}' not found in Databricks, may have been already deleted")
+                            logger.warning(f"Installation record for '{job_id}' not found in database, attempting Databricks lookup")
+                            # Fallback to Databricks lookup if not in database
+                            job = self._jobs.find_job_by_name(job_id)
+                            if job:
+                                self._jobs.remove_workflow(job.job_id)
+                                logger.info(f"Successfully removed workflow '{job_id}' (via Databricks lookup)")
+                            else:
+                                logger.warning(f"Job '{job_id}' not found in Databricks either, may have been already deleted")
                 except Exception as e:
                     error_msg = f"Failed to remove workflow '{job_id}': {str(e)}"
                     errors.append(error_msg)
-                    logger.error(error_msg)
+                    logger.error(error_msg, exc_info=True)
             else:
                 error_msg = f"Workflow '{job_id}' not found in available workflows"
                 errors.append(error_msg)
@@ -339,9 +389,10 @@ class SettingsManager:
             try:
                 from src.controller.jobs_manager import JobsManager
                 self._jobs = JobsManager(
-                    db=self._db, 
-                    ws_client=self._client, 
-                    notifications_manager=self._notifications_manager
+                    db=self._db,
+                    ws_client=self._client,
+                    notifications_manager=self._notifications_manager,
+                    settings=self._settings
                 )
                 self._available_jobs = [w["id"] for w in self._jobs.list_available_workflows()]
             except Exception as e:

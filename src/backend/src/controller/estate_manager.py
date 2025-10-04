@@ -5,7 +5,6 @@ import uuid # Import uuid for generating policy IDs
 from src.common.workspace_client import WorkspaceClient
 from src.common.config import Settings
 from src.models.estate import Estate, CloudType, SyncStatus, ConnectionType, SharingPolicy, SharingRule, SharingResourceType, SharingRuleOperator # Import new models
-from src.common.job_runner import JobRunner
 import logging
 import yaml
 
@@ -16,7 +15,6 @@ logger = get_logger(__name__)
 
 class EstateManager:
     def __init__(self, client: WorkspaceClient, settings: Settings):
-        self.job_runner = JobRunner(client, settings)
         self.estates: List[Estate] = []
 
     def _parse_sharing_policies(self, policies_data: Optional[List[dict]]) -> List[SharingPolicy]:

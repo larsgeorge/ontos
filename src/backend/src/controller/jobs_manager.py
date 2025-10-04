@@ -13,17 +13,23 @@ from databricks.sdk.service.jobs import RunState, RunResultState
 from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
+from src.repositories.workflow_installations_repository import workflow_installation_repo
+from src.models.workflow_installations import WorkflowInstallation
 
 logger = get_logger(__name__)
 
 
 class JobsManager:
-    def __init__(self, db: Session, ws_client: WorkspaceClient, *, workflows_root: Optional[Path] = None, notifications_manager=None):
+    def __init__(self, db: Session, ws_client: WorkspaceClient, *, workflows_root: Optional[Path] = None, notifications_manager=None, settings=None):
         self._db = db
         self._client = ws_client
         self._workflows_root = workflows_root or Path(__file__).parent.parent / "workflows"
         self._notifications_manager = notifications_manager
+        self._settings = settings
         self._running_jobs: Dict[int, str] = {}  # run_id -> notification_id
+        self._notified_failures: set = set()  # Track run_ids we've already notified about
+        self._polling_thread: Optional[threading.Thread] = None
+        self._stop_polling = threading.Event()
 
     def list_available_workflows(self) -> List[Dict[str, str]]:
         root = self._workflows_root
@@ -52,51 +58,100 @@ class JobsManager:
 
     def install_workflow(self, workflow_id: str, *, job_cluster_id: Optional[str] = None) -> int:
         wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=job_cluster_id)
-        
-        # Build job settings with additional configuration options
-        job_settings = jobs.JobSettings(
-            name=wf_def.get('name', workflow_id),
-            tasks=self._build_tasks_from_definition(wf_def)
+
+        # Build job settings kwargs from workflow definition
+        tasks = self._build_tasks_from_definition(wf_def)
+        job_settings_kwargs = {
+            'name': wf_def.get('name', workflow_id),
+            'tasks': tasks  # Keep as Task objects
+        }
+
+        # Check if any tasks need serverless (no cluster_id specified)
+        # If so, add default environment for serverless compute
+        has_serverless_tasks = any(
+            not hasattr(task, 'existing_cluster_id') or task.existing_cluster_id is None
+            for task in tasks
         )
-        
+        if has_serverless_tasks and 'environments' not in wf_def:
+            from databricks.sdk.service import compute
+
+            # Add default serverless environment
+            job_settings_kwargs['environments'] = [
+                jobs.JobEnvironment(
+                    environment_key='default',
+                    spec=compute.Environment(
+                        client='1'  # Use default Databricks runtime
+                    )
+                )
+            ]
+            # Set environment_key on tasks that don't have a cluster
+            for task in tasks:
+                if not hasattr(task, 'existing_cluster_id') or task.existing_cluster_id is None:
+                    task.environment_key = 'default'
+
         # Add optional job configuration from YAML
         if 'schedule' in wf_def:
             schedule_config = wf_def['schedule']
             if isinstance(schedule_config, dict):
-                cron_schedule = jobs.CronSchedule(
+                job_settings_kwargs['schedule'] = jobs.CronSchedule(
                     quartz_cron_expression=schedule_config.get('quartz_cron_expression'),
                     timezone_id=schedule_config.get('timezone_id', 'UTC'),
                     pause_status=jobs.PauseStatus(schedule_config.get('pause_status', 'UNPAUSED'))
                 )
-                job_settings.schedule = cron_schedule
-        
+
         if 'continuous' in wf_def and wf_def['continuous']:
-            job_settings.continuous = jobs.Continuous(pause_status=jobs.PauseStatus.UNPAUSED)
-        
+            job_settings_kwargs['continuous'] = jobs.Continuous(pause_status=jobs.PauseStatus.UNPAUSED)
+
         if 'parameters' in wf_def:
-            job_settings.parameters = wf_def['parameters']
-        
+            job_settings_kwargs['parameters'] = wf_def['parameters']
+
         if 'tags' in wf_def:
-            job_settings.tags = wf_def['tags']
-        
+            job_settings_kwargs['tags'] = wf_def['tags']
+
         if 'timeout_seconds' in wf_def:
-            job_settings.timeout_seconds = int(wf_def['timeout_seconds'])
-        
+            job_settings_kwargs['timeout_seconds'] = int(wf_def['timeout_seconds'])
+
         if 'max_concurrent_runs' in wf_def:
-            job_settings.max_concurrent_runs = int(wf_def['max_concurrent_runs'])
-        
+            job_settings_kwargs['max_concurrent_runs'] = int(wf_def['max_concurrent_runs'])
+
         if 'email_notifications' in wf_def:
             email_config = wf_def['email_notifications']
             if isinstance(email_config, dict):
-                job_settings.email_notifications = jobs.JobEmailNotifications(
+                job_settings_kwargs['email_notifications'] = jobs.JobEmailNotifications(
                     on_start=email_config.get('on_start', []),
                     on_success=email_config.get('on_success', []),
                     on_failure=email_config.get('on_failure', []),
                     no_alert_for_skipped_runs=email_config.get('no_alert_for_skipped_runs', False)
                 )
-        
-        created = self._client.jobs.create(**job_settings.as_dict())
-        return int(created.job_id)
+
+        # Create the job directly with kwargs (no JobSettings intermediate object needed)
+        created = self._client.jobs.create(**job_settings_kwargs)
+        job_id = int(created.job_id)
+
+        # Persist installation to database
+        try:
+            # Get workspace_id from settings if available
+            workspace_id = None
+            if self._settings and hasattr(self._settings, 'DATABRICKS_HOST'):
+                # Use host as workspace identifier since DATABRICKS_WORKSPACE_ID doesn't exist
+                workspace_id = self._settings.DATABRICKS_HOST
+
+            installation = WorkflowInstallation(
+                workflow_id=workflow_id,
+                name=wf_def.get('name', workflow_id),
+                job_id=job_id,
+                workspace_id=workspace_id,
+                status='installed',
+                installed_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            workflow_installation_repo.create(self._db, obj_in=installation)
+            logger.info(f"Persisted installation record for workflow '{workflow_id}' with job_id {job_id}")
+        except Exception as e:
+            logger.error(f"Failed to persist installation record for workflow '{workflow_id}': {e}")
+            # Don't fail the installation if DB persist fails, but log it
+
+        return job_id
 
     def update_workflow(self, workflow_id: str, job_id: int, *, job_cluster_id: Optional[str] = None) -> None:
         wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=job_cluster_id)
@@ -147,6 +202,15 @@ class JobsManager:
 
     def remove_workflow(self, job_id: int) -> None:
         self._client.jobs.delete(job_id=job_id)
+
+        # Remove from database
+        try:
+            db_obj = workflow_installation_repo.get_by_job_id(self._db, job_id=job_id)
+            if db_obj:
+                workflow_installation_repo.remove(self._db, id=db_obj.id)
+                logger.info(f"Removed installation record for job_id {job_id}")
+        except Exception as e:
+            logger.error(f"Failed to remove installation record for job_id {job_id}: {e}")
 
     def run_job(self, job_id: int, job_name: Optional[str] = None) -> int:
         """Run a job and create a progress notification."""
@@ -214,10 +278,41 @@ class JobsManager:
         else:
             raise ValueError(f"Workflow definition not found: {yaml_path} or {ini_path}")
 
-        if job_cluster_id and isinstance(wf.get("tasks"), list):
+        # Handle cluster configuration
+        # If job_cluster_id is None, tasks will use Databricks serverless compute
+        # by omitting cluster parameters (existing_cluster_id, new_cluster)
+        if isinstance(wf.get("tasks"), list):
             for t in wf["tasks"]:
-                if "existing_cluster_id" not in t and "new_cluster" not in t:
-                    t["existing_cluster_id"] = job_cluster_id
+                if job_cluster_id:
+                    # Set the configured cluster ID, overriding any placeholder
+                    if "new_cluster" not in t:
+                        t["existing_cluster_id"] = job_cluster_id
+                else:
+                    # Remove placeholder cluster IDs to enable serverless
+                    if t.get("existing_cluster_id") in ["cluster-id", ""]:
+                        del t["existing_cluster_id"]
+
+        # Resolve relative paths to absolute workspace paths
+        # For Databricks Apps, files are located at /Workspace/Applications/{app}/
+        # We use __file__ to determine the app's workspace location
+        if isinstance(wf.get("tasks"), list):
+            for t in wf["tasks"]:
+                # Handle notebook_task
+                if 'notebook_task' in t and isinstance(t['notebook_task'], dict):
+                    notebook_path = t['notebook_task'].get('notebook_path', '')
+                    if notebook_path and not notebook_path.startswith('/'):
+                        # Convert to workspace path: workflows are relative to src directory
+                        workspace_path = f"/Workspace{Path(__file__).parent.parent}/workflows/{workflow_id}/{notebook_path}"
+                        t['notebook_task']['notebook_path'] = workspace_path
+
+                # Handle spark_python_task
+                if 'spark_python_task' in t and isinstance(t['spark_python_task'], dict):
+                    python_file = t['spark_python_task'].get('python_file', '')
+                    if python_file and not python_file.startswith('/'):
+                        # Convert to workspace path: workflows are relative to src directory
+                        workspace_path = f"/Workspace{Path(__file__).parent.parent}/workflows/{workflow_id}/{python_file}"
+                        t['spark_python_task']['python_file'] = workspace_path
+
         return wf
 
     def _build_tasks_from_definition(self, wf: Dict[str, Any]) -> List[jobs.Task]:
@@ -228,13 +323,20 @@ class JobsManager:
             kwargs: Dict[str, Any] = {}
             if 'task_key' in t:
                 kwargs['task_key'] = t['task_key']
+            # Only set cluster params if they exist in task definition
+            # Omitting them enables Databricks serverless compute
             if 'existing_cluster_id' in t:
                 kwargs['existing_cluster_id'] = t['existing_cluster_id']
             if 'notebook_task' in t and isinstance(t['notebook_task'], dict):
                 kwargs['notebook_task'] = jobs.NotebookTask(**t['notebook_task'])
+            if 'spark_python_task' in t and isinstance(t['spark_python_task'], dict):
+                kwargs['spark_python_task'] = jobs.SparkPythonTask(**t['spark_python_task'])
             if 'python_wheel_task' in t and isinstance(t['python_wheel_task'], dict):
                 kwargs['python_wheel_task'] = jobs.PythonWheelTask(**t['python_wheel_task'])
-            tasks.append(jobs.Task(**kwargs))
+
+            task_obj = jobs.Task(**kwargs)
+            tasks.append(task_obj)
+
         return tasks
 
     def _create_job_progress_notification(self, job_name: str, run_id: int) -> str:
@@ -347,7 +449,7 @@ class JobsManager:
             run = self._client.jobs.get_run(run_id=run_id)
             if not run.state:
                 return None
-                
+
             return {
                 "run_id": run_id,
                 "job_id": run.job_id,
@@ -359,5 +461,162 @@ class JobsManager:
         except Exception as e:
             logger.error(f"Failed to get job status for run {run_id}: {e}")
             return None
+
+    def cancel_run(self, run_id: int) -> None:
+        """Cancel a running job.
+
+        Args:
+            run_id: ID of the job run to cancel
+
+        Raises:
+            Exception: If cancellation fails
+        """
+        try:
+            self._client.jobs.cancel_run(run_id=run_id)
+            logger.info(f"Cancelled run {run_id}")
+        except Exception as e:
+            logger.error(f"Error cancelling run {run_id}: {e}")
+            raise
+
+    def start_background_polling(self, interval_seconds: int = 300):
+        """Start background polling of installed job states.
+
+        Args:
+            interval_seconds: Polling interval (default: 5 minutes)
+        """
+        if self._polling_thread and self._polling_thread.is_alive():
+            logger.warning("Background polling already running")
+            return
+
+        self._stop_polling.clear()
+        self._polling_thread = threading.Thread(
+            target=self._poll_job_states,
+            args=(interval_seconds,),
+            daemon=True,
+            name="JobsManagerPoller"
+        )
+        self._polling_thread.start()
+        logger.info(f"Started background job polling (interval: {interval_seconds}s)")
+
+    def stop_background_polling(self):
+        """Stop background polling."""
+        if not self._polling_thread or not self._polling_thread.is_alive():
+            logger.warning("Background polling not running")
+            return
+
+        self._stop_polling.set()
+        self._polling_thread.join(timeout=10)
+        logger.info("Stopped background job polling")
+
+    def _poll_job_states(self, interval_seconds: int):
+        """Background task to poll all installed jobs."""
+        from src.common.database import get_db
+
+        logger.info("Job state polling thread started")
+
+        while not self._stop_polling.is_set():
+            # Create a new database session for this polling iteration
+            db = next(get_db())
+            try:
+                # Get all installed workflows from database
+                installations = workflow_installation_repo.get_all_installed(db)
+                logger.info(f"Polling {len(installations)} installed workflows...")
+
+                for installation in installations:
+                    if self._stop_polling.is_set():
+                        break
+
+                    try:
+                        # Get latest run for this job
+                        runs = self._client.jobs.list_runs(job_id=installation.job_id, limit=1)
+                        if not runs:
+                            continue
+
+                        latest_run = next(iter(runs), None)
+                        if not latest_run or not latest_run.state:
+                            continue
+
+                        # Build job state dict
+                        job_state = {
+                            'run_id': latest_run.run_id,
+                            'life_cycle_state': latest_run.state.life_cycle_state.value if latest_run.state.life_cycle_state else None,
+                            'result_state': latest_run.state.result_state.value if latest_run.state.result_state else None,
+                            'start_time': latest_run.start_time,
+                            'end_time': latest_run.end_time
+                        }
+
+                        # Update last polled timestamp and state
+                        workflow_installation_repo.update_last_polled(
+                            db,
+                            workflow_id=installation.workflow_id,
+                            job_state=job_state
+                        )
+
+                        # Create notification if job failed (only once per run)
+                        if (latest_run.state.life_cycle_state == RunState.TERMINATED and
+                            latest_run.state.result_state == RunResultState.FAILED):
+
+                            # Check if we've already notified about this failure
+                            if latest_run.run_id not in self._notified_failures:
+                                logger.info(f"Job {installation.workflow_id} (run {latest_run.run_id}) failed, creating notification")
+                                self._create_job_failure_notification(
+                                    installation.name,
+                                    installation.workflow_id,
+                                    latest_run.run_id
+                                )
+                                # Mark this run as notified
+                                self._notified_failures.add(latest_run.run_id)
+                            else:
+                                logger.debug(f"Already notified about failure of run {latest_run.run_id}, skipping")
+
+                    except Exception as e:
+                        logger.error(f"Error polling job {installation.job_id} ({installation.workflow_id}): {e}")
+
+                # Commit all updates
+                try:
+                    db.commit()
+                except Exception as e:
+                    logger.error(f"Error committing polling updates: {e}")
+                    db.rollback()
+
+            except Exception as e:
+                logger.error(f"Error in polling loop: {e}")
+            finally:
+                # Always close the session
+                db.close()
+
+            # Wait for next interval or stop signal
+            self._stop_polling.wait(timeout=interval_seconds)
+
+        logger.info("Job state polling thread stopped")
+
+    def _create_job_failure_notification(self, job_name: str, workflow_id: str, run_id: int):
+        """Create a notification for job failure."""
+        if not self._notifications_manager:
+            return
+
+        try:
+            from src.models.notifications import Notification, NotificationType
+
+            notification = Notification(
+                id=f"job-failure-{workflow_id}-{run_id}-{int(time.time())}",
+                type=NotificationType.ERROR,
+                title=f"Background Job Failed: {job_name}",
+                message=f"Workflow '{job_name}' (ID: {workflow_id}) failed during scheduled execution. Run ID: {run_id}",
+                data={
+                    "workflow_id": workflow_id,
+                    "job_name": job_name,
+                    "run_id": run_id,
+                    "error_type": "job_failure"
+                },
+                target_roles=["Admin"],  # Notify admins
+                created_at=datetime.utcnow()
+            )
+
+            self._notifications_manager.create_notification(notification, db=self._db)
+            logger.info(f"Created failure notification for workflow '{workflow_id}' run {run_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to create failure notification for workflow '{workflow_id}': {e}")
 
 

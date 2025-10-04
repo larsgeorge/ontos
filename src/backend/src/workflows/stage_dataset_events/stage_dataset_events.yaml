@@ -3,6 +3,6 @@ description: "Stage dataset change events for downstream processing."
 format: "MULTI_TASK"
 tasks:
   - task_key: "stage_dataset_events"
-    notebook_task:
-      notebook_path: "stage_dataset_events.ipynb"
+    spark_python_task:
+      python_file: "stage_dataset_events.py"
     existing_cluster_id: "cluster-id" 

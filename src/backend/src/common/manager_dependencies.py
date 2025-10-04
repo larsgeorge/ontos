@@ -20,6 +20,7 @@ from src.controller.search_manager import SearchManager
 from src.controller.semantic_models_manager import SemanticModelsManager
 from src.controller.metadata_manager import MetadataManager
 from src.controller.comments_manager import CommentsManager
+from src.controller.jobs_manager import JobsManager
 
 # Import other dependencies needed by these providers
 from src.common.database import get_db
@@ -133,6 +134,23 @@ def get_comments_manager(request: Request) -> CommentsManager:
         setattr(request.app.state, 'comments_manager', manager)
         logger.info("Initialized CommentsManager and stored on app.state.comments_manager")
     return manager
+
+def get_jobs_manager(request: Request) -> JobsManager:
+    """Get JobsManager from SettingsManager.
+
+    JobsManager is owned by SettingsManager, so we access it via settings_manager._jobs
+    """
+    settings_manager = getattr(request.app.state, 'settings_manager', None)
+    if not settings_manager:
+        logger.critical("SettingsManager not found in application state during request!")
+        raise HTTPException(status_code=503, detail="Settings service not configured.")
+
+    jobs_manager = getattr(settings_manager, '_jobs', None)
+    if not jobs_manager:
+        logger.critical("JobsManager not found in SettingsManager!")
+        raise HTTPException(status_code=503, detail="Jobs service not configured.")
+
+    return jobs_manager
 
 # Add getters for Compliance, Estate, MDM, Security, Entitlements, Catalog Commander managers when they are added
 

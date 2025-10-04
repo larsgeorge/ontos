@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from src.common.repository import CRUDBase
 from src.db_models.settings import AppRoleDb
-from src.models.settings import AppRole as AppRoleApi, AppRoleCreate, AppRoleUpdate # Import correct models
+from src.models.settings import AppRole as AppRoleApi, AppRoleCreate, AppRoleUpdate
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
@@ -81,5 +81,6 @@ class AppRoleRepository(CRUDBase[AppRoleDb, AppRoleCreate, AppRoleUpdate]):
 
     # get and get_multi are inherited from CRUDBase and should work directly
 
-# Create a singleton instance of the repository
+
+# Create singleton instance of the repository
 app_role_repo = AppRoleRepository(AppRoleDb) 

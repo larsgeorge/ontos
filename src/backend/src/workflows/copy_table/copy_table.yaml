@@ -3,8 +3,8 @@ description: "Copy data from a source table to a new target table in UC."
 format: "MULTI_TASK"
 tasks:
   - task_key: "copy_table"
-    notebook_task:
-      notebook_path: "copy_table.ipynb"
+    spark_python_task:
+      python_file: "copy_table.py"
     existing_cluster_id: "cluster-id"
 
 # Optional: Schedule to run daily at 2 AM UTC
