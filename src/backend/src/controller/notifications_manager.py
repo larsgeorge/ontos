@@ -140,10 +140,10 @@ class NotificationsManager:
         all_notifications_db = self._repo.get_multi(db=db, limit=1000) # Adjust limit if needed
         
         # Convert DB models to Pydantic models (handling potential errors)
-        all_notifications_api: List[Notification] = [] 
+        all_notifications_api: List[Notification] = []
         for db_obj in all_notifications_db:
              try:
-                 all_notifications_api.append(Notification.from_orm(db_obj))
+                 all_notifications_api.append(Notification.model_validate(db_obj))
              except ValidationError as e:
                  logger.error(f"Error validating Notification DB object (ID: {db_obj.id}): {e}")
                  continue # Skip this notification
