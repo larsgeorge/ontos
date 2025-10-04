@@ -8,10 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings as SettingsIcon } from 'lucide-react';
+import { Settings as SettingsIcon, History } from 'lucide-react';
 import RolesSettings from '@/components/settings/roles-settings';
 import SemanticModelsSettings from '@/components/settings/semantic-models-settings';
 import TagsSettings from '@/components/settings/tags-settings';
+import { JobRunsDialog } from '@/components/settings/job-runs-dialog';
 
 interface AppSettings {
   id: string;
@@ -63,6 +64,10 @@ export default function Settings() {
   const [availableWorkflows, setAvailableWorkflows] = useState<{ id: string; name: string; description?: string }[]>([]);
   const [enabledJobs, setEnabledJobs] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
+
+  // Job runs dialog state
+  const [selectedWorkflow, setSelectedWorkflow] = useState<{ id: string; name: string } | null>(null);
+  const [jobRunsDialogOpen, setJobRunsDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -316,7 +321,21 @@ export default function Settings() {
                           <p className="text-sm text-muted-foreground">{wf.description}</p>
                         )}
                       </div>
-                      <Switch checked={!!enabledJobs[wf.id]} onCheckedChange={() => toggleWorkflow(wf.id)} />
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => {
+                            setSelectedWorkflow({ id: wf.id, name: wf.name });
+                            setJobRunsDialogOpen(true);
+                          }}
+                          title={t('settings:jobRuns.viewHistory')}
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
+                        <Switch checked={!!enabledJobs[wf.id]} onCheckedChange={() => toggleWorkflow(wf.id)} />
+                      </div>
                     </div>
                   ))}
                 </>
@@ -341,6 +360,16 @@ export default function Settings() {
           {isLoading ? t('common:actions.saving') : t('settings:jobs.saveButton')}
         </Button>
       </div>
+
+      {/* Job Runs Dialog */}
+      {selectedWorkflow && (
+        <JobRunsDialog
+          workflowId={selectedWorkflow.id}
+          workflowName={selectedWorkflow.name}
+          open={jobRunsDialogOpen}
+          onOpenChange={setJobRunsDialogOpen}
+        />
+      )}
     </div>
   );
 } 
