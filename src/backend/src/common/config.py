@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     # If not set (None), jobs will use Databricks serverless compute.
     # If set, jobs will use the specified cluster ID via new_cluster or existing_cluster_id.
     job_cluster_id: Optional[str] = None
+    # Workspace path where app files are deployed (for job task paths)
+    # If not set, will derive from __file__ path (works when app runs in workspace)
+    # For local dev with remote jobs, set to workspace deployment path (e.g., /Workspace/Users/user@domain.com/app-name/src/backend/src)
+    WORKSPACE_APP_PATH: Optional[str] = Field(None, env='WORKSPACE_APP_PATH')
     sync_enabled: bool = False
     sync_repository: Optional[str] = None
     enabled_jobs: List[str] = Field(default_factory=list)

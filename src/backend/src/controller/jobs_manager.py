@@ -9,11 +9,12 @@ import threading
 import yaml
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service import jobs
-from databricks.sdk.service.jobs import RunState, RunResultState
+from databricks.sdk.service.jobs import RunLifeCycleState, RunResultState
 from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.repositories.workflow_installations_repository import workflow_installation_repo
+from src.repositories.workflow_job_runs_repository import workflow_job_run_repo
 from src.models.workflow_installations import WorkflowInstallation
 
 logger = get_logger(__name__)
@@ -27,7 +28,6 @@ class JobsManager:
         self._notifications_manager = notifications_manager
         self._settings = settings
         self._running_jobs: Dict[int, str] = {}  # run_id -> notification_id
-        self._notified_failures: set = set()  # Track run_ids we've already notified about
         self._polling_thread: Optional[threading.Thread] = None
         self._stop_polling = threading.Event()
 
@@ -146,9 +146,11 @@ class JobsManager:
                 updated_at=datetime.utcnow()
             )
             workflow_installation_repo.create(self._db, obj_in=installation)
+            self._db.commit()
             logger.info(f"Persisted installation record for workflow '{workflow_id}' with job_id {job_id}")
         except Exception as e:
             logger.error(f"Failed to persist installation record for workflow '{workflow_id}': {e}")
+            self._db.rollback()
             # Don't fail the installation if DB persist fails, but log it
 
         return job_id
@@ -208,9 +210,11 @@ class JobsManager:
             db_obj = workflow_installation_repo.get_by_job_id(self._db, job_id=job_id)
             if db_obj:
                 workflow_installation_repo.remove(self._db, id=db_obj.id)
+                self._db.commit()
                 logger.info(f"Removed installation record for job_id {job_id}")
         except Exception as e:
             logger.error(f"Failed to remove installation record for job_id {job_id}: {e}")
+            self._db.rollback()
 
     def run_job(self, job_id: int, job_name: Optional[str] = None) -> int:
         """Run a job and create a progress notification."""
@@ -293,8 +297,14 @@ class JobsManager:
                         del t["existing_cluster_id"]
 
         # Resolve relative paths to absolute workspace paths
-        # For Databricks Apps, files are located at /Workspace/Applications/{app}/
-        # We use __file__ to determine the app's workspace location
+        # Use WORKSPACE_APP_PATH from settings if available, otherwise derive from __file__
+        if self._settings and self._settings.WORKSPACE_APP_PATH:
+            # Use configured workspace path (for local dev with remote jobs)
+            base_path = self._settings.WORKSPACE_APP_PATH
+        else:
+            # Derive from __file__ (works when app runs in workspace)
+            base_path = str(Path(__file__).parent.parent)
+
         if isinstance(wf.get("tasks"), list):
             for t in wf["tasks"]:
                 # Handle notebook_task
@@ -302,7 +312,7 @@ class JobsManager:
                     notebook_path = t['notebook_task'].get('notebook_path', '')
                     if notebook_path and not notebook_path.startswith('/'):
                         # Convert to workspace path: workflows are relative to src directory
-                        workspace_path = f"/Workspace{Path(__file__).parent.parent}/workflows/{workflow_id}/{notebook_path}"
+                        workspace_path = f"{base_path}/workflows/{workflow_id}/{notebook_path}"
                         t['notebook_task']['notebook_path'] = workspace_path
 
                 # Handle spark_python_task
@@ -310,7 +320,7 @@ class JobsManager:
                     python_file = t['spark_python_task'].get('python_file', '')
                     if python_file and not python_file.startswith('/'):
                         # Convert to workspace path: workflows are relative to src directory
-                        workspace_path = f"/Workspace{Path(__file__).parent.parent}/workflows/{workflow_id}/{python_file}"
+                        workspace_path = f"{base_path}/workflows/{workflow_id}/{python_file}"
                         t['spark_python_task']['python_file'] = workspace_path
 
         return wf
@@ -527,47 +537,70 @@ class JobsManager:
                         break
 
                     try:
-                        # Get latest run for this job
-                        runs = self._client.jobs.list_runs(job_id=installation.job_id, limit=1)
+                        # Get recent runs for this job (limit to reasonable number to avoid overwhelming)
+                        runs = self._client.jobs.list_runs(job_id=installation.job_id, limit=10)
                         if not runs:
                             continue
 
+                        # Process each run
+                        for run in runs:
+                            if not run or not run.state:
+                                continue
+
+                            # Build run data dict
+                            run_data = {
+                                'run_name': run.run_name,
+                                'life_cycle_state': run.state.life_cycle_state.value if run.state.life_cycle_state else None,
+                                'result_state': run.state.result_state.value if run.state.result_state else None,
+                                'state_message': run.state.state_message if run.state else None,
+                                'start_time': run.start_time,
+                                'end_time': run.end_time
+                            }
+
+                            # Upsert job run record (creates or updates)
+                            job_run = workflow_job_run_repo.upsert_run(
+                                db,
+                                run_id=run.run_id,
+                                workflow_installation_id=installation.id,
+                                run_data=run_data
+                            )
+
+                            # Create notification if job terminated unsuccessfully (failed, canceled, timed out, etc.)
+                            if (run.state.life_cycle_state == RunLifeCycleState.TERMINATED and
+                                run.state.result_state != RunResultState.SUCCESS):
+
+                                # Check if we've already notified about this failure
+                                if not job_run.notified_at:
+                                    logger.info(f"Job {installation.workflow_id} (run {run.run_id}) failed, creating notification")
+                                    try:
+                                        self._create_job_failure_notification(
+                                            installation.name,
+                                            installation.workflow_id,
+                                            run.run_id
+                                        )
+                                        # Mark this run as notified only after notification succeeds
+                                        workflow_job_run_repo.mark_as_notified(db, run_id=run.run_id)
+                                    except Exception as e:
+                                        logger.error(f"Failed to create notification for run {run.run_id}: {e}")
+                                        # Don't mark as notified so we can retry on next poll
+                                else:
+                                    logger.debug(f"Already notified about failure of run {run.run_id}, skipping")
+
+                        # Update last polled timestamp on installation (use latest run if available)
                         latest_run = next(iter(runs), None)
-                        if not latest_run or not latest_run.state:
-                            continue
-
-                        # Build job state dict
-                        job_state = {
-                            'run_id': latest_run.run_id,
-                            'life_cycle_state': latest_run.state.life_cycle_state.value if latest_run.state.life_cycle_state else None,
-                            'result_state': latest_run.state.result_state.value if latest_run.state.result_state else None,
-                            'start_time': latest_run.start_time,
-                            'end_time': latest_run.end_time
-                        }
-
-                        # Update last polled timestamp and state
-                        workflow_installation_repo.update_last_polled(
-                            db,
-                            workflow_id=installation.workflow_id,
-                            job_state=job_state
-                        )
-
-                        # Create notification if job failed (only once per run)
-                        if (latest_run.state.life_cycle_state == RunState.TERMINATED and
-                            latest_run.state.result_state == RunResultState.FAILED):
-
-                            # Check if we've already notified about this failure
-                            if latest_run.run_id not in self._notified_failures:
-                                logger.info(f"Job {installation.workflow_id} (run {latest_run.run_id}) failed, creating notification")
-                                self._create_job_failure_notification(
-                                    installation.name,
-                                    installation.workflow_id,
-                                    latest_run.run_id
-                                )
-                                # Mark this run as notified
-                                self._notified_failures.add(latest_run.run_id)
-                            else:
-                                logger.debug(f"Already notified about failure of run {latest_run.run_id}, skipping")
+                        if latest_run and latest_run.state:
+                            latest_run_data = {
+                                'run_id': latest_run.run_id,
+                                'life_cycle_state': latest_run.state.life_cycle_state.value if latest_run.state.life_cycle_state else None,
+                                'result_state': latest_run.state.result_state.value if latest_run.state.result_state else None,
+                                'start_time': latest_run.start_time,
+                                'end_time': latest_run.end_time
+                            }
+                            workflow_installation_repo.update_last_polled(
+                                db,
+                                workflow_id=installation.workflow_id,
+                                job_state=latest_run_data
+                            )
 
                     except Exception as e:
                         logger.error(f"Error polling job {installation.job_id} ({installation.workflow_id}): {e}")
@@ -585,8 +618,9 @@ class JobsManager:
                 # Always close the session
                 db.close()
 
-            # Wait for next interval or stop signal
-            self._stop_polling.wait(timeout=interval_seconds)
+            # Wait for next interval or stop signal (unless stopping)
+            if not self._stop_polling.is_set():
+                self._stop_polling.wait(timeout=interval_seconds)
 
         logger.info("Job state polling thread stopped")
 

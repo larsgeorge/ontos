@@ -1,5 +1,6 @@
 import uuid
 from sqlalchemy import Column, String, Text, BigInteger, func, TIMESTAMP
+from sqlalchemy.orm import relationship
 
 from src.common.database import Base
 
@@ -35,6 +36,9 @@ class WorkflowInstallationDb(Base):
     installed_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     last_polled_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    # Relationship to job runs
+    job_runs = relationship("WorkflowJobRunDb", back_populates="workflow_installation", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<WorkflowInstallationDb(id='{self.id}', workflow_id='{self.workflow_id}', job_id={self.job_id}, status='{self.status}')>"
