@@ -1,0 +1,48 @@
+{
+  "title": "Settings",
+  "tabs": {
+    "jobs": "Jobs & Workflows",
+    "roles": "Roles",
+    "semanticModels": "Semantic Models",
+    "tags": "Tags"
+  },
+  "jobs": {
+    "title": "Jobs & Workflows Configuration",
+    "description": "Configure Databricks job cluster and enable background workflows",
+    "jobClusterId": {
+      "label": "Job Cluster ID (optional)",
+      "placeholder": "Leave empty for serverless compute"
+    },
+    "availableWorkflows": {
+      "label": "Available Workflows",
+      "description": "Enable or disable background workflows"
+    },
+    "noWorkflows": "No workflows available",
+    "saveButton": "Save Configuration",
+    "messages": {
+      "saveSuccess": "Settings saved successfully",
+      "saveError": "Failed to save settings"
+    }
+  },
+  "jobRuns": {
+    "viewHistory": "View run history",
+    "dialogTitle": "Job Run History: {{workflowName}}",
+    "dialogDescription": "Recent execution history for this workflow",
+    "emptyState": "No runs found for this workflow",
+    "runId": "Run ID",
+    "runName": "Name",
+    "status": "Status",
+    "started": "Started",
+    "duration": "Duration",
+    "notified": "Notified",
+    "statuses": {
+      "success": "Success",
+      "failed": "Failed",
+      "canceled": "Canceled",
+      "timedout": "Timed Out",
+      "running": "Running",
+      "pending": "Pending",
+      "unknown": "Unknown"
+    }
+  }
+}

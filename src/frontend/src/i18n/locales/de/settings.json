@@ -1,0 +1,27 @@
+{
+  "title": "Einstellungen",
+  "tabs": {
+    "jobs": "Jobs & Workflows",
+    "roles": "Rollen",
+    "semanticModels": "Semantische Modelle",
+    "tags": "Tags"
+  },
+  "jobs": {
+    "title": "Jobs & Workflows Konfiguration",
+    "description": "Databricks Job-Cluster konfigurieren und Hintergrund-Workflows aktivieren",
+    "jobClusterId": {
+      "label": "Job-Cluster-ID",
+      "placeholder": "Job-Cluster-ID eingeben"
+    },
+    "availableWorkflows": {
+      "label": "Verfügbare Workflows",
+      "description": "Hintergrund-Workflows aktivieren oder deaktivieren"
+    },
+    "noWorkflows": "Keine Workflows verfügbar",
+    "saveButton": "Konfiguration speichern",
+    "messages": {
+      "saveSuccess": "Einstellungen erfolgreich gespeichert",
+      "saveError": "Fehler beim Speichern der Einstellungen"
+    }
+  }
+}

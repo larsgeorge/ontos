@@ -1,0 +1,27 @@
+{
+  "title": "設定",
+  "tabs": {
+    "jobs": "ジョブとワークフロー",
+    "roles": "ロール",
+    "semanticModels": "セマンティックモデル",
+    "tags": "タグ"
+  },
+  "jobs": {
+    "title": "ジョブとワークフローの設定",
+    "description": "Databricksジョブクラスタを設定し、バックグラウンドワークフローを有効化",
+    "jobClusterId": {
+      "label": "ジョブクラスタID",
+      "placeholder": "ジョブクラスタIDを入力"
+    },
+    "availableWorkflows": {
+      "label": "利用可能なワークフロー",
+      "description": "バックグラウンドワークフローの有効化・無効化"
+    },
+    "noWorkflows": "利用可能なワークフローがありません",
+    "saveButton": "設定を保存",
+    "messages": {
+      "saveSuccess": "設定が正常に保存されました",
+      "saveError": "設定の保存に失敗しました"
+    }
+  }
+}

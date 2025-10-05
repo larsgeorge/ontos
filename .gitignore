@@ -26,7 +26,7 @@ __pycache__
 .databricks
 .env
 
-settings.json
+.vscode/settings.json
 audit_logs/
 
 .playwright-mcp/
