@@ -5,14 +5,17 @@ import { Button } from './button';
 import { Card } from './card';
 import { ScrollArea } from './scroll-area';
 import { Search, FileText, Database, Book, Shield, Loader2 } from 'lucide-react';
+import { features } from '@/config/features';
 import { cn } from '@/lib/utils';
 
 interface SearchResult {
   id: string;
-  type: 'data-product' | 'data-contract' | 'glossary-term' | 'persona';
+  type: string; // backend may return additional types (e.g., 'data-domain', 'data-asset-review')
   title: string;
   description: string;
   link: string;
+  feature_id?: string; // map to features.ts for icon rendering
+  tags?: string[];
 }
 
 interface SearchBarProps {
@@ -73,8 +76,18 @@ export default function SearchBar({ variant = 'default', placeholder = 'Search..
     return () => clearTimeout(debounceTimer);
   }, [query]);
 
-  const getIcon = (type: SearchResult['type']) => {
-    switch (type) {
+  const getIcon = (result: SearchResult) => {
+    // Prefer explicit feature-based icon mapping to keep UI consistent with navigation
+    if (result.feature_id) {
+      const feature = features.find((f) => f.id === result.feature_id);
+      if (feature) {
+        const Icon = feature.icon;
+        return <Icon className="h-4 w-4" />;
+      }
+    }
+
+    // Fallbacks based on type
+    switch (result.type) {
       case 'data-product':
         return <Database className="h-4 w-4" />;
       case 'data-contract':
@@ -151,7 +164,7 @@ export default function SearchBar({ variant = 'default', placeholder = 'Search..
                     className="w-full justify-start gap-2 p-2 h-auto"
                     onClick={() => handleResultClick(result)}
                   >
-                    {getIcon(result.type)}
+                    {getIcon(result)}
                     <div className="flex flex-col items-start">
                       <span className="font-medium">{result.title}</span>
                       <span className="text-sm text-muted-foreground">{result.description}</span>

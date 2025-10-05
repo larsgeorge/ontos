@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 from src.models.notifications import NotificationType, Notification
 from src.models.settings import JobCluster, AppRole, AppRoleCreate, AppRoleUpdate, HomeSection
 from src.models.workflow_installations import WorkflowInstallation
-from src.common.features import get_feature_config, FeatureAccessLevel, get_all_access_levels, APP_FEATURES
+from src.common.features import get_feature_config, FeatureAccessLevel, get_all_access_levels, APP_FEATURES, ACCESS_LEVEL_ORDER
 from src.common.logging import get_logger
 from src.repositories.settings_repository import app_role_repo
 from src.repositories.workflow_installations_repository import workflow_installation_repo
@@ -47,6 +47,8 @@ DEFAULT_ROLE_PERMISSIONS = {
         'data-domains': FeatureAccessLevel.ADMIN,
         'data-products': FeatureAccessLevel.ADMIN,
         'data-contracts': FeatureAccessLevel.ADMIN,
+        'teams': FeatureAccessLevel.READ_ONLY,
+        'projects': FeatureAccessLevel.READ_ONLY,
         'business-glossary': FeatureAccessLevel.ADMIN,
         'compliance': FeatureAccessLevel.ADMIN,
         'estate-manager': FeatureAccessLevel.ADMIN,
@@ -62,6 +64,8 @@ DEFAULT_ROLE_PERMISSIONS = {
         'data-domains': FeatureAccessLevel.READ_WRITE,
         'data-products': FeatureAccessLevel.READ_WRITE,
         'data-contracts': FeatureAccessLevel.READ_WRITE,
+        'teams': FeatureAccessLevel.READ_ONLY,
+        'projects': FeatureAccessLevel.READ_ONLY,
         'business-glossary': FeatureAccessLevel.READ_WRITE,
         'compliance': FeatureAccessLevel.READ_ONLY,
         'data-asset-reviews': FeatureAccessLevel.READ_WRITE,
@@ -71,6 +75,8 @@ DEFAULT_ROLE_PERMISSIONS = {
         'data-domains': FeatureAccessLevel.READ_ONLY,
         'data-products': FeatureAccessLevel.READ_ONLY,
         'data-contracts': FeatureAccessLevel.READ_ONLY,
+        'teams': FeatureAccessLevel.READ_ONLY,
+        'projects': FeatureAccessLevel.READ_ONLY,
         'business-glossary': FeatureAccessLevel.READ_ONLY,
         'catalog-commander': FeatureAccessLevel.READ_ONLY,
     },
@@ -78,6 +84,8 @@ DEFAULT_ROLE_PERMISSIONS = {
         'data-domains': FeatureAccessLevel.READ_ONLY,
         'data-products': FeatureAccessLevel.READ_WRITE,
         'data-contracts': FeatureAccessLevel.READ_WRITE,
+        'teams': FeatureAccessLevel.READ_WRITE,
+        'projects': FeatureAccessLevel.READ_WRITE,
         'business-glossary': FeatureAccessLevel.READ_ONLY,
         'catalog-commander': FeatureAccessLevel.READ_ONLY,
     },
@@ -101,6 +109,8 @@ class SettingsManager:
         self._installations: Dict[str, WorkflowInstallation] = {}
         self.app_role_repo = app_role_repo
         self._notifications_manager: Optional['NotificationsManager'] = None
+        # In-memory role overrides: user_email -> role_id
+        self._applied_role_overrides: Dict[str, str] = {}
         # Initialize available jobs from workflow directory
         try:
             from src.controller.jobs_manager import JobsManager
@@ -113,6 +123,100 @@ class SettingsManager:
             logger.error(f"Error initializing JobsManager: {e}")
             self._jobs = None
             self._available_jobs = []
+
+    # --- Role override helpers (in-memory persistence) ---
+    def set_applied_role_override_for_user(self, user_email: Optional[str], role_id: Optional[str]) -> None:
+        """Sets or clears the applied role override for a user.
+
+        When role_id is None, the override is cleared and the user's actual group-based
+        permissions are used. This stores state in-memory for the backend process lifetime.
+        """
+        if not user_email:
+            raise ValueError("User email is required to set role override")
+        if role_id is None:
+            self._applied_role_overrides.pop(user_email, None)
+            return
+        role = self.get_app_role(role_id)
+        if not role:
+            raise ValueError(f"Role with id '{role_id}' not found")
+        self._applied_role_overrides[user_email] = role_id
+
+    def get_applied_role_override_for_user(self, user_email: Optional[str]) -> Optional[str]:
+        if not user_email:
+            return None
+        return self._applied_role_overrides.get(user_email)
+
+    def get_feature_permissions_for_role_id(self, role_id: str) -> Dict[str, FeatureAccessLevel]:
+        role = self.get_app_role(role_id)
+        if not role:
+            raise ValueError(f"Role with id '{role_id}' not found")
+        return role.feature_permissions or {}
+
+    def get_canonical_role_for_groups(self, user_groups: Optional[List[str]]) -> Optional[AppRole]:
+        """Map a user's groups to the closest configured AppRole.
+
+        Algorithm:
+        1) Try direct match via assigned_groups intersection (pick highest-weight role).
+        2) If no matches, compute effective permissions from groups and choose the role
+           whose permissions are closest (minimum sum of absolute level differences per feature).
+        3) Heuristic: if any group contains 'admin' (case-insensitive), prefer Admin role by name.
+        """
+        if not user_groups:
+            return None
+
+        roles = self.list_app_roles()
+        user_group_set = set(user_groups)
+
+        # 3) Admin heuristic first for better UX in local dev
+        try:
+            if any('admin' in g.lower() for g in user_group_set):
+                admin = next((r for r in roles if (r.name or '').strip().lower() == 'admin'), None)
+                if admin:
+                    return admin
+        except Exception:
+            pass
+
+        # 1) Direct group match
+        best_role: Optional[AppRole] = None
+        best_weight = -1
+        for role in roles:
+            try:
+                role_groups = set(role.assigned_groups or [])
+                if not role_groups.intersection(user_group_set):
+                    continue
+                weight = sum(ACCESS_LEVEL_ORDER.get(level, 0) for level in (role.feature_permissions or {}).values())
+                if weight > best_weight:
+                    best_weight = weight
+                    best_role = role
+            except Exception:
+                continue
+        if best_role:
+            return best_role
+
+        # 2) Distance-based fallback using effective permissions
+        try:
+            from src.controller.authorization_manager import AuthorizationManager
+            auth = AuthorizationManager(self)
+            effective = auth.get_user_effective_permissions(list(user_group_set))
+            # Normalize feature set
+            feature_ids = set(get_feature_config().keys())
+            def level_of(perms: Dict[str, FeatureAccessLevel], fid: str) -> int:
+                return ACCESS_LEVEL_ORDER.get(perms.get(fid, FeatureAccessLevel.NONE), 0)
+
+            best_role = None
+            best_distance = 10**9
+            for role in roles:
+                role_perms = role.feature_permissions or {}
+                # Compute Manhattan distance across features
+                distance = 0
+                for fid in feature_ids:
+                    distance += abs(level_of(role_perms, fid) - level_of(effective, fid))
+                if distance < best_distance:
+                    best_distance = distance
+                    best_role = role
+            return best_role
+        except Exception:
+            return None
 
     def set_notifications_manager(self, notifications_manager: 'NotificationsManager') -> None:
         self._notifications_manager = notifications_manager

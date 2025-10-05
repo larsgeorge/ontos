@@ -25,6 +25,8 @@ from src.common.workspace_client import get_workspace_client_dependency
 from databricks.sdk import WorkspaceClient
 
 from src.common.logging import get_logger
+from src.common.authorization import PermissionChecker
+from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
     DBSessionDep, 
     # Define annotated types for WorkspaceClient and NotificationsManager if not already done
@@ -49,6 +51,7 @@ def create_review_request(
     request_data: DataAssetReviewRequestCreate,
     # Inject manager directly using its Annotated type
     manager: DataAssetReviewManagerDep,
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_WRITE))
 ):
     """Create a new data asset review request."""
     logger.info(f"Received request to create data asset review from {request_data.requester_email} for {request_data.reviewer_email}")
@@ -69,6 +72,7 @@ def list_review_requests(
     manager: DataAssetReviewManagerDep,
     skip: int = 0,
     limit: int = 100,
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
 ):
     """Retrieve a list of data asset review requests."""
     logger.info(f"Listing data asset review requests (skip={skip}, limit={limit})")
@@ -94,7 +98,8 @@ def list_review_requests(
 def get_review_request(
     request_id: str,
     manager: DataAssetReviewManagerDep,
-    db: DBSessionDep
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
 ):
     """Get a specific data asset review request by its ID."""
     logger.info(f"Fetching data asset review request ID: {request_id}")
@@ -115,6 +120,7 @@ def update_review_request_status(
     request_id: str,
     status_update: DataAssetReviewRequestUpdateStatus,
     manager: DataAssetReviewManagerDep,
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_WRITE))
 ):
     """Update the overall status of a data asset review request."""
     logger.info(f"Updating status for review request ID: {request_id} to {status_update.status}")
@@ -136,6 +142,7 @@ def update_reviewed_asset_status(
     asset_id: str,
     asset_update: ReviewedAssetUpdate,
     manager: DataAssetReviewManagerDep,
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_WRITE))
 ):
     """Update the status and comments of a specific asset within a review request."""
     logger.info(f"Updating status for asset ID: {asset_id} in request {request_id} to {asset_update.status}")
@@ -162,6 +169,7 @@ def update_reviewed_asset_status(
 def delete_review_request(
     request_id: str,
     manager: DataAssetReviewManagerDep,
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.ADMIN))
 ):
     """Delete a data asset review request."""
     logger.info(f"Deleting review request ID: {request_id}")
@@ -183,6 +191,7 @@ async def get_asset_definition(
     asset_id: str,
     manager: DataAssetReviewManagerDep,
     # db: DBSessionDep # No longer needed here
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
 ):
     """Get the definition (e.g., SQL) for a view or function asset."""
     logger.info(f"Getting definition for asset {asset_id} in request {request_id}")
@@ -219,6 +228,7 @@ async def get_table_preview(
     # db: DBSessionDep, # No longer needed here
     manager: DataAssetReviewManagerDep,
     limit: int = Query(25, ge=1, le=100, description="Number of rows to preview"),
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
 ):
     """Get a preview of data for a table asset."""
     logger.info(f"Getting preview for asset {asset_id} (table) in request {request_id} (limit={limit})")
@@ -252,6 +262,7 @@ async def analyze_asset_with_llm(
     request_id: str,
     asset_id: str,
     manager: DataAssetReviewManagerDep,
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
 ):
     """Triggers LLM analysis for a specific asset's content."""
     logger.info(f"Received request to analyze asset {asset_id} in request {request_id} with LLM.")

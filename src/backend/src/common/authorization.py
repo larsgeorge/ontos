@@ -36,9 +36,9 @@ async def get_user_details_from_sdk(
     Retrieves detailed user information via SDK using UsersManager, or mock data if local dev.
     (Moved from user_routes.py to break circular import)
     """
-    # Check for local development environment
-    if settings.ENV.upper().startswith("LOCAL"):
-        logger.info("Local environment detected, returning mock user data for dependency.")
+    # Check for local development environment or explicit mock flag
+    if settings.ENV.upper().startswith("LOCAL") or getattr(settings, "MOCK_USER_DETAILS", False):
+        logger.info("Local/mock user mode detected, returning mock user data for dependency.")
         # Ensure mock user has groups for testing permissions
         return LOCAL_DEV_USER
 
@@ -228,10 +228,23 @@ class PermissionChecker:
                 request
             )
 
-            effective_permissions = auth_manager.get_user_effective_permissions(
-                user_details.groups,
-                team_role_override
-            )
+            # Check if an explicit role override is applied for this user
+            applied_role_id = None
+            try:
+                settings_manager = getattr(request.app.state, 'settings_manager', None)
+                if settings_manager:
+                    applied_role_id = settings_manager.get_applied_role_override_for_user(user_details.email)
+            except Exception:
+                applied_role_id = None
+
+            if applied_role_id and settings_manager:
+                # Build effective permissions directly from the selected role
+                effective_permissions = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+            else:
+                effective_permissions = auth_manager.get_user_effective_permissions(
+                    user_details.groups,
+                    team_role_override
+                )
             has_required_permission = auth_manager.has_permission(
                 effective_permissions,
                 self.feature_id,

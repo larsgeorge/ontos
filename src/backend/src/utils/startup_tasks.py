@@ -172,32 +172,7 @@ def initialize_managers(app: FastAPI):
         notifications_manager = getattr(app.state, 'notifications_manager', None)
         # Add other managers: Compliance, Estate, MDM, Security, Entitlements, Catalog Commander...
 
-        # --- Instantiate Search Manager --- 
-        # Dynamically collect manager instances that inherit from SearchableAsset
-        # Iterate directly over the values stored in app.state._state dictionary
-        searchable_managers_instances = []
-        logger.debug("--- Scanning app.state._state.values() for SearchableAsset instances ---")
-        
-        if hasattr(app.state, '_state') and isinstance(app.state._state, dict):
-            for manager_instance in app.state._state.values():
-                # Log the type of each instance found in _state
-                manager_type = type(manager_instance)
-                logger.debug(f"Checking instance in app.state._state: Type={manager_type.__name__}")
-
-                # Check if it's an instance of the SearchableAsset base class
-                if isinstance(manager_instance, SearchableAsset):
-                    # Check if it implements the required method (good practice)
-                    if hasattr(manager_instance, 'get_search_index_items') and callable(getattr(manager_instance, 'get_search_index_items')):
-                        searchable_managers_instances.append(manager_instance)
-                        logger.debug(f"   Added searchable manager instance: Type={manager_type.__name__}")
-                    else:
-                        logger.warning(f"Manager instance of type {manager_type.__name__} inherits from SearchableAsset but does not implement 'get_search_index_items' method.")
-        else:
-            logger.error("Could not find or access app.state._state dictionary to scan for managers.")
-
-        logger.info(f"Found {len(searchable_managers_instances)} managers inheriting from SearchableAsset by checking app.state._state.values().")
-        app.state.search_manager = SearchManager(searchable_managers=searchable_managers_instances)
-        logger.info("SearchManager initialized.")
+        # (moved) SearchManager initialization now happens AFTER all feature managers are constructed
 
         # Instantiate and store TagsManager
         try:
@@ -244,6 +219,24 @@ def initialize_managers(app: FastAPI):
         #     logger.info("MetadataManager initialized.")
 
         logger.info("All managers instantiated and stored in app.state.")
+
+        # Build the SearchManager only after ALL managers + demo data are in place
+        try:
+            logger.info("Initializing SearchManager after managers and demo data are ready...")
+            searchable_managers_instances = []
+            for attr_name, manager_instance in list(getattr(app.state, '_state', {}).items()):
+                try:
+                    if isinstance(manager_instance, SearchableAsset) and hasattr(manager_instance, 'get_search_index_items'):
+                        searchable_managers_instances.append(manager_instance)
+                        logger.debug(f"Added searchable manager instance from app.state: {attr_name}")
+                except Exception:
+                    continue
+
+            app.state.search_manager = SearchManager(searchable_managers=searchable_managers_instances)
+            app.state.search_manager.build_index()
+            logger.info("Search index initialized and built from DB-backed managers.")
+        except Exception as e:
+            logger.error(f"Failed initializing or building search index: {e}", exc_info=True)
         
         # --- Ensure default roles exist using the manager method --- 
         app.state.settings_manager.ensure_default_roles_exist()

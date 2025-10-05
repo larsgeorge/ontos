@@ -16,9 +16,15 @@ from src.controller.comments_manager import CommentsManager
 from src.controller.tags_manager import TagsManager
 # from src.controller.audit_log_manager import AuditLogManager # Placeholder
 
+# Search indexing interfaces
+from src.common.search_interfaces import SearchableAsset, SearchIndexItem
+from src.common.search_registry import searchable_asset
+from src.common.database import get_session_factory
+
 logger = get_logger(__name__)
 
-class DataDomainManager:
+@searchable_asset
+class DataDomainManager(SearchableAsset):
     def __init__(self, repository: DataDomainRepository, tags_manager: Optional[TagsManager] = None):
         self.repository = repository
         self.tags_manager = tags_manager or TagsManager()
@@ -511,3 +517,39 @@ class DataDomainManager:
         except Exception as e:
             logger.exception(f"Failed to load demo timeline entries: {e}")
             db.rollback()
+
+    # --- SearchableAsset Implementation ---
+    def get_search_index_items(self) -> List[SearchIndexItem]:
+        """Fetch data domains and map them to SearchIndexItem format for global search."""
+        logger.info("Fetching data domains for search indexing...")
+        items: List[SearchIndexItem] = []
+        try:
+            session_factory = get_session_factory()
+            if not session_factory:
+                logger.warning("Session factory not available; cannot index data domains.")
+                return []
+
+            with session_factory() as db:
+                db_domains = self.repository.get_multi(db=db, limit=10000)
+                for db_domain in db_domains:
+                    if not getattr(db_domain, 'id', None) or not getattr(db_domain, 'name', None):
+                        logger.warning(f"Skipping domain due to missing id or name: {db_domain}")
+                        continue
+
+                    items.append(
+                        SearchIndexItem(
+                            id=f"domain::{db_domain.id}",
+                            type="data-domain",
+                            feature_id="data-domains",
+                            title=db_domain.name,
+                            description=getattr(db_domain, 'description', '') or "",
+                            link=f"/data-domains/{db_domain.id}",
+                            tags=[]
+                        )
+                    )
+
+            logger.info(f"Prepared {len(items)} data domains for search index.")
+            return items
+        except Exception as e:
+            logger.error(f"Error fetching or mapping data domains for search: {e}", exc_info=True)
+            return []

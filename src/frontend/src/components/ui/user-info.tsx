@@ -73,6 +73,7 @@ export default function UserInfo() {
       availableRoles,
       appliedRoleId,
       setRoleOverride,
+      initializeStore,
   } = usePermissions();
   
   // Use a string state for the radio group value, mapping null to 'actual'
@@ -122,6 +123,27 @@ export default function UserInfo() {
     hasFetched.current = true;
   }, []);
 
+  // Ensure we refresh permissions/roles on mount (and when switching back to page)
+  useEffect(() => {
+    // On mount, ensure the permissions store is initialized (will also pull persisted override)
+    initializeStore();
+  }, [initializeStore]);
+
+  // Load canonical actual role name (role inferred from groups) for the user
+  const [canonicalActualRoleName, setCanonicalActualRoleName] = useState<string | null>(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/user/actual-role', { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          const roleName = data?.role?.name ?? null;
+          setCanonicalActualRoleName(roleName);
+        }
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
   // Determine if user can switch roles (use ACTUAL permissions, not overridden)
   const isLocalDev = userInfo?.username === 'localdev';
   const actualSettingsLevel = permissions['settings'] ?? FeatureAccessLevel.NONE;
@@ -144,14 +166,14 @@ export default function UserInfo() {
           const appliedRole = availableRoles.find(role => role.id === appliedRoleId);
           displayRoleName = appliedRole?.name || 'Unknown Role';
       } else {
-          displayRoleName = highestActualLevelName; // Display the level name for actual
+          // When no override is applied, show canonical role if available
+          displayRoleName = canonicalActualRoleName || highestActualLevelName;
       }
   }
 
   // Filter available roles to exclude the one matching the highest actual canonical name
-  const filteredRolesForOverride = availableRoles.filter(role =>
-      !highestActualCanonicalRoleName || role.name !== highestActualCanonicalRoleName
-  );
+  // Hide the canonical actual role from the override list to avoid duplication with the "Actual" entry
+  const filteredRolesForOverride = availableRoles.filter((role) => role.name !== (canonicalActualRoleName || ''));
 
   // Handle RadioGroup changes
   const handleRoleChange = (value: string) => {
@@ -161,7 +183,7 @@ export default function UserInfo() {
       } else {
           setRoleOverride(value); // value is the role.id for overrides
       }
-      // Redirect to home page after changing override
+      // Soft refresh: navigate home to trigger view queries without full reload
       navigate('/');
   };
 
@@ -209,7 +231,7 @@ export default function UserInfo() {
                     <DropdownMenuRadioGroup value={radioValue} onValueChange={handleRoleChange}>
                         <DropdownMenuRadioItem value="actual">
                             <UserIcon className="mr-1.5 h-3.5 w-3.5" />
-                            {highestActualLevelName} (Actual)
+                            {(canonicalActualRoleName || highestActualLevelName)} (Actual)
                         </DropdownMenuRadioItem>
                         {filteredRolesForOverride.map((role: AppRole) => (
                             <DropdownMenuRadioItem

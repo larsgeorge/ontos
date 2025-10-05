@@ -12,6 +12,7 @@ interface PermissionsState {
     _isInitializing: boolean; // Internal flag to prevent concurrent initializations
     fetchPermissions: () => Promise<void>;
     fetchAvailableRoles: () => Promise<void>; // New action
+    fetchAppliedOverride: () => Promise<void>; // New action to read persisted override
     setRoleOverride: (roleId: string | null) => void; // New action
     hasPermission: (featureId: string, requiredLevel: FeatureAccessLevel) => boolean;
     getPermissionLevel: (featureId: string) => FeatureAccessLevel;
@@ -43,7 +44,7 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
 
     fetchPermissions: async () => {
         try {
-            const response = await fetch('/api/user/permissions');
+            const response = await fetch('/api/user/permissions', { cache: 'no-store' });
             if (!response.ok) {
                 let errorMsg = `HTTP error! status: ${response.status}`;
                 try {
@@ -63,7 +64,7 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
 
     fetchAvailableRoles: async () => {
         try {
-            const response = await fetch('/api/settings/roles');
+            const response = await fetch('/api/settings/roles', { cache: 'no-store' });
             if (!response.ok) {
                  let errorMsg = `HTTP error! status: ${response.status}`;
                  try {
@@ -78,6 +79,20 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
              console.error("Failed to fetch available roles:", error);
              set({ availableRoles: [], error: error.message || 'Failed to load roles.' });
              throw error;
+        }
+    },
+
+    fetchAppliedOverride: async () => {
+        try {
+            const response = await fetch('/api/user/role-override', { cache: 'no-store' });
+            if (!response.ok) {
+                // If endpoint missing/fails, don't break UI
+                return;
+            }
+            const data: { role_id: string | null } = await response.json();
+            set({ appliedRoleId: data?.role_id ?? null });
+        } catch {
+            // ignore
         }
     },
 
@@ -100,7 +115,11 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
 
         try {
             // Use the instance methods from get() to ensure the latest state is used
-            await Promise.all([get().fetchPermissions(), get().fetchAvailableRoles()]);
+            await Promise.all([
+                get().fetchPermissions(),
+                get().fetchAvailableRoles(),
+                get().fetchAppliedOverride()
+            ]);
             // NOTE: isLoading and _isInitializing are reset in finally block
         } catch (error: any) {
             console.error("Error caught during permissions store initialization Promise.all:", error);
@@ -112,7 +131,26 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
     },
 
     setRoleOverride: (roleId: string | null) => {
-        set({ appliedRoleId: roleId });
+        (async () => {
+            // Optimistic local state update
+            set({ appliedRoleId: roleId });
+            try {
+                await fetch('/api/user/role-override', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role_id: roleId })
+                });
+            } catch { /* ignore */ }
+            // Force-refresh state so views recompute immediately
+            try {
+                await Promise.all([
+                    get().fetchPermissions(),
+                    get().fetchAvailableRoles(),
+                    get().fetchAppliedOverride()
+                ]);
+            } catch { /* ignore */ }
+            // No full reload — views already recompute from refreshed store state
+        })();
     },
 
     hasPermission: (featureId: string, requiredLevel: FeatureAccessLevel): boolean => {

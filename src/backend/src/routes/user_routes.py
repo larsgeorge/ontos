@@ -1,7 +1,7 @@
 import logging
 import uuid # Import uuid
 from datetime import datetime # Import datetime
-from typing import Dict
+from typing import Dict, Optional
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from databricks.sdk import WorkspaceClient
@@ -16,6 +16,7 @@ from src.controller.authorization_manager import AuthorizationManager
 from src.common.dependencies import get_auth_manager, get_db # Import get_db
 from src.common.dependencies import get_settings_manager, get_notifications_manager
 from src.controller.settings_manager import SettingsManager
+from pydantic import BaseModel
 from src.controller.notifications_manager import NotificationsManager
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import get_user_details_from_sdk
@@ -76,7 +77,8 @@ async def get_user_details(
 async def get_current_user_permissions(
     request: Request,
     user_details: UserInfo = Depends(get_user_details_from_sdk),
-    auth_manager: AuthorizationManager = Depends(get_auth_manager)
+    auth_manager: AuthorizationManager = Depends(get_auth_manager),
+    settings_manager: SettingsManager = Depends(get_settings_manager)
 ) -> Dict[str, FeatureAccessLevel]:
     """Get the effective feature permissions for the current user based on their groups."""
     logger.info(f"Request received for /api/user/permissions for user '{user_details.user or user_details.email}'")
@@ -87,9 +89,13 @@ async def get_current_user_permissions(
         return {}
 
     try:
-        effective_permissions = auth_manager.get_user_effective_permissions(user_details.groups)
-        
-        return effective_permissions
+        # Apply override if set for this user
+        applied_role_id = settings_manager.get_applied_role_override_for_user(user_details.email)
+        if applied_role_id:
+            role_perms = settings_manager.get_feature_permissions_for_role_id(applied_role_id)
+            return role_perms
+        # Otherwise compute from groups
+        return auth_manager.get_user_effective_permissions(user_details.groups)
 
     except HTTPException:
         raise # Re-raise exceptions from dependencies
@@ -99,6 +105,45 @@ async def get_current_user_permissions(
             status_code=500,
             detail="Error calculating user permissions."
         )
+
+# --- Role override endpoints ---
+class RoleOverrideRequest(BaseModel):
+    role_id: Optional[str] = None
+
+@router.post("/user/role-override")
+async def set_role_override(
+    payload: RoleOverrideRequest,
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    settings_manager: SettingsManager = Depends(get_settings_manager)
+):
+    """Set or clear the applied role override for the current user.
+
+    Body: { "role_id": "<uuid>" } or { "role_id": null } to clear.
+    """
+    role_id = payload.role_id
+    try:
+        settings_manager.set_applied_role_override_for_user(user_details.email, role_id)
+        return {"status": "ok"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/user/role-override")
+async def get_role_override(
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    settings_manager: SettingsManager = Depends(get_settings_manager)
+):
+    """Return the currently applied role override id for the user (or null)."""
+    role_id = settings_manager.get_applied_role_override_for_user(user_details.email)
+    return {"role_id": role_id}
+
+@router.get("/user/actual-role")
+async def get_actual_role(
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    settings_manager: SettingsManager = Depends(get_settings_manager)
+):
+    """Return the canonical role determined from the user's groups (ignores override)."""
+    role = settings_manager.get_canonical_role_for_groups(user_details.groups)
+    return {"role": role.dict() if role else None}
 
 # --- Role Access Request Endpoint --- 
 @router.post("/user/request-role/{role_id}")

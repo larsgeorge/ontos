@@ -51,7 +51,7 @@ class SearchManager:
         self.index = new_index
         logger.info(f"Search index build complete. Total items: {len(self.index)}")
 
-    def search(self, query: str, auth_manager: AuthorizationManager, user: UserInfo) -> List[SearchIndexItem]:
+    def search(self, query: str, auth_manager: AuthorizationManager, user: UserInfo, team_role_override: Optional[str] = None) -> List[SearchIndexItem]:
         """
         Performs a case-insensitive prefix search on title, description, tags,
         filtered by user permissions for the associated feature using AuthorizationManager.
@@ -64,15 +64,15 @@ class SearchManager:
         for item in self.index:
             match = False
             # Check title
-            if item.title and item.title.lower().startswith(query_lower):
+            if item.title and query_lower in item.title.lower():
                  match = True
             # Check description (if not already matched)
-            elif item.description and item.description.lower().startswith(query_lower):
+            elif item.description and query_lower in item.description.lower():
                  match = True
             # Check tags (if not already matched)
             elif item.tags:
                 for tag in item.tags:
-                     if str(tag).lower().startswith(query_lower):
+                     if query_lower in str(tag).lower():
                          match = True
                          break # Found a matching tag
             
@@ -86,7 +86,7 @@ class SearchManager:
              
         filtered_results = []
         try:
-             effective_permissions = auth_manager.get_user_effective_permissions(user.groups)
+             effective_permissions = auth_manager.get_user_effective_permissions(user.groups, team_role_override)
              for item in potential_results:
                  if auth_manager.has_permission(effective_permissions, item.feature_id, FeatureAccessLevel.READ_ONLY):
                      filtered_results.append(item)

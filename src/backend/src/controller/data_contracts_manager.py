@@ -27,6 +27,7 @@ from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.search_registry import searchable_asset
 
 from src.common.logging import get_logger
+from src.common.database import get_session_factory
 from src.db_models.data_contracts import (
     DataContractDb,
     DataContractTagDb,
@@ -424,33 +425,58 @@ class DataContractsManager(SearchableAsset):
 
     # --- Implementation of SearchableAsset --- 
     def get_search_index_items(self) -> List[SearchIndexItem]:
-        """Fetches data contracts and maps them to SearchIndexItem format."""
-        logger.info("Fetching data contracts for search indexing...")
-        items = []
+        """Fetches data contracts from the database and maps them to SearchIndexItem format."""
+        logger.info("Fetching data contracts for search indexing (DB-backed)...")
+        items: List[SearchIndexItem] = []
         try:
-            # Use the existing list_contracts method
-            contracts = self.list_contracts()
-            
-            for contract in contracts:
-                # Adapt field access based on DataContract model structure
-                if not contract.id or not contract.name:
-                    logger.warning(f"Skipping contract due to missing id or name: {contract}")
-                    continue
-                
-                # Assuming DataContract has .tags attribute (add if missing)
-                tags = getattr(contract, 'tags', []) 
-                    
-                items.append(
-                    SearchIndexItem(
-                        id=f"contract::{contract.id}",
-                        type="data-contract",
-                        feature_id="data-contracts",
-                        title=contract.name,
-                        description=contract.description or "",
-                        link=f"/data-contracts/{contract.id}",
-                        tags=tags
+            session_factory = get_session_factory()
+            if not session_factory:
+                logger.warning("Session factory not available; cannot index data contracts.")
+                return []
+
+            with session_factory() as db:
+                # Fetch a generous number; adjust if needed
+                contracts_db = data_contract_repo.get_multi(db=db, limit=10000)
+                for contract_db in contracts_db:
+                    contract_id = getattr(contract_db, 'id', None)
+                    name = getattr(contract_db, 'name', None)
+                    if not contract_id or not name:
+                        logger.warning(f"Skipping contract due to missing id or name: {contract_db}")
+                        continue
+
+                    # Build a concise description from available fields
+                    version = getattr(contract_db, 'version', None)
+                    status = getattr(contract_db, 'status', None)
+                    description_usage = getattr(contract_db, 'description_usage', None)
+                    desc_parts: List[str] = []
+                    if version:
+                        desc_parts.append(str(version))
+                    if status:
+                        desc_parts.append(str(status))
+                    if description_usage:
+                        desc_parts.append(str(description_usage))
+                    description = " \u2022 ".join([p for p in desc_parts if p])
+
+                    # Tags relation is optional; collect simple names if present
+                    tag_names: List[str] = []
+                    try:
+                        if getattr(contract_db, 'tags', None):
+                            tag_names = [t.name for t in contract_db.tags if getattr(t, 'name', None)]
+                    except Exception:
+                        tag_names = []
+
+                    items.append(
+                        SearchIndexItem(
+                            id=f"contract::{contract_id}",
+                            type="data-contract",
+                            feature_id="data-contracts",
+                            title=name,
+                            description=description or "",
+                            link=f"/data-contracts/{contract_id}",
+                            tags=tag_names
+                        )
                     )
-                )
+
             logger.info(f"Prepared {len(items)} data contracts for search index.")
             return items
         except Exception as e:
