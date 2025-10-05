@@ -270,9 +270,15 @@ class SettingsManager:
         # Refresh available jobs from filesystem to reflect changes
         available = self._jobs.list_available_workflows() if getattr(self, '_jobs', None) else []
         self._available_jobs = [w["id"] if isinstance(w, dict) else w for w in available]
+
+        # Get enabled jobs from WorkflowInstallationDb (source of truth)
+        from src.repositories.workflow_installations_repository import workflow_installation_repo
+        enabled_installations = workflow_installation_repo.get_all_installed(self._db)
+        enabled_job_ids = [inst.workflow_id for inst in enabled_installations]
+
         return {
             'job_cluster_id': self._settings.job_cluster_id,
-            'enabled_jobs': self._settings.enabled_jobs or [],
+            'enabled_jobs': enabled_job_ids,  # From database, not Settings model
             'available_workflows': available,
             'current_settings': self._settings.to_dict(),
         }
