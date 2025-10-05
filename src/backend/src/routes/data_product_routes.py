@@ -18,13 +18,11 @@ from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 
 from src.common.dependencies import (
-    CurrentUserDep, 
-    DBSessionDep, 
+    CurrentUserDep,
+    DBSessionDep,
     AuditManagerDep,
     AuditCurrentUserDep
 )
-from src.common.audit_logging import _extract_details_default
-
 from src.common.logging import get_logger
 from src.controller.change_log_manager import change_log_manager
 from src.models.notifications import NotificationType

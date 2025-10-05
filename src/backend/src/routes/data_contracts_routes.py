@@ -16,7 +16,6 @@ from src.common.dependencies import (
     CurrentUserDep,
     AuditCurrentUserDep,
 )
-from src.common.audit_logging import _extract_details_default
 from src.repositories.data_contracts_repository import data_contract_repo
 from src.db_models.data_contracts import (
     DataContractDb,
