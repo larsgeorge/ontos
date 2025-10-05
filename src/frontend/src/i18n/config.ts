@@ -10,6 +10,12 @@ const localeModules = import.meta.glob('./locales/*/*.json', {
   import: 'default',
 }) as Record<string, any>;
 
+// Fallback explicit imports to guarantee inclusion of critical namespaces
+// If packaging ever misses a file, these ensure it's still bundled.
+import settingsEN from './locales/en/settings.json';
+import settingsDE from './locales/de/settings.json';
+import settingsJA from './locales/ja/settings.json';
+
 const resources: Resource = {};
 
 for (const [modulePath, moduleExports] of Object.entries(localeModules)) {
@@ -25,10 +31,26 @@ const namespaces = resources['en'] ? Object.keys(resources['en']) : ['common'];
 // Diagnostics to verify loaded languages and namespaces at runtime
 try {
   // eslint-disable-next-line no-console
+  console.log('[i18n] Discovered locale modules:', Object.keys(localeModules));
+  // eslint-disable-next-line no-console
   console.log('[i18n] Loaded languages:', Object.keys(resources));
   // eslint-disable-next-line no-console
   console.log('[i18n] Namespaces for en:', namespaces);
 } catch {}
+
+// Ensure 'settings' namespace exists by injecting explicit imports if missing
+const fallbackSettingsByLang: Record<string, any> = {
+  en: settingsEN,
+  de: settingsDE,
+  ja: settingsJA,
+};
+
+for (const [lang, data] of Object.entries(fallbackSettingsByLang)) {
+  if (!resources[lang]) resources[lang] = {};
+  if (!(resources[lang] as any)['settings']) {
+    (resources[lang] as any)['settings'] = data as any;
+  }
+}
 
 // Configure i18next
 i18n
