@@ -20,6 +20,7 @@ from src.db_models.tags import TagDb, TagNamespaceDb # For type hints
 
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.search_registry import searchable_asset
+from src.common.database import get_session_factory
 
 logger = get_logger(__name__)
 
@@ -312,32 +313,48 @@ class TagsManager(SearchableAsset):
         return False
 
     # --- SearchableAsset Implementation ---
-    def get_search_index_items(self, db: Session) -> List[SearchIndexItem]:
+    def get_search_index_items(self) -> List[SearchIndexItem]:
         logger.info("TagsManager: Fetching tags for search indexing...")
-        items = []
+        items: List[SearchIndexItem] = []
         try:
-            # Fetch all tags with their namespaces for FQN
-            db_tags = self._tag_repo.get_multi_with_filters(db, limit=10000) # Adjust limit as needed
-            
-            for tag_db_obj in db_tags:
-                if not tag_db_obj.id or not tag_db_obj.name or not tag_db_obj.namespace:
-                     logger.warning(f"Skipping tag for search indexing due to missing id, name, or namespace: {tag_db_obj}")
-                     continue
-                
-                tag_api_model = Tag.from_orm(tag_db_obj) # Use Pydantic model for FQN
-                items.append(
-                    SearchIndexItem(
-                        id=f"tag::{tag_api_model.id}",
-                        type="tag",
-                        feature_id="tags", # Or "settings.tags" if managed under settings UI
-                        title=tag_api_model.fully_qualified_name,
-                        description=tag_api_model.description or f"Tag: {tag_api_model.name} in namespace {tag_api_model.namespace_name}",
-                        link=f"/settings/tags?tagId={tag_api_model.id}", # Placeholder link, adjust to actual UI path
-                        tags=[tag_api_model.name, tag_api_model.namespace_name or DEFAULT_NAMESPACE_NAME, f"status:{tag_api_model.status.value}"]
+            session_factory = get_session_factory()
+            if not session_factory:
+                logger.warning("Session factory not available; cannot index tags.")
+                return []
+
+            with session_factory() as db:
+                # Fetch all tags with their namespaces for FQN
+                db_tags = self._tag_repo.get_multi_with_filters(db, limit=10000)
+
+                for tag_db_obj in db_tags:
+                    if not tag_db_obj.id or not tag_db_obj.name or not tag_db_obj.namespace:
+                        logger.warning(
+                            f"Skipping tag for search indexing due to missing id, name, or namespace: {tag_db_obj}"
+                        )
+                        continue
+
+                    tag_api_model = Tag.from_orm(tag_db_obj)  # Use Pydantic model for FQN
+                    items.append(
+                        SearchIndexItem(
+                            id=f"tag::{tag_api_model.id}",
+                            type="tag",
+                            feature_id="tags",
+                            title=tag_api_model.fully_qualified_name,
+                            description=tag_api_model.description
+                            or f"Tag: {tag_api_model.name} in namespace {tag_api_model.namespace_name}",
+                            link=f"/settings/tags?tagId={tag_api_model.id}",
+                            tags=[
+                                tag_api_model.name,
+                                tag_api_model.namespace_name or DEFAULT_NAMESPACE_NAME,
+                                f"status:{tag_api_model.status.value}",
+                            ],
+                        )
                     )
-                )
+
             logger.info(f"TagsManager: Prepared {len(items)} tags for search index.")
             return items
         except Exception as e:
-            logger.error(f"TagsManager: Error fetching or mapping tags for search: {e}", exc_info=True)
-            return [] 
+            logger.error(
+                f"TagsManager: Error fetching or mapping tags for search: {e}", exc_info=True
+            )
+            return []

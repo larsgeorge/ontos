@@ -214,7 +214,7 @@ class DataProductsManager(SearchableAsset):
             if tags_data is not None and self._tags_manager:  # Check explicitly for None since empty list is valid
                 try:
                     # First, remove all existing tags for this product
-                    existing_tags = self._entity_tag_repo.get_assigned_tags(
+                    existing_tags = self._entity_tag_repo.get_assigned_tags_for_entity(
                         db=self._db,
                         entity_id=product_id,
                         entity_type="data_product"
@@ -222,7 +222,7 @@ class DataProductsManager(SearchableAsset):
                     for existing_tag in existing_tags:
                         self._entity_tag_repo.remove_tag_from_entity(
                             db=self._db,
-                            tag_id=existing_tag.get('tag_id'),
+                            tag_id=existing_tag.tag_id,
                             entity_id=product_id,
                             entity_type="data_product"
                         )
@@ -675,7 +675,7 @@ class DataProductsManager(SearchableAsset):
 
                 # Use the tags manager to assign the tag
                 if tag_id:
-                    self._entity_tag_repo.assign_tag_to_entity(
+                    self._entity_tag_repo.add_tag_to_entity(
                         db=self._db,
                         tag_id=tag_id,
                         entity_id=product_id,
@@ -687,7 +687,7 @@ class DataProductsManager(SearchableAsset):
                     # Resolve FQN to tag_id first
                     tag = self._tags_manager.get_tag_by_fqn(self._db, fqn=tag_fqn)
                     if tag:
-                        self._entity_tag_repo.assign_tag_to_entity(
+                        self._entity_tag_repo.add_tag_to_entity(
                             db=self._db,
                             tag_id=tag.id,
                             entity_id=product_id,
@@ -710,7 +710,7 @@ class DataProductsManager(SearchableAsset):
             # Load associated tags if tags_manager is available
             if self._tags_manager:
                 try:
-                    assigned_tags = self._entity_tag_repo.get_assigned_tags(
+                    assigned_tags = self._entity_tag_repo.get_assigned_tags_for_entity(
                         db=self._db,
                         entity_id=db_obj.id,
                         entity_type="data_product"
@@ -738,7 +738,7 @@ class DataProductsManager(SearchableAsset):
             return False
 
         try:
-            self._entity_tag_repo.assign_tag_to_entity(
+            self._entity_tag_repo.add_tag_to_entity(
                 db=self._db,
                 tag_id=tag_id,
                 entity_id=product_id,
@@ -775,7 +775,7 @@ class DataProductsManager(SearchableAsset):
             return []
 
         try:
-            return self._entity_tag_repo.get_assigned_tags(
+            return self._entity_tag_repo.get_assigned_tags_for_entity(
                 db=self._db,
                 entity_id=product_id,
                 entity_type="data_product"
