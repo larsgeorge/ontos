@@ -4,14 +4,20 @@ import uuid
 from datetime import datetime
 
 from databricks.sdk import WorkspaceClient
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Body, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from ..common.workspace_client import get_workspace_client
 from ..controller.settings_manager import SettingsManager
 from ..models.settings import AppRole, AppRoleCreate
 from ..common.database import get_db
-from ..common.dependencies import get_settings_manager, get_notifications_manager
+from ..common.dependencies import (
+    get_settings_manager,
+    get_notifications_manager,
+    AuditManagerDep,
+    AuditCurrentUserDep,
+    DBSessionDep,
+)
 from ..models.settings import HandleRoleRequest
 from ..models.notifications import Notification, NotificationType
 from ..controller.notifications_manager import NotificationsManager
@@ -37,18 +43,48 @@ async def get_settings_route(manager: SettingsManager = Depends(get_settings_man
 
 @router.put('/settings')
 async def update_settings(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     settings_payload: dict, # Renamed to avoid conflict with module
     manager: SettingsManager = Depends(get_settings_manager)
 ):
     """Update settings"""
+    success = False
+    details = {}
     try:
         logger.info(f"Received settings update request: {settings_payload}")
         logger.info(f"job_cluster_id in payload: {settings_payload.get('job_cluster_id')}")
+
+        # Track what settings changed
+        if 'job_cluster_id' in settings_payload:
+            details['job_cluster_id'] = settings_payload.get('job_cluster_id')
+        if 'sync_enabled' in settings_payload:
+            details['sync_enabled'] = settings_payload.get('sync_enabled')
+        if 'sync_repository' in settings_payload:
+            details['sync_repository'] = settings_payload.get('sync_repository')
+        if 'enabled_jobs' in settings_payload:
+            details['enabled_jobs'] = settings_payload.get('enabled_jobs')
+
         updated = manager.update_settings(settings_payload)
+        success = True
         return updated.to_dict()
     except Exception as e:
         logger.error(f"Error updating settings: {e!s}")
+        details['exception'] = str(e)
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        background_tasks.add_task(
+            audit_manager.log_action_background,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=SETTINGS_FEATURE_ID,
+            action="UPDATE",
+            success=success,
+            details=details
+        )
 
 @router.get('/settings/health')
 async def health_check(manager: SettingsManager = Depends(get_settings_manager)):
@@ -103,26 +139,41 @@ async def list_roles(manager: SettingsManager = Depends(get_settings_manager)):
 
 @router.post("/settings/roles", response_model=AppRole, status_code=status.HTTP_201_CREATED)
 async def create_role(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     role_data: AppRoleCreate = Body(..., embed=False),
-    manager: SettingsManager = Depends(get_settings_manager),
-    db: Session = Depends(get_db)
+    manager: SettingsManager = Depends(get_settings_manager)
 ):
     """Create a new application role."""
+    success = False
+    details = {"role_name": role_data.name}
     try:
         created_role = manager.create_app_role(db=db, role_data=role_data)
-        
-        # --- Add created ID to request.state for audit logging --- 
+        success = True
         if created_role and hasattr(created_role, 'id'):
-            request.state.audit_created_resource_id = str(created_role.id)
-        # -----------------------------------------------------------
-            
+            details["created_role_id"] = str(created_role.id)
         return created_role
     except ValueError as e:
         logger.warning(f"Validation error creating role '{role_data.name}': {e!s}")
+        details["exception"] = str(e)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"Error creating role '{role_data.name}': {e!s}")
+        details["exception"] = str(e)
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        background_tasks.add_task(
+            audit_manager.log_action_background,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=SETTINGS_FEATURE_ID,
+            action="CREATE",
+            success=success,
+            details=details
+        )
 
 @router.get("/settings/roles/{role_id}", response_model=AppRole)
 async def get_role(
@@ -142,39 +193,85 @@ async def get_role(
 @router.put("/settings/roles/{role_id}", response_model=AppRole)
 async def update_role(
     role_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     role_data: AppRole = Body(..., embed=False),
     manager: SettingsManager = Depends(get_settings_manager)
 ):
     """Update an existing application role."""
+    success = False
+    details = {"role_id": role_id, "role_name": role_data.name}
     try:
         updated_role = manager.update_app_role(role_id, role_data)
         if updated_role is None:
+            details["exception"] = "Role not found"
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+        success = True
         return updated_role
     except ValueError as e:
         logger.warning(f"Validation error updating role '{role_id}': {e!s}")
+        details["exception"] = str(e)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating role '{role_id}': {e!s}")
+        details["exception"] = str(e)
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        background_tasks.add_task(
+            audit_manager.log_action_background,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=SETTINGS_FEATURE_ID,
+            action="UPDATE",
+            success=success,
+            details=details
+        )
 
 @router.delete("/settings/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_role(
     role_id: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     manager: SettingsManager = Depends(get_settings_manager)
 ):
     """Delete an application role."""
+    success = False
+    details = {"deleted_role_id": role_id}
     try:
         deleted = manager.delete_app_role(role_id)
         if not deleted:
+            details["exception"] = "Role not found"
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+        success = True
         return None # Return None for 204
     except ValueError as e: # Catch potential error like deleting admin role
         logger.warning(f"Error deleting role '{role_id}': {e!s}")
+        details["exception"] = str(e)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error deleting role '{role_id}': {e!s}")
+        details["exception"] = str(e)
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        background_tasks.add_task(
+            audit_manager.log_action_background,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=SETTINGS_FEATURE_ID,
+            action="DELETE",
+            success=success,
+            details=details
+        )
 
 # --- Role Request Handling --- 
 @router.post("/settings/roles/handle-request", status_code=status.HTTP_200_OK)

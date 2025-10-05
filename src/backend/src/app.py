@@ -100,6 +100,24 @@ async def startup_event():
     logger.info("Attempting to load initial data...")
     load_initial_data(app=app)
     
+    # After initial data load, ensure SearchManager is initialized and index built
+    try:
+        from src.common.search_interfaces import SearchableAsset
+        from src.controller.search_manager import SearchManager
+        logger.info("Initializing SearchManager after data load (app.py)...")
+        searchable_managers_instances = []
+        for attr_name, manager_instance in list(getattr(app.state, '_state', {}).items()):
+            try:
+                if isinstance(manager_instance, SearchableAsset) and hasattr(manager_instance, 'get_search_index_items'):
+                    searchable_managers_instances.append(manager_instance)
+            except Exception:
+                continue
+        app.state.search_manager = SearchManager(searchable_managers=searchable_managers_instances)
+        app.state.search_manager.build_index()
+        logger.info("Search index initialized and built from DB-backed managers (app.py).")
+    except Exception as e:
+        logger.error(f"Failed initializing or building search index in app.py: {e}", exc_info=True)
+
     logger.info("Application startup complete.")
 
 # Application Shutdown Event
