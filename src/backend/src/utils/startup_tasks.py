@@ -220,23 +220,8 @@ def initialize_managers(app: FastAPI):
 
         logger.info("All managers instantiated and stored in app.state.")
 
-        # Build the SearchManager only after ALL managers + demo data are in place
-        try:
-            logger.info("Initializing SearchManager after managers and demo data are ready...")
-            searchable_managers_instances = []
-            for attr_name, manager_instance in list(getattr(app.state, '_state', {}).items()):
-                try:
-                    if isinstance(manager_instance, SearchableAsset) and hasattr(manager_instance, 'get_search_index_items'):
-                        searchable_managers_instances.append(manager_instance)
-                        logger.debug(f"Added searchable manager instance from app.state: {attr_name}")
-                except Exception:
-                    continue
-
-            app.state.search_manager = SearchManager(searchable_managers=searchable_managers_instances)
-            app.state.search_manager.build_index()
-            logger.info("Search index initialized and built from DB-backed managers.")
-        except Exception as e:
-            logger.error(f"Failed initializing or building search index: {e}", exc_info=True)
+        # Defer SearchManager initialization until after initial data loading completes
+        logger.info("Deferring SearchManager initialization until after initial data load.")
         
         # --- Ensure default roles exist using the manager method --- 
         app.state.settings_manager.ensure_default_roles_exist()
@@ -278,9 +263,9 @@ def initialize_managers(app: FastAPI):
         if db_session: db_session.rollback() # Rollback if any part fails
         raise RuntimeError("Failed to initialize application managers or default roles.") from e
     finally:
-        if db_session:
-            db_session.close()
-            logger.info("DB session for manager instantiation closed.")
+        # Keep the DB session open for manager singletons that rely on it.
+        # It will be managed at application shutdown.
+        pass
 
 def load_demo_semantic_links(db: Session) -> None:
     """Load demo semantic links between app entities and business concepts."""
@@ -469,8 +454,26 @@ async def startup_event_handler(app: FastAPI):
 
         # Step 3: Load initial data (requires managers to be initialized)
         # This function now creates its own session for data loading operations.
-        load_initial_data(app) 
+        load_initial_data(app)
         logger.info("Initial data loading sequence complete.")
+
+        # Step 4: Build the SearchManager AFTER data has been loaded
+        try:
+            logger.info("Initializing SearchManager after managers and initial data are ready...")
+            searchable_managers_instances = []
+            for attr_name, manager_instance in list(getattr(app.state, '_state', {}).items()):
+                try:
+                    if isinstance(manager_instance, SearchableAsset) and hasattr(manager_instance, 'get_search_index_items'):
+                        searchable_managers_instances.append(manager_instance)
+                        logger.debug(f"Added searchable manager instance from app.state: {attr_name}")
+                except Exception:
+                    continue
+
+            app.state.search_manager = SearchManager(searchable_managers=searchable_managers_instances)
+            app.state.search_manager.build_index()
+            logger.info("Search index initialized and built from DB-backed managers.")
+        except Exception as e:
+            logger.error(f"Failed initializing or building search index after data load: {e}", exc_info=True)
 
         logger.info("Application startup event handler finished successfully.")
     except Exception as e:
