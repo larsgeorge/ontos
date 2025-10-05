@@ -116,23 +116,7 @@ const { t } = useTranslation('common');
 1. Create a new directory in `src/i18n/locales/` (e.g., `fr/` for French)
 2. Copy all JSON files from `en/` to the new directory
 3. Translate all values (keep keys the same)
-4. Update `src/i18n/config.ts`:
-
-```ts
-import commonFR from './locales/fr/common.json';
-// ... import other namespaces
-
-i18n.init({
-  resources: {
-    // ... existing languages
-    fr: {
-      common: commonFR,
-      // ... other namespaces
-    },
-  },
-});
-```
-
+4. No manual imports are needed. The i18n config auto-discovers files via `import.meta.glob`.
 5. Add the language to the LanguageSelector component:
 
 ```tsx
