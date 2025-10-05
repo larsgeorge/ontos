@@ -15,41 +15,21 @@ NotificationCreate = NotificationApi
 NotificationUpdate = Union[NotificationApi, Dict[str, Any]]
 
 class NotificationRepository(CRUDBase[NotificationDb, NotificationCreate, NotificationUpdate]):
-    """Repository for Notification CRUD operations."""
+    """Repository for Notification CRUD operations.
 
-    def _deserialize_json_fields(self, db_obj: NotificationDb) -> NotificationDb:
-        """Deserialize JSON string fields back to Python objects."""
-        if db_obj.action_payload and isinstance(db_obj.action_payload, str):
-            try:
-                db_obj.action_payload = json.loads(db_obj.action_payload)
-            except (json.JSONDecodeError, TypeError):
-                pass  # Keep as string if deserialization fails
-
-        if db_obj.data and isinstance(db_obj.data, str):
-            try:
-                db_obj.data = json.loads(db_obj.data)
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-        if db_obj.target_roles and isinstance(db_obj.target_roles, str):
-            try:
-                db_obj.target_roles = json.loads(db_obj.target_roles)
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-        return db_obj
+    Note: JSON field deserialization (action_payload, data, target_roles) is handled
+    by Pydantic field_validator decorators in the Notification model when converting
+    DB objects to API models via model_validate(). The repository keeps JSON fields
+    as strings in the database to avoid mutating tracked ORM objects.
+    """
 
     def get(self, db: Session, id: Any) -> Optional[NotificationDb]:
-        """Override get to deserialize JSON fields."""
-        db_obj = super().get(db, id)
-        if db_obj:
-            return self._deserialize_json_fields(db_obj)
-        return db_obj
+        """Get notification by ID. Pydantic validators handle JSON deserialization."""
+        return super().get(db, id)
 
     def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[NotificationDb]:
-        """Override get_multi to deserialize JSON fields."""
-        db_objs = super().get_multi(db, skip=skip, limit=limit)
-        return [self._deserialize_json_fields(obj) for obj in db_objs]
+        """Get multiple notifications. Pydantic validators handle JSON deserialization."""
+        return super().get_multi(db, skip=skip, limit=limit)
 
     # Override create and update to handle potential JSON string conversion for payload
     # and explicit Enum -> String conversion for the 'type' field.
@@ -82,7 +62,9 @@ class NotificationRepository(CRUDBase[NotificationDb, NotificationCreate, Notifi
         # --- Flush and Refresh ---
         db.flush()  # Send pending changes to DB (assigns defaults like 'read')
         db.refresh(db_obj) # Update the db_obj instance with DB state
-        return self._deserialize_json_fields(db_obj)
+        # Return db_obj without deserializing to avoid mutating tracked ORM object
+        # Pydantic validators will handle JSON deserialization when model_validate() is called
+        return db_obj
 
     def update(self, db: Session, *, db_obj: NotificationDb, obj_in: NotificationUpdate) -> NotificationDb:
         logger.debug(f"Updating Notification (DB layer) with id: {db_obj.id}")

@@ -59,6 +59,17 @@ class Notification(BaseModel):
                 return None
         return v
 
+    @field_validator('target_roles', mode='before')
+    @classmethod
+    def parse_target_roles_json(cls, v: Any) -> Optional[List[str]]:
+        """Parse target_roles if it's a JSON string."""
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return None
+        return v
+
 class NotificationUpdate(BaseModel):
     """Model for updating notification fields."""
     title: Optional[str] = None

@@ -242,15 +242,18 @@ class NotificationsManager:
             db_obj = self._repo.get(db=db, id=notification_id)
             if not db_obj:
                 return None
-            
+
             if db_obj.read: # Already read
                 return Notification.from_orm(db_obj)
-                
+
             # Update using the repository's update method
             updated_db_obj = self._repo.update(db=db, db_obj=db_obj, obj_in={"read": True})
+            db.commit() # Commit the change to the database
+            db.refresh(updated_db_obj) # Refresh to get the committed state
             return Notification.from_orm(updated_db_obj)
         except Exception as e:
             logger.error(f"Error marking notification {notification_id} as read: {e}", exc_info=True)
+            db.rollback()
             raise
 
     def handle_actionable_notification(self, db: Session, action_type: str, action_payload: Dict) -> bool:

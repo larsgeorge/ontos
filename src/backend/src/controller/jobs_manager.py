@@ -584,7 +584,8 @@ class JobsManager:
                                         self._create_job_failure_notification(
                                             installation.name,
                                             installation.workflow_id,
-                                            run.run_id
+                                            run.run_id,
+                                            db
                                         )
                                         # Mark this run as notified only after notification succeeds
                                         workflow_job_run_repo.mark_as_notified(db, run_id=run.run_id)
@@ -632,7 +633,7 @@ class JobsManager:
 
         logger.info("Job state polling thread stopped")
 
-    def _create_job_failure_notification(self, job_name: str, workflow_id: str, run_id: int):
+    def _create_job_failure_notification(self, job_name: str, workflow_id: str, run_id: int, db: Session):
         """Create a notification for job failure."""
         if not self._notifications_manager:
             return
@@ -655,7 +656,7 @@ class JobsManager:
                 created_at=datetime.utcnow()
             )
 
-            self._notifications_manager.create_notification(notification, db=self._db)
+            self._notifications_manager.create_notification(notification, db=db)
             logger.info(f"Created failure notification for workflow '{workflow_id}' run {run_id}")
 
         except Exception as e:
