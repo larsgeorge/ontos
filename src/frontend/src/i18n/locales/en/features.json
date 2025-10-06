@@ -1,20 +1,74 @@
 {
-  "data-domains": { "name": "Domains" },
-  "teams": { "name": "Teams" },
-  "projects": { "name": "Projects" },
-  "data-contracts": { "name": "Contracts" },
-  "data-products": { "name": "Products" },
-  "business-glossary": { "name": "Business Glossary" },
-  "data-asset-reviews": { "name": "Asset Review" },
-  "compliance": { "name": "Compliance" },
-  "estate-manager": { "name": "Estate Manager" },
-  "master-data": { "name": "Master Data Management" },
-  "catalog-commander": { "name": "Catalog Commander" },
-  "security": { "name": "Security Features" },
-  "entitlements": { "name": "Entitlements" },
-  "entitlements-sync": { "name": "Entitlements Sync" },
-  "search": { "name": "Search" },
-  "audit": { "name": "Audit Trail" },
-  "settings": { "name": "Settings" },
-  "about": { "name": "About" }
+  "data-domains": {
+    "name": "Domains",
+    "description": "Organize data products and assets into logical domains."
+  },
+  "teams": {
+    "name": "Teams",
+    "description": "Manage teams and team members with role overrides."
+  },
+  "projects": {
+    "name": "Projects",
+    "description": "Manage projects and assign teams for workspace isolation."
+  },
+  "data-contracts": {
+    "name": "Contracts",
+    "description": "Define and enforce technical metadata standards."
+  },
+  "data-products": {
+    "name": "Products",
+    "description": "Group and manage related Databricks assets with tags."
+  },
+  "business-glossary": {
+    "name": "Business Glossary",
+    "description": "Create and manage business terms and definitions."
+  },
+  "data-asset-reviews": {
+    "name": "Asset Review",
+    "description": "Review and approve Databricks assets like tables, views, and functions."
+  },
+  "compliance": {
+    "name": "Compliance",
+    "description": "Create, verify compliance rules, and calculate scores."
+  },
+  "estate-manager": {
+    "name": "Estate Manager",
+    "description": "Manage multiple Databricks instances across regions and clouds."
+  },
+  "master-data": {
+    "name": "Master Data Management",
+    "description": "Build a golden record of your data."
+  },
+  "catalog-commander": {
+    "name": "Catalog Commander",
+    "description": "Side-by-side catalog explorer for asset management."
+  },
+  "security": {
+    "name": "Security Features",
+    "description": "Enable advanced security like differential privacy."
+  },
+  "entitlements": {
+    "name": "Entitlements",
+    "description": "Manage access privileges through personas and groups."
+  },
+  "entitlements-sync": {
+    "name": "Entitlements Sync",
+    "description": "Synchronize entitlements with external systems."
+  },
+  "search": {
+    "name": "Search",
+    "description": "Search across data products, contracts, and knowledge graph."
+  },
+  "audit": {
+    "name": "Audit Trail",
+    "description": "View and filter application audit logs."
+  },
+  "settings": {
+    "name": "Settings",
+    "description": "Configure application settings, jobs, and integrations."
+  },
+  "about": {
+    "name": "About",
+    "description": "Information about the application and its features."
+  }
 }

@@ -1,20 +1,74 @@
 {
-  "data-domains": { "name": "Domänen" },
-  "teams": { "name": "Teams" },
-  "projects": { "name": "Projekte" },
-  "data-contracts": { "name": "Verträge" },
-  "data-products": { "name": "Produkte" },
-  "business-glossary": { "name": "Business-Glossar" },
-  "data-asset-reviews": { "name": "Asset-Prüfung" },
-  "compliance": { "name": "Compliance" },
-  "estate-manager": { "name": "Estate-Manager" },
-  "master-data": { "name": "Stammdatenmanagement" },
-  "catalog-commander": { "name": "Catalog Commander" },
-  "security": { "name": "Sicherheitsfunktionen" },
-  "entitlements": { "name": "Berechtigungen" },
-  "entitlements-sync": { "name": "Berechtigungsabgleich" },
-  "search": { "name": "Suche" },
-  "audit": { "name": "Audit-Protokoll" },
-  "settings": { "name": "Einstellungen" },
-  "about": { "name": "Info" }
+  "data-domains": {
+    "name": "Domänen",
+    "description": "Datenprodukte und Assets in logische Domänen organisieren."
+  },
+  "teams": {
+    "name": "Teams",
+    "description": "Teams und Teammitglieder mit Rollen-Overrides verwalten."
+  },
+  "projects": {
+    "name": "Projekte",
+    "description": "Projekte verwalten und Teams zur Arbeitsbereichstrennung zuweisen."
+  },
+  "data-contracts": {
+    "name": "Verträge",
+    "description": "Technische Metadatenstandards definieren und durchsetzen."
+  },
+  "data-products": {
+    "name": "Produkte",
+    "description": "Verwandte Databricks-Assets mit Tags gruppieren und verwalten."
+  },
+  "business-glossary": {
+    "name": "Business-Glossar",
+    "description": "Geschäftsbegriffe und Definitionen erstellen und verwalten."
+  },
+  "data-asset-reviews": {
+    "name": "Asset-Prüfung",
+    "description": "Databricks-Assets wie Tabellen, Views und Funktionen prüfen und freigeben."
+  },
+  "compliance": {
+    "name": "Compliance",
+    "description": "Compliance-Regeln erstellen, prüfen und Scores berechnen."
+  },
+  "estate-manager": {
+    "name": "Estate-Manager",
+    "description": "Mehrere Databricks-Instanzen über Regionen und Clouds verwalten."
+  },
+  "master-data": {
+    "name": "Stammdatenmanagement",
+    "description": "Einen Golden Record Ihrer Daten aufbauen."
+  },
+  "catalog-commander": {
+    "name": "Catalog Commander",
+    "description": "Nebeneinander angeordneter Katalog-Explorer für Asset-Management."
+  },
+  "security": {
+    "name": "Sicherheitsfunktionen",
+    "description": "Erweiterte Sicherheit wie Differenzialprivacy aktivieren."
+  },
+  "entitlements": {
+    "name": "Berechtigungen",
+    "description": "Zugriffsrechte über Personas und Gruppen verwalten."
+  },
+  "entitlements-sync": {
+    "name": "Berechtigungsabgleich",
+    "description": "Berechtigungen mit externen Systemen synchronisieren."
+  },
+  "search": {
+    "name": "Suche",
+    "description": "Über Datenprodukte, Verträge und den Knowledge Graph suchen."
+  },
+  "audit": {
+    "name": "Audit-Protokoll",
+    "description": "Anwendungs-Audit-Logs anzeigen und filtern."
+  },
+  "settings": {
+    "name": "Einstellungen",
+    "description": "App-Einstellungen, Jobs und Integrationen konfigurieren."
+  },
+  "about": {
+    "name": "Info",
+    "description": "Informationen über die Anwendung und ihre Funktionen."
+  }
 }

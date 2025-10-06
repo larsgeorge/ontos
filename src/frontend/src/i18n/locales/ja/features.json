@@ -1,20 +1,74 @@
 {
-  "data-domains": { "name": "ドメイン" },
-  "teams": { "name": "チーム" },
-  "projects": { "name": "プロジェクト" },
-  "data-contracts": { "name": "契約" },
-  "data-products": { "name": "プロダクト" },
-  "business-glossary": { "name": "ビジネス用語集" },
-  "data-asset-reviews": { "name": "アセットレビュー" },
-  "compliance": { "name": "コンプライアンス" },
-  "estate-manager": { "name": "エステートマネージャー" },
-  "master-data": { "name": "マスターデータ管理" },
-  "catalog-commander": { "name": "カタログコマンダー" },
-  "security": { "name": "セキュリティ機能" },
-  "entitlements": { "name": "エンタイトルメント" },
-  "entitlements-sync": { "name": "エンタイトルメント同期" },
-  "search": { "name": "検索" },
-  "audit": { "name": "監査ログ" },
-  "settings": { "name": "設定" },
-  "about": { "name": "概要" }
+  "data-domains": {
+    "name": "ドメイン",
+    "description": "データ製品とアセットを論理的なドメインに整理します。"
+  },
+  "teams": {
+    "name": "チーム",
+    "description": "チームとメンバーをロール上書きで管理します。"
+  },
+  "projects": {
+    "name": "プロジェクト",
+    "description": "プロジェクトを管理し、チームを割り当ててワークスペースを分離します。"
+  },
+  "data-contracts": {
+    "name": "契約",
+    "description": "技術メタデータ標準を定義し、遵守を強制します。"
+  },
+  "data-products": {
+    "name": "プロダクト",
+    "description": "関連する Databricks アセットをタグでグループ化して管理します。"
+  },
+  "business-glossary": {
+    "name": "ビジネス用語集",
+    "description": "ビジネス用語と定義を作成および管理します。"
+  },
+  "data-asset-reviews": {
+    "name": "アセットレビュー",
+    "description": "テーブル、ビュー、関数などの Databricks アセットをレビューして承認します。"
+  },
+  "compliance": {
+    "name": "コンプライアンス",
+    "description": "コンプライアンスルールを作成・検証し、スコアを計算します。"
+  },
+  "estate-manager": {
+    "name": "エステートマネージャー",
+    "description": "複数の Databricks インスタンスをリージョンやクラウドをまたいで管理します。"
+  },
+  "master-data": {
+    "name": "マスターデータ管理",
+    "description": "データのゴールデンレコードを構築します。"
+  },
+  "catalog-commander": {
+    "name": "カタログコマンダー",
+    "description": "アセット管理のための左右分割カタログエクスプローラー。"
+  },
+  "security": {
+    "name": "セキュリティ機能",
+    "description": "差分プライバシーなどの高度なセキュリティを有効化します。"
+  },
+  "entitlements": {
+    "name": "エンタイトルメント",
+    "description": "ペルソナとグループを通じてアクセス権限を管理します。"
+  },
+  "entitlements-sync": {
+    "name": "エンタイトルメント同期",
+    "description": "エンタイトルメントを外部システムと同期します。"
+  },
+  "search": {
+    "name": "検索",
+    "description": "データ製品、契約、ナレッジグラフを横断検索します。"
+  },
+  "audit": {
+    "name": "監査ログ",
+    "description": "アプリの監査ログを表示・フィルタリングします。"
+  },
+  "settings": {
+    "name": "設定",
+    "description": "アプリ設定、ジョブ、連携を構成します。"
+  },
+  "about": {
+    "name": "概要",
+    "description": "アプリケーションと機能に関する情報。"
+  }
 }
