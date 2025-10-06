@@ -3,7 +3,6 @@ from src.common.config import Settings, get_settings
 from src.common.workspace_client import get_workspace_client, WorkspaceClient
 from src.models.estate import Estate, CloudType, SyncStatus
 from src.controller.estate_manager import EstateManager
-import logging
 import os
 from pathlib import Path
 import yaml
@@ -11,7 +10,6 @@ from datetime import datetime
 
 # Configure logging
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["estates"])

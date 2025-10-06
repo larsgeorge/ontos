@@ -1,4 +1,3 @@
-import logging
 import os
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -23,11 +22,11 @@ from src.common.dependencies import (
     AuditManagerDep,
     AuditCurrentUserDep
 )
-from src.common.logging import get_logger
 from src.controller.change_log_manager import change_log_manager
 from src.models.notifications import NotificationType
 from src.common.dependencies import NotificationsManagerDep, CurrentUserDep, DBSessionDep
 
+from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["data-products"])

@@ -1,4 +1,3 @@
-import logging
 from typing import List
 from uuid import UUID
 
@@ -17,8 +16,8 @@ from src.common.dependencies import (
 ) 
 from src.models.users import UserInfo # To type hint current_user
 from src.common.errors import NotFoundError, ConflictError
-from src.common.logging import get_logger
 
+from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 # Define router

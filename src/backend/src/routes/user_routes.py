@@ -1,4 +1,3 @@
-import logging
 import uuid # Import uuid
 from datetime import datetime # Import datetime
 from typing import Dict, Optional
@@ -11,7 +10,6 @@ from src.models.users import UserInfo
 from src.models.users import UserPermissions
 from src.models.notifications import Notification, NotificationType
 from src.common.config import get_settings, Settings
-from src.common.logging import get_logger
 from src.controller.authorization_manager import AuthorizationManager
 from src.common.dependencies import get_auth_manager, get_db # Import get_db
 from src.common.dependencies import get_settings_manager, get_notifications_manager
@@ -22,6 +20,7 @@ from src.common.features import FeatureAccessLevel
 from src.common.authorization import get_user_details_from_sdk
 from sqlalchemy.orm import Session # Import Session
 
+from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 # Define router at the module level with /api prefix

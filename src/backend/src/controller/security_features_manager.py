@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -7,7 +6,6 @@ import yaml
 from src.models.security_features import SecurityFeature
 
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 class SecurityFeaturesManager:

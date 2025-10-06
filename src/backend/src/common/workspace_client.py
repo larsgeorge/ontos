@@ -1,4 +1,3 @@
-import logging
 import signal
 import time
 from functools import cached_property, wraps
@@ -13,7 +12,6 @@ from src import __version__
 
 # Configure logging
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 class TimeoutError(Exception):

@@ -2,14 +2,14 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Dict, Any, Union
 import json
-import logging # Import logging
 
 from pydantic import BaseModel, Field, HttpUrl, field_validator, computed_field
 
 from .tags import AssignedTag, AssignedTagCreate
 
 # Get a logger instance for this module
-logger = logging.getLogger(__name__)
+from src.common.logging import get_logger
+logger = get_logger(__name__)
 
 class DataProductType(str, Enum):
     SOURCE = "source"

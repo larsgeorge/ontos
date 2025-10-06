@@ -1,4 +1,3 @@
-import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,7 +11,6 @@ from src.models.workflow_job_runs import WorkflowJobRun
 
 # Configure logging
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["jobs"])

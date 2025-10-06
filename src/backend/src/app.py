@@ -1,5 +1,4 @@
 # Initialize configuration and logging first
-import logging
 from src.common.config import get_settings, init_config
 from src.common.logging import setup_logging, get_logger
 init_config()

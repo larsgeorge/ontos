@@ -1,4 +1,3 @@
-import logging
 import os
 from pathlib import Path
 from typing import List
@@ -13,7 +12,6 @@ from src.common.dependencies import NotificationsManagerDep, DBSessionDep, Curre
 
 # Configure logging
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["notifications"])

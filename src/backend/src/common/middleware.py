@@ -1,4 +1,3 @@
-import logging
 import time
 from typing import Awaitable, Callable
 
@@ -6,7 +5,6 @@ from fastapi import Request, Response, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 class LoggingMiddleware(BaseHTTPMiddleware):

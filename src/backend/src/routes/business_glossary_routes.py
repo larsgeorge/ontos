@@ -1,4 +1,3 @@
-import logging
 import os
 from pathlib import Path
 from typing import Optional, List
@@ -16,7 +15,6 @@ from src.models.ontology import (
 
 # Configure logging
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["business-glossaries"])

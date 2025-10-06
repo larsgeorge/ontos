@@ -1,4 +1,3 @@
-import logging
 from typing import List, Optional
 from uuid import UUID
 import json # Import json
@@ -9,7 +8,6 @@ from sqlalchemy.exc import IntegrityError # Import IntegrityError
 from src.repositories.data_domain_repository import DataDomainRepository
 from src.models.data_domains import DataDomainCreate, DataDomainUpdate, DataDomainRead, DataDomainBasicInfo # Added DataDomainBasicInfo
 from src.db_models.data_domains import DataDomain
-from src.common.logging import get_logger
 from src.common.errors import ConflictError, NotFoundError, AppError # Import custom errors, AppError for validation
 from src.controller.change_log_manager import change_log_manager
 from src.controller.comments_manager import CommentsManager
@@ -21,6 +19,7 @@ from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.search_registry import searchable_asset
 from src.common.database import get_session_factory
 
+from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 @searchable_asset

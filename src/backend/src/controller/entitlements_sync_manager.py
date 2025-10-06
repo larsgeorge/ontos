@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime
 from typing import List, Optional
 
@@ -6,6 +5,9 @@ import yaml
 
 from src.common.workspace_client import get_workspace_client
 from src.models.entitlements_sync import EntitlementSyncConfig
+
+from src.common.logging import get_logger
+logger = get_logger(__name__)
 
 
 class EntitlementsSyncManager:
@@ -20,9 +22,9 @@ class EntitlementsSyncManager:
             with open(yaml_path) as f:
                 data = yaml.safe_load(f)
                 self.configs = [EntitlementSyncConfig(**config) for config in data.get('configs', [])]
-                logging.info(f"Loaded {len(self.configs)} sync configurations from {yaml_path}")
+                logger.info(f"Loaded {len(self.configs)} sync configurations from {yaml_path}")
         except Exception as e:
-            logging.exception(f"Error loading sync configurations from {yaml_path}: {e}")
+            logger.exception(f"Error loading sync configurations from {yaml_path}: {e}")
             self.configs = []
 
     def get_configs(self) -> List[EntitlementSyncConfig]:
@@ -70,7 +72,7 @@ class EntitlementsSyncManager:
                 for conn in connections
             ]
         except Exception as e:
-            logging.exception(f"Error fetching connections: {e}")
+            logger.exception(f"Error fetching connections: {e}")
             return []
 
     def get_catalogs(self) -> List[str]:
@@ -80,5 +82,5 @@ class EntitlementsSyncManager:
             catalogs = self.workspace_client.catalogs.list()
             return [catalog.name for catalog in catalogs]
         except Exception as e:
-            logging.exception(f"Error fetching catalogs: {e}")
+            logger.exception(f"Error fetching catalogs: {e}")
             return []

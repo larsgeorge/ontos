@@ -1,4 +1,3 @@
-import logging
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -8,7 +7,6 @@ import yaml
 from src.models.entitlements import AccessPrivilege, Persona
 
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 class EntitlementsManager:

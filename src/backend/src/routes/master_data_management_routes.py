@@ -1,4 +1,4 @@
-import logging
+
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -11,7 +11,6 @@ from ..models.master_data_management import (
 
 # Configure logging
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["master-data-management"])

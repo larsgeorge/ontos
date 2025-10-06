@@ -1,4 +1,3 @@
-import logging
 import json
 import yaml
 from pathlib import Path
@@ -20,9 +19,9 @@ from src.models.teams import (
 )
 from src.models.tags import AssignedTag, AssignedTagCreate
 from src.db_models.teams import TeamDb, TeamMemberDb
-from src.common.logging import get_logger
 from src.common.errors import ConflictError, NotFoundError
 
+from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 

@@ -1,4 +1,3 @@
-import logging
 import os
 from pathlib import Path
 from typing import Optional
@@ -20,6 +19,8 @@ from src.models.compliance import (
 from src.db_models.compliance import CompliancePolicyDb, ComplianceRunDb, ComplianceResultDb
 from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
 
+from src.common.logging import get_logger
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["compliance"])
 manager = ComplianceManager()
@@ -33,9 +34,9 @@ def _load_yaml_on_startup():
         yaml_path = Path(__file__).parent.parent / 'data' / 'compliance.yaml'
         if os.path.exists(yaml_path):
             # Defer DB provision via dependency in endpoints; here we just note file exists
-            logging.info(f"Compliance YAML available at {yaml_path}")
+            logger.info(f"Compliance YAML available at {yaml_path}")
     except Exception:
-        logging.exception("Compliance YAML detection failed")
+        logger.exception("Compliance YAML detection failed")
 
 
 @router.get("/compliance/policies")
@@ -51,7 +52,7 @@ async def get_policies(
         if count == 0 and os.path.exists(yaml_path):
             manager.load_from_yaml(db, str(yaml_path))
     except Exception:
-        logging.exception("Failed preloading compliance YAML")
+        logger.exception("Failed preloading compliance YAML")
 
     rows = manager.list_policies(db)
     stats = manager.get_compliance_stats(db)

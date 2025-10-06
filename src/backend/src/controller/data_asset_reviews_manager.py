@@ -1,4 +1,3 @@
-import logging
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Any
@@ -41,9 +40,9 @@ from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 # Import the registry decorator
 from src.common.search_registry import searchable_asset
 
-from src.common.logging import get_logger
 from src.common.config import Settings, get_settings # Added Settings and get_settings
 
+from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 @searchable_asset # Register this manager with the search system

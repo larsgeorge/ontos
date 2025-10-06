@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
-import logging
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound, PermissionDenied
@@ -9,8 +8,8 @@ from databricks.sdk.errors import NotFound, PermissionDenied
 from src.common.workspace_client import get_workspace_client_dependency # If available
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
-from src.common.logging import get_logger
 
+from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["workspace"])

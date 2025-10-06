@@ -5,6 +5,7 @@ import json
 import configparser
 import time
 import threading
+import re
 
 import yaml
 from databricks.sdk import WorkspaceClient
@@ -65,6 +66,28 @@ class JobsManager:
             'name': wf_def.get('name', workflow_id),
             'tasks': tasks  # Keep as Task objects
         }
+
+        # If YAML defines environments, convert and include them
+        if isinstance(wf_def.get('environments'), list):
+            env_objs: List[jobs.JobEnvironment] = []
+            for env in wf_def['environments']:
+                if not isinstance(env, dict):
+                    continue
+                env_key = env.get('environment_key')
+                spec_dict = env.get('spec') or {}
+                spec_obj = None
+                try:
+                    # Prefer jobs.Environment where available (SDK may expose in jobs or compute)
+                    spec_obj = jobs.Environment(**spec_dict)  # type: ignore[attr-defined]
+                except Exception:
+                    try:
+                        from databricks.sdk.service import compute
+                        spec_obj = compute.Environment(**spec_dict)
+                    except Exception:
+                        spec_obj = spec_dict
+                env_objs.append(jobs.JobEnvironment(environment_key=env_key, spec=spec_obj))
+            if env_objs:
+                job_settings_kwargs['environments'] = env_objs
 
         # Check if any tasks need serverless (no cluster_id specified)
         # If so, add default environment for serverless compute
@@ -164,6 +187,27 @@ class JobsManager:
             tasks=self._build_tasks_from_definition(wf_def)
         )
         
+        # Include environments if defined in YAML
+        if isinstance(wf_def.get('environments'), list):
+            env_objs: List[jobs.JobEnvironment] = []
+            for env in wf_def['environments']:
+                if not isinstance(env, dict):
+                    continue
+                env_key = env.get('environment_key')
+                spec_dict = env.get('spec') or {}
+                spec_obj = None
+                try:
+                    spec_obj = jobs.Environment(**spec_dict)  # type: ignore[attr-defined]
+                except Exception:
+                    try:
+                        from databricks.sdk.service import compute
+                        spec_obj = compute.Environment(**spec_dict)
+                    except Exception:
+                        spec_obj = spec_dict
+                env_objs.append(jobs.JobEnvironment(environment_key=env_key, spec=spec_obj))
+            if env_objs:
+                job_settings.environments = env_objs
+
         # Add optional job configuration from YAML
         if 'schedule' in wf_def:
             schedule_config = wf_def['schedule']
@@ -305,12 +349,16 @@ class JobsManager:
             # Derive from __file__ (works when app runs in workspace)
             base_path = str(Path(__file__).parent.parent)
 
+        # Helper: detect URI scheme like file:, dbfs:, s3:, etc.
+        def _has_scheme(path: str) -> bool:
+            return bool(re.match(r'^[a-zA-Z][a-zA-Z0-9+\-.]*:', path))
+
         if isinstance(wf.get("tasks"), list):
             for t in wf["tasks"]:
                 # Handle notebook_task
                 if 'notebook_task' in t and isinstance(t['notebook_task'], dict):
                     notebook_path = t['notebook_task'].get('notebook_path', '')
-                    if notebook_path and not notebook_path.startswith('/'):
+                    if notebook_path and not notebook_path.startswith('/') and not _has_scheme(notebook_path):
                         # Convert to workspace path: workflows are relative to src directory
                         workspace_path = f"{base_path}/workflows/{workflow_id}/{notebook_path}"
                         t['notebook_task']['notebook_path'] = workspace_path
@@ -318,7 +366,7 @@ class JobsManager:
                 # Handle spark_python_task
                 if 'spark_python_task' in t and isinstance(t['spark_python_task'], dict):
                     python_file = t['spark_python_task'].get('python_file', '')
-                    if python_file and not python_file.startswith('/'):
+                    if python_file and not python_file.startswith('/') and not _has_scheme(python_file):
                         # Convert to workspace path: workflows are relative to src directory
                         workspace_path = f"{base_path}/workflows/{workflow_id}/{python_file}"
                         t['spark_python_task']['python_file'] = workspace_path
@@ -327,6 +375,12 @@ class JobsManager:
 
     def _build_tasks_from_definition(self, wf: Dict[str, Any]) -> List[jobs.Task]:
         tasks: List[jobs.Task] = []
+        # Determine default environment_key if environments are defined
+        default_env_key: Optional[str] = None
+        if isinstance(wf.get('environments'), list) and wf['environments']:
+            first_env = wf['environments'][0]
+            if isinstance(first_env, dict):
+                default_env_key = first_env.get('environment_key')
         for t in wf.get('tasks', []) or []:
             if not isinstance(t, dict):
                 continue
@@ -337,12 +391,19 @@ class JobsManager:
             # Omitting them enables Databricks serverless compute
             if 'existing_cluster_id' in t:
                 kwargs['existing_cluster_id'] = t['existing_cluster_id']
+            # Optional: map environment_key for serverless environments
+            if 'environment_key' in t:
+                kwargs['environment_key'] = t['environment_key']
             if 'notebook_task' in t and isinstance(t['notebook_task'], dict):
                 kwargs['notebook_task'] = jobs.NotebookTask(**t['notebook_task'])
             if 'spark_python_task' in t and isinstance(t['spark_python_task'], dict):
                 kwargs['spark_python_task'] = jobs.SparkPythonTask(**t['spark_python_task'])
             if 'python_wheel_task' in t and isinstance(t['python_wheel_task'], dict):
                 kwargs['python_wheel_task'] = jobs.PythonWheelTask(**t['python_wheel_task'])
+
+            # If task is serverless (no cluster) and no explicit environment_key, default to first env
+            if 'existing_cluster_id' not in kwargs and 'environment_key' not in kwargs and default_env_key:
+                kwargs['environment_key'] = default_env_key
 
             task_obj = jobs.Task(**kwargs)
             tasks.append(task_obj)
@@ -385,12 +446,12 @@ class JobsManager:
                         continue
                     
                     # Update notification based on job state
-                    if state.life_cycle_state in [RunState.RUNNING, RunState.PENDING]:
+                    if state.life_cycle_state in [RunLifeCycleState.RUNNING, RunLifeCycleState.PENDING]:
                         # Job is still running, update progress
                         progress_data = {
                             "job_name": job_name,
                             "run_id": run_id,
-                            "progress": 50 if state.life_cycle_state == RunState.RUNNING else 25,
+                            "progress": 50 if state.life_cycle_state == RunLifeCycleState.RUNNING else 25,
                             "status": state.life_cycle_state.value
                         }
                         
@@ -403,10 +464,10 @@ class JobsManager:
                         
                         time.sleep(10)  # Check every 10 seconds
                         
-                    elif state.life_cycle_state in [RunState.TERMINATED, RunState.SKIPPED, RunState.INTERNAL_ERROR]:
+                    elif state.life_cycle_state in [RunLifeCycleState.TERMINATED, RunLifeCycleState.SKIPPED, RunLifeCycleState.INTERNAL_ERROR]:
                         # Job completed, update final notification
                         is_success = (
-                            state.life_cycle_state == RunState.TERMINATED and 
+                            state.life_cycle_state == RunLifeCycleState.TERMINATED and 
                             state.result_state == RunResultState.SUCCESS
                         )
                         

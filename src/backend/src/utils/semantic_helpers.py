@@ -6,13 +6,13 @@ routes, ensuring that business semantics are properly converted from ODCS format
 app's native semantic links system.
 """
 
-import logging
 from typing import List, Dict, Any, Optional, Tuple
 
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.models.semantic_links import EntitySemanticLinkCreate
 
-logger = logging.getLogger(__name__)
+from src.common.logging import get_logger
+logger = get_logger(__name__)
 
 # Constants for ODCS semantic processing
 SEMANTIC_ASSIGNMENT_TYPE = "http://databricks.com/ontology/uc/semanticAssignment"

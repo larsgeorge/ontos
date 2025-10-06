@@ -1,4 +1,3 @@
-import logging
 from typing import List, Optional, Dict, Any, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -24,7 +23,6 @@ from src.common.database import get_db
 from src.common.workspace_client import get_workspace_client_dependency
 from databricks.sdk import WorkspaceClient
 
-from src.common.logging import get_logger
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
@@ -40,6 +38,7 @@ from src.common.dependencies import (
     WorkspaceClientDep 
 )
 
+from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["data-asset-reviews"])

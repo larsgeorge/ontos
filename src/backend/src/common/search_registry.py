@@ -1,8 +1,8 @@
 from typing import List, Type
 from src.common.search_interfaces import SearchableAsset
-import logging
 
-logger = logging.getLogger(__name__)
+from src.common.logging import get_logger
+logger = get_logger(__name__)
 
 # Global registry for searchable asset manager classes
 SEARCHABLE_ASSET_MANAGERS: List[Type[SearchableAsset]] = []

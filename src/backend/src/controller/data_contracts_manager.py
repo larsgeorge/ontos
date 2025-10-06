@@ -1,5 +1,4 @@
 import json
-import logging
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Any
@@ -39,6 +38,7 @@ from src.db_models.data_contracts import (
 )
 from src.repositories.data_contracts_repository import data_contract_repo
 
+from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 # Inherit from SearchableAsset
@@ -1173,8 +1173,6 @@ class DataContractsManager(SearchableAsset):
                                         prop_dict['authoritativeDefinitions'].append(auth_def)
         except Exception as e:
             # Log error but don't fail export
-            import logging
-            logger = logging.getLogger(__name__)
             logger.warning(f"Failed to inject semantic assignments during ODCS export: {e}")
 
         return odcs

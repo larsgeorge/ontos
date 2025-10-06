@@ -1,25 +1,9 @@
-import logging
 from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-# Remove Session and WorkspaceClient imports if no longer needed directly
-# from sqlalchemy.sdk import Session 
-# from databricks.sdk import WorkspaceClient 
-
 from src.controller.search_manager import SearchManager
-# Remove direct manager imports as they are no longer needed here
-# from src.routes.data_product_routes import get_data_products_manager
-# from src.routes.business_glossary_routes import glossary_manager as business_glossary_manager_instance 
-# from src.routes.data_contract_routes import contract_manager as data_contract_manager_instance 
-# from src.controller.data_products_manager import DataProductsManager
-# from src.controller.business_glossaries_manager import BusinessGlossariesManager
-# from src.controller.data_contracts_manager import DataContractsManager
-
 # Import the search interfaces
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
-# Import dependencies for db and ws_client (Not needed directly here anymore)
-# from src.common.database import get_db
-# from src.common.workspace_client import get_workspace_client_dependency
 # Import Permission Checker class (not the non-existent getter)
 from src.common.authorization import PermissionChecker # Keep PermissionChecker class import if needed elsewhere, but remove getter
 # Import correct dependencies using Annotated types from dependencies.py
@@ -31,7 +15,6 @@ from src.common.dependencies import (
 
 # Configure logging
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["search"])

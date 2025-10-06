@@ -1,4 +1,3 @@
-import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -12,7 +11,6 @@ from src.models.security_features import SecurityFeature, SecurityFeatureType
 
 # Configure logging
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["security-features"])

@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Any
@@ -41,7 +40,6 @@ from src.controller.tags_manager import TagsManager
 from src.repositories.tags_repository import entity_tag_repo
 
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 # Import necessary components for creating a session

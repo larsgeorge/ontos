@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -51,7 +50,6 @@ import yaml
 
 # Configure logging
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["data-contracts"])

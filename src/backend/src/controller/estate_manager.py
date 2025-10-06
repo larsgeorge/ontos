@@ -5,12 +5,10 @@ import uuid # Import uuid for generating policy IDs
 from src.common.workspace_client import WorkspaceClient
 from src.common.config import Settings
 from src.models.estate import Estate, CloudType, SyncStatus, ConnectionType, SharingPolicy, SharingRule, SharingResourceType, SharingRuleOperator # Import new models
-import logging
 import yaml
 
 # Configure logging
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 class EstateManager:

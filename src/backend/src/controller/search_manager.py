@@ -1,5 +1,4 @@
 from __future__ import annotations # Ensure forward references work
-import logging
 from typing import Any, Dict, List, Optional, Iterable, TYPE_CHECKING
 
 # Import Search Interfaces
@@ -13,7 +12,6 @@ from src.models.users import UserInfo
 from src.common.features import FeatureAccessLevel
 
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 class SearchManager:

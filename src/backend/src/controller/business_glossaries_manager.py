@@ -1,4 +1,3 @@
-import logging
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
@@ -23,7 +22,6 @@ from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.search_registry import searchable_asset
 
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 # Inherit from SearchableAsset

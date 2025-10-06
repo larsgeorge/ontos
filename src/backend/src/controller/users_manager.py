@@ -1,4 +1,3 @@
-import logging
 from typing import Optional, List
 
 from databricks.sdk import WorkspaceClient
@@ -6,8 +5,8 @@ from databricks.sdk.service.iam import User as DatabricksUser
 from databricks.sdk.errors import DatabricksError, NotFound
 
 from src.models.users import UserInfo
-from src.common.logging import get_logger
 
+from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 class UsersManager:

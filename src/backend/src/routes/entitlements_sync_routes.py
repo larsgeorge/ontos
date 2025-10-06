@@ -1,4 +1,3 @@
-import logging
 import os
 from pathlib import Path
 from typing import List
@@ -11,7 +10,6 @@ from src.models.entitlements_sync import EntitlementSyncConfig
 
 # Configure logging
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["entitlements-sync"])

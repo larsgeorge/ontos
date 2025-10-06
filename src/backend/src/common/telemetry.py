@@ -1,11 +1,10 @@
 import functools
-import logging
 from collections.abc import Callable
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import DatabricksError
 
-
-logger = logging.getLogger(__name__)
+from src.common.logging import get_logger
+logger = get_logger(__name__)
 
 # Example usage:
 # 

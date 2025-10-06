@@ -1,4 +1,3 @@
-import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -21,7 +20,6 @@ from src.repositories.notification_repository import notification_repo, Notifica
 
 # Set up logging
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 class NotificationNotFoundError(Exception):

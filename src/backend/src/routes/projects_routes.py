@@ -1,4 +1,3 @@
-import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -26,8 +25,8 @@ from src.common.dependencies import (
 )
 from src.models.users import UserInfo
 from src.common.errors import NotFoundError, ConflictError
-from src.common.logging import get_logger
 
+from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 # Define router

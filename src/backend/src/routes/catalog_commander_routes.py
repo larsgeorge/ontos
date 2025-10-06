@@ -1,5 +1,3 @@
-import logging
-
 from databricks.sdk import WorkspaceClient
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -11,7 +9,6 @@ from src.common.features import FeatureAccessLevel
 
 # Configure logging
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["catalog-commander"])

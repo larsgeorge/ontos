@@ -1,4 +1,3 @@
-import logging
 from typing import List, Dict, Any, Optional
 import uuid
 from datetime import datetime
@@ -24,7 +23,6 @@ from ..controller.notifications_manager import NotificationsManager
 
 # Configure logging
 from src.common.logging import get_logger
-
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["settings"])
