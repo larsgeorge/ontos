@@ -1,3 +1,20 @@
 {
-  "placeholder": "機能の翻訳は段階的に追加されます"
+  "data-domains": { "name": "ドメイン" },
+  "teams": { "name": "チーム" },
+  "projects": { "name": "プロジェクト" },
+  "data-contracts": { "name": "契約" },
+  "data-products": { "name": "プロダクト" },
+  "business-glossary": { "name": "ビジネス用語集" },
+  "data-asset-reviews": { "name": "アセットレビュー" },
+  "compliance": { "name": "コンプライアンス" },
+  "estate-manager": { "name": "エステートマネージャー" },
+  "master-data": { "name": "マスターデータ管理" },
+  "catalog-commander": { "name": "カタログコマンダー" },
+  "security": { "name": "セキュリティ機能" },
+  "entitlements": { "name": "エンタイトルメント" },
+  "entitlements-sync": { "name": "エンタイトルメント同期" },
+  "search": { "name": "検索" },
+  "audit": { "name": "監査ログ" },
+  "settings": { "name": "設定" },
+  "about": { "name": "概要" }
 }

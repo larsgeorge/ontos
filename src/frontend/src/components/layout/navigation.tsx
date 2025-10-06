@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/tooltip';
 import { getNavigationGroups, FeatureConfig } from '@/config/features';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 // Import the Zustand store hook
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ interface NavigationProps {
 }
 
 export function Navigation({ isCollapsed }: NavigationProps) {
+  const { t } = useTranslation(['navigation', 'features']);
   const location = useLocation();
   // Select only the allowedMaturities from the store
   const allowedMaturities = useFeatureVisibilityStore((state) => state.allowedMaturities);
@@ -66,12 +68,30 @@ export function Navigation({ isCollapsed }: NavigationProps) {
   // Define the Home link separately
   const homeLink: FeatureConfig = {
     id: 'home',
-    name: 'Home',
+    name: t('navigation:home'),
     path: '/',
     description: 'Dashboard overview', // Optional description
     icon: HomeIcon, // Use imported HomeIcon
     group: 'System', // Assign to a group, or handle separately
     maturity: 'ga', // Treat as GA
+  };
+
+  // Map group names to i18n keys
+  const groupKeyMap: Record<string, string> = {
+    'Data Products': 'dataProducts',
+    'Governance': 'governance',
+    'Operations': 'operations',
+    'Security': 'security',
+    'System': 'system',
+  };
+
+  const translateGroupName = (groupName: string) => {
+    const key = groupKeyMap[groupName] || groupName;
+    return t(`navigation:groups.${key}`, { defaultValue: groupName });
+  };
+
+  const translateFeatureName = (featureId: string, defaultName: string) => {
+    return t(`features:${featureId}.name`, { defaultValue: defaultName });
   };
 
   return (
@@ -128,11 +148,12 @@ export function Navigation({ isCollapsed }: NavigationProps) {
             <div key={group.name} className={cn("w-full", isCollapsed ? "" : "mb-2 last:mb-0")}>
               {!isCollapsed && group.items.length > 0 && (
                 <h2 className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {group.name}
+                  {translateGroupName(group.name)}
                 </h2>
               )}
               {group.items.map((item: FeatureConfig) => {
                 const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+                const translatedName = translateFeatureName(item.id, item.name);
 
                 return isCollapsed ? (
                   <Tooltip key={item.path}>
@@ -146,17 +167,17 @@ export function Navigation({ isCollapsed }: NavigationProps) {
                             ? 'bg-muted text-primary'
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                         )}
-                        aria-label={item.name}
+                        aria-label={translatedName}
                         asChild
                       >
                         <NavLink to={item.path}>
                           <item.icon className="h-5 w-5" />
-                          <span className="sr-only">{item.name}</span>
+                          <span className="sr-only">{translatedName}</span>
                         </NavLink>
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="right" className="flex items-center gap-4">
-                      {item.name}
+                      {translatedName}
                       {item.maturity !== 'ga' && (
                           <span className={cn(
                               "ml-auto text-[8px] font-semibold px-1.5 py-0.5 rounded-full",
@@ -182,7 +203,7 @@ export function Navigation({ isCollapsed }: NavigationProps) {
                     }
                   >
                     <item.icon className="h-5 w-5" />
-                    {item.name}
+                    {translatedName}
                     {item.maturity !== 'ga' && (
                         <span className={cn(
                             "ml-auto text-[9px] font-semibold px-1.5 py-0 rounded-full",

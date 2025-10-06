@@ -1,3 +1,20 @@
 {
-  "placeholder": "Feature-Übersetzungen werden schrittweise hinzugefügt"
+  "data-domains": { "name": "Domänen" },
+  "teams": { "name": "Teams" },
+  "projects": { "name": "Projekte" },
+  "data-contracts": { "name": "Verträge" },
+  "data-products": { "name": "Produkte" },
+  "business-glossary": { "name": "Business-Glossar" },
+  "data-asset-reviews": { "name": "Asset-Prüfung" },
+  "compliance": { "name": "Compliance" },
+  "estate-manager": { "name": "Estate-Manager" },
+  "master-data": { "name": "Stammdatenmanagement" },
+  "catalog-commander": { "name": "Catalog Commander" },
+  "security": { "name": "Sicherheitsfunktionen" },
+  "entitlements": { "name": "Berechtigungen" },
+  "entitlements-sync": { "name": "Berechtigungsabgleich" },
+  "search": { "name": "Suche" },
+  "audit": { "name": "Audit-Protokoll" },
+  "settings": { "name": "Einstellungen" },
+  "about": { "name": "Info" }
 }

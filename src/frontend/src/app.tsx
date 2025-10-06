@@ -37,6 +37,7 @@ import DataDomainDetailsView from "@/views/data-domain-details";
 import SearchView from './views/search';
 import TeamsView from './views/teams';
 import ProjectsView from './views/projects';
+import AuditTrail from './views/audit-trail';
 
 export default function App() {
   const fetchUserInfo = useUserStore((state: any) => state.fetchUserInfo);
@@ -93,6 +94,7 @@ export default function App() {
               <Route path="/estates/:estateId" element={<EstateDetailsView />} />
               <Route path="/data-asset-reviews" element={<DataAssetReviews />} />
               <Route path="/data-asset-reviews/:requestId" element={<DataAssetReviewDetails />} />
+              <Route path="/audit" element={<AuditTrail />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Layout>

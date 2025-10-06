@@ -1,3 +1,20 @@
 {
-  "placeholder": "Feature translations will be added incrementally"
+  "data-domains": { "name": "Domains" },
+  "teams": { "name": "Teams" },
+  "projects": { "name": "Projects" },
+  "data-contracts": { "name": "Contracts" },
+  "data-products": { "name": "Products" },
+  "business-glossary": { "name": "Business Glossary" },
+  "data-asset-reviews": { "name": "Asset Review" },
+  "compliance": { "name": "Compliance" },
+  "estate-manager": { "name": "Estate Manager" },
+  "master-data": { "name": "Master Data Management" },
+  "catalog-commander": { "name": "Catalog Commander" },
+  "security": { "name": "Security Features" },
+  "entitlements": { "name": "Entitlements" },
+  "entitlements-sync": { "name": "Entitlements Sync" },
+  "search": { "name": "Search" },
+  "audit": { "name": "Audit Trail" },
+  "settings": { "name": "Settings" },
+  "about": { "name": "About" }
 }

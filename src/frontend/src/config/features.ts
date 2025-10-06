@@ -16,6 +16,7 @@ import {
     Search, // Added icon for Search
     UserCheck, // Added icon for Teams
     FolderOpen, // Added icon for Projects
+    ScrollText, // Added icon for Audit Trail
     type LucideIcon, // Import LucideIcon type
   } from 'lucide-react';
   
@@ -185,6 +186,16 @@ import {
       path: '/search',
       description: 'Search across data products, contracts, and knowledge graph.',
       icon: Search,
+      group: 'System',
+      maturity: 'ga',
+      showInLanding: false,
+    },
+    {
+      id: 'audit',
+      name: 'Audit Trail',
+      path: '/audit',
+      description: 'View and filter application audit logs.',
+      icon: ScrollText,
       group: 'System',
       maturity: 'ga',
       showInLanding: false,
