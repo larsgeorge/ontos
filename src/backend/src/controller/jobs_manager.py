@@ -6,6 +6,7 @@ import configparser
 import time
 import threading
 import re
+import os
 
 import yaml
 from databricks.sdk import WorkspaceClient
@@ -397,7 +398,25 @@ class JobsManager:
             if 'notebook_task' in t and isinstance(t['notebook_task'], dict):
                 kwargs['notebook_task'] = jobs.NotebookTask(**t['notebook_task'])
             if 'spark_python_task' in t and isinstance(t['spark_python_task'], dict):
-                kwargs['spark_python_task'] = jobs.SparkPythonTask(**t['spark_python_task'])
+                # Resolve ${ENV} placeholders in parameters
+                spt = dict(t['spark_python_task'])
+                params = spt.get('parameters')
+                if isinstance(params, list):
+                    resolved: List[Any] = []
+                    for p in params:
+                        if isinstance(p, str):
+                            m = re.match(r'^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$', p)
+                            if m:
+                                var = m.group(1)
+                                val = None
+                                if self._settings and hasattr(self._settings, var):
+                                    val = getattr(self._settings, var)
+                                if val is None:
+                                    val = os.environ.get(var)
+                                p = str(val) if val is not None else p
+                        resolved.append(p)
+                    spt['parameters'] = resolved
+                kwargs['spark_python_task'] = jobs.SparkPythonTask(**spt)
             if 'python_wheel_task' in t and isinstance(t['python_wheel_task'], dict):
                 kwargs['python_wheel_task'] = jobs.PythonWheelTask(**t['python_wheel_task'])
 
