@@ -266,9 +266,6 @@ class SettingsManager:
                 )
                 self._installations[db_inst.workflow_id] = installation
 
-            # Update settings.enabled_jobs to reflect what's actually installed
-            self._settings.enabled_jobs = list(self._installations.keys())
-
             logger.info(f"Loaded {len(self._installations)} workflow installations from database")
         except Exception as e:
             logger.error(f"Error loading installations from database: {e}")
@@ -419,8 +416,12 @@ class SettingsManager:
         logger.info(f"SettingsManager.update_settings received cluster_id: {desired_cluster_id}")
         logger.info(f"SettingsManager.update_settings current stored cluster_id: {self._settings.job_cluster_id}")
 
-        # Compute job enable/disable delta against current settings
-        current_enabled: List[str] = self._settings.enabled_jobs or []
+        # Compute job enable/disable delta against current state from DB (source of truth)
+        try:
+            enabled_installations = workflow_installation_repo.get_all_installed(self._db)
+            current_enabled: List[str] = [inst.workflow_id for inst in enabled_installations]
+        except Exception:
+            current_enabled = self._settings.enabled_jobs or []
         self._available_jobs = [w["id"] for w in (self._jobs.list_available_workflows() if self._jobs else [])]
 
         to_install = sorted(list(set(desired_enabled) - set(current_enabled)))
@@ -431,6 +432,36 @@ class SettingsManager:
 
         # Apply changes on Databricks and collect errors
         errors = []
+
+        # Reconcile drift: desired job enabled but Databricks job missing; remove stale DB record and reinstall
+        try:
+            if self._client and self._jobs:
+                for job_id in list(desired_enabled):
+                    try:
+                        installation = workflow_installation_repo.get_by_workflow_id(self._db, workflow_id=job_id)
+                    except Exception:
+                        installation = None
+                    if not installation:
+                        continue
+                    try:
+                        # Validate remote job existence; add to install if missing
+                        self._client.jobs.get(job_id=installation.job_id)
+                    except Exception:
+                        try:
+                            workflow_installation_repo.remove(self._db, id=installation.id)
+                            self._db.commit()
+                            logger.info(f"Removed stale installation for workflow '{job_id}' (missing in Databricks)")
+                        except Exception as e:
+                            logger.error(f"Failed to remove stale installation for '{job_id}': {e}")
+                            self._db.rollback()
+                        if job_id not in to_install:
+                            to_install.append(job_id)
+                to_install = sorted(list(set(to_install)))
+        except Exception as e:
+            logger.error(f"Error during drift reconciliation: {e}")
+
+        # Log final plan after reconciliation
+        logger.info(f"Final to_install after reconciliation: {to_install}; to_remove: {to_remove}")
         
         for job_id in to_install:
             # Only process jobs that exist in workflows
@@ -466,9 +497,25 @@ class SettingsManager:
                         installation = workflow_installation_repo.get_by_workflow_id(self._db, workflow_id=job_id)
 
                         if installation:
-                            logger.info(f"Found installation record, calling remove_workflow with job_id: {installation.job_id}")
-                            self._jobs.remove_workflow(installation.job_id)
-                            logger.info(f"Successfully removed workflow '{job_id}'")
+                            # If remote job already missing, just remove DB record to avoid errors
+                            remote_exists = True
+                            try:
+                                self._client.jobs.get(job_id=installation.job_id)
+                            except Exception:
+                                remote_exists = False
+
+                            if remote_exists:
+                                logger.info(f"Found installation record, calling remove_workflow with job_id: {installation.job_id}")
+                                self._jobs.remove_workflow(installation.job_id)
+                                logger.info(f"Successfully removed workflow '{job_id}'")
+                            else:
+                                try:
+                                    workflow_installation_repo.remove(self._db, id=installation.id)
+                                    self._db.commit()
+                                    logger.info(f"Removed stale installation record for '{job_id}' (remote job already absent)")
+                                except Exception as e:
+                                    logger.error(f"Failed to remove stale installation for '{job_id}': {e}")
+                                    self._db.rollback()
                         else:
                             logger.warning(f"Installation record for '{job_id}' not found in database, attempting Databricks lookup")
                             # Fallback to Databricks lookup if not in database

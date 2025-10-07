@@ -644,6 +644,20 @@ class JobsManager:
                         break
 
                     try:
+                        # If the Databricks job was deleted, remove the stale installation record
+                        try:
+                            self._client.jobs.get(job_id=installation.job_id)
+                        except Exception as e:
+                            try:
+                                logger.warning(f"Job {installation.job_id} for workflow {installation.workflow_id} no longer exists. Cleaning up installation record.")
+                                workflow_installation_repo.remove(db, id=installation.id)
+                                db.commit()
+                            except Exception as db_e:
+                                logger.error(f"Failed to remove stale installation for workflow {installation.workflow_id}: {db_e}")
+                                db.rollback()
+                            # Skip further processing for this installation in this cycle
+                            continue
+
                         # Calculate time range for backfill (default: last 7 days)
                         backfill_days = self._settings.JOB_POLLING_BACKFILL_DAYS if self._settings else 7
                         start_time_from = int((datetime.utcnow() - timedelta(days=backfill_days)).timestamp() * 1000)
