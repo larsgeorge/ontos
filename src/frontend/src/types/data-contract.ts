@@ -16,6 +16,13 @@ export type ColumnProperty = {
   required?: boolean
   unique?: boolean
   description?: string
+  // ODCS v3.0.2 additional property fields
+  businessName?: string
+  encryptedName?: string
+  criticalDataElement?: boolean
+  transformLogic?: string
+  transformSourceObjects?: string
+  transformDescription?: string
 }
 
 // ODCS compliant schema object
@@ -23,6 +30,17 @@ export type SchemaObject = {
   name: string
   physicalName?: string
   properties: ColumnProperty[]
+  // Extended UC metadata
+  description?: string
+  tableType?: string
+  owner?: string
+  createdAt?: string
+  updatedAt?: string
+  tableProperties?: Record<string, any>
+  // ODCS v3.0.2 fields
+  businessName?: string
+  physicalType?: string
+  dataGranularityDescription?: string
 }
 
 // ODCS compliant description

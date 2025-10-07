@@ -51,6 +51,9 @@ const ODCS_SERVER_TYPES = [
 ]
 const ENVIRONMENTS = ['production', 'staging', 'development', 'test']
 
+// ODCS v3.0.2 physical types for schema objects
+const PHYSICAL_TYPES = ['table', 'view', 'materialized_view', 'external_table', 'managed_table', 'streaming_table']
+
 export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmit, initial }: WizardProps) {
   const { domains, loading: domainsLoading, refetch: refetchDomains } = useDomains()
   const { toast } = useToast()
@@ -118,6 +121,13 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
     classification?: string;
     examples?: string;
     semanticConcepts?: SemanticConcept[];
+    // ODCS v3.0.2 additional property fields
+    businessName?: string;
+    encryptedName?: string;
+    criticalDataElement?: boolean;
+    transformLogic?: string;
+    transformSourceObjects?: string;
+    transformDescription?: string;
   }
   type SchemaObject = {
     name: string;
@@ -131,6 +141,10 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
     createdAt?: string;
     updatedAt?: string;
     tableProperties?: Record<string, any>;
+    // ODCS v3.0.2 fields
+    businessName?: string;
+    physicalType?: string; // table, view, materialized_view, etc.
+    dataGranularityDescription?: string;
   }
   const [schemaObjects, setSchemaObjects] = useState<SchemaObject[]>(initial?.schemaObjects || [])
   const [contractSemanticConcepts, setContractSemanticConcepts] = useState<SemanticConcept[]>(initial?.contractSemanticConcepts || [])
@@ -391,6 +405,11 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         schema: schemaObjects.map((o) => ({
           name: o.name,
           physicalName: o.physicalName,
+          // ODCS v3.0.2 schema object fields
+          businessName: o.businessName,
+          physicalType: o.physicalType,
+          description: o.description,
+          dataGranularityDescription: o.dataGranularityDescription,
           // Include schema-level semantic assignments
           authoritativeDefinitions: convertSemanticConcepts(o.semanticConcepts),
           properties: o.properties.map(p => ({
@@ -467,6 +486,11 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
         schema: schemaObjects.map((o) => ({
           name: o.name,
           physicalName: o.physicalName,
+          // ODCS v3.0.2 schema object fields
+          businessName: o.businessName,
+          physicalType: o.physicalType,
+          description: o.description,
+          dataGranularityDescription: o.dataGranularityDescription,
           // Include schema-level semantic assignments
           authoritativeDefinitions: convertSemanticConcepts(o.semanticConcepts),
           properties: o.properties.map(p => ({
@@ -508,7 +532,9 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="w-[90vw] h-[90vh] max-w-none max-h-none flex flex-col">
         <DialogHeader className="flex-shrink-0 pb-4 border-b">
-          <DialogTitle className="text-2xl">Data Contract Wizard</DialogTitle>
+          <DialogTitle className="text-2xl">
+            {name ? `Data Contract Wizard: ${name}` : 'Data Contract Wizard'}
+          </DialogTitle>
           <DialogDescription className="text-base">Build a contract incrementally according to ODCS v3.0.2</DialogDescription>
           
           {/* Progress Indicator */}
@@ -524,11 +550,36 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
               />
             </div>
             <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-              <span className={step === 1 ? 'text-primary font-medium' : ''}>Fundamentals</span>
-              <span className={step === 2 ? 'text-primary font-medium' : ''}>Schema</span>
-              <span className={step === 3 ? 'text-primary font-medium' : ''}>Quality</span>
-              <span className={step === 4 ? 'text-primary font-medium' : ''}>Team & Roles</span>
-              <span className={step === 5 ? 'text-primary font-medium' : ''}>SLA & Infrastructure</span>
+              <button
+                onClick={() => setStep(1)}
+                className={`cursor-pointer hover:text-primary transition-colors ${step === 1 ? 'text-primary font-medium' : ''}`}
+              >
+                Fundamentals
+              </button>
+              <button
+                onClick={() => setStep(2)}
+                className={`cursor-pointer hover:text-primary transition-colors ${step === 2 ? 'text-primary font-medium' : ''}`}
+              >
+                Schema
+              </button>
+              <button
+                onClick={() => setStep(3)}
+                className={`cursor-pointer hover:text-primary transition-colors ${step === 3 ? 'text-primary font-medium' : ''}`}
+              >
+                Quality
+              </button>
+              <button
+                onClick={() => setStep(4)}
+                className={`cursor-pointer hover:text-primary transition-colors ${step === 4 ? 'text-primary font-medium' : ''}`}
+              >
+                Team & Roles
+              </button>
+              <button
+                onClick={() => setStep(5)}
+                className={`cursor-pointer hover:text-primary transition-colors ${step === 5 ? 'text-primary font-medium' : ''}`}
+              >
+                SLA & Infrastructure
+              </button>
             </div>
           </div>
         </DialogHeader>
@@ -722,20 +773,70 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                       <div>
                         <Label className="text-sm font-medium">Logical Name *</Label>
-                        <Input 
-                          placeholder="e.g., customers, orders" 
-                          value={obj.name} 
+                        <Input
+                          placeholder="e.g., customers, orders"
+                          value={obj.name}
                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, name: e.target.value } : x))}
                           className="mt-1"
                         />
                       </div>
                       <div>
                         <Label className="text-sm font-medium">Physical Name (Optional)</Label>
-                        <Input 
-                          placeholder="e.g., catalog.schema.table_name" 
-                          value={obj.physicalName || ''} 
+                        <Input
+                          placeholder="e.g., catalog.schema.table_name"
+                          value={obj.physicalName || ''}
                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, physicalName: e.target.value } : x))}
                           className="mt-1"
+                        />
+                      </div>
+                    </div>
+
+                    {/* ODCS v3.0.2 Schema Object Fields */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                      <div>
+                        <Label className="text-sm font-medium">Business Name (ODCS)</Label>
+                        <Input
+                          placeholder="Business-friendly name"
+                          value={obj.businessName || ''}
+                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, businessName: e.target.value } : x))}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Physical Type (ODCS)</Label>
+                        <Select
+                          value={obj.physicalType || 'table'}
+                          onValueChange={(v) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, physicalType: v } : x))}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select physical type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PHYSICAL_TYPES.map((t) => (
+                              <SelectItem key={t} value={t}>{t.replace(/_/g, ' ')}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                      <div>
+                        <Label className="text-sm font-medium">Schema Description (ODCS)</Label>
+                        <Textarea
+                          placeholder="Describe this schema object..."
+                          value={obj.description || ''}
+                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, description: e.target.value } : x))}
+                          className="mt-1 min-h-[80px]"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Data Granularity Description (ODCS)</Label>
+                        <Textarea
+                          placeholder="e.g., One row per customer per day"
+                          value={obj.dataGranularityDescription || ''}
+                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, dataGranularityDescription: e.target.value } : x))}
+                          className="mt-1 min-h-[80px]"
                         />
                       </div>
                     </div>
@@ -1089,13 +1190,66 @@ export default function DataContractWizardDialog({ isOpen, onOpenChange, onSubmi
                                       </div>
                                       <div className="lg:col-span-9">
                                         <Label className="text-[11px]">Examples (comma-separated)</Label>
-                                        <Input 
-                                          placeholder="123, 456, 789" 
+                                        <Input
+                                          placeholder="123, 456, 789"
                                           value={(col as any).examples || ''}
                                           onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, examples: e.target.value } : y) } : x))}
                                           className="mt-0.5 h-8 text-xs"
                                         />
                                       </div>
+
+                                      {/* ODCS v3.0.2 Property Fields */}
+                                      <div className="lg:col-span-4">
+                                        <Label className="text-[11px]">Business Name (ODCS)</Label>
+                                        <Input
+                                          placeholder="Business-friendly name"
+                                          value={(col as any).businessName || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, businessName: e.target.value } : y) } : x))}
+                                          className="mt-0.5 h-8 text-xs"
+                                        />
+                                      </div>
+                                      <div className="lg:col-span-4">
+                                        <Label className="text-[11px]">Encrypted Name (ODCS)</Label>
+                                        <Input
+                                          placeholder="Encrypted field name"
+                                          value={(col as any).encryptedName || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, encryptedName: e.target.value } : y) } : x))}
+                                          className="mt-0.5 h-8 text-xs"
+                                        />
+                                      </div>
+                                      <div className="lg:col-span-4">
+                                        <Label className="text-[11px]">Critical Data Element</Label>
+                                        <div className="mt-0.5">
+                                          <label className="flex items-center gap-1 text-[11px]">
+                                            <input
+                                              type="checkbox"
+                                              checked={!!(col as any).criticalDataElement}
+                                              onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, criticalDataElement: e.target.checked } : y) } : x))}
+                                            />
+                                            Is Critical Data Element
+                                          </label>
+                                        </div>
+                                      </div>
+
+                                      <div className="lg:col-span-6">
+                                        <Label className="text-[11px]">Transform Logic (ODCS)</Label>
+                                        <Input
+                                          placeholder="Transformation SQL or logic"
+                                          value={(col as any).transformLogic || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, transformLogic: e.target.value } : y) } : x))}
+                                          className="mt-0.5 h-8 text-xs"
+                                        />
+                                      </div>
+                                      <div className="lg:col-span-6">
+                                        <Label className="text-[11px]">Transform Source Objects (ODCS)</Label>
+                                        <Input
+                                          placeholder="Source table/column references"
+                                          value={(col as any).transformSourceObjects || ''}
+                                          onChange={(e) => setSchemaObjects((prev) => prev.map((x, i) => i === objIndex ? { ...x, properties: x.properties.map((y, j) => j === colIndex ? { ...y, transformSourceObjects: e.target.value } : y) } : x))}
+                                          className="mt-0.5 h-8 text-xs"
+                                        />
+                                      </div>
+
                                       <div className="lg:col-span-12 pt-2">
                                         <div className="mt-0.5">
                                           <BusinessConceptsDisplay

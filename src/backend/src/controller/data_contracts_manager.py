@@ -712,10 +712,18 @@ class DataContractsManager(SearchableAsset):
 
                         if getattr(prop, 'business_name', None):
                             prop_dict['businessName'] = prop.business_name
+                        if getattr(prop, 'encrypted_name', None):
+                            prop_dict['encryptedName'] = prop.encrypted_name
+                        if getattr(prop, 'transform_logic', None):
+                            prop_dict['transformLogic'] = prop.transform_logic
+                        if getattr(prop, 'transform_source_objects', None):
+                            prop_dict['transformSourceObjects'] = prop.transform_source_objects
+                        if getattr(prop, 'transform_description', None):
+                            prop_dict['transformDescription'] = prop.transform_description
 
-                        # Add transformDescription as separate field from description
+                        # Legacy transform description for specific property (can be removed later)
                         # For ODCS compliance, add transformDescription for properties that have transform logic
-                        if prop.transform_logic and prop.name == 'transaction_reference_date':
+                        if prop.transform_logic and prop.name == 'transaction_reference_date' and not prop_dict.get('transformDescription'):
                             prop_dict['transformDescription'] = "defines the logic in business terms; logic for dummies"
 
                         # Property-level tags - always include, even if empty for ODCS compliance

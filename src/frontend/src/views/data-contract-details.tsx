@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, Shapes, Columns2, CopyPlus } from 'lucide-react'
+import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, Shapes, Columns2, CopyPlus, Database } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -626,9 +626,16 @@ export default function DataContractDetails() {
                     )}
                   </div>
                   {contract.schema[0].physicalName && (
-                    <Badge variant="outline" className="text-xs">
-                      Physical: {contract.schema[0].physicalName}
-                    </Badge>
+                    <a
+                      href={`/catalog-explorer?table=${encodeURIComponent(contract.schema[0].physicalName)}`}
+                      className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`Open ${contract.schema[0].physicalName} in Catalog Explorer`}
+                    >
+                      <Database className="h-4 w-4" />
+                      {contract.schema[0].physicalName}
+                    </a>
                   )}
                 </div>
                 {contract.schema[0].properties && contract.schema[0].properties.length > 0 && (
@@ -679,9 +686,16 @@ export default function DataContractDetails() {
                       )}
                     </div>
                     {contract.schema[selectedSchemaIndex]?.physicalName && (
-                      <Badge variant="outline" className="text-xs">
-                        Physical: {contract.schema[selectedSchemaIndex].physicalName}
-                      </Badge>
+                      <a
+                        href={`/catalog-explorer?table=${encodeURIComponent(contract.schema[selectedSchemaIndex].physicalName)}`}
+                        className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Open ${contract.schema[selectedSchemaIndex].physicalName} in Catalog Explorer`}
+                      >
+                        <Database className="h-4 w-4" />
+                        {contract.schema[selectedSchemaIndex].physicalName}
+                      </a>
                     )}
                   </div>
                   {contract.schema[selectedSchemaIndex]?.properties && contract.schema[selectedSchemaIndex].properties.length > 0 && (
@@ -738,9 +752,16 @@ export default function DataContractDetails() {
                       )}
                     </div>
                     {contract.schema[selectedSchemaIndex]?.physicalName && (
-                      <Badge variant="outline" className="text-xs">
-                        Physical: {contract.schema[selectedSchemaIndex].physicalName}
-                      </Badge>
+                      <a
+                        href={`/catalog-explorer?table=${encodeURIComponent(contract.schema[selectedSchemaIndex].physicalName)}`}
+                        className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Open ${contract.schema[selectedSchemaIndex].physicalName} in Catalog Explorer`}
+                      >
+                        <Database className="h-4 w-4" />
+                        {contract.schema[selectedSchemaIndex].physicalName}
+                      </a>
                     )}
                   </div>
                   {contract.schema[selectedSchemaIndex]?.properties && contract.schema[selectedSchemaIndex].properties.length > 0 && (
@@ -780,6 +801,8 @@ export default function DataContractDetails() {
           // Rename schema to schemaObjects for wizard compatibility and include semantic concepts
           schemaObjects: contract.schema?.map(schema => ({
             ...schema,
+            // Ensure physicalName is mapped (handle both camelCase and snake_case)
+            physicalName: schema.physicalName || (schema as any).physical_name,
             semanticConcepts: (schemaLinks[schema.name] || [])
               .map(link => ({
                 iri: link.iri,

@@ -49,6 +49,14 @@ class ColumnProperty(BaseModel):
     semanticConcepts: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
     authoritativeDefinitions: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
 
+    # ODCS v3.0.2 additional property fields
+    businessName: Optional[str] = None
+    encryptedName: Optional[str] = None
+    criticalDataElement: Optional[bool] = None
+    transformLogic: Optional[str] = None
+    transformSourceObjects: Optional[str] = None
+    transformDescription: Optional[str] = None
+
     class Config:
         # Accept both JSON keys: "logicalType" (field name) and "logical_type" (alias)
         populate_by_name = True
@@ -57,7 +65,7 @@ class ColumnProperty(BaseModel):
 
 class SchemaObject(BaseModel):
     name: str
-    physicalName: Optional[str] = Field(None, alias='physical_name')
+    physicalName: Optional[str] = None
     properties: List[ColumnProperty] = Field(default_factory=list)
 
     # ODCS v3.0.2 additional schema object fields
@@ -72,6 +80,7 @@ class SchemaObject(BaseModel):
 
     class Config:
         populate_by_name = True
+        by_alias = False  # Use field names (physicalName) not aliases (physical_name) for serialization
         extra = "allow"  # Allow extra fields from wizard
 
 
