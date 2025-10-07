@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     # If not set, will derive from __file__ path (works when app runs in workspace)
     # For local dev with remote jobs, set to workspace deployment path (e.g., /Workspace/Users/user@domain.com/app-name/src/backend/src)
     WORKSPACE_APP_PATH: Optional[str] = Field(None, env='WORKSPACE_APP_PATH')
+    # Workspace path where workflow code should be deployed for containerized Databricks Apps
+    # This is where the JobsManager will copy workflow folders before creating jobs
+    # Example: /Workspace/Users/user@domain.com/ontos-workflows
+    # If not set, falls back to WORKSPACE_APP_PATH or __file__ derivation
+    WORKSPACE_DEPLOYMENT_PATH: Optional[str] = Field(None, env='WORKSPACE_DEPLOYMENT_PATH')
     # Number of days to look back when polling for job runs (for backfilling missed runs)
     # On startup or after downtime, will fetch all runs from last N days
     JOB_POLLING_BACKFILL_DAYS: int = Field(7, env='JOB_POLLING_BACKFILL_DAYS')

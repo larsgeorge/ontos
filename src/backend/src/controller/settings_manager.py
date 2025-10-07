@@ -114,7 +114,27 @@ class SettingsManager:
         # Initialize available jobs from workflow directory
         try:
             from src.controller.jobs_manager import JobsManager
-            self._jobs = JobsManager(db=self._db, ws_client=self._client, notifications_manager=self._notifications_manager, settings=self._settings)
+            from src.utils.workspace_deployer import WorkspaceDeployer
+
+            # Initialize WorkspaceDeployer if deployment path is configured
+            workspace_deployer = None
+            if self._client and self._settings.WORKSPACE_DEPLOYMENT_PATH:
+                try:
+                    workspace_deployer = WorkspaceDeployer(
+                        ws_client=self._client,
+                        deployment_path=self._settings.WORKSPACE_DEPLOYMENT_PATH
+                    )
+                    logger.info(f"WorkspaceDeployer initialized with deployment path: {self._settings.WORKSPACE_DEPLOYMENT_PATH}")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize WorkspaceDeployer: {e}")
+
+            self._jobs = JobsManager(
+                db=self._db,
+                ws_client=self._client,
+                notifications_manager=self._notifications_manager,
+                settings=self._settings,
+                workspace_deployer=workspace_deployer
+            )
             self._available_jobs = [w["id"] for w in self._jobs.list_available_workflows()]
 
             # Load installations from database
@@ -245,6 +265,9 @@ class SettingsManager:
                     updated_at=db_inst.updated_at
                 )
                 self._installations[db_inst.workflow_id] = installation
+
+            # Update settings.enabled_jobs to reflect what's actually installed
+            self._settings.enabled_jobs = list(self._installations.keys())
 
             logger.info(f"Loaded {len(self._installations)} workflow installations from database")
         except Exception as e:
@@ -498,11 +521,25 @@ class SettingsManager:
         if self._client:
             try:
                 from src.controller.jobs_manager import JobsManager
+                from src.utils.workspace_deployer import WorkspaceDeployer
+
+                # Initialize WorkspaceDeployer if deployment path is configured
+                workspace_deployer = None
+                if self._settings.WORKSPACE_DEPLOYMENT_PATH:
+                    try:
+                        workspace_deployer = WorkspaceDeployer(
+                            ws_client=self._client,
+                            deployment_path=self._settings.WORKSPACE_DEPLOYMENT_PATH
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to initialize WorkspaceDeployer: {e}")
+
                 self._jobs = JobsManager(
                     db=self._db,
                     ws_client=self._client,
                     notifications_manager=self._notifications_manager,
-                    settings=self._settings
+                    settings=self._settings,
+                    workspace_deployer=workspace_deployer
                 )
                 self._available_jobs = [w["id"] for w in self._jobs.list_available_workflows()]
             except Exception as e:

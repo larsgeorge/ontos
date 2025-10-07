@@ -23,12 +23,13 @@ logger = get_logger(__name__)
 
 
 class JobsManager:
-    def __init__(self, db: Session, ws_client: WorkspaceClient, *, workflows_root: Optional[Path] = None, notifications_manager=None, settings=None):
+    def __init__(self, db: Session, ws_client: WorkspaceClient, *, workflows_root: Optional[Path] = None, notifications_manager=None, settings=None, workspace_deployer=None):
         self._db = db
         self._client = ws_client
         self._workflows_root = workflows_root or Path(__file__).parent.parent / "workflows"
         self._notifications_manager = notifications_manager
         self._settings = settings
+        self._workspace_deployer = workspace_deployer
         self._running_jobs: Dict[int, str] = {}  # run_id -> notification_id
         self._polling_thread: Optional[threading.Thread] = None
         self._stop_polling = threading.Event()
@@ -56,9 +57,20 @@ class JobsManager:
             except Exception:
                 name = d.name
             items.append({"id": d.name, "name": name, "description": description})
-        return items
+        # Sort by name alphabetically
+        return sorted(items, key=lambda x: x["name"].lower())
 
     def install_workflow(self, workflow_id: str, *, job_cluster_id: Optional[str] = None) -> int:
+        # Deploy workflow code to workspace if deployer is configured
+        if self._workspace_deployer:
+            workflow_dir = self._workflows_root / workflow_id
+            if workflow_dir.exists():
+                try:
+                    self._workspace_deployer.deploy_workflow(workflow_id, workflow_dir)
+                    logger.info(f"Deployed workflow '{workflow_id}' to workspace")
+                except Exception as e:
+                    logger.warning(f"Failed to deploy workflow '{workflow_id}': {e}. Continuing with job installation...")
+
         wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=job_cluster_id)
 
         # Build job settings kwargs from workflow definition
@@ -342,8 +354,13 @@ class JobsManager:
                         del t["existing_cluster_id"]
 
         # Resolve relative paths to absolute workspace paths
-        # Use WORKSPACE_APP_PATH from settings if available, otherwise derive from __file__
-        if self._settings and self._settings.WORKSPACE_APP_PATH:
+        # Priority 1: Use WORKSPACE_DEPLOYMENT_PATH for containerized Apps
+        # Priority 2: Use WORKSPACE_APP_PATH for local dev with remote jobs
+        # Priority 3: Derive from __file__ (legacy, works when app runs in workspace)
+        if self._settings and self._settings.WORKSPACE_DEPLOYMENT_PATH:
+            # Use deployment path (for containerized Databricks Apps)
+            base_path = self._settings.WORKSPACE_DEPLOYMENT_PATH
+        elif self._settings and self._settings.WORKSPACE_APP_PATH:
             # Use configured workspace path (for local dev with remote jobs)
             base_path = self._settings.WORKSPACE_APP_PATH
         else:
@@ -360,16 +377,26 @@ class JobsManager:
                 if 'notebook_task' in t and isinstance(t['notebook_task'], dict):
                     notebook_path = t['notebook_task'].get('notebook_path', '')
                     if notebook_path and not notebook_path.startswith('/') and not _has_scheme(notebook_path):
-                        # Convert to workspace path: workflows are relative to src directory
-                        workspace_path = f"{base_path}/workflows/{workflow_id}/{notebook_path}"
+                        # Convert to workspace path
+                        # If using WORKSPACE_DEPLOYMENT_PATH, workflow is deployed directly there
+                        # Otherwise, workflow is nested under src/workflows
+                        if self._settings and self._settings.WORKSPACE_DEPLOYMENT_PATH:
+                            workspace_path = f"{base_path}/{workflow_id}/{notebook_path}"
+                        else:
+                            workspace_path = f"{base_path}/workflows/{workflow_id}/{notebook_path}"
                         t['notebook_task']['notebook_path'] = workspace_path
 
                 # Handle spark_python_task
                 if 'spark_python_task' in t and isinstance(t['spark_python_task'], dict):
                     python_file = t['spark_python_task'].get('python_file', '')
                     if python_file and not python_file.startswith('/') and not _has_scheme(python_file):
-                        # Convert to workspace path: workflows are relative to src directory
-                        workspace_path = f"{base_path}/workflows/{workflow_id}/{python_file}"
+                        # Convert to workspace path
+                        # If using WORKSPACE_DEPLOYMENT_PATH, workflow is deployed directly there
+                        # Otherwise, workflow is nested under src/workflows
+                        if self._settings and self._settings.WORKSPACE_DEPLOYMENT_PATH:
+                            workspace_path = f"{base_path}/{workflow_id}/{python_file}"
+                        else:
+                            workspace_path = f"{base_path}/workflows/{workflow_id}/{python_file}"
                         t['spark_python_task']['python_file'] = workspace_path
 
         return wf
