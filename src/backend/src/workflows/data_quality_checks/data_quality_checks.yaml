@@ -1,0 +1,25 @@
+name: "Data Quality Checks"
+description: "Validate data contracts and quality rules across datasets."
+format: "MULTI_TASK"
+environments:
+  - environment_key: "my-dqx-env"
+    spec:
+      # Serverless environment with required packages for DQX
+      # Using compute.Environment schema; jobs.Environment may also be accepted by SDK
+      requirements:
+        pypi:
+          packages:
+            - "databricks-labs-dqx==0.8.0"
+tasks:
+  - task_key: "data_quality_checks"
+    spark_python_task:
+      # Allow absolute or file: URI; relative path will be rewritten
+      python_file: "data_quality_checks.py"
+      parameters:
+        - "--config"
+        - "/Workspace/Users/yourname/.dqx/config.yml"
+    environment_key: "my-dqx-env"
+
+tags:
+  environment: "development"
+  owner: "ontos"
