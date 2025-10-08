@@ -13,8 +13,16 @@ export type DataContractListItem = {
 export type ColumnProperty = {
   name: string
   logicalType: string
+  physicalType?: string // Physical data type (VARCHAR(50), INT, etc.)
+  physicalName?: string // Physical column name
   required?: boolean
   unique?: boolean
+  primaryKey?: boolean // Primary key flag
+  primaryKeyPosition?: number // PK position for composite keys (-1 if not part of PK)
+  partitioned?: boolean // Partition column flag
+  partitionKeyPosition?: number // Partition position (-1 if not partitioned)
+  classification?: string // Data classification (confidential/restricted/public/PII/1-5)
+  examples?: string // Sample values (comma-separated or JSON string)
   description?: string
   // ODCS v3.0.2 additional property fields
   businessName?: string

@@ -368,3 +368,39 @@ def register_routes(app):
     """Register routes with the app"""
     app.include_router(router)
     logger.info("Settings routes registered")
+
+
+# --- Compliance mapping (object-type policies) ---
+
+@router.get('/settings/compliance-mapping')
+async def get_compliance_mapping():
+    """Return compliance mapping YAML content as JSON.
+
+    See structure documented in self_service_routes._load_compliance_mapping.
+    """
+    try:
+        from src.common.config import get_config_manager
+        cfg = get_config_manager()
+        data = cfg.load_yaml('compliance_mapping.yaml')
+        return data or {}
+    except FileNotFoundError:
+        return {}
+    except Exception as e:
+        logger.error(f"Error loading compliance mapping: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put('/settings/compliance-mapping')
+async def save_compliance_mapping(
+    payload: Dict[str, Any] = Body(...),
+    manager: SettingsManager = Depends(get_settings_manager)
+):
+    """Persist compliance mapping to YAML."""
+    try:
+        from src.common.config import get_config_manager
+        cfg = get_config_manager()
+        cfg.save_yaml('compliance_mapping.yaml', payload)
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Error saving compliance mapping: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))

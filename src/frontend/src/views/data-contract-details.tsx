@@ -3,9 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, Shapes, Columns2, CopyPlus, Database, Plus } from 'lucide-react'
+import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Rocket, Shapes, Columns2, Database } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DataTable } from '@/components/ui/data-table'
+import { ColumnDef } from '@tanstack/react-table'
 import { useToast } from '@/hooks/use-toast'
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel'
 import { CommentSidebar } from '@/components/comments'
@@ -23,6 +26,99 @@ import QualityRuleFormDialog from '@/components/data-contracts/quality-rule-form
 import TeamMemberFormDialog from '@/components/data-contracts/team-member-form-dialog'
 import ServerConfigFormDialog from '@/components/data-contracts/server-config-form-dialog'
 import SLAFormDialog from '@/components/data-contracts/sla-form-dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+
+// Define column structure for schema properties
+type SchemaProperty = {
+  name: string
+  logicalType?: string
+  logical_type?: string  // API response uses underscore
+  required: boolean
+  unique: boolean
+  description?: string
+}
+
+// Define this as a function to access component state
+const createSchemaPropertyColumns = (
+  contract: DataContract | null,
+  selectedSchemaIndex: number,
+  propertyLinks: Record<string, EntitySemanticLink[]>
+): ColumnDef<SchemaProperty>[] => [
+  {
+    accessorKey: 'name',
+    header: 'Column Name',
+    cell: ({ row }) => {
+      const property = row.original
+      const schemaName = contract?.schema?.[selectedSchemaIndex]?.name || ''
+      const propertyKey = `${schemaName}#${property.name}`
+      const links = propertyLinks[propertyKey] || []
+
+      const getLabel = (iri: string, label?: string) => (label && !/^https?:\/\//.test(label) && !/^urn:/.test(label)) ? label : (iri.split(/[\/#]/).pop() || iri)
+      return (
+        <div>
+          <span className="font-mono font-medium">{property.name}</span>
+          {links.length > 0 && (
+            <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
+              {links.map((link, idx) => (
+                <span key={idx} className="inline-flex items-center gap-1">
+                  <Columns2 className="h-3 w-3" />
+                  <span
+                    className="cursor-pointer hover:underline"
+                    onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
+                    title={link.iri}
+                  >
+                    {getLabel(link.iri, link.label)}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    },
+  },
+  {
+    accessorKey: 'logicalType',
+    header: 'Data Type',
+    cell: ({ row }) => {
+      const property = row.original
+      const logicalType = property.logicalType || (property as any).logical_type
+      return (
+        <Badge variant="secondary" className="text-xs">
+          {logicalType || 'N/A'}
+        </Badge>
+      )
+    },
+  },
+  {
+    accessorKey: 'required',
+    header: 'Required',
+    cell: ({ row }) => (
+      <span className="text-center block">
+        {row.getValue('required') ? '✓' : '✗'}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'unique',
+    header: 'Unique',
+    cell: ({ row }) => (
+      <span className="text-center block">
+        {row.getValue('unique') ? '✓' : '✗'}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'description',
+    header: 'Description',
+    cell: ({ row }) => (
+      <span className="text-muted-foreground text-sm">
+        {row.getValue('description') || '-'}
+      </span>
+    ),
+  },
+]
 
 export default function DataContractDetails() {
   const { contractId } = useParams<{ contractId: string }>()
@@ -41,6 +137,15 @@ export default function DataContractDetails() {
   const [isRequestAccessDialogOpen, setIsRequestAccessDialogOpen] = useState(false)
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false)
   const [links, setLinks] = useState<EntitySemanticLink[]>([])
+  const [selectedSchemaIndex, setSelectedSchemaIndex] = useState(0)
+  const [schemaLinks, setSchemaLinks] = useState<Record<string, EntitySemanticLink[]>>({})
+  const [propertyLinks, setPropertyLinks] = useState<Record<string, EntitySemanticLink[]>>({})
+  const [isDeploying, setIsDeploying] = useState(false)
+  const [deployError, setDeployError] = useState<string | null>(null)
+  const [deploySuccess, setDeploySuccess] = useState<string | null>(null)
+  const [deployCatalog, setDeployCatalog] = useState('')
+  const [deploySchema, setDeploySchema] = useState('')
+  const [isDeployDialogOpen, setIsDeployDialogOpen] = useState(false)
 
   // Dialog states for CRUD operations
   const [isBasicFormOpen, setIsBasicFormOpen] = useState(false)
@@ -77,6 +182,46 @@ export default function DataContractDetails() {
         setLinks(Array.isArray(linksData) ? linksData : [])
       } else {
         setLinks([])
+      }
+
+      // Fetch schema and property semantic links if contract has schemas
+      if (contractData?.schema) {
+        const schemaLinksMap: Record<string, EntitySemanticLink[]> = {}
+        const propertyLinksMap: Record<string, EntitySemanticLink[]> = {}
+
+        for (const schema of contractData.schema) {
+          // Fetch schema-level semantic links
+          const schemaEntityId = `${contractId}#${schema.name}`
+          try {
+            const schemaLinksRes = await fetch(`/api/semantic-links/entity/data_contract_schema/${encodeURIComponent(schemaEntityId)}`)
+            if (schemaLinksRes.ok) {
+              const schemaLinksData = await schemaLinksRes.json()
+              schemaLinksMap[schema.name] = Array.isArray(schemaLinksData) ? schemaLinksData : []
+            }
+          } catch (e) {
+            console.warn(`Failed to fetch schema links for ${schema.name}:`, e)
+          }
+
+          // Fetch property-level semantic links
+          if (schema.properties) {
+            for (const property of schema.properties) {
+              const propertyEntityId = `${contractId}#${schema.name}#${property.name}`
+              const propertyKey = `${schema.name}#${property.name}`
+              try {
+                const propertyLinksRes = await fetch(`/api/semantic-links/entity/data_contract_property/${encodeURIComponent(propertyEntityId)}`)
+                if (propertyLinksRes.ok) {
+                  const propertyLinksData = await propertyLinksRes.json()
+                  propertyLinksMap[propertyKey] = Array.isArray(propertyLinksData) ? propertyLinksData : []
+                }
+              } catch (e) {
+                console.warn(`Failed to fetch property links for ${propertyKey}:`, e)
+              }
+            }
+          }
+        }
+
+        setSchemaLinks(schemaLinksMap)
+        setPropertyLinks(propertyLinksMap)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
@@ -335,6 +480,45 @@ export default function DataContractDetails() {
     }
   }
 
+  const openDeploy = () => {
+    // If schema has a physicalName with catalog.schema.table, suggest defaults from there
+    try {
+      const sobj = contract?.schema?.[0]
+      const phys = sobj?.physicalName || ''
+      const parts = (phys || '').split('.')
+      if (parts.length === 3) {
+        setDeployCatalog(prev => prev || parts[0])
+        setDeploySchema(prev => prev || parts[1])
+      }
+    } catch {}
+    setIsDeployDialogOpen(true)
+  }
+
+  const handleDeploy = async () => {
+    if (!contract) return
+    try {
+      setIsDeploying(true)
+      setDeployError(null)
+      setDeploySuccess(null)
+      const res = await fetch(`/api/self-service/deploy/${contract.id}` , {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultCatalog: deployCatalog, defaultSchema: deploySchema })
+      })
+      if (!res.ok) {
+        const txt = await res.text()
+        throw new Error(txt || `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      setDeploySuccess(Array.isArray(data?.created) ? data.created.join(', ') : 'Deployed')
+      setIsDeployDialogOpen(false)
+    } catch (e: any) {
+      setDeployError(e?.message || 'Failed to deploy')
+    } finally {
+      setIsDeploying(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -372,6 +556,7 @@ export default function DataContractDetails() {
           <Button variant="outline" onClick={handleCreateNewVersion} size="sm"><CopyPlus className="mr-2 h-4 w-4" /> Create New Version</Button>
           <Button variant="outline" onClick={() => setIsBasicFormOpen(true)} size="sm"><Pencil className="mr-2 h-4 w-4" /> Edit Metadata</Button>
           <Button variant="outline" onClick={exportOdcs} size="sm"><Download className="mr-2 h-4 w-4" /> Export ODCS</Button>
+          <Button variant="default" onClick={openDeploy} className="flex items-center gap-2"><Rocket className="h-4 w-4" /> Deploy</Button>
           <Button variant="destructive" onClick={handleDelete} size="sm"><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
         </div>
       </div>
@@ -453,51 +638,220 @@ export default function DataContractDetails() {
       </Card>
 
       {/* Schemas Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-xl">Schemas ({contract.schema?.length || 0})</CardTitle>
-              <CardDescription>Database schema definitions</CardDescription>
+      {contract.schema && contract.schema.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-xl">Schemas ({contract.schema?.length || 0})</CardTitle>
+                <CardDescription>Database schema definitions</CardDescription>
+              </div>
+              <Button size="sm" onClick={() => { setEditingSchemaIndex(null); setIsSchemaFormOpen(true); }}>
+                <Plus className="h-4 w-4 mr-1.5" />
+                Add Schema
+              </Button>
             </div>
-            <Button size="sm" onClick={() => { setEditingSchemaIndex(null); setIsSchemaFormOpen(true); }}>
-              <Plus className="h-4 w-4 mr-1.5" />
-              Add Schema
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {contract.schema && contract.schema.length > 0 ? (
-            <div className="space-y-4">
-              {contract.schema.map((schema, idx) => (
-                <div key={idx} className="border rounded-lg p-4 space-y-3">
-                  <div className="flex items-center justify-between">
+          </CardHeader>
+          <CardContent>
+            {contract.schema.length === 1 ? (
+              // Single schema - simple view
+              <div className="space-y-4">
+                <div className="flex items-center gap-4 justify-between">
+                  <div>
+                    <Label className="text-base font-semibold">{contract.schema[0].name || 'Table 1'}</Label>
+                    {contract.schema[0].name && schemaLinks[contract.schema[0].name] && schemaLinks[contract.schema[0].name].length > 0 && (
+                      <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
+                        {schemaLinks[contract.schema[0].name].map((link, idx) => (
+                          <span key={idx} className="inline-flex items-center gap-1">
+                            <Shapes className="h-3 w-3" />
+                            <span
+                              className="cursor-pointer hover:underline"
+                              onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
+                              title={link.iri}
+                            >
+                              {(link.label && !/^https?:\/\//.test(link.label) && !/^urn:/.test(link.label)) ? link.label : (link.iri.split(/[\/#]/).pop() || link.iri)}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    {contract.schema[0].physicalName && (
+                      <a
+                        href={`/catalog-explorer?table=${encodeURIComponent(contract.schema[0].physicalName)}`}
+                        className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Open ${contract.schema[0].physicalName} in Catalog Explorer`}
+                      >
+                        <Database className="h-4 w-4" />
+                        {contract.schema[0].physicalName}
+                      </a>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => { setEditingSchemaIndex(0); setIsSchemaFormOpen(true); }}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => handleDeleteSchema(0)} className="text-destructive hover:text-destructive">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                {contract.schema[0].properties && contract.schema[0].properties.length > 0 && (
+                  <DataTable
+                    columns={createSchemaPropertyColumns(contract, 0, propertyLinks)}
+                    data={contract.schema[0].properties as SchemaProperty[]}
+                    searchColumn="name"
+                  />
+                )}
+              </div>
+            ) : contract.schema.length > 6 ? (
+              // Many schemas - use dropdown selector
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <Label>Select Schema:</Label>
+                  <Select value={selectedSchemaIndex.toString()} onValueChange={(value) => setSelectedSchemaIndex(parseInt(value))}>
+                    <SelectTrigger className="w-80">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[40vh] overflow-y-auto" position="popper" sideOffset={5}>
+                      {contract.schema.map((schemaObj, idx) => (
+                        <SelectItem key={idx} value={idx.toString()}>
+                          {schemaObj.name || `Table ${idx + 1}`} ({schemaObj.properties?.length || 0} columns)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 justify-between">
                     <div>
-                      <h4 className="font-semibold">{schema.name}</h4>
-                      {schema.physicalName && (
-                        <p className="text-sm text-muted-foreground">{schema.physicalName}</p>
+                      <Label className="text-base font-semibold">{contract.schema[selectedSchemaIndex]?.name || `Table ${selectedSchemaIndex + 1}`}</Label>
+                      {contract.schema[selectedSchemaIndex]?.name && schemaLinks[contract.schema[selectedSchemaIndex].name] && schemaLinks[contract.schema[selectedSchemaIndex].name].length > 0 && (
+                        <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
+                          {schemaLinks[contract.schema[selectedSchemaIndex].name].map((link, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1">
+                              <Shapes className="h-3 w-3" />
+                              <span
+                                className="cursor-pointer hover:underline"
+                                onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
+                                title={link.iri}
+                              >
+                                {(link.label && !/^https?:\/\//.test(link.label) && !/^urn:/.test(link.label)) ? link.label : (link.iri.split(/[\/#]/).pop() || link.iri)}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="ghost" onClick={() => { setEditingSchemaIndex(idx); setIsSchemaFormOpen(true); }}>
+                      {contract.schema[selectedSchemaIndex]?.physicalName && (
+                        <a
+                          href={`/catalog-explorer?table=${encodeURIComponent(contract.schema[selectedSchemaIndex].physicalName)}`}
+                          className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`Open ${contract.schema[selectedSchemaIndex].physicalName} in Catalog Explorer`}
+                        >
+                          <Database className="h-4 w-4" />
+                          {contract.schema[selectedSchemaIndex].physicalName}
+                        </a>
+                      )}
+                      <Button size="sm" variant="ghost" onClick={() => { setEditingSchemaIndex(selectedSchemaIndex); setIsSchemaFormOpen(true); }}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => handleDeleteSchema(idx)} className="text-destructive hover:text-destructive">
+                      <Button size="sm" variant="ghost" onClick={() => handleDeleteSchema(selectedSchemaIndex)} className="text-destructive hover:text-destructive">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    {schema.properties?.length || 0} columns • {schema.physicalType || 'table'}
+                  {contract.schema[selectedSchemaIndex]?.properties && contract.schema[selectedSchemaIndex].properties.length > 0 && (
+                    <DataTable
+                      columns={createSchemaPropertyColumns(contract, selectedSchemaIndex, propertyLinks)}
+                      data={contract.schema[selectedSchemaIndex].properties as SchemaProperty[]}
+                      searchColumn="name"
+                    />
+                  )}
+                </div>
+              </div>
+            ) : (
+              // Few schemas - use tabs with custom scrollable container
+              <div className="space-y-4">
+                <div className="w-full overflow-x-auto">
+                  <div className="flex border-b border-border">
+                    {contract.schema.map((schemaObj, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setSelectedSchemaIndex(idx)}
+                        className={`flex-shrink-0 px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                          selectedSchemaIndex === idx
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
+                        }`}
+                      >
+                        {schemaObj.name || `Table ${idx + 1}`}
+                        <span className="ml-2 text-xs">
+                          ({schemaObj.properties?.length || 0})
+                        </span>
+                      </button>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">No schemas defined. Click "Add Schema" to create one.</p>
-          )}
-        </CardContent>
-      </Card>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 justify-between">
+                    <div>
+                      <Label className="text-base font-semibold">{contract.schema[selectedSchemaIndex]?.name || `Table ${selectedSchemaIndex + 1}`}</Label>
+                      {contract.schema[selectedSchemaIndex]?.name && schemaLinks[contract.schema[selectedSchemaIndex].name] && schemaLinks[contract.schema[selectedSchemaIndex].name].length > 0 && (
+                        <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
+                          {schemaLinks[contract.schema[selectedSchemaIndex].name].map((link, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1">
+                              <Shapes className="h-3 w-3" />
+                              <span
+                                className="cursor-pointer hover:underline"
+                                onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
+                                title={link.iri}
+                              >
+                                {(link.label && !/^https?:\/\//.test(link.label) && !/^urn:/.test(link.label)) ? link.label : (link.iri.split(/[\/#]/).pop() || link.iri)}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      {contract.schema[selectedSchemaIndex]?.physicalName && (
+                        <a
+                          href={`/catalog-explorer?table=${encodeURIComponent(contract.schema[selectedSchemaIndex].physicalName)}`}
+                          className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`Open ${contract.schema[selectedSchemaIndex].physicalName} in Catalog Explorer`}
+                        >
+                          <Database className="h-4 w-4" />
+                          {contract.schema[selectedSchemaIndex].physicalName}
+                        </a>
+                      )}
+                      <Button size="sm" variant="ghost" onClick={() => { setEditingSchemaIndex(selectedSchemaIndex); setIsSchemaFormOpen(true); }}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => handleDeleteSchema(selectedSchemaIndex)} className="text-destructive hover:text-destructive">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  {contract.schema[selectedSchemaIndex]?.properties && contract.schema[selectedSchemaIndex].properties.length > 0 && (
+                    <DataTable
+                      columns={createSchemaPropertyColumns(contract, selectedSchemaIndex, propertyLinks)}
+                      data={contract.schema[selectedSchemaIndex].properties as SchemaProperty[]}
+                      searchColumn="name"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Quality Rules Section */}
       <Card>
@@ -819,6 +1173,38 @@ export default function DataContractDetails() {
           entityName={contract.name}
         />
       )}
+
+      {deployError && (
+        <div className="mt-2"><Alert variant="destructive"><AlertDescription>{deployError}</AlertDescription></Alert></div>
+      )}
+      {deploySuccess && (
+        <div className="mt-2"><Alert><AlertDescription>Deployed: {deploySuccess}</AlertDescription></Alert></div>
+      )}
+
+      {/* Simple inline deploy dialog */}
+      <Dialog open={isDeployDialogOpen} onOpenChange={setIsDeployDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Deploy to Unity Catalog</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div>
+              <Label>Default Catalog</Label>
+              <Input value={deployCatalog} onChange={(e) => setDeployCatalog(e.target.value)} placeholder="e.g. user_jdoe" />
+            </div>
+            <div>
+              <Label>Default Schema</Label>
+              <Input value={deploySchema} onChange={(e) => setDeploySchema(e.target.value)} placeholder="e.g. sandbox" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setIsDeployDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleDeploy} disabled={isDeploying || !deployCatalog || !deploySchema}>
+                {isDeploying ? (<span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Deploying…</span>) : 'Deploy'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

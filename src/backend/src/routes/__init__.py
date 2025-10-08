@@ -21,5 +21,6 @@ from . import tags_routes
 from . import user_routes
 from . import workspace_routes
 from . import semantic_models_routes
+from . import self_service_routes
 
 
