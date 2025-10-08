@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent } from '@/components/ui/card';
 import { Plus, Pencil, Trash2, AlertCircle, Upload, ChevronDown, Loader2, KeyRound } from 'lucide-react';
 // Removed Ajv and draft store imports with modal removal
-import DataContractWizardDialog from '@/components/data-contracts/data-contract-wizard-dialog'
+import DataContractBasicFormDialog from '@/components/data-contracts/data-contract-basic-form-dialog'
 import { useDropzone } from 'react-dropzone';
 import {
   ColumnDef,
@@ -759,40 +759,11 @@ export default function DataContracts() {
         </DialogContent>
       </Dialog>
 
-      {/* Wizard Dialog */}
-      <DataContractWizardDialog
+      {/* Basic Form Dialog */}
+      <DataContractBasicFormDialog
         isOpen={openWizard}
         onOpenChange={setOpenWizard}
-        initial={null}
-        onSubmit={async (payload) => {
-          const odcsContract = {
-            kind: 'DataContract',
-            apiVersion: 'v3.0.2',
-            name: payload.name,
-            version: payload.version,
-            status: payload.status,
-            owner: payload.owner,
-            domainId: payload.domainId,
-            tenant: payload.tenant,
-            dataProduct: payload.dataProduct,
-            description: payload.description,
-            schema: payload.schema || [],
-          }
-          
-          await createContract({
-            name: payload.name,
-            version: payload.version,
-            status: payload.status,
-            owner: payload.owner,
-            domainId: payload.domainId,
-            tenant: payload.tenant,
-            dataProduct: payload.dataProduct,
-            description: payload.description,
-            schema: payload.schema,
-            format: 'json',
-            contract_text: JSON.stringify(odcsContract, null, 2),
-          })
-        }}
+        onSubmit={createContract}
       />
     </div>
   );

@@ -83,6 +83,52 @@ export type SLARequirements = {
   dataFreshnessMinutes?: number
 }
 
+// ODCS v3.0.2 compliant quality rule (matches backend QualityRule model)
+export type QualityRule = {
+  name?: string
+  description?: string
+  level?: string // 'contract', 'object', 'property'
+  dimension?: string // 'accuracy', 'completeness', 'conformity', 'consistency', 'coverage', 'timeliness', 'uniqueness'
+  businessImpact?: string // 'operational', 'regulatory'
+  severity?: string // 'info', 'warning', 'error'
+  type?: string // 'text', 'library', 'sql', 'custom'
+  method?: string
+  schedule?: string
+  scheduler?: string
+  unit?: string
+  tags?: string
+  rule?: string
+  query?: string
+  engine?: string
+  implementation?: string
+  mustBe?: string
+  mustNotBe?: string
+  mustBeGt?: number
+  mustBeGe?: number
+  mustBeLt?: number
+  mustBeLe?: number
+  mustBeBetweenMin?: number
+  mustBeBetweenMax?: number
+}
+
+// Server configuration (ODCS compliant)
+export type ServerConfig = {
+  server?: string
+  type?: string
+  description?: string
+  environment?: string
+  host?: string
+  port?: number
+  database?: string
+  schema?: string
+  catalog?: string
+  project?: string
+  account?: string
+  region?: string
+  location?: string
+  properties?: Record<string, string>
+}
+
 // Full ODCS v3.0.2 compliant data contract
 export interface DataContract {
   id: string
@@ -98,25 +144,12 @@ export interface DataContract {
   owner_team_id?: string // UUID of the owning team
   description?: ContractDescription
   schema?: SchemaObject[]
-  qualityRules?: Array<{
-    type: string
-    enabled: boolean
-    threshold?: number
-    query?: string
-  }>
+  qualityRules?: QualityRule[]
   team?: TeamMember[]
   accessControl?: AccessControl
   support?: SupportChannels
   sla?: SLARequirements
-  servers?: {
-    serverType?: string
-    connectionString?: string
-    environment?: string
-  } | Array<{
-    serverType?: string
-    connectionString?: string
-    environment?: string
-  }>
+  servers?: ServerConfig | ServerConfig[]
   customProperties?: Record<string, any>
   created?: string
   updated?: string
@@ -131,24 +164,16 @@ export type DataContractCreate = {
   kind?: string
   apiVersion?: string
   domain?: string
+  domainId?: string
   tenant?: string
   dataProduct?: string
   description?: ContractDescription
   schema?: SchemaObject[]
-  qualityRules?: Array<{
-    type: string
-    enabled: boolean
-    threshold?: number
-    query?: string
-  }>
+  qualityRules?: QualityRule[]
   team?: TeamMember[]
   accessControl?: AccessControl
   support?: SupportChannels
   sla?: SLARequirements
-  servers?: {
-    serverType?: string
-    connectionString?: string
-    environment?: string
-  }
+  servers?: ServerConfig | ServerConfig[]
   customProperties?: Record<string, any>
 } 

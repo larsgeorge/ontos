@@ -3,13 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, Shapes, Columns2, CopyPlus, Database } from 'lucide-react'
+import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, Shapes, Columns2, CopyPlus, Database, Plus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { DataTable } from '@/components/ui/data-table'
-import { ColumnDef } from '@tanstack/react-table'
-import DataContractWizardDialog from '@/components/data-contracts/data-contract-wizard-dialog'
 import { useToast } from '@/hooks/use-toast'
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel'
 import { CommentSidebar } from '@/components/comments'
@@ -17,123 +13,48 @@ import ConceptSelectDialog from '@/components/semantic/concept-select-dialog'
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips'
 import { useDomains } from '@/hooks/use-domains'
 import type { EntitySemanticLink } from '@/types/semantic-link'
-import type { DataContract } from '@/types/data-contract'
+import type { DataContract, SchemaObject, QualityRule, TeamMember, ServerConfig, SLARequirements } from '@/types/data-contract'
 import useBreadcrumbStore from '@/stores/breadcrumb-store'
 import RequestAccessDialog from '@/components/access/request-access-dialog'
 import CreateVersionDialog from '@/components/data-products/create-version-dialog'
-
-// Define column structure for schema properties
-type SchemaProperty = {
-  name: string
-  logicalType?: string
-  logical_type?: string  // API response uses underscore
-  required: boolean
-  unique: boolean
-  description?: string
-}
-
-// Define this as a function to access component state
-const createSchemaPropertyColumns = (
-  contract: DataContract | null,
-  selectedSchemaIndex: number,
-  propertyLinks: Record<string, EntitySemanticLink[]>
-): ColumnDef<SchemaProperty>[] => [
-  {
-    accessorKey: 'name',
-    header: 'Column Name',
-    cell: ({ row }) => {
-      const property = row.original
-      const schemaName = contract?.schema?.[selectedSchemaIndex]?.name || ''
-      const propertyKey = `${schemaName}#${property.name}`
-      const links = propertyLinks[propertyKey] || []
-
-      const getLabel = (iri: string, label?: string) => (label && !/^https?:\/\//.test(label) && !/^urn:/.test(label)) ? label : (iri.split(/[\/#]/).pop() || iri)
-      return (
-        <div>
-          <span className="font-mono font-medium">{property.name}</span>
-          {links.length > 0 && (
-            <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
-              {links.map((link, idx) => (
-                <span key={idx} className="inline-flex items-center gap-1">
-                  <Columns2 className="h-3 w-3" />
-                  <span
-                    className="cursor-pointer hover:underline"
-                    onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
-                    title={link.iri}
-                  >
-                    {getLabel(link.iri, link.label)}
-                  </span>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      )
-    },
-  },
-  {
-    accessorKey: 'logicalType',
-    header: 'Data Type',
-    cell: ({ row }) => {
-      const property = row.original
-      const logicalType = property.logicalType || (property as any).logical_type
-      return (
-        <Badge variant="secondary" className="text-xs">
-          {logicalType || 'N/A'}
-        </Badge>
-      )
-    },
-  },
-  {
-    accessorKey: 'required',
-    header: 'Required',
-    cell: ({ row }) => (
-      <span className="text-center block">
-        {row.getValue('required') ? '✓' : '✗'}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'unique',
-    header: 'Unique',
-    cell: ({ row }) => (
-      <span className="text-center block">
-        {row.getValue('unique') ? '✓' : '✗'}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'description',
-    header: 'Description',
-    cell: ({ row }) => (
-      <span className="text-muted-foreground text-sm">
-        {row.getValue('description') || '-'}
-      </span>
-    ),
-  },
-]
+import DataContractBasicFormDialog from '@/components/data-contracts/data-contract-basic-form-dialog'
+import SchemaFormDialog from '@/components/data-contracts/schema-form-dialog'
+import QualityRuleFormDialog from '@/components/data-contracts/quality-rule-form-dialog'
+import TeamMemberFormDialog from '@/components/data-contracts/team-member-form-dialog'
+import ServerConfigFormDialog from '@/components/data-contracts/server-config-form-dialog'
+import SLAFormDialog from '@/components/data-contracts/sla-form-dialog'
 
 export default function DataContractDetails() {
   const { contractId } = useParams<{ contractId: string }>()
   const navigate = useNavigate()
   const { toast } = useToast()
   const { getDomainName } = useDomains()
-  
+
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments)
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle)
 
   const [contract, setContract] = useState<DataContract | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isWizardOpen, setIsWizardOpen] = useState(false)
   const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false)
   const [iriDialogOpen, setIriDialogOpen] = useState(false)
   const [isRequestAccessDialogOpen, setIsRequestAccessDialogOpen] = useState(false)
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false)
   const [links, setLinks] = useState<EntitySemanticLink[]>([])
-  const [selectedSchemaIndex, setSelectedSchemaIndex] = useState(0)
-  const [schemaLinks, setSchemaLinks] = useState<Record<string, EntitySemanticLink[]>>({})
-  const [propertyLinks, setPropertyLinks] = useState<Record<string, EntitySemanticLink[]>>({})
+
+  // Dialog states for CRUD operations
+  const [isBasicFormOpen, setIsBasicFormOpen] = useState(false)
+  const [isSchemaFormOpen, setIsSchemaFormOpen] = useState(false)
+  const [isQualityRuleFormOpen, setIsQualityRuleFormOpen] = useState(false)
+  const [isTeamMemberFormOpen, setIsTeamMemberFormOpen] = useState(false)
+  const [isServerConfigFormOpen, setIsServerConfigFormOpen] = useState(false)
+  const [isSLAFormOpen, setIsSLAFormOpen] = useState(false)
+
+  // Editing states
+  const [editingSchemaIndex, setEditingSchemaIndex] = useState<number | null>(null)
+  const [editingQualityRuleIndex, setEditingQualityRuleIndex] = useState<number | null>(null)
+  const [editingTeamMemberIndex, setEditingTeamMemberIndex] = useState<number | null>(null)
+  const [editingServerIndex, setEditingServerIndex] = useState<number | null>(null)
 
   const fetchDetails = async () => {
     if (!contractId) return
@@ -145,94 +66,17 @@ export default function DataContractDetails() {
         fetch(`/api/data-contracts/${contractId}`),
         fetch(`/api/semantic-links/entity/data_contract/${contractId}`)
       ])
-      
-      let contractData: DataContract | null = null
-      if (contractRes.ok) {
-        contractData = await contractRes.json()
-      } else {
-        // Fallback: try list endpoint and hydrate a minimal model
-        const listRes = await fetch('/api/data-contracts')
-        if (listRes.ok) {
-          const items: any[] = await listRes.json()
-          const found = items.find((i) => i.id === contractId)
-          if (found) {
-            contractData = {
-              id: found.id,
-              kind: 'DataContract',
-              apiVersion: 'v3.0.2',
-              version: found.version,
-              status: found.status,
-              name: found.name,
-              owner: found.owner,
-              tenant: found.tenant,
-              domain: undefined,
-              dataProduct: found.dataProduct,
-              description: undefined,
-              schema: [],
-              qualityRules: [],
-              team: [],
-              accessControl: undefined,
-              support: undefined,
-              sla: undefined,
-              servers: undefined,
-              customProperties: {},
-              created: found.created,
-              updated: found.updated,
-            } as DataContract
-          }
-        }
-      }
 
-      if (!contractData) throw new Error('Failed to load contract')
-
+      if (!contractRes.ok) throw new Error('Failed to load contract')
+      const contractData: DataContract = await contractRes.json()
       setContract(contractData)
       setDynamicTitle(contractData.name)
-      
+
       if (linksRes.ok) {
         const linksData = await linksRes.json()
         setLinks(Array.isArray(linksData) ? linksData : [])
       } else {
         setLinks([])
-      }
-
-      // Fetch schema and property semantic links if contract has schemas
-      if (contractData?.schema) {
-        const schemaLinksMap: Record<string, EntitySemanticLink[]> = {}
-        const propertyLinksMap: Record<string, EntitySemanticLink[]> = {}
-
-        for (const schema of contractData.schema) {
-          // Fetch schema-level semantic links
-          const schemaEntityId = `${contractId}#${schema.name}`
-          try {
-            const schemaLinksRes = await fetch(`/api/semantic-links/entity/data_contract_schema/${encodeURIComponent(schemaEntityId)}`)
-            if (schemaLinksRes.ok) {
-              const schemaLinksData = await schemaLinksRes.json()
-              schemaLinksMap[schema.name] = Array.isArray(schemaLinksData) ? schemaLinksData : []
-            }
-          } catch (e) {
-            console.warn(`Failed to fetch schema links for ${schema.name}:`, e)
-          }
-
-          // Fetch property-level semantic links
-          if (schema.properties) {
-            for (const property of schema.properties) {
-              const propertyEntityId = `${contractId}#${schema.name}#${property.name}`
-              const propertyKey = `${schema.name}#${property.name}`
-              try {
-                const propertyLinksRes = await fetch(`/api/semantic-links/entity/data_contract_property/${encodeURIComponent(propertyEntityId)}`)
-                if (propertyLinksRes.ok) {
-                  const propertyLinksData = await propertyLinksRes.json()
-                  propertyLinksMap[propertyKey] = Array.isArray(propertyLinksData) ? propertyLinksData : []
-                }
-              } catch (e) {
-                console.warn(`Failed to fetch property links for ${propertyKey}:`, e)
-              }
-            }
-          }
-        }
-
-        setSchemaLinks(schemaLinksMap)
-        setPropertyLinks(propertyLinksMap)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
@@ -242,10 +86,10 @@ export default function DataContractDetails() {
     }
   }
 
-  useEffect(() => { 
+  useEffect(() => {
     setStaticSegments([{ label: 'Data Contracts', path: '/data-contracts' }])
     fetchDetails()
-    
+
     return () => {
       setStaticSegments([])
       setDynamicTitle(null)
@@ -265,14 +109,11 @@ export default function DataContractDetails() {
     }
   }
 
-  // Legacy export removed - ODCS export is the primary method
-
   const exportOdcs = async () => {
     if (!contractId || !contract) return
     try {
       const res = await fetch(`/api/data-contracts/${contractId}/odcs/export`)
       if (!res.ok) throw new Error('Export ODCS failed')
-      // Backend returns YAML; read as text and download as .yaml
       const text = await res.text()
       const contentDisposition = res.headers.get('Content-Disposition') || ''
       const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
@@ -321,11 +162,6 @@ export default function DataContractDetails() {
     }
   }
 
-  const requestAccess = () => {
-    if (!contractId || !contract) return
-    setIsRequestAccessDialogOpen(true)
-  }
-
   const handleCreateNewVersion = () => {
     if (!contractId || !contract) {
       toast({ title: 'Permission Denied or Data Missing', description: 'Cannot create new version.', variant: 'destructive' })
@@ -358,6 +194,147 @@ export default function DataContractDetails() {
     }
   }
 
+  // CRUD handlers for main metadata
+  const handleUpdateMetadata = async (payload: any) => {
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: payload.name,
+          version: payload.version,
+          status: payload.status,
+          owner_team_id: payload.owner_team_id,
+          tenant: payload.tenant,
+          dataProduct: payload.dataProduct,
+          domainId: payload.domainId,
+          descriptionUsage: payload.description?.usage,
+          descriptionPurpose: payload.description?.purpose,
+          descriptionLimitations: payload.description?.limitations,
+        })
+      })
+      if (!res.ok) throw new Error('Update failed')
+      await fetchDetails()
+      toast({ title: 'Updated', description: 'Contract metadata updated.' })
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
+      throw e
+    }
+  }
+
+  // Schema CRUD handlers
+  const handleAddSchema = async (schema: SchemaObject) => {
+    if (!contract) return
+    const updatedSchemas = [...(contract.schema || []), schema]
+    await updateContract({ schema: updatedSchemas })
+  }
+
+  const handleUpdateSchema = async (schema: SchemaObject) => {
+    if (!contract || editingSchemaIndex === null) return
+    const updatedSchemas = [...(contract.schema || [])]
+    updatedSchemas[editingSchemaIndex] = schema
+    await updateContract({ schema: updatedSchemas })
+    setEditingSchemaIndex(null)
+  }
+
+  const handleDeleteSchema = async (index: number) => {
+    if (!contract) return
+    if (!confirm('Delete this schema?')) return
+    const updatedSchemas = (contract.schema || []).filter((_, i) => i !== index)
+    await updateContract({ schema: updatedSchemas })
+  }
+
+  // Quality Rule CRUD handlers
+  const handleAddQualityRule = async (rule: QualityRule) => {
+    if (!contract) return
+    const updatedRules = [...(contract.qualityRules || []), rule]
+    await updateContract({ qualityRules: updatedRules })
+  }
+
+  const handleUpdateQualityRule = async (rule: QualityRule) => {
+    if (!contract || editingQualityRuleIndex === null) return
+    const updatedRules = [...(contract.qualityRules || [])]
+    updatedRules[editingQualityRuleIndex] = rule
+    await updateContract({ qualityRules: updatedRules })
+    setEditingQualityRuleIndex(null)
+  }
+
+  const handleDeleteQualityRule = async (index: number) => {
+    if (!contract) return
+    if (!confirm('Delete this quality rule?')) return
+    const updatedRules = (contract.qualityRules || []).filter((_, i) => i !== index)
+    await updateContract({ qualityRules: updatedRules })
+  }
+
+  // Team Member CRUD handlers
+  const handleAddTeamMember = async (member: TeamMember) => {
+    if (!contract) return
+    const updatedTeam = [...(contract.team || []), member]
+    await updateContract({ team: updatedTeam })
+  }
+
+  const handleUpdateTeamMember = async (member: TeamMember) => {
+    if (!contract || editingTeamMemberIndex === null) return
+    const updatedTeam = [...(contract.team || [])]
+    updatedTeam[editingTeamMemberIndex] = member
+    await updateContract({ team: updatedTeam })
+    setEditingTeamMemberIndex(null)
+  }
+
+  const handleDeleteTeamMember = async (index: number) => {
+    if (!contract) return
+    if (!confirm('Remove this team member?')) return
+    const updatedTeam = (contract.team || []).filter((_, i) => i !== index)
+    await updateContract({ team: updatedTeam })
+  }
+
+  // Server Config CRUD handlers
+  const handleAddServer = async (server: ServerConfig) => {
+    if (!contract) return
+    const currentServers = Array.isArray(contract.servers) ? contract.servers : (contract.servers ? [contract.servers] : [])
+    const updatedServers = [...currentServers, server]
+    await updateContract({ servers: updatedServers })
+  }
+
+  const handleUpdateServer = async (server: ServerConfig) => {
+    if (!contract || editingServerIndex === null) return
+    const currentServers = Array.isArray(contract.servers) ? contract.servers : (contract.servers ? [contract.servers] : [])
+    const updatedServers = [...currentServers]
+    updatedServers[editingServerIndex] = server
+    await updateContract({ servers: updatedServers })
+    setEditingServerIndex(null)
+  }
+
+  const handleDeleteServer = async (index: number) => {
+    if (!contract) return
+    if (!confirm('Delete this server configuration?')) return
+    const currentServers = Array.isArray(contract.servers) ? contract.servers : (contract.servers ? [contract.servers] : [])
+    const updatedServers = currentServers.filter((_, i) => i !== index)
+    await updateContract({ servers: updatedServers })
+  }
+
+  // SLA handler
+  const handleUpdateSLA = async (sla: SLARequirements) => {
+    await updateContract({ sla })
+  }
+
+  // Helper to update contract (read-modify-write pattern)
+  const updateContract = async (updates: Partial<any>) => {
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      })
+      if (!res.ok) throw new Error('Update failed')
+      await fetchDetails()
+      toast({ title: 'Updated', description: 'Contract updated successfully.' })
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
+      throw e
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -374,6 +351,8 @@ export default function DataContractDetails() {
     )
   }
 
+  const serversList = Array.isArray(contract.servers) ? contract.servers : (contract.servers ? [contract.servers] : [])
+
   return (
     <div className="py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -389,14 +368,15 @@ export default function DataContractDetails() {
             onToggle={() => setIsCommentSidebarOpen(!isCommentSidebarOpen)}
             className="h-8"
           />
-          <Button variant="outline" onClick={requestAccess} size="sm"><KeyRound className="mr-2 h-4 w-4" /> Request Access</Button>
+          <Button variant="outline" onClick={() => setIsRequestAccessDialogOpen(true)} size="sm"><KeyRound className="mr-2 h-4 w-4" /> Request Access</Button>
           <Button variant="outline" onClick={handleCreateNewVersion} size="sm"><CopyPlus className="mr-2 h-4 w-4" /> Create New Version</Button>
-          <Button variant="outline" onClick={() => setIsWizardOpen(true)} size="sm"><Pencil className="mr-2 h-4 w-4" /> Edit</Button>
+          <Button variant="outline" onClick={() => setIsBasicFormOpen(true)} size="sm"><Pencil className="mr-2 h-4 w-4" /> Edit Metadata</Button>
           <Button variant="outline" onClick={exportOdcs} size="sm"><Download className="mr-2 h-4 w-4" /> Export ODCS</Button>
           <Button variant="destructive" onClick={handleDelete} size="sm"><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
         </div>
       </div>
 
+      {/* Core Metadata Card */}
       <Card>
         <CardHeader>
           <CardTitle className="text-2xl font-bold flex items-center">
@@ -405,16 +385,15 @@ export default function DataContractDetails() {
           <CardDescription className="pt-1">Core contract metadata</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Core Metadata */}
           <div className="grid md:grid-cols-4 gap-4">
-            <div className="space-y-1"><Label>Owner:</Label> <span className="text-sm block">{(contract as any).owner || contract.owner_team_id || 'N/A'}</span></div>
+            <div className="space-y-1"><Label>Owner:</Label> <span className="text-sm block">{contract.owner_team_id || 'N/A'}</span></div>
             <div className="space-y-1"><Label>Status:</Label> <Badge variant="secondary" className="ml-1">{contract.status}</Badge></div>
             <div className="space-y-1"><Label>Version:</Label> <Badge variant="outline" className="ml-1">{contract.version}</Badge></div>
             <div className="space-y-1"><Label>API Version:</Label> <span className="text-sm block">{contract.apiVersion}</span></div>
             <div className="space-y-1">
               <Label>Domain:</Label>
               {(() => {
-                const domainId = (contract as any).domain_id || (contract as any).domainId;
+                const domainId = contract.domainId;
                 const domainName = getDomainName(domainId) || contract.domain;
                 return domainName && domainId ? (
                   <span
@@ -462,123 +441,6 @@ export default function DataContractDetails() {
             </div>
           )}
 
-
-          {/* Team */}
-          {contract.team && contract.team.length > 0 && (
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Team</Label>
-              <div className="space-y-2 pl-4">
-                {contract.team.map((member, idx) => (
-                  <div key={idx} className="flex items-center gap-3">
-                    <Badge variant="outline">{member.role}</Badge>
-                    <span className="text-sm">{member.name || member.email}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Access Control */}
-          {contract.accessControl && (
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Access Control</Label>
-              <div className="grid md:grid-cols-2 gap-3 pl-4">
-                {contract.accessControl.classification && (
-                  <div className="space-y-1">
-                    <Label>Classification:</Label>
-                    <Badge variant="secondary">{contract.accessControl.classification}</Badge>
-                  </div>
-                )}
-                <div className="space-y-1">
-                  <Label>Contains PII:</Label>
-                  <span className="text-sm">{contract.accessControl.containsPii ? 'Yes' : 'No'}</span>
-                </div>
-                <div className="space-y-1">
-                  <Label>Requires Encryption:</Label>
-                  <span className="text-sm">{contract.accessControl.requiresEncryption ? 'Yes' : 'No'}</span>
-                </div>
-                {contract.accessControl.readGroups && contract.accessControl.readGroups.length > 0 && (
-                  <div className="space-y-1">
-                    <Label>Read Groups:</Label>
-                    <div className="flex flex-wrap gap-1">
-                      {contract.accessControl.readGroups.map((group, idx) => (
-                        <Badge key={idx} variant="outline" className="text-xs">{group}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Custom Properties */}
-          {contract.customProperties && Object.keys(contract.customProperties).length > 0 && (
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Custom Properties</Label>
-              <div className="space-y-2 pl-4">
-                {Object.entries(contract.customProperties).map(([key, value]) => (
-                  <div key={key} className="flex items-center gap-3">
-                    <Label className="min-w-24">{key}:</Label>
-                    <span className="text-sm text-muted-foreground">{String(value)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Support Channels */}
-          {contract.support && Object.keys(contract.support).length > 0 && (
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Support</Label>
-              <div className="space-y-2 pl-4">
-                {Object.entries(contract.support).map(([channel, url]) => (
-                  <div key={channel} className="flex items-center gap-3">
-                    <Badge variant="outline" className="text-xs capitalize">{channel}</Badge>
-                    {url ? (
-                      <a href={url} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline break-all">{url}</a>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">N/A</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* SLA */}
-          {contract.sla && Object.keys(contract.sla as any).length > 0 && (
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">SLA</Label>
-              <div className="space-y-2 pl-4">
-                {Object.entries(contract.sla as any).map(([k, v]) => (
-                  <div key={k} className="flex items-center gap-3">
-                    <Label className="min-w-32 capitalize">{k}:</Label>
-                    <span className="text-sm text-muted-foreground">{String(v)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Servers / Ports */}
-          {contract.servers && (
-            Array.isArray(contract.servers) ? contract.servers.length > 0 : true
-          ) && (
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Ports / Servers</Label>
-              <div className="space-y-2 pl-4">
-                {(Array.isArray(contract.servers) ? contract.servers : [contract.servers]).map((s, idx) => (
-                  <div key={idx} className="flex items-center gap-3">
-                    {s.serverType && <Badge variant="outline" className="text-xs">{s.serverType}</Badge>}
-                    {s.environment && <Badge variant="secondary" className="text-xs">{s.environment}</Badge>}
-                    {s.connectionString && (
-                      <span className="text-sm text-muted-foreground break-all">{s.connectionString}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
           <div className="space-y-1">
             <Label>Linked Business Concepts:</Label>
             <LinkedConceptChips
@@ -590,190 +452,285 @@ export default function DataContractDetails() {
         </CardContent>
       </Card>
 
-      {/* Schema Section */}
-      {contract.schema && contract.schema.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-xl flex items-center gap-2">
-              Schemas
-            </CardTitle>
-            <CardDescription>
-              Database schema definitions for this contract ({contract.schema.length} table{contract.schema.length !== 1 ? 's' : ''})
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {contract.schema.length === 1 ? (
-              // Single schema - no tabs needed
-              <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <div>
-                    <Label className="text-base font-semibold">{contract.schema[0].name}</Label>
-                    {schemaLinks[contract.schema[0].name] && schemaLinks[contract.schema[0].name].length > 0 && (
-                      <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
-                        {schemaLinks[contract.schema[0].name].map((link, idx) => (
-                          <span key={idx} className="inline-flex items-center gap-1">
-                            <Shapes className="h-3 w-3" />
-                            <span
-                              className="cursor-pointer hover:underline"
-                              onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
-                              title={link.iri}
-                            >
-                              {(link.label && !/^https?:\/\//.test(link.label) && !/^urn:/.test(link.label)) ? link.label : (link.iri.split(/[\/#]/).pop() || link.iri)}
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
+      {/* Schemas Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-xl">Schemas ({contract.schema?.length || 0})</CardTitle>
+              <CardDescription>Database schema definitions</CardDescription>
+            </div>
+            <Button size="sm" onClick={() => { setEditingSchemaIndex(null); setIsSchemaFormOpen(true); }}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add Schema
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {contract.schema && contract.schema.length > 0 ? (
+            <div className="space-y-4">
+              {contract.schema.map((schema, idx) => (
+                <div key={idx} className="border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-semibold">{schema.name}</h4>
+                      {schema.physicalName && (
+                        <p className="text-sm text-muted-foreground">{schema.physicalName}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="ghost" onClick={() => { setEditingSchemaIndex(idx); setIsSchemaFormOpen(true); }}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => handleDeleteSchema(idx)} className="text-destructive hover:text-destructive">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  {contract.schema[0].physicalName && (
-                    <a
-                      href={`/catalog-explorer?table=${encodeURIComponent(contract.schema[0].physicalName)}`}
-                      className="flex items-center gap-1.5 text-sm text-primary hover:underline"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={`Open ${contract.schema[0].physicalName} in Catalog Explorer`}
-                    >
-                      <Database className="h-4 w-4" />
-                      {contract.schema[0].physicalName}
-                    </a>
-                  )}
+                  <div className="text-sm text-muted-foreground">
+                    {schema.properties?.length || 0} columns • {schema.physicalType || 'table'}
+                  </div>
                 </div>
-                {contract.schema[0].properties && contract.schema[0].properties.length > 0 && (
-                  <DataTable
-                    columns={createSchemaPropertyColumns(contract, 0, propertyLinks)}
-                    data={contract.schema[0].properties as SchemaProperty[]}
-                    searchColumn="name"
-                  />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">No schemas defined. Click "Add Schema" to create one.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Quality Rules Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-xl">Quality Rules ({contract.qualityRules?.length || 0})</CardTitle>
+              <CardDescription>Data quality checks and validations</CardDescription>
+            </div>
+            <Button size="sm" onClick={() => { setEditingQualityRuleIndex(null); setIsQualityRuleFormOpen(true); }}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add Rule
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {contract.qualityRules && contract.qualityRules.length > 0 ? (
+            <div className="space-y-3">
+              {contract.qualityRules.map((rule, idx) => (
+                <div key={idx} className="border rounded-lg p-3 flex items-center justify-between">
+                  <div>
+                    <div className="font-medium">{rule.name}</div>
+                    <div className="text-sm text-muted-foreground flex gap-2 mt-1">
+                      <Badge variant="outline" className="text-xs">{rule.dimension}</Badge>
+                      <Badge variant="secondary" className="text-xs">{rule.severity}</Badge>
+                      <span>{rule.type}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => { setEditingQualityRuleIndex(idx); setIsQualityRuleFormOpen(true); }}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => handleDeleteQualityRule(idx)} className="text-destructive hover:text-destructive">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">No quality rules defined. Click "Add Rule" to create one.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Team & Roles Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-xl">Team Members ({contract.team?.length || 0})</CardTitle>
+              <CardDescription>Team responsible for this contract</CardDescription>
+            </div>
+            <Button size="sm" onClick={() => { setEditingTeamMemberIndex(null); setIsTeamMemberFormOpen(true); }}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add Member
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {contract.team && contract.team.length > 0 ? (
+            <div className="space-y-2">
+              {contract.team.map((member, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline">{member.role}</Badge>
+                    <span className="text-sm">{member.name || member.email}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => { setEditingTeamMemberIndex(idx); setIsTeamMemberFormOpen(true); }}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => handleDeleteTeamMember(idx)} className="text-destructive hover:text-destructive">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">No team members defined. Click "Add Member" to add one.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* SLA & Infrastructure Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-xl">SLA & Infrastructure</CardTitle>
+          <CardDescription>Service level agreements and server configurations</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* SLA Requirements */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <Label className="text-base font-semibold">SLA Requirements</Label>
+              <Button size="sm" variant="outline" onClick={() => setIsSLAFormOpen(true)}>
+                <Pencil className="h-4 w-4 mr-1.5" />
+                Edit SLA
+              </Button>
+            </div>
+            {contract.sla && Object.keys(contract.sla).length > 0 ? (
+              <div className="grid grid-cols-2 gap-3 pl-4">
+                {contract.sla.uptimeTarget !== undefined && (
+                  <div className="space-y-1">
+                    <Label className="text-sm">Uptime Target:</Label>
+                    <span className="text-sm text-muted-foreground block">{contract.sla.uptimeTarget}%</span>
+                  </div>
+                )}
+                {contract.sla.maxDowntimeMinutes !== undefined && (
+                  <div className="space-y-1">
+                    <Label className="text-sm">Max Downtime:</Label>
+                    <span className="text-sm text-muted-foreground block">{contract.sla.maxDowntimeMinutes} min</span>
+                  </div>
+                )}
+                {contract.sla.queryResponseTimeMs !== undefined && (
+                  <div className="space-y-1">
+                    <Label className="text-sm">Query Response Time:</Label>
+                    <span className="text-sm text-muted-foreground block">{contract.sla.queryResponseTimeMs} ms</span>
+                  </div>
+                )}
+                {contract.sla.dataFreshnessMinutes !== undefined && (
+                  <div className="space-y-1">
+                    <Label className="text-sm">Data Freshness:</Label>
+                    <span className="text-sm text-muted-foreground block">{contract.sla.dataFreshnessMinutes} min</span>
+                  </div>
                 )}
               </div>
-            ) : contract.schema.length > 6 ? (
-              // Many schemas - use dropdown selector
-              <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <Label>Select Schema:</Label>
-                  <Select value={selectedSchemaIndex.toString()} onValueChange={(value) => setSelectedSchemaIndex(parseInt(value))}>
-                    <SelectTrigger className="w-80">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[40vh] overflow-y-auto" position="popper" sideOffset={5}>
-                      {contract.schema.map((schemaObj, idx) => (
-                        <SelectItem key={idx} value={idx.toString()}>
-                          {schemaObj.name || `Table ${idx + 1}`} ({schemaObj.properties?.length || 0} columns)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4">
+            ) : (
+              <p className="text-sm text-muted-foreground pl-4">No SLA requirements defined.</p>
+            )}
+          </div>
+
+          {/* Server Configurations */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <Label className="text-base font-semibold">Server Configurations ({serversList.length})</Label>
+              <Button size="sm" onClick={() => { setEditingServerIndex(null); setIsServerConfigFormOpen(true); }}>
+                <Plus className="h-4 w-4 mr-1.5" />
+                Add Server
+              </Button>
+            </div>
+            {serversList.length > 0 ? (
+              <div className="space-y-2 pl-4">
+                {serversList.map((server, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3 border rounded-lg">
                     <div>
-                      <Label className="text-base font-semibold">{contract.schema[selectedSchemaIndex]?.name || `Table ${selectedSchemaIndex + 1}`}</Label>
-                      {contract.schema[selectedSchemaIndex]?.name && schemaLinks[contract.schema[selectedSchemaIndex].name] && schemaLinks[contract.schema[selectedSchemaIndex].name].length > 0 && (
-                        <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
-                          {schemaLinks[contract.schema[selectedSchemaIndex].name].map((link, idx) => (
-                            <span key={idx} className="inline-flex items-center gap-1">
-                              <Shapes className="h-3 w-3" />
-                              <span
-                                className="cursor-pointer hover:underline"
-                                onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
-                                title={link.iri}
-                              >
-                                {(link.label && !/^https?:\/\//.test(link.label) && !/^urn:/.test(link.label)) ? link.label : (link.iri.split(/[\/#]/).pop() || link.iri)}
-                              </span>
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      <div className="font-medium">{server.server}</div>
+                      <div className="text-sm text-muted-foreground flex gap-2 mt-1">
+                        <Badge variant="outline" className="text-xs">{server.type}</Badge>
+                        <Badge variant="secondary" className="text-xs">{server.environment}</Badge>
+                        {server.host && <span>{server.host}</span>}
+                      </div>
                     </div>
-                    {contract.schema[selectedSchemaIndex]?.physicalName && (
-                      <a
-                        href={`/catalog-explorer?table=${encodeURIComponent(contract.schema[selectedSchemaIndex].physicalName)}`}
-                        className="flex items-center gap-1.5 text-sm text-primary hover:underline"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={`Open ${contract.schema[selectedSchemaIndex].physicalName} in Catalog Explorer`}
-                      >
-                        <Database className="h-4 w-4" />
-                        {contract.schema[selectedSchemaIndex].physicalName}
-                      </a>
-                    )}
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="ghost" onClick={() => { setEditingServerIndex(idx); setIsServerConfigFormOpen(true); }}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => handleDeleteServer(idx)} className="text-destructive hover:text-destructive">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                  {contract.schema[selectedSchemaIndex]?.properties && contract.schema[selectedSchemaIndex].properties.length > 0 && (
-                    <DataTable
-                      columns={createSchemaPropertyColumns(contract, selectedSchemaIndex, propertyLinks)}
-                      data={contract.schema[selectedSchemaIndex].properties as SchemaProperty[]}
-                      searchColumn="name"
-                    />
-                  )}
-                </div>
+                ))}
               </div>
             ) : (
-              // Few schemas - use tabs with custom scrollable container
-              <div className="space-y-4">
-                <div className="w-full overflow-x-auto">
-                  <div className="flex border-b border-border">
-                    {contract.schema.map((schemaObj, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setSelectedSchemaIndex(idx)}
-                        className={`flex-shrink-0 px-4 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                          selectedSchemaIndex === idx
-                            ? 'border-primary text-primary'
-                            : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
-                        }`}
-                      >
-                        {schemaObj.name || `Table ${idx + 1}`}
-                        <span className="ml-2 text-xs">
-                          ({schemaObj.properties?.length || 0})
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+              <p className="text-sm text-muted-foreground pl-4">No server configurations defined.</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Access Control (read-only for now, can add edit later) */}
+      {contract.accessControl && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Access Control</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-2 gap-3">
+              {contract.accessControl.classification && (
+                <div className="space-y-1">
+                  <Label>Classification:</Label>
+                  <Badge variant="secondary">{contract.accessControl.classification}</Badge>
                 </div>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <div>
-                      <Label className="text-base font-semibold">{contract.schema[selectedSchemaIndex]?.name || `Table ${selectedSchemaIndex + 1}`}</Label>
-                      {contract.schema[selectedSchemaIndex]?.name && schemaLinks[contract.schema[selectedSchemaIndex].name] && schemaLinks[contract.schema[selectedSchemaIndex].name].length > 0 && (
-                        <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-2">
-                          {schemaLinks[contract.schema[selectedSchemaIndex].name].map((link, idx) => (
-                            <span key={idx} className="inline-flex items-center gap-1">
-                              <Shapes className="h-3 w-3" />
-                              <span
-                                className="cursor-pointer hover:underline"
-                                onClick={() => window.open(`/search?startIri=${encodeURIComponent(link.iri)}`, '_blank')}
-                                title={link.iri}
-                              >
-                                {(link.label && !/^https?:\/\//.test(link.label) && !/^urn:/.test(link.label)) ? link.label : (link.iri.split(/[\/#]/).pop() || link.iri)}
-                              </span>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {contract.schema[selectedSchemaIndex]?.physicalName && (
-                      <a
-                        href={`/catalog-explorer?table=${encodeURIComponent(contract.schema[selectedSchemaIndex].physicalName)}`}
-                        className="flex items-center gap-1.5 text-sm text-primary hover:underline"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={`Open ${contract.schema[selectedSchemaIndex].physicalName} in Catalog Explorer`}
-                      >
-                        <Database className="h-4 w-4" />
-                        {contract.schema[selectedSchemaIndex].physicalName}
-                      </a>
-                    )}
-                  </div>
-                  {contract.schema[selectedSchemaIndex]?.properties && contract.schema[selectedSchemaIndex].properties.length > 0 && (
-                    <DataTable
-                      columns={createSchemaPropertyColumns(contract, selectedSchemaIndex, propertyLinks)}
-                      data={contract.schema[selectedSchemaIndex].properties as SchemaProperty[]}
-                      searchColumn="name"
-                    />
+              )}
+              <div className="space-y-1">
+                <Label>Contains PII:</Label>
+                <span className="text-sm">{contract.accessControl.containsPii ? 'Yes' : 'No'}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Custom Properties (read-only for now) */}
+      {contract.customProperties && Object.keys(contract.customProperties).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Custom Properties</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {Object.entries(contract.customProperties).map(([key, value]) => (
+                <div key={key} className="flex items-center gap-3">
+                  <Label className="min-w-24">{key}:</Label>
+                  <span className="text-sm text-muted-foreground">{String(value)}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Support Channels (read-only for now) */}
+      {contract.support && Object.keys(contract.support).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Support</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {Object.entries(contract.support).map(([channel, url]) => (
+                <div key={channel} className="flex items-center gap-3">
+                  <Badge variant="outline" className="text-xs capitalize">{channel}</Badge>
+                  {url ? (
+                    <a href={url} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline break-all">{url}</a>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">N/A</span>
                   )}
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -783,95 +740,58 @@ export default function DataContractDetails() {
         <EntityMetadataPanel entityId={contract.id} entityType="data_contract" />
       )}
 
-      <DataContractWizardDialog
-        isOpen={isWizardOpen}
-        onOpenChange={setIsWizardOpen}
+      {/* Dialogs */}
+      <DataContractBasicFormDialog
+        isOpen={isBasicFormOpen}
+        onOpenChange={setIsBasicFormOpen}
         initial={{
           name: contract.name,
           version: contract.version,
           status: contract.status,
-          owner: (contract as any).owner || contract.owner_team_id,
-          domain: (contract as any).domain_id || contract.domainId, // Use domain_id (backend) or domainId (frontend)
+          owner_team_id: contract.owner_team_id,
+          domain: contract.domainId,
           tenant: contract.tenant,
           dataProduct: contract.dataProduct,
-          // Flatten description for wizard compatibility
           descriptionUsage: contract.description?.usage,
           descriptionPurpose: contract.description?.purpose,
           descriptionLimitations: contract.description?.limitations,
-          // Rename schema to schemaObjects for wizard compatibility and include semantic concepts
-          schemaObjects: contract.schema?.map(schema => ({
-            ...schema,
-            // Ensure physicalName is mapped (handle both camelCase and snake_case)
-            physicalName: schema.physicalName || (schema as any).physical_name,
-            semanticConcepts: (schemaLinks[schema.name] || [])
-              .map(link => ({
-                iri: link.iri,
-                label: link.label || link.iri.split('#')[1] || link.iri,
-                type: 'class'
-              })),
-            properties: schema.properties?.map(property => ({
-              ...property,
-              semanticConcepts: (propertyLinks[`${schema.name}#${property.name}`] || [])
-                .map(link => ({
-                  iri: link.iri,
-                  label: link.label || link.iri.split('#')[1] || link.iri,
-                  type: 'class'
-                }))
-            })) || []
-          })) || [],
-          // Convert contract-level semantic links to wizard format
-          contractSemanticConcepts: (links || []).map(link => ({
-            iri: link.iri,
-            label: link.label || link.iri.split('#')[1] || link.iri,
-            type: 'class'
-          })),
-          team: contract.team,
-          accessControl: contract.accessControl,
-          support: contract.support,
-          sla: contract.sla,
-          servers: contract.servers,
-          customProperties: contract.customProperties,
         }}
-        onSubmit={async (payload) => {
-          try {
-            // Transform payload to match backend expectations - include ALL fields from wizard
-            const transformedPayload = {
-              name: payload.name,
-              version: payload.version,
-              status: payload.status,
-              owner: payload.owner,
-              kind: payload.kind,
-              apiVersion: payload.apiVersion,
-              tenant: payload.tenant,
-              dataProduct: payload.dataProduct,
-              domain_id: payload.domainId, // Use the domainId from wizard payload
-              // Flatten description object
-              descriptionUsage: payload.description?.usage,
-              descriptionPurpose: payload.description?.purpose,
-              descriptionLimitations: payload.description?.limitations,
-              // Include schema and other important fields that the wizard sends
-              schema: payload.schema,
-              authoritativeDefinitions: payload.authoritativeDefinitions,
-              qualityRules: payload.qualityRules,
-              serverConfigs: payload.serverConfigs,
-              sla: payload.sla,
-            }
-            
-            
-            const res = await fetch(`/api/data-contracts/${contract.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(transformedPayload)
-            })
-            if (!res.ok) throw new Error('Update failed')
-            // Ensure details (including semantic links) are refreshed BEFORE closing the dialog
-            await fetchDetails()
-            setIsWizardOpen(false)
-            toast({ title: 'Updated', description: 'Contract updated.' })
-          } catch (e) {
-            toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
-          }
-        }}
+        onSubmit={handleUpdateMetadata}
+      />
+
+      <SchemaFormDialog
+        isOpen={isSchemaFormOpen}
+        onOpenChange={setIsSchemaFormOpen}
+        initial={editingSchemaIndex !== null ? contract.schema?.[editingSchemaIndex] : undefined}
+        onSubmit={editingSchemaIndex !== null ? handleUpdateSchema : handleAddSchema}
+      />
+
+      <QualityRuleFormDialog
+        isOpen={isQualityRuleFormOpen}
+        onOpenChange={setIsQualityRuleFormOpen}
+        initial={editingQualityRuleIndex !== null ? contract.qualityRules?.[editingQualityRuleIndex] : undefined}
+        onSubmit={editingQualityRuleIndex !== null ? handleUpdateQualityRule : handleAddQualityRule}
+      />
+
+      <TeamMemberFormDialog
+        isOpen={isTeamMemberFormOpen}
+        onOpenChange={setIsTeamMemberFormOpen}
+        initial={editingTeamMemberIndex !== null ? contract.team?.[editingTeamMemberIndex] : undefined}
+        onSubmit={editingTeamMemberIndex !== null ? handleUpdateTeamMember : handleAddTeamMember}
+      />
+
+      <ServerConfigFormDialog
+        isOpen={isServerConfigFormOpen}
+        onOpenChange={setIsServerConfigFormOpen}
+        initial={editingServerIndex !== null ? serversList[editingServerIndex] : undefined}
+        onSubmit={editingServerIndex !== null ? handleUpdateServer : handleAddServer}
+      />
+
+      <SLAFormDialog
+        isOpen={isSLAFormOpen}
+        onOpenChange={setIsSLAFormOpen}
+        initial={contract.sla}
+        onSubmit={handleUpdateSLA}
       />
 
       <ConceptSelectDialog
@@ -890,7 +810,6 @@ export default function DataContractDetails() {
         />
       )}
 
-      {/* Request Access Dialog */}
       {contract && (
         <RequestAccessDialog
           isOpen={isRequestAccessDialogOpen}
@@ -903,5 +822,3 @@ export default function DataContractDetails() {
     </div>
   )
 }
-
-
