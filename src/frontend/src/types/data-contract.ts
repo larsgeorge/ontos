@@ -24,6 +24,28 @@ export type ColumnProperty = {
   classification?: string // Data classification (confidential/restricted/public/PII/1-5)
   examples?: string // Sample values (comma-separated or JSON string)
   description?: string
+  // ODCS-compatible logical type options and semantics
+  logicalTypeOptions?: Record<string, any>
+  authoritativeDefinitions?: { url: string; type: string }[]
+  // Optional local helper used by wizard/editor to collect concepts
+  semanticConcepts?: { iri: string; label?: string }[]
+  // String constraints
+  minLength?: number
+  maxLength?: number
+  pattern?: string
+  // Number/Integer constraints
+  minimum?: number
+  maximum?: number
+  multipleOf?: number
+  precision?: number
+  // Date constraints
+  format?: string
+  timezone?: string
+  customFormat?: string
+  // Array constraints
+  itemType?: string
+  minItems?: number
+  maxItems?: number
   // ODCS v3.0.2 additional property fields
   businessName?: string
   encryptedName?: string
@@ -49,6 +71,10 @@ export type SchemaObject = {
   businessName?: string
   physicalType?: string
   dataGranularityDescription?: string
+  // Semantics
+  authoritativeDefinitions?: { url: string; type: string }[]
+  // Optional local helper used by wizard/editor to collect concepts
+  semanticConcepts?: { iri: string; label?: string }[]
 }
 
 // ODCS compliant description

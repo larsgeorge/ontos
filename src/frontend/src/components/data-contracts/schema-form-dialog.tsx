@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import SchemaPropertyEditor from './schema-property-editor'
+import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
 import type { SchemaObject, ColumnProperty } from '@/types/data-contract'
 
 type SchemaFormProps = {
@@ -32,6 +33,7 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
 
   // Properties (columns)
   const [properties, setProperties] = useState<ColumnProperty[]>([])
+  const [schemaSemanticConcepts, setSchemaSemanticConcepts] = useState<{ iri: string; label?: string }[]>([])
 
   // Initialize form when dialog opens
   useEffect(() => {
@@ -42,7 +44,25 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
       setBusinessName(initial.businessName || '')
       setPhysicalType(initial.physicalType || 'table')
       setDataGranularityDescription(initial.dataGranularityDescription || '')
-      setProperties(initial.properties || [])
+      // Normalize legacy snake_case fields coming from backend or older drafts
+      const normalizedProps = (initial.properties || []).map((p: any) => ({
+        ...p,
+        logicalType: p.logicalType || p.logical_type || 'string',
+        physicalType: p.physicalType || p.physical_type,
+        primaryKey: p.primaryKey ?? p.primary_key,
+        primaryKeyPosition: p.primaryKeyPosition ?? p.primary_key_position,
+        partitionKeyPosition: p.partitionKeyPosition ?? p.partition_key_position,
+      }))
+      setProperties(normalizedProps)
+      // Load semantics
+      const concepts = (initial as any).semanticConcepts as { iri: string; label?: string }[] | undefined
+      if (concepts && Array.isArray(concepts)) {
+        setSchemaSemanticConcepts(concepts)
+      } else if (initial.authoritativeDefinitions && initial.authoritativeDefinitions.length > 0) {
+        setSchemaSemanticConcepts(initial.authoritativeDefinitions.map(def => ({ iri: (def as any).url })))
+      } else {
+        setSchemaSemanticConcepts([])
+      }
     } else if (isOpen && !initial) {
       // Reset for new schema
       setName('')
@@ -52,6 +72,7 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
       setPhysicalType('table')
       setDataGranularityDescription('')
       setProperties([])
+      setSchemaSemanticConcepts([])
     }
   }, [isOpen, initial])
 
@@ -77,6 +98,9 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
         physicalType: physicalType || undefined,
         dataGranularityDescription: dataGranularityDescription.trim() || undefined,
         properties,
+        authoritativeDefinitions: schemaSemanticConcepts.length > 0 ? schemaSemanticConcepts.map(c => ({ url: c.iri, type: 'http://databricks.com/ontology/uc/semanticAssignment' })) : undefined,
+        // @ts-ignore retain local concepts for further editing flows
+        semanticConcepts: schemaSemanticConcepts.length > 0 ? schemaSemanticConcepts : undefined,
       }
 
       await onSubmit(schema)
@@ -178,6 +202,69 @@ export default function SchemaFormDialog({ isOpen, onOpenChange, onSubmit, initi
               />
             </div>
           </div>
+
+          {/* Schema-level Business Concepts */}
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Business Concepts</Label>
+            <BusinessConceptsDisplay
+              concepts={schemaSemanticConcepts}
+              onConceptsChange={setSchemaSemanticConcepts}
+              entityType="data_contract_schema"
+              entityId={name || 'schema'}
+              conceptType="class"
+            />
+          </div>
+
+          {/* Unity Catalog Metadata (read-only, shown when present) */}
+          {initial && (initial.tableType || initial.owner || initial.createdAt || initial.updatedAt || initial.tableProperties) && (
+            <div className="space-y-4 border-t pt-4">
+              <h3 className="text-sm font-semibold text-muted-foreground">Unity Catalog Metadata (Read-Only)</h3>
+
+              <div className="grid grid-cols-2 gap-4">
+                {initial.tableType && (
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Table Type</Label>
+                    <Input value={initial.tableType} disabled className="bg-muted" />
+                  </div>
+                )}
+                {initial.owner && (
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Owner</Label>
+                    <Input value={initial.owner} disabled className="bg-muted" />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {initial.createdAt && (
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Created At</Label>
+                    <Input value={initial.createdAt} disabled className="bg-muted" />
+                  </div>
+                )}
+                {initial.updatedAt && (
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Updated At</Label>
+                    <Input value={initial.updatedAt} disabled className="bg-muted" />
+                  </div>
+                )}
+              </div>
+
+              {initial.tableProperties && Object.keys(initial.tableProperties).length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Table Properties</Label>
+                  <div className="rounded-md border bg-muted p-3 text-sm">
+                    {Object.entries(initial.tableProperties).map(([key, value]) => (
+                      <div key={key} className="flex justify-between py-1">
+                        <span className="font-medium">{key}:</span>
+                        <span className="text-muted-foreground">{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Properties section */}
           <div className="space-y-4 border-t pt-4">

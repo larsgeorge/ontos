@@ -36,6 +36,8 @@ export default function ServerConfigFormDialog({ isOpen, onOpenChange, onSubmit,
   const [port, setPort] = useState('')
   const [database, setDatabase] = useState('')
   const [schema, setSchema] = useState('')
+  const [location, setLocation] = useState('')
+  const [properties, setProperties] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (isOpen && initial) {
@@ -47,6 +49,8 @@ export default function ServerConfigFormDialog({ isOpen, onOpenChange, onSubmit,
       setPort(initial.port?.toString() || '')
       setDatabase(initial.database || '')
       setSchema(initial.schema || '')
+      setLocation(initial.location || '')
+      setProperties(initial.properties || {})
     } else if (isOpen && !initial) {
       setServer('')
       setType('databricks')
@@ -56,6 +60,8 @@ export default function ServerConfigFormDialog({ isOpen, onOpenChange, onSubmit,
       setPort('')
       setDatabase('')
       setSchema('')
+      setLocation('')
+      setProperties({})
     }
   }, [isOpen, initial])
 
@@ -76,6 +82,8 @@ export default function ServerConfigFormDialog({ isOpen, onOpenChange, onSubmit,
         port: port ? parseInt(port, 10) : undefined,
         database: database.trim() || undefined,
         schema: schema.trim() || undefined,
+        location: location.trim() || undefined,
+        properties: Object.keys(properties).length > 0 ? properties : undefined,
       }
 
       await onSubmit(serverConfig)
@@ -201,6 +209,83 @@ export default function ServerConfigFormDialog({ isOpen, onOpenChange, onSubmit,
                 onChange={(e) => setSchema(e.target.value)}
                 placeholder="e.g., default"
               />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="location">Location / URI</Label>
+            <Input
+              id="location"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="e.g., s3://bucket/path, abfss://container@storage/path"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Custom Properties</Label>
+            <div className="space-y-2">
+              {Object.entries(properties).map(([key, value]) => (
+                <div key={key} className="flex gap-2">
+                  <Input
+                    value={key}
+                    disabled
+                    className="flex-1"
+                    placeholder="Key"
+                  />
+                  <Input
+                    value={value}
+                    onChange={(e) => {
+                      const newProps = { ...properties }
+                      newProps[key] = e.target.value
+                      setProperties(newProps)
+                    }}
+                    className="flex-1"
+                    placeholder="Value"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      const newProps = { ...properties }
+                      delete newProps[key]
+                      setProperties(newProps)
+                    }}
+                  >
+                    ×
+                  </Button>
+                </div>
+              ))}
+              <div className="flex gap-2">
+                <Input
+                  id="new-prop-key"
+                  placeholder="New property key"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      const input = e.currentTarget
+                      const key = input.value.trim()
+                      if (key && !properties[key]) {
+                        setProperties({ ...properties, [key]: '' })
+                        input.value = ''
+                      }
+                    }
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const input = document.getElementById('new-prop-key') as HTMLInputElement
+                    const key = input?.value.trim()
+                    if (key && !properties[key]) {
+                      setProperties({ ...properties, [key]: '' })
+                      input.value = ''
+                    }
+                  }}
+                >
+                  Add Property
+                </Button>
+              </div>
             </div>
           </div>
         </div>

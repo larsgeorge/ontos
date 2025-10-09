@@ -9,6 +9,7 @@ import { Plus, Trash2, Edit, Info } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ColumnProperty } from '@/types/data-contract'
+import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
 
 const LOGICAL_TYPES = ['string', 'date', 'number', 'integer', 'object', 'array', 'boolean']
 const CLASSIFICATION_LEVELS = ['public', 'internal', 'confidential', 'restricted', 'pii', '1', '2', '3', '4', '5']
@@ -42,6 +43,21 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
   const [partitioned, setPartitioned] = useState(false)
   const [partitionKeyPosition, setPartitionKeyPosition] = useState('')
 
+  // Type-specific constraints
+  const [minLength, setMinLength] = useState('')
+  const [maxLength, setMaxLength] = useState('')
+  const [pattern, setPattern] = useState('')
+  const [minimum, setMinimum] = useState('')
+  const [maximum, setMaximum] = useState('')
+  const [multipleOf, setMultipleOf] = useState('')
+  const [precision, setPrecision] = useState('')
+  const [dateFormat, setDateFormat] = useState('')
+  const [timezone, setTimezone] = useState('')
+  const [customFormat, setCustomFormat] = useState('')
+  const [itemType, setItemType] = useState('')
+  const [minItems, setMinItems] = useState('')
+  const [maxItems, setMaxItems] = useState('')
+
   // Governance
   const [classification, setClassification] = useState('')
   const [examples, setExamples] = useState('')
@@ -56,6 +72,11 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
   const [transformSourceObjects, setTransformSourceObjects] = useState('')
   const [transformDescription, setTransformDescription] = useState('')
 
+  // Semantics (business properties)
+  const SEMANTIC_ASSIGNMENT_TYPE = 'http://databricks.com/ontology/uc/semanticAssignment'
+  const [authoritativeDefinitions, setAuthoritativeDefinitions] = useState<{ url: string; type: string }[]>([])
+  const [semanticConcepts, setSemanticConcepts] = useState<{ iri: string; label?: string }[]>([])
+
   const resetForm = () => {
     setName('')
     setLogicalType('string')
@@ -68,6 +89,19 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
     setPrimaryKeyPosition('')
     setPartitioned(false)
     setPartitionKeyPosition('')
+    setMinLength('')
+    setMaxLength('')
+    setPattern('')
+    setMinimum('')
+    setMaximum('')
+    setMultipleOf('')
+    setPrecision('')
+    setDateFormat('')
+    setTimezone('')
+    setCustomFormat('')
+    setItemType('')
+    setMinItems('')
+    setMaxItems('')
     setClassification('')
     setExamples('')
     setBusinessName('')
@@ -76,6 +110,8 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
     setTransformLogic('')
     setTransformSourceObjects('')
     setTransformDescription('')
+    setAuthoritativeDefinitions([])
+    setSemanticConcepts([])
     setEditingIndex(null)
   }
 
@@ -91,6 +127,19 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
     setPrimaryKeyPosition(prop.primaryKeyPosition !== undefined && prop.primaryKeyPosition !== -1 ? String(prop.primaryKeyPosition) : '')
     setPartitioned(prop.partitioned || false)
     setPartitionKeyPosition(prop.partitionKeyPosition !== undefined && prop.partitionKeyPosition !== -1 ? String(prop.partitionKeyPosition) : '')
+    setMinLength(prop.minLength !== undefined ? String(prop.minLength) : '')
+    setMaxLength(prop.maxLength !== undefined ? String(prop.maxLength) : '')
+    setPattern(prop.pattern || '')
+    setMinimum(prop.minimum !== undefined ? String(prop.minimum) : '')
+    setMaximum(prop.maximum !== undefined ? String(prop.maximum) : '')
+    setMultipleOf(prop.multipleOf !== undefined ? String(prop.multipleOf) : '')
+    setPrecision(prop.precision !== undefined ? String(prop.precision) : '')
+    setDateFormat(prop.format || '')
+    setTimezone(prop.timezone || '')
+    setCustomFormat(prop.customFormat || '')
+    setItemType(prop.itemType || '')
+    setMinItems(prop.minItems !== undefined ? String(prop.minItems) : '')
+    setMaxItems(prop.maxItems !== undefined ? String(prop.maxItems) : '')
     setClassification(prop.classification || '')
     setExamples(prop.examples || '')
     setBusinessName(prop.businessName || '')
@@ -99,6 +148,16 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
     setTransformLogic(prop.transformLogic || '')
     setTransformSourceObjects(prop.transformSourceObjects || '')
     setTransformDescription(prop.transformDescription || '')
+    setAuthoritativeDefinitions(prop.authoritativeDefinitions || [])
+    // When loading, derive semanticConcepts from authoritativeDefinitions for display if needed
+    const concepts = (prop as any).semanticConcepts as { iri: string; label?: string }[] | undefined
+    if (concepts && Array.isArray(concepts)) {
+      setSemanticConcepts(concepts)
+    } else if (prop.authoritativeDefinitions && prop.authoritativeDefinitions.length > 0) {
+      setSemanticConcepts(prop.authoritativeDefinitions.map(def => ({ iri: def.url })))
+    } else {
+      setSemanticConcepts([])
+    }
   }
 
   const handleAddOrUpdate = () => {
@@ -119,6 +178,23 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
       primaryKeyPosition: primaryKey && primaryKeyPosition ? parseInt(primaryKeyPosition) : undefined,
       partitioned: partitioned || undefined,
       partitionKeyPosition: partitioned && partitionKeyPosition ? parseInt(partitionKeyPosition) : undefined,
+      // String constraints
+      minLength: minLength ? parseInt(minLength) : undefined,
+      maxLength: maxLength ? parseInt(maxLength) : undefined,
+      pattern: pattern.trim() || undefined,
+      // Number/Integer constraints
+      minimum: minimum ? Number(minimum) : undefined,
+      maximum: maximum ? Number(maximum) : undefined,
+      multipleOf: multipleOf ? Number(multipleOf) : undefined,
+      precision: precision ? parseInt(precision) : undefined,
+      // Date constraints
+      format: dateFormat.trim() || undefined,
+      timezone: timezone.trim() || undefined,
+      customFormat: customFormat.trim() || undefined,
+      // Array constraints
+      itemType: itemType.trim() || undefined,
+      minItems: minItems ? parseInt(minItems) : undefined,
+      maxItems: maxItems ? parseInt(maxItems) : undefined,
       classification: classification || undefined,
       examples: examples.trim() || undefined,
       businessName: businessName.trim() || undefined,
@@ -127,6 +203,10 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
       transformLogic: transformLogic.trim() || undefined,
       transformSourceObjects: transformSourceObjects.trim() || undefined,
       transformDescription: transformDescription.trim() || undefined,
+      authoritativeDefinitions: authoritativeDefinitions.length > 0 ? authoritativeDefinitions : undefined,
+      // Keep semanticConcepts locally for UI use; parent may optionally consume it
+      // @ts-ignore
+      semanticConcepts: semanticConcepts && semanticConcepts.length > 0 ? semanticConcepts : undefined,
     }
 
     if (editingIndex !== null) {
@@ -173,12 +253,13 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
       {!readOnly && (
         <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
           <Tabs defaultValue="core" className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
               <TabsTrigger value="core">Core</TabsTrigger>
               <TabsTrigger value="constraints">Constraints</TabsTrigger>
               <TabsTrigger value="governance">Governance</TabsTrigger>
               <TabsTrigger value="business">Business</TabsTrigger>
               <TabsTrigger value="transform">Transform</TabsTrigger>
+              <TabsTrigger value="semantics">Semantics</TabsTrigger>
             </TabsList>
 
             {/* Core Tab */}
@@ -345,6 +426,82 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
                     </div>
                   )}
                 </div>
+
+                <div className="border-t pt-3 space-y-3">
+                  {logicalType === 'string' && (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-min-length" className="text-xs">Min Length</Label>
+                        <Input id="prop-min-length" type="number" min="0" value={minLength} onChange={(e) => setMinLength(e.target.value)} className="h-9" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-max-length" className="text-xs">Max Length</Label>
+                        <Input id="prop-max-length" type="number" min="0" value={maxLength} onChange={(e) => setMaxLength(e.target.value)} className="h-9" />
+                      </div>
+                      <div className="space-y-1.5 col-span-3">
+                        <Label htmlFor="prop-pattern" className="text-xs">Pattern (ECMA-262 regex)</Label>
+                        <Input id="prop-pattern" value={pattern} onChange={(e) => setPattern(e.target.value)} className="h-9" />
+                      </div>
+                    </div>
+                  )}
+
+                  {(logicalType === 'number' || logicalType === 'integer') && (
+                    <div className="grid grid-cols-4 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-minimum" className="text-xs">Minimum</Label>
+                        <Input id="prop-minimum" type="number" value={minimum} onChange={(e) => setMinimum(e.target.value)} className="h-9" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-maximum" className="text-xs">Maximum</Label>
+                        <Input id="prop-maximum" type="number" value={maximum} onChange={(e) => setMaximum(e.target.value)} className="h-9" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-multiple-of" className="text-xs">Multiple Of</Label>
+                        <Input id="prop-multiple-of" type="number" value={multipleOf} onChange={(e) => setMultipleOf(e.target.value)} className="h-9" />
+                      </div>
+                      {logicalType === 'number' && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="prop-precision" className="text-xs">Precision</Label>
+                          <Input id="prop-precision" type="number" min="0" value={precision} onChange={(e) => setPrecision(e.target.value)} className="h-9" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {logicalType === 'date' && (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-date-format" className="text-xs">Format</Label>
+                        <Input id="prop-date-format" value={dateFormat} onChange={(e) => setDateFormat(e.target.value)} placeholder="e.g., yyyy-MM-dd" className="h-9" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-timezone" className="text-xs">Timezone</Label>
+                        <Input id="prop-timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="e.g., UTC" className="h-9" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-custom-format" className="text-xs">Custom Format</Label>
+                        <Input id="prop-custom-format" value={customFormat} onChange={(e) => setCustomFormat(e.target.value)} className="h-9" />
+                      </div>
+                    </div>
+                  )}
+
+                  {logicalType === 'array' && (
+                    <div className="grid grid-cols-4 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-item-type" className="text-xs">Item Type</Label>
+                        <Input id="prop-item-type" value={itemType} onChange={(e) => setItemType(e.target.value)} placeholder="string | number | object..." className="h-9" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-min-items" className="text-xs">Min Items</Label>
+                        <Input id="prop-min-items" type="number" min="0" value={minItems} onChange={(e) => setMinItems(e.target.value)} className="h-9" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="prop-max-items" className="text-xs">Max Items</Label>
+                        <Input id="prop-max-items" type="number" min="0" value={maxItems} onChange={(e) => setMaxItems(e.target.value)} className="h-9" />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </TabsContent>
 
@@ -471,6 +628,24 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
                 />
               </div>
             </TabsContent>
+
+            {/* Semantics Tab */}
+            <TabsContent value="semantics" className="space-y-3 mt-4">
+              <div className="space-y-2">
+                <Label className="text-xs flex items-center">Linked Business Properties</Label>
+                <BusinessConceptsDisplay
+                  concepts={semanticConcepts}
+                  onConceptsChange={(concepts) => {
+                    setSemanticConcepts(concepts)
+                    // Keep authoritativeDefinitions in sync
+                    setAuthoritativeDefinitions(concepts.map(c => ({ url: c.iri, type: SEMANTIC_ASSIGNMENT_TYPE })))
+                  }}
+                  entityType="data_contract_property"
+                  entityId="property"
+                  conceptType="property"
+                />
+              </div>
+            </TabsContent>
           </Tabs>
 
           <div className="flex gap-2 pt-2">
@@ -523,7 +698,11 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
                 if (prop.criticalDataElement) governance.push('CDE')
 
                 return (
-                  <tr key={idx} className="border-t hover:bg-muted/50">
+                  <tr
+                    key={idx}
+                    className="border-t hover:bg-muted/50 cursor-pointer"
+                    onClick={() => handleEdit(idx)}
+                  >
                     <td className="p-2">
                       <div className="font-mono text-xs font-medium">{prop.name}</div>
                       {prop.physicalName && (
@@ -532,7 +711,7 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
                     </td>
                     <td className="p-2">
                       <div className="text-xs bg-secondary px-2 py-0.5 rounded inline-block">
-                        {prop.logicalType}
+                        {prop.logicalType || (prop as any).logical_type || '-'}
                       </div>
                       {prop.physicalType && (
                         <div className="text-xs text-muted-foreground mt-0.5">{prop.physicalType}</div>
@@ -579,7 +758,7 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
                             type="button"
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleEdit(idx)}
+                            onClick={(e) => { e.stopPropagation(); handleEdit(idx) }}
                             className="h-7 w-7 p-0"
                           >
                             <Edit className="h-3.5 w-3.5" />
@@ -588,7 +767,7 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
                             type="button"
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleDelete(idx)}
+                            onClick={(e) => { e.stopPropagation(); handleDelete(idx) }}
                             className="h-7 w-7 p-0 text-destructive hover:text-destructive"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
