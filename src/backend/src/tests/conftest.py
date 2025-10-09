@@ -13,7 +13,12 @@ from src.common.database import Base, get_db # Removed engine import from here
 from src.common.dependencies import get_settings_manager
 from src.common.config import Settings # Import the main Settings model
 from src.controller.settings_manager import SettingsManager
+from src.controller.authorization_manager import AuthorizationManager
 from databricks.sdk import WorkspaceClient # For mocking
+from src.common.authorization import get_user_details_from_sdk
+from src.models.users import UserInfo
+from src.db_models.audit_log import AuditLogDb
+from src.common.manager_dependencies import get_auth_manager
 
 
 # In-memory SQLite database for testing
@@ -75,8 +80,63 @@ def mock_workspace_client():
     # Configure default return values for methods that might be called during setup or basic tests
     # For example, if settings_manager.get_job_clusters() is called via settings_manager.get_settings()
     mock_client.clusters.list.return_value = [] # No clusters by default
-    # Add more mock configurations as needed for other WorkspaceClient interactions
+
+    # Mock catalog operations
+    mock_client.catalogs.list.return_value = []
+    mock_client.schemas.list.return_value = []
+    mock_client.tables.list.return_value = []
+
+    # Mock job operations
+    mock_client.jobs.list.return_value = []
+    mock_client.jobs.get.return_value = MagicMock()
+
+    # Mock workspace operations
+    mock_client.workspace.list.return_value = []
+
     return mock_client
+
+
+@pytest.fixture(scope="function")
+def mock_test_user():
+    """Provides a test user for authentication in tests."""
+    return UserInfo(
+        username="test_user",
+        email="test@example.com",
+        user="test_user",
+        ip="127.0.0.1",
+        groups=["test_admins"]
+    )
+
+
+@pytest.fixture(scope="function")
+def verify_audit_log(db_session: Session):
+    """Helper fixture to verify audit log entries."""
+    def _verify(
+        feature: str,
+        action: str,
+        success: bool = True,
+        username: str = "test_user",
+        check_details: dict = None
+    ):
+        audit = db_session.query(AuditLogDb).filter_by(
+            feature=feature,
+            action=action,
+            username=username
+        ).order_by(AuditLogDb.timestamp.desc()).first()
+
+        assert audit is not None, f"No audit log found for feature='{feature}', action='{action}', username='{username}'"
+        assert audit.success == success, f"Expected success={success}, got {audit.success}"
+
+        if check_details:
+            import json
+            details = json.loads(audit.details) if audit.details else {}
+            for key, expected_value in check_details.items():
+                assert key in details, f"Expected key '{key}' not found in audit details"
+                assert details[key] == expected_value, f"Expected details['{key}']={expected_value}, got {details[key]}"
+
+        return audit
+
+    return _verify
 
 
 @pytest.fixture(scope="function")
@@ -102,18 +162,20 @@ def test_settings(temp_audit_log_dir: str) -> Settings:
 
 
 @pytest.fixture(scope="function")
-def client(db_session: Session, test_settings: Settings, mock_workspace_client: MagicMock):
+def client(db_session: Session, test_settings: Settings, mock_workspace_client: MagicMock, mock_test_user: UserInfo):
     """
     Provides a TestClient instance.
     Overrides get_settings_manager to use test_settings and a mock_workspace_client.
+    Overrides get_user_details_from_sdk to use mock_test_user for authentication.
+    Overrides get_auth_manager to use a test AuthorizationManager.
     Ensures default roles are created by SettingsManager.
     """
-    
+
     # This is the actual SettingsManager instance that will be used by the app during tests
     # when get_settings_manager is called.
     settings_manager_instance = SettingsManager(
-        db=db_session, 
-        settings=test_settings, 
+        db=db_session,
+        settings=test_settings,
         workspace_client=mock_workspace_client
     )
 
@@ -131,17 +193,42 @@ def client(db_session: Session, test_settings: Settings, mock_workspace_client: 
         # For now, we'll print and proceed.
         # raise # Uncomment to make test setup fail if role creation fails
 
+    # Create AuthorizationManager instance for tests
+    authorization_manager_instance = AuthorizationManager(
+        settings_manager=settings_manager_instance
+    )
 
     def override_get_settings_manager():
         return settings_manager_instance
 
+    def override_get_auth_manager():
+        return authorization_manager_instance
+
+    async def override_get_user_details():
+        return mock_test_user
+
     original_get_settings_manager = app.dependency_overrides.get(get_settings_manager)
+    original_get_auth_manager = app.dependency_overrides.get(get_auth_manager)
+    original_get_user_details = app.dependency_overrides.get(get_user_details_from_sdk)
+
     app.dependency_overrides[get_settings_manager] = override_get_settings_manager
+    app.dependency_overrides[get_auth_manager] = override_get_auth_manager
+    app.dependency_overrides[get_user_details_from_sdk] = override_get_user_details
 
     with TestClient(app) as c:
         yield c
-    
+
     if original_get_settings_manager:
         app.dependency_overrides[get_settings_manager] = original_get_settings_manager
     else:
-        del app.dependency_overrides[get_settings_manager] 
+        app.dependency_overrides.pop(get_settings_manager, None)
+
+    if original_get_auth_manager:
+        app.dependency_overrides[get_auth_manager] = original_get_auth_manager
+    else:
+        app.dependency_overrides.pop(get_auth_manager, None)
+
+    if original_get_user_details:
+        app.dependency_overrides[get_user_details_from_sdk] = original_get_user_details
+    else:
+        app.dependency_overrides.pop(get_user_details_from_sdk, None) 
