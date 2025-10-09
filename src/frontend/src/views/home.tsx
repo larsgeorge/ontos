@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import SearchBar from '@/components/ui/search-bar';
 import { Card, CardContent, CardTitle, CardHeader, CardDescription } from '@/components/ui/card';
-import { Loader2, Database, TrendingUp, FileText as FileTextIcon, BookOpen, Scale, Globe, AlertCircle } from 'lucide-react';
+import { Loader2, Database, TrendingUp, FileText as FileTextIcon, Network, Scale, Globe, AlertCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { UnityCatalogLogo } from '@/components/unity-catalog-logo';
 // import { Button } from '@/components/ui/button';
@@ -23,7 +23,14 @@ import { useUserStore } from '@/stores/user-store';
 interface Stats {
   dataContracts: { count: number; loading: boolean; error: string | null };
   dataProducts: { count: number; loading: boolean; error: string | null };
-  glossaries: { count: { glossaries: number; terms: number }; loading: boolean; error: string | null };
+  ontologies: {
+    count: {
+      models: number;  // database-sourced semantic models
+      totalTerms: number;  // total concepts + properties
+    };
+    loading: boolean;
+    error: string | null
+  };
   personas: { count: number; loading: boolean; error: string | null };
   estates: {
     count: number;
@@ -46,7 +53,7 @@ export default function Home() {
   const [stats, setStats] = useState<Stats>({
     dataContracts: { count: 0, loading: true, error: null },
     dataProducts: { count: 0, loading: true, error: null },
-    glossaries: { count: { glossaries: 0, terms: 0 }, loading: true, error: null },
+    ontologies: { count: { models: 0, totalTerms: 0 }, loading: true, error: null },
     personas: { count: 0, loading: true, error: null },
     estates: {
       count: 0,
@@ -101,18 +108,24 @@ export default function Home() {
         }));
       });
 
-    fetch('/api/business-glossaries/counts')
+    fetch('/api/semantic-models/stats')
        .then(response => {
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         return response.json();
         })
       .then(data => {
+        // Count all loaded semantic models
+        const modelsCount = data?.stats?.taxonomies?.length || 0;
+
+        // Calculate total terms (concepts + properties)
+        const totalTerms = (data?.stats?.total_concepts || 0) + (data?.stats?.total_properties || 0);
+
         setStats(prev => ({
           ...prev,
-          glossaries: {
+          ontologies: {
             count: {
-              glossaries: data?.glossaries || 0,
-              terms: data?.terms || 0
+              models: modelsCount,
+              totalTerms: totalTerms
             },
             loading: false,
             error: null
@@ -120,11 +133,11 @@ export default function Home() {
         }));
       })
       .catch(error => {
-        console.error('Error fetching glossaries:', error);
+        console.error('Error fetching ontologies:', error);
         setStats(prev => ({
           ...prev,
-          glossaries: {
-            count: { glossaries: 0, terms: 0 },
+          ontologies: {
+            count: { models: 0, totalTerms: 0 },
             loading: false,
             error: error.message
           }
@@ -251,14 +264,14 @@ export default function Home() {
       maturity: 'ga',
     },
     {
-      id: 'business-glossary',
-      title: t('home:overview.tiles.businessGlossary.title'),
-      value: `${stats.glossaries.count.glossaries} / ${stats.glossaries.count.terms}`,
-      loading: stats.glossaries.loading,
-      error: stats.glossaries.error,
-      link: '/business-glossary',
-      icon: <BookOpen className="h-4 w-4" />,
-      description: t('home:overview.tiles.businessGlossary.description'),
+      id: 'semantic-models',
+      title: t('home:overview.tiles.semanticModels.title'),
+      value: `${stats.ontologies.count.models} / ${stats.ontologies.count.totalTerms}`,
+      loading: stats.ontologies.loading,
+      error: stats.ontologies.error,
+      link: '/semantic-models',
+      icon: <Network className="h-4 w-4" />,
+      description: t('home:overview.tiles.semanticModels.description'),
        maturity: 'ga',
     },
     {

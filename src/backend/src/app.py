@@ -22,7 +22,6 @@ from fastapi import HTTPException, status
 
 from src.common.middleware import ErrorHandlingMiddleware, LoggingMiddleware
 from src.routes import (
-    business_glossary_routes,
     catalog_commander_routes,
     compliance_routes,
     comments_routes,
@@ -174,7 +173,7 @@ app.mount("/static", StaticFiles(directory=STATIC_ASSETS_PATH, html=True), name=
 # Data Management features
 data_product_routes.register_routes(app)
 data_contracts_routes.register_routes(app)
-business_glossary_routes.register_routes(app)
+semantic_models_routes.register_routes(app)
 master_data_management_routes.register_routes(app)
 compliance_routes.register_routes(app)
 estate_manager_routes.register_routes(app)

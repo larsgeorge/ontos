@@ -19,9 +19,9 @@
     "name": "Products",
     "description": "Group and manage related Databricks assets with tags."
   },
-  "business-glossary": {
-    "name": "Business Glossary",
-    "description": "Create and manage business terms and definitions."
+  "semantic-models": {
+    "name": "Semantic Models",
+    "description": "Explore semantic models and their terms (concepts and properties)."
   },
   "data-asset-reviews": {
     "name": "Asset Review",

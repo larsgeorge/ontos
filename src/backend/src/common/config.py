@@ -94,6 +94,13 @@ class Settings(BaseSettings):
 
     # Mock User Details (for local development when MOCK_USER_DETAILS is True or ENV is LOCAL*)
     MOCK_USER_DETAILS: bool = Field(False, env='MOCK_USER_DETAILS')
+    # Optional mock user identity overrides (only honored when LOCAL or MOCK_USER_DETAILS)
+    MOCK_USER_EMAIL: Optional[str] = Field(None, env='MOCK_USER_EMAIL')
+    MOCK_USER_USERNAME: Optional[str] = Field(None, env='MOCK_USER_USERNAME')
+    MOCK_USER_NAME: Optional[str] = Field(None, env='MOCK_USER_NAME')
+    # Accept JSON array string (e.g. '["group-a","group-b"]') or comma-separated list
+    MOCK_USER_GROUPS: Optional[str] = Field(None, env='MOCK_USER_GROUPS')
+    MOCK_USER_IP: Optional[str] = Field(None, env='MOCK_USER_IP')
 
     # Databricks Serving Endpoint for LLM
     SERVING_ENDPOINT: Optional[str] = Field(None, env='SERVING_ENDPOINT')

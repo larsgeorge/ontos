@@ -19,9 +19,9 @@
     "name": "Produkte",
     "description": "Verwandte Databricks-Assets mit Tags gruppieren und verwalten."
   },
-  "business-glossary": {
-    "name": "Business-Glossar",
-    "description": "Geschäftsbegriffe und Definitionen erstellen und verwalten."
+  "semantic-models": {
+    "name": "Semantische Modelle",
+    "description": "Semantische Modelle und ihre Begriffe (Konzepte und Eigenschaften) erkunden."
   },
   "data-asset-reviews": {
     "name": "Asset-Prüfung",

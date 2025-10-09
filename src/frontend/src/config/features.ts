@@ -1,7 +1,7 @@
 import {
     Database,
     FileTextIcon,
-    BookOpen,
+    Network,
     Users, // Using Users icon from About for MDM for now
     CheckCircle, // Using CheckCircle icon from About for Compliance for now
     Globe,
@@ -88,11 +88,11 @@ import {
     },
     // Governance - Standards definition and approval workflows
     {
-      id: 'business-glossary',
-      name: 'Business Glossary',
-      path: '/business-glossary',
-      description: 'Create and manage business terms and definitions.',
-      icon: BookOpen,
+      id: 'semantic-models',
+      name: 'Semantic Models',
+      path: '/semantic-models',
+      description: 'Explore semantic models and their terms (concepts and properties).',
+      icon: Network,
       group: 'Governance',
       maturity: 'ga',
       showInLanding: true,

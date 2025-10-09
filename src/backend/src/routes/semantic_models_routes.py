@@ -1,315 +1,248 @@
-import json
-from typing import List, Any
+import os
+from pathlib import Path
+from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Body, status, Request
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, Depends, Request, Query
 
-from src.common.dependencies import (
-    DBSessionDep,
-    AuditCurrentUserDep,
+from src.controller.business_glossaries_manager import BusinessGlossariesManager
+from src.models.ontology import (
+    OntologyTaxonomy,
+    OntologyConcept,
+    ConceptHierarchy,
+    TaxonomyStats,
+    ConceptSearchResult
 )
-from src.common.manager_dependencies import get_semantic_models_manager
-from src.controller.semantic_models_manager import SemanticModelsManager
-from src.models.semantic_models import SemanticModel, SemanticModelUpdate, SemanticModelPreview
+
+# Configure logging
 from src.common.logging import get_logger
-
-
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["semantic-models"])
 
-SEMANTIC_MODELS_FEATURE_ID = "settings"
+def get_semantic_models_manager(request: Request) -> BusinessGlossariesManager:
+    """Retrieves the BusinessGlossariesManager singleton from app.state."""
+    manager = getattr(request.app.state, 'business_glossaries_manager', None)
+    if manager is None:
+        logger.critical("BusinessGlossariesManager instance not found in app.state!")
+        raise HTTPException(status_code=500, detail="Semantic Models service is not available.")
+    if not isinstance(manager, BusinessGlossariesManager):
+        logger.critical(f"Object found at app.state.business_glossaries_manager is not a BusinessGlossariesManager instance (Type: {type(manager)})!")
+        raise HTTPException(status_code=500, detail="Semantic Models service configuration error.")
+    return manager
 
+# --- Semantic Models endpoints ---
 
-def _detect_format(filename: str, content_type: str | None) -> str:
-    # Basic detection for RDFS (rdf/xml) and SKOS (turtle, rdf/xml)
-    lower = (filename or "").lower()
-    if lower.endswith(".ttl") or (content_type and "turtle" in content_type):
-        return "skos"
-    # Default assume rdfs for rdf+xml or xml
-    return "rdfs"
-
-
-@router.get("/semantic-models", response_model=List[SemanticModel])
-async def list_models(
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-):
+@router.get('/semantic-models')
+async def get_taxonomies(manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)) -> dict:
+    """Get all available taxonomies"""
     try:
-        return manager.list()
+        logger.info("Retrieving all taxonomies from semantic knowledge graph")
+        taxonomies = manager.get_taxonomies()
+        return {'taxonomies': [taxonomy.model_dump() for taxonomy in taxonomies]}
     except Exception as e:
-        logger.error(f"Failed listing semantic models: {e}")
+        logger.error(f"Error retrieving taxonomies: {e!s}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.get("/semantic-models/prefix", response_model=List[dict])
-async def prefix_search(
-    q: str,
-    limit: int = 20,
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-):
-    if not q:
-        return []
+@router.get('/semantic-models/concepts')
+async def get_concepts(
+    taxonomy_name: Optional[str] = Query(None, description="Filter by taxonomy name"),
+    search: Optional[str] = Query(None, description="Search query"),
+    limit: int = Query(100, description="Maximum number of results"),
+    manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)
+) -> dict:
+    """Get concepts, optionally filtered by taxonomy or search query"""
     try:
-        return manager.prefix_search(q, limit=limit)
-    except Exception as e:
-        logger.error(f"Prefix search failed: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/semantic-models/concepts", response_model=List[dict])
-async def search_concepts(
-    q: str = "",
-    limit: int = 50,
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-):
-    """Search for classes/concepts in the semantic models using SPARQL.
-
-    Returns:
-    - RDFS classes (rdfs:Class instances or rdfs:subClassOf relationships)
-    - SKOS concepts (skos:Concept instances)
-    """
-    try:
-        return manager.search_concepts(q, limit=limit)
-    except Exception as e:
-        logger.error(f"Concept search failed: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/semantic-models/concepts/suggestions", response_model=dict)
-async def search_concepts_with_suggestions(
-    q: str = "",
-    parent_iris: str = "",
-    limit: int = 50,
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-):
-    """Search for classes/concepts with suggested child concepts first if parent_iris is provided.
-
-    Args:
-        parent_iris: Comma-separated list of parent concept IRIs in hierarchy order (nearest first)
-
-    Returns:
-    - suggested: List of child concepts of the best available parent
-    - other: All other matching concepts
-    """
-    try:
-        # Parse comma-separated parent IRIs
-        parent_iris_list = [iri.strip() for iri in parent_iris.split(",") if iri.strip()] if parent_iris else []
-        return manager.search_concepts_with_suggestions(q, parent_iris=parent_iris_list, limit=limit)
-    except Exception as e:
-        logger.error(f"Concept search with suggestions failed: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/semantic-models/properties", response_model=List[dict])
-async def search_properties(
-    q: str = "",
-    limit: int = 50,
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-):
-    """Search for properties in the semantic models using SPARQL.
-
-    Returns:
-    - OWL properties (owl:ObjectProperty, owl:DatatypeProperty)
-    - RDFS properties (rdfs:Property)
-    """
-    try:
-        return manager.search_properties(q, limit=limit)
-    except Exception as e:
-        logger.error(f"Property search failed: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/semantic-models/properties/suggestions", response_model=dict)
-async def search_properties_with_suggestions(
-    q: str = "",
-    parent_iris: str = "",
-    limit: int = 50,
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-):
-    """Search for properties with suggested child properties first if parent_iris is provided.
-
-    Args:
-        parent_iris: Comma-separated list of parent concept IRIs in hierarchy order (nearest first)
-
-    Returns:
-    - suggested: List of child properties of the best available parent (typically empty)
-    - other: All other matching properties
-    """
-    try:
-        # Parse comma-separated parent IRIs
-        parent_iris_list = [iri.strip() for iri in parent_iris.split(",") if iri.strip()] if parent_iris else []
-        return manager.search_properties_with_suggestions(q, parent_iris=parent_iris_list, limit=limit)
-    except Exception as e:
-        logger.error(f"Property search with suggestions failed: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/semantic-models/neighbors", response_model=List[dict])
-async def get_neighbors(
-    iri: str,
-    limit: int = 200,
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-):
-    if not iri:
-        raise HTTPException(status_code=400, detail="Missing 'iri' query param")
-    try:
-        return manager.neighbors(iri, limit=limit)
-    except Exception as e:
-        logger.error(f"Neighbors fetch failed: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/semantic-models/{model_id}", response_model=SemanticModel)
-async def get_model(
-    model_id: str,
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-):
-    m = manager.get(model_id)
-    if not m:
-        raise HTTPException(status_code=404, detail="Semantic model not found")
-    return m
-
-
-@router.post("/semantic-models/upload", response_model=SemanticModel, status_code=status.HTTP_201_CREATED)
-async def upload_model(
-    request: Request,
-    db: DBSessionDep,
-    current_user: AuditCurrentUserDep,
-    file: UploadFile = File(...),
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-):
-    try:
-        contents = await file.read()
-        if not contents:
-            raise HTTPException(status_code=400, detail="Uploaded file is empty")
-
-        filename = file.filename or "uploaded.rdf"
-        content_type = file.content_type
-        fmt = _detect_format(filename, content_type)
-
-        create_data = {
-            "name": filename,
-            "format": fmt,
-            "content_text": contents.decode("utf-8", errors="ignore"),
-            "original_filename": filename,
-            "content_type": content_type,
-            "size_bytes": len(contents),
-            "enabled": True,
+        if search:
+            logger.info(f"Searching concepts with query: '{search}' in taxonomy: {taxonomy_name}")
+            results = manager.search_concepts(search, taxonomy_name, limit)
+            concepts = [result.concept for result in results]
+        else:
+            logger.info(f"Retrieving concepts from taxonomy: {taxonomy_name or 'all'}")
+            concepts = manager.get_concepts_by_taxonomy(taxonomy_name)
+        
+        return {
+            'concepts': [concept.model_dump() for concept in concepts[:limit]]
         }
+    except Exception as e:
+        logger.error(f"Error retrieving concepts: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-        from src.models.semantic_models import SemanticModelCreate
+@router.get('/semantic-models/concepts-grouped')
+async def get_concepts_grouped(
+    manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)
+) -> dict:
+    """Get all concepts grouped by taxonomy source"""
+    try:
+        logger.info("Retrieving concepts grouped by taxonomy")
+        grouped = manager.get_grouped_concepts()
+        
+        # Convert to serializable format
+        result = {}
+        for source, concepts in grouped.items():
+            result[source] = [concept.model_dump() for concept in concepts]
+        
+        return {'grouped_concepts': result}
+    except Exception as e:
+        logger.error(f"Error retrieving grouped concepts: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-        created = manager.create(SemanticModelCreate(**create_data), created_by=current_user.username if current_user else None)
-        db.commit()
-        manager.on_models_changed()
-        return created
+@router.get('/semantic-models/concepts/{concept_iri:path}/hierarchy')
+async def get_concept_hierarchy(
+    concept_iri: str,
+    manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)
+) -> dict:
+    """Get hierarchical relationships for a concept"""
+    try:
+        logger.info(f"Retrieving hierarchy for concept: {concept_iri}")
+        hierarchy = manager.get_concept_hierarchy(concept_iri)
+        
+        if not hierarchy:
+            raise HTTPException(status_code=404, detail="Concept not found")
+        
+        return {'hierarchy': hierarchy.model_dump()}
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(f"Error uploading semantic model: {e}")
+        logger.error(f"Error retrieving concept hierarchy for {concept_iri}: {e!s}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@router.put("/semantic-models/{model_id}", response_model=SemanticModel)
-async def update_model(
-    model_id: str,
-    db: DBSessionDep,
-    current_user: AuditCurrentUserDep,
-    payload: SemanticModelUpdate = Body(...),
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-):
-    updated = manager.update(model_id, payload, updated_by=current_user.username if current_user else None)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Semantic model not found")
-    db.commit()
-    manager.on_models_changed()
-    return updated
-
-
-@router.post("/semantic-models/{model_id}/upload", response_model=SemanticModel)
-async def replace_model_content(
-    model_id: str,
-    db: DBSessionDep,
-    current_user: AuditCurrentUserDep,
-    file: UploadFile = File(...),
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-):
+@router.get('/semantic-models/concepts/{concept_iri:path}')
+async def get_concept_details(
+    concept_iri: str,
+    manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)
+) -> dict:
+    """Get detailed information about a specific concept"""
     try:
-        contents = await file.read()
-        if not contents:
-            raise HTTPException(status_code=400, detail="Uploaded file is empty")
-        updated = manager.replace_content(
-            model_id=model_id,
-            content_text=contents.decode("utf-8", errors="ignore"),
-            original_filename=file.filename,
-            content_type=file.content_type,
-            size_bytes=len(contents),
-            updated_by=current_user.username if current_user else None,
+        logger.info(f"Retrieving details for concept: {concept_iri}")
+        concept = manager.get_concept_details(concept_iri)
+        
+        if not concept:
+            raise HTTPException(status_code=404, detail="Concept not found")
+        
+        return {'concept': concept.model_dump()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving concept details for {concept_iri}: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get('/semantic-models/stats')
+async def get_taxonomy_stats(
+    manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)
+) -> dict:
+    """Get statistics about loaded taxonomies"""
+    try:
+        logger.info("Retrieving taxonomy statistics")
+        stats = manager.get_taxonomy_stats()
+        return {'stats': stats.model_dump()}
+    except Exception as e:
+        logger.error(f"Error retrieving taxonomy stats: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get('/semantic-models/search')
+async def search_concepts(
+    q: str = Query(..., description="Search query"),
+    taxonomy: Optional[str] = Query(None, description="Filter by taxonomy name"),
+    limit: int = Query(50, description="Maximum number of results"),
+    manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)
+) -> dict:
+    """Search for concepts by text query"""
+    try:
+        logger.info(f"Searching concepts with query: '{q}' in taxonomy: {taxonomy}")
+        results = manager.search_concepts(q, taxonomy, limit)
+        
+        return {
+            'results': [result.model_dump() for result in results]
+        }
+    except Exception as e:
+        logger.error(f"Error searching concepts: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Legacy endpoints for backwards compatibility ---
+
+@router.post('/semantic-models')
+async def create_glossary(glossary_data: dict, manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)):
+    """Create a new business glossary (legacy)"""
+    try:
+        glossary = manager.create_glossary(
+            name=glossary_data['name'],
+            description=glossary_data['description'],
+            scope=glossary_data['scope'],
+            org_unit=glossary_data['org_unit'],
+            domain=glossary_data['domain'],
+            parent_glossary_ids=glossary_data.get('parent_glossary_ids', []),
+            tags=glossary_data.get('tags', [])
         )
-        if not updated:
-            raise HTTPException(status_code=404, detail="Semantic model not found")
-        db.commit()
-        manager.on_models_changed()
-        return updated
-    except HTTPException:
-        raise
+        return glossary.to_dict()
     except Exception as e:
-        logger.exception(f"Error replacing semantic model content: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.delete("/semantic-models/{model_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_model(
-    model_id: str,
-    db: DBSessionDep,
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-):
-    deleted = manager.delete(model_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Semantic model not found")
-    db.commit()
-    manager.on_models_changed()
-    return None
-
-
-@router.get("/semantic-models/{model_id}/preview", response_model=SemanticModelPreview)
-async def preview_model(
-    model_id: str,
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-):
-    p = manager.preview(model_id)
-    if not p:
-        raise HTTPException(status_code=404, detail="Semantic model not found")
-    return p
-
-
-@router.post("/semantic-models/query", response_model=List[dict])
-async def query_graph(
-    body: dict = Body(...),
-    manager: SemanticModelsManager = Depends(get_semantic_models_manager),
-):
-    sparql = body.get("sparql")
-    if not sparql or not isinstance(sparql, str):
-        raise HTTPException(status_code=400, detail="Missing 'sparql' string in body")
-    try:
-        return manager.query(sparql)
-    except Exception as e:
-        logger.error(f"SPARQL query failed: {e}")
+        logger.error(f"Error creating glossary: {e!s}")
         raise HTTPException(status_code=400, detail=str(e))
 
+@router.put('/semantic-models/{glossary_id}')
+async def update_glossary(glossary_id: str, glossary_data: dict, manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)):
+    """Update a glossary (legacy)"""
+    try:
+        updated_glossary = manager.update_glossary(glossary_id, glossary_data)
+        if not updated_glossary:
+            raise HTTPException(status_code=404, detail="Glossary not found")
+        return updated_glossary
+    except Exception as e:
+        logger.error(f"Error updating glossary {glossary_id}: {e!s}")
+        raise HTTPException(status_code=400, detail=str(e))
 
+@router.delete('/semantic-models/{glossary_id}')
+async def delete_glossary(glossary_id: str, manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)):
+    """Delete a glossary (legacy)"""
+    try:
+        manager.delete_glossary(glossary_id)
+        return None
+    except Exception as e:
+        logger.error(f"Error deleting glossary {glossary_id}: {e!s}")
+        raise HTTPException(status_code=400, detail=str(e))
 
+@router.get('/semantic-models/{glossary_id}/terms')
+async def get_terms(glossary_id: str, manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)):
+    """Get terms for a glossary (legacy)"""
+    try:
+        glossary = manager.get_glossary(glossary_id)
+        if not glossary:
+            raise HTTPException(status_code=404, detail="Glossary not found")
+        return [term.to_dict() for term in glossary.terms.values()]
+    except Exception as e:
+        logger.error(f"Error getting terms for glossary {glossary_id}: {e!s}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post('/semantic-models/{glossary_id}/terms')
+async def create_term(glossary_id: str, term_data: dict, manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)):
+    """Create a new term in a glossary (legacy)"""
+    try:
+        glossary = manager.get_glossary(glossary_id)
+        if not glossary:
+            raise HTTPException(status_code=404, detail="Glossary not found")
+
+        term = manager.create_term(**term_data)
+        manager.add_term_to_glossary(glossary, term)
+        return term.to_dict()
+    except Exception as e:
+        logger.error(f"Error creating term: {e!s}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.delete('/semantic-models/{glossary_id}/terms/{term_id}')
+async def delete_term(glossary_id: str, term_id: str, manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)):
+    """Delete a term from a glossary (legacy)"""
+    try:
+        glossary = manager.get_glossary(glossary_id)
+        if not glossary:
+            raise HTTPException(status_code=404, detail="Glossary not found")
+
+        if manager.delete_term_from_glossary(glossary, term_id):
+            return None
+        raise HTTPException(status_code=404, detail="Term not found")
+    except Exception as e:
+        logger.error(f"Error deleting term {term_id}: {e!s}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 def register_routes(app):
+    """Register routes with the app"""
     app.include_router(router)
     logger.info("Semantic models routes registered")
-    # After routes are registered, rebuild graph once
-    try:
-        # Access manager via app.state
-        manager = getattr(app.state, 'semantic_models_manager', None)
-        if manager:
-            manager.on_models_changed()
-    except Exception:
-        pass
-
-

@@ -38,9 +38,39 @@ async def get_user_details_from_sdk(
     """
     # Check for local development environment or explicit mock flag
     if settings.ENV.upper().startswith("LOCAL") or getattr(settings, "MOCK_USER_DETAILS", False):
-        logger.info("Local/mock user mode detected, returning mock user data for dependency.")
-        # Ensure mock user has groups for testing permissions
-        return LOCAL_DEV_USER
+        # Build mock user from env-var overrides if provided
+        mock_email = settings.MOCK_USER_EMAIL or LOCAL_DEV_USER.email
+        mock_username = settings.MOCK_USER_USERNAME or LOCAL_DEV_USER.username
+        mock_name = settings.MOCK_USER_NAME or LOCAL_DEV_USER.user
+        mock_ip = settings.MOCK_USER_IP or LOCAL_DEV_USER.ip
+        groups_source = "default"
+        mock_groups = LOCAL_DEV_USER.groups
+        if settings.MOCK_USER_GROUPS:
+            try:
+                # Try JSON first (e.g. '["a","b"]')
+                import json as _json
+                parsed = _json.loads(settings.MOCK_USER_GROUPS)
+                if isinstance(parsed, list) and all(isinstance(x, str) for x in parsed):
+                    mock_groups = parsed
+                    groups_source = "json"
+                else:
+                    raise ValueError("MOCK_USER_GROUPS JSON must be an array of strings")
+            except Exception:
+                # Fallback to comma-separated string
+                csv = [g.strip() for g in settings.MOCK_USER_GROUPS.split(',') if g.strip()]
+                if csv:
+                    mock_groups = csv
+                    groups_source = "csv"
+        logger.info(
+            f"Local/mock user mode: using overrides(email={mock_email}, username={mock_username}, user={mock_name}, ip={mock_ip}, groups_source={groups_source}, groups={mock_groups})"
+        )
+        return UserInfo(
+            email=mock_email,
+            username=mock_username,
+            user=mock_name,
+            ip=mock_ip,
+            groups=mock_groups,
+        )
 
     # Logic for non-local environments
     logger.debug("Non-local environment, proceeding with SDK lookup via UsersManager.")
@@ -80,8 +110,18 @@ async def get_user_groups(user_email: str) -> List[str]:
     # Get settings directly instead of using dependency injection
     settings = get_settings()
 
-    if settings.ENV.upper().startswith("LOCAL"):
-        # Return mock groups for local development
+    if settings.ENV.upper().startswith("LOCAL") or getattr(settings, "MOCK_USER_DETAILS", False):
+        # Return mock groups for local/mock development honoring overrides
+        if settings.MOCK_USER_GROUPS:
+            try:
+                import json as _json
+                parsed = _json.loads(settings.MOCK_USER_GROUPS)
+                if isinstance(parsed, list) and all(isinstance(x, str) for x in parsed):
+                    return parsed
+            except Exception:
+                csv = [g.strip() for g in settings.MOCK_USER_GROUPS.split(',') if g.strip()]
+                if csv:
+                    return csv
         return LOCAL_DEV_USER.groups
 
     # In production, you would get groups from the user details

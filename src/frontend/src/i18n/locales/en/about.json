@@ -31,7 +31,7 @@
       "• Group Databricks assets (tables, views, functions, models, dashboards, jobs, notebooks).",
       "• Use tags (e.g., data-product-name, data-product-domain)."
     ],
-    "business-glossary": [
+    "semantic-models": [
       "• Hierarchical glossaries per org unit (company, LOB, department, team, project).",
       "• Merged bottom-up for users, allowing overrides.",
       "• Terms have tags, markdown descriptions, lifecycle status, assigned assets."

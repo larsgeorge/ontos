@@ -27,6 +27,25 @@ logger = get_logger(__name__)
 # Inherit from SearchableAsset
 @searchable_asset
 class BusinessGlossariesManager(SearchableAsset):
+    """
+    Manages business glossaries and ontology concepts.
+
+    CURRENT IMPLEMENTATION (Phase 0 - Read-Only Ontologies):
+    - Provides read-only access to loaded ontologies/taxonomies from semantic models
+    - Exposes concepts via RDF/SKOS standards for knowledge graph visualization
+    - Supports semantic linking of concepts to application assets
+    - Search integration for cross-feature discovery
+
+    FUTURE ENHANCEMENT (Phase 1 - Custom Terms):
+    - User-created custom business terms with versioning
+    - Review and approval workflow for term publication
+    - RDF graph integration (custom terms as SKOS concepts in named graphs)
+    - Git export capability for glossaries
+    - Semantic linking to external ontology concepts
+
+    See BUSINESS-GLOSSARIES-IMPLEMENTATION-PLAN.md for full roadmap.
+    """
+
     def __init__(self, data_dir: Path, semantic_models_manager=None):
         self._domains: Dict[str, Domain] = {}
         self._glossaries: Dict[str, BusinessGlossary] = {}
@@ -50,6 +69,10 @@ class BusinessGlossariesManager(SearchableAsset):
         """Set the semantic models manager after initialization"""
         self._semantic_models_manager = semantic_models_manager
 
+    # ===== Phase 1 (Planned): Custom Term Management =====
+    # The following methods are placeholders for future custom term functionality.
+    # Currently not exposed via API routes.
+
     def create_term(self,
                    name: str,
                    definition: str,
@@ -61,7 +84,7 @@ class BusinessGlossariesManager(SearchableAsset):
                    examples: List[str] = None,
                    source: str = None,
                    taggedAssets: List[Dict[str, Any]] = None) -> GlossaryTerm:
-        """Create a new glossary term"""
+        """Create a new glossary term (Phase 1 - not yet implemented)"""
         term_id = str(uuid.uuid4())
         now = datetime.utcnow()
 
@@ -444,11 +467,11 @@ class BusinessGlossariesManager(SearchableAsset):
                     SearchIndexItem(
                         id=f"term::{term.id}",
                         type="glossary-term",
-                        feature_id="business-glossary",
+                        feature_id="semantic-models",
                         title=term.name,
                         description=term.definition or "",
                         # Adjust link format based on frontend routing
-                        link=f"/business-glossaries?termId={term.id}", 
+                        link=f"/semantic-models?termId={term.id}", 
                         tags=term.tags or []
                         # Add other fields if needed (e.g., domain, owner)
                         # domain=term.domain,
@@ -461,8 +484,10 @@ class BusinessGlossariesManager(SearchableAsset):
             logger.error(f"Error fetching or mapping glossary terms for search: {e}", exc_info=True)
             return [] # Return empty list on error
 
-    # --- New Ontology-based Methods ---
-    
+    # ===== Phase 0 (Active): Ontology/Taxonomy Access =====
+    # These methods provide read-only access to loaded ontologies from semantic models.
+    # Fully functional and exposed via API routes.
+
     def get_taxonomies(self) -> List[OntologyTaxonomy]:
         """Get all available taxonomies from the semantic knowledge graph"""
         if not self._semantic_models_manager:

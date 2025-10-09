@@ -15,33 +15,17 @@ import {
   hotkeysCoreFeature,
   searchFeature
 } from '@headless-tree/core';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-// Tabs removed; sections are now displayed together
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
-import { 
-  Plus, 
-  Minus,
-  Pencil, 
-  Trash2, 
-  AlertCircle, 
-  FileText, 
-  ChevronRight, 
-  ChevronDown, 
-  Book,
+import {
+  AlertCircle,
+  ChevronRight,
+  ChevronDown,
   Layers,
   Zap,
   Search,
@@ -608,17 +592,7 @@ export default function BusinessGlossary() {
   const [showKnowledgeGraph, setShowKnowledgeGraph] = useState(false);
   const [graphExpanded, setGraphExpanded] = useState<Set<string>>(new Set());
 
-  // Legacy form state (for backwards compatibility)
-  const [openDialog, setOpenDialog] = useState(false);
-  const [dialogType, setDialogType] = useState<'glossary' | 'term'>('glossary');
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [scope, setScope] = useState('');
-  const [orgUnit, setOrgUnit] = useState('');
-  const [domain, setDomain] = useState('');
-  const [owner, setOwner] = useState('');
-  const [tags, setTags] = useState('');
-  const [status, setStatus] = useState('draft');
+  // Legacy form state removed - Phase 0 (read-only ontologies)
 
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
@@ -628,7 +602,7 @@ export default function BusinessGlossary() {
     
     // Set breadcrumbs
     setStaticSegments([]);
-    setDynamicTitle('Business Glossary');
+    setDynamicTitle('Semantic Models');
 
     // Cleanup breadcrumbs and search timeout on unmount
     return () => {
@@ -667,19 +641,19 @@ export default function BusinessGlossary() {
       setLoading(true);
       
       // Fetch taxonomies
-      const taxonomiesResponse = await fetch('/api/business-glossaries');
+      const taxonomiesResponse = await fetch('/api/semantic-models');
       if (!taxonomiesResponse.ok) throw new Error('Failed to fetch taxonomies');
       const taxonomiesData = await taxonomiesResponse.json();
       setTaxonomies(taxonomiesData.taxonomies || []);
       
       // Fetch grouped concepts
-      const conceptsResponse = await fetch('/api/business-glossaries/concepts-grouped');
+      const conceptsResponse = await fetch('/api/semantic-models/concepts-grouped');
       if (!conceptsResponse.ok) throw new Error('Failed to fetch concepts');
       const conceptsData = await conceptsResponse.json();
       setGroupedConcepts(conceptsData.grouped_concepts || {});
       
       // Fetch stats
-      const statsResponse = await fetch('/api/business-glossaries/stats');
+      const statsResponse = await fetch('/api/semantic-models/stats');
       if (statsResponse.ok) {
         const statsData = await statsResponse.json();
         setStats(statsData.stats);
@@ -704,7 +678,7 @@ export default function BusinessGlossary() {
     
     // Fetch hierarchy information
     try {
-      const response = await fetch(`/api/business-glossaries/concepts/${encodeURIComponent(concept.iri)}/hierarchy`);
+      const response = await fetch(`/api/semantic-models/concepts/${encodeURIComponent(concept.iri)}/hierarchy`);
       if (response.ok) {
         const data = await response.json();
         setSelectedHierarchy(data.hierarchy);
@@ -757,7 +731,7 @@ export default function BusinessGlossary() {
     try {
       setLoading(true);
       const response = await fetch(
-        `/api/business-glossaries/search?q=${encodeURIComponent(searchTerm)}`
+        `/api/semantic-models/search?q=${encodeURIComponent(searchTerm)}`
       );
       if (!response.ok) throw new Error('Search failed');
       const data = await response.json();
@@ -1209,37 +1183,7 @@ export default function BusinessGlossary() {
     );
   };
 
-  // Legacy create handlers (for backwards compatibility)
-  const handleCreateGlossary = () => {
-    setDialogType('glossary');
-    setName('');
-    setDescription('');
-    setScope('');
-    setOrgUnit('');
-    setDomain('');
-    setOwner('');
-    setTags('');
-    setStatus('draft');
-    setOpenDialog(true);
-  };
-
-  const handleCreateTerm = () => {
-    setDialogType('term');
-    setName('');
-    setDescription('');
-    setDomain('');
-    setOwner('');
-    setTags('');
-    setStatus('draft');
-    setOpenDialog(true);
-  };
-
-  const handleSave = async (event: React.FormEvent) => {
-    event.preventDefault();
-    // This would need to be implemented if we want to support creation
-    setError('Creating new glossaries and terms is not supported in the ontology-based system.');
-    setOpenDialog(false);
-  };
+  // Legacy create handlers removed - Phase 0 (read-only ontologies)
 
   // Removed early return to keep header visible while loading
 
@@ -1247,24 +1191,14 @@ export default function BusinessGlossary() {
     <div className="py-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold mb-6 flex items-center gap-2">
-          <Book className="w-8 h-8" /> Business Glossary
+          <Network className="w-8 h-8" /> Semantic Models
         </h1>
         <div className="flex items-center gap-4">
           {stats && (
             <div className="text-sm text-muted-foreground">
-              {stats.total_concepts} concepts across {stats.taxonomies.length} taxonomies
+              {stats.taxonomies.length} models / {stats.total_concepts + stats.total_properties} terms
             </div>
           )}
-          <div className="flex space-x-2">
-            <Button onClick={handleCreateTerm}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Term
-            </Button>
-            <Button onClick={handleCreateGlossary} variant="outline">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Glossary
-            </Button>
-          </div>
         </div>
       </div>
 
@@ -1427,14 +1361,6 @@ export default function BusinessGlossary() {
                       {selectedConcept.comment || 'No description available'}
                     </p>
                   </div>
-                  <div className="flex space-x-2">
-                    <Button variant="ghost" size="sm" disabled>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" disabled>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </div>
                 </div>
               </div>
 
@@ -1477,108 +1403,6 @@ export default function BusinessGlossary() {
         </div>
       </div>
       )}
-
-      {/* Legacy Dialog (for backwards compatibility) */}
-      <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Create New {dialogType === 'glossary' ? 'Glossary' : 'Term'}
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSave} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">
-                {dialogType === 'glossary' ? 'Description' : 'Definition'}
-              </Label>
-              <Input
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                required
-              />
-            </div>
-            {dialogType === 'glossary' && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="scope">Scope</Label>
-                  <Select value={scope} onValueChange={setScope}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select scope" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="company">Company</SelectItem>
-                      <SelectItem value="division">Division</SelectItem>
-                      <SelectItem value="department">Department</SelectItem>
-                      <SelectItem value="team">Team</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="orgUnit">Organizational Unit</Label>
-                  <Input
-                    id="orgUnit"
-                    value={orgUnit}
-                    onChange={(e) => setOrgUnit(e.target.value)}
-                    required
-                  />
-                </div>
-              </>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="domain">Domain</Label>
-              <Input
-                id="domain"
-                value={domain}
-                onChange={(e) => setDomain(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="owner">Owner</Label>
-              <Input
-                id="owner"
-                value={owner}
-                onChange={(e) => setOwner(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tags">Tags (comma-separated)</Label>
-              <Input
-                id="tags"
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="deprecated">Deprecated</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <DialogFooter>
-              <Button type="submit">Create</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

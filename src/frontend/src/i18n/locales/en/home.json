@@ -1,8 +1,8 @@
 {
   "title": "Welcome to Ontos",
-  "tagline": "Manage business glossaries, data contracts, data products, personas, and more",
+  "tagline": "Manage semantic models, data contracts, data products, personas, and more",
   "search": {
-    "placeholder": "Search for data products, business terms, contracts..."
+    "placeholder": "Search for data products, semantic models, contracts..."
   },
   "overview": {
     "title": "Overview",
@@ -23,9 +23,9 @@
         "title": "Data Products",
         "description": "Total data products"
       },
-      "businessGlossary": {
-        "title": "Business Glossary",
-        "description": "Glossaries / Terms"
+      "semanticModels": {
+        "title": "Semantic Models",
+        "description": "Models / Terms"
       },
       "estates": {
         "title": "Estates",
@@ -59,7 +59,7 @@
     "noActions": "No actions available.",
     "actions": {
       "browseProducts": "Browse Data Products",
-      "browseGlossary": "Browse Business Glossary",
+      "browseGlossary": "Browse Semantic Models",
       "createProduct": "Create Data Product",
       "defineContract": "Define Data Contract",
       "reviewAssets": "Review Data Assets",

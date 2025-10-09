@@ -52,7 +52,7 @@ export const AUDIT_FEATURES = {
   DATA_DOMAINS: 'data-domains',
   TEAMS: 'teams',
   PROJECTS: 'projects',
-  BUSINESS_GLOSSARY: 'business-glossary',
+  SEMANTIC_MODELS: 'semantic-models',
   COMPLIANCE: 'compliance',
   DATA_ASSET_REVIEWS: 'data-asset-reviews',
   ENTITLEMENTS: 'entitlements',

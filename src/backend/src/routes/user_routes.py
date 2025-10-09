@@ -33,15 +33,21 @@ async def get_user_info_from_headers(request: Request, settings: Settings = Depe
     logger.info("Request received for /api/user/info")
 
     # Check for local development environment
-    if settings.ENV.upper().startswith("LOCAL"):
-        logger.info("Local environment detected, returning mock user data for /user/info.")
-        
+    if settings.ENV.upper().startswith("LOCAL") or getattr(settings, "MOCK_USER_DETAILS", False):
+        # Build from overrides consistent with get_user_details_from_sdk
+        email = settings.MOCK_USER_EMAIL or "unknown@dev.local"
+        username = settings.MOCK_USER_USERNAME or "localdev"
+        name = settings.MOCK_USER_NAME or "Local Developer"
+        ip = settings.MOCK_USER_IP or "127.0.0.1"
+        logger.info(
+            f"Local/mock /user/info: using overrides(email={email}, username={username}, user={name}, ip={ip})"
+        )
         simple_mock_user = UserInfo(
-            email="unknown@dev.local",
-            username="localdev",
-            user="Local Developer",
-            ip="127.0.0.1",
-            groups=None # This endpoint doesn't provide groups
+            email=email,
+            username=username,
+            user=name,
+            ip=ip,
+            groups=None # This endpoint doesn't include groups
         )
         return simple_mock_user
 

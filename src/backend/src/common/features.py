@@ -63,10 +63,6 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
         'name': 'Projects',
         'allowed_levels': READ_WRITE_ADMIN_LEVELS
     },
-    'business-glossary': {
-        'name': 'Business Glossary',
-        'allowed_levels': READ_WRITE_ADMIN_LEVELS
-    },
     'compliance': {
         'name': 'Compliance',
         'allowed_levels': READ_WRITE_ADMIN_LEVELS

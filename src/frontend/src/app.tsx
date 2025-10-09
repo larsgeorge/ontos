@@ -16,7 +16,7 @@ import DataProducts from './views/data-products';
 import DataProductDetails from './views/data-product-details';
 import DataContracts from './views/data-contracts';
 import DataContractDetails from './views/data-contract-details';
-import BusinessGlossary from './views/business-glossary';
+import SemanticModels from './views/business-glossary';
 import Compliance from './views/compliance';
 import CompliancePolicyDetails from './views/compliance-policy-details';
 import ComplianceRunDetails from './views/compliance-run-details';
@@ -75,7 +75,7 @@ export default function App() {
               <Route path="/data-products/:productId" element={<DataProductDetails />} />
               <Route path="/data-contracts" element={<DataContracts />} />
               <Route path="/data-contracts/:contractId" element={<DataContractDetails />} />
-              <Route path="/business-glossary" element={<BusinessGlossary />} />
+              <Route path="/semantic-models" element={<SemanticModels />} />
               <Route path="/master-data" element={<MasterDataManagement />} />
               <Route path="/entitlements" element={<Entitlements />} />
               <Route path="/security" element={<SecurityFeatures />} />

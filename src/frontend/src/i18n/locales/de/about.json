@@ -31,7 +31,7 @@
       "• Databricks-Assets (Tabellen, Views, Funktionen, Modelle, Dashboards, Jobs, Notebooks) gruppieren.",
       "• Tags verwenden (z. B. data-product-name, data-product-domain)."
     ],
-    "business-glossary": [
+    "semantic-models": [
       "• Hierarchische Glossare pro Organisationseinheit (Unternehmen, LOB, Abteilung, Team, Projekt).",
       "• Bottom-up für Nutzer zusammengeführt, mit Überschreibungen.",
       "• Begriffe haben Tags, Markdown-Beschreibungen, Lebenszyklusstatus, zugewiesene Assets."

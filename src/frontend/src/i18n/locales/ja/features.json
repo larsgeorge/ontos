@@ -19,9 +19,9 @@
     "name": "プロダクト",
     "description": "関連する Databricks アセットをタグでグループ化して管理します。"
   },
-  "business-glossary": {
-    "name": "ビジネス用語集",
-    "description": "ビジネス用語と定義を作成および管理します。"
+  "semantic-models": {
+    "name": "セマンティックモデル",
+    "description": "セマンティックモデルとその用語（概念とプロパティ）を探索します。"
   },
   "data-asset-reviews": {
     "name": "アセットレビュー",

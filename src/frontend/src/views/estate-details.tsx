@@ -292,7 +292,7 @@ export default function EstateDetailsView() {
             </Button>
           </div>
           <CardDescription>
-            Define rules to share specific Data Products or Business Glossary terms with this estate. Shared resources will be accessible via the configured connection type.
+            Define rules to share specific Data Products or Semantic Model terms with this estate. Shared resources will be accessible via the configured connection type.
           </CardDescription>
         </CardHeader>
         <CardContent>

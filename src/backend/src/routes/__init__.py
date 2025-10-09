@@ -1,5 +1,4 @@
 from . import audit_routes
-from . import business_glossary_routes
 from . import catalog_commander_routes
 from . import change_log_routes
 from . import compliance_routes

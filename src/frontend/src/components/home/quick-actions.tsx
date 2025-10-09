@@ -17,7 +17,7 @@ export default function QuickActions() {
     const list: QuickAction[] = [];
     // Consumer
     if (hasPermission('data-products', FeatureAccessLevel.READ_ONLY)) list.push({ name: t('quickActions.actions.browseProducts'), path: '/data-products' });
-    if (hasPermission('business-glossary', FeatureAccessLevel.READ_ONLY)) list.push({ name: t('quickActions.actions.browseGlossary'), path: '/business-glossary' });
+    if (hasPermission('semantic-models', FeatureAccessLevel.READ_ONLY)) list.push({ name: t('quickActions.actions.browseGlossary'), path: '/semantic-models' });
     // Producer
     if (hasPermission('data-products', FeatureAccessLevel.READ_WRITE)) list.push({ name: t('quickActions.actions.createProduct'), path: '/data-products' });
     if (hasPermission('data-contracts', FeatureAccessLevel.READ_WRITE)) list.push({ name: t('quickActions.actions.defineContract'), path: '/data-contracts' });
