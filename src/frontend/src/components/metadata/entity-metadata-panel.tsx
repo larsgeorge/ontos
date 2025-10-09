@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RelativeDate } from '@/components/common/relative-date';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Plus, RefreshCcw, Eye, Trash2, FileText, LinkIcon, Paperclip, Pencil } from 'lucide-react';
+import { Plus, RefreshCcw, Eye, Trash2, FileText, LinkIcon, Paperclip, Pencil, Loader2 } from 'lucide-react';
 import FilePreviewDialog from '@/components/preview/file-preview-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -52,6 +52,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
   const [previewDoc, setPreviewDoc] = React.useState<DocumentItem | null>(null);
   const [previewNote, setPreviewNote] = React.useState<RichTextItem | null>(null);
   const [showPreview, setShowPreview] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
 
   // Editing states for notes
   const [editingNote, setEditingNote] = React.useState<RichTextItem | null>(null);
@@ -67,6 +68,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
 
   const fetchMetadata = React.useCallback(async () => {
     try {
+      setLoading(true);
       const [rt, li, docs] = await Promise.all([
         fetch(`/api/entities/${entityType}/${entityId}/rich-texts`).then(r => r.json()),
         fetch(`/api/entities/${entityType}/${entityId}/links`).then(r => r.json()),
@@ -77,6 +79,8 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
       setDocuments(Array.isArray(docs) ? docs : []);
     } catch (e: any) {
       toast({ title: 'Metadata load failed', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
   }, [entityId, entityType, toast]);
 
@@ -138,7 +142,9 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
           </div>
           {!addingNote ? (
             <div>
-              {richTexts.length === 0 ? (
+              {loading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+              ) : richTexts.length === 0 ? (
                 <div className="text-sm text-muted-foreground">No notes yet.</div>
               ) : (
                 <Table>
@@ -247,7 +253,9 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
           </div>
           {!addingLink ? (
             <div>
-              {links.length === 0 ? (
+              {loading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+              ) : links.length === 0 ? (
                 <div className="text-sm text-muted-foreground">No links yet.</div>
               ) : (
                 <Table>
@@ -380,7 +388,9 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
               </div>
             </div>
           )}
-          {documents.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+          ) : documents.length === 0 ? (
             <div className="text-sm text-muted-foreground">No documents uploaded.</div>
           ) : (
             <Table>
