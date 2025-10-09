@@ -1,0 +1,74 @@
+{
+  "data-domains": {
+    "name": "Dominios",
+    "description": "Organiza productos de datos y activos en dominios lógicos."
+  },
+  "teams": {
+    "name": "Equipos",
+    "description": "Gestiona equipos y miembros de equipo con sobrescrituras de roles."
+  },
+  "projects": {
+    "name": "Proyectos",
+    "description": "Gestiona proyectos y asigna equipos para aislamiento de espacios de trabajo."
+  },
+  "data-contracts": {
+    "name": "Contratos",
+    "description": "Define y aplica estándares de metadatos técnicos."
+  },
+  "data-products": {
+    "name": "Productos",
+    "description": "Agrupa y gestiona activos Databricks relacionados con etiquetas."
+  },
+  "semantic-models": {
+    "name": "Modelos semánticos",
+    "description": "Explora modelos semánticos y sus términos (conceptos y propiedades)."
+  },
+  "data-asset-reviews": {
+    "name": "Revisión de activos",
+    "description": "Revisa y aprueba activos Databricks como tablas, vistas y funciones."
+  },
+  "compliance": {
+    "name": "Cumplimiento",
+    "description": "Crea, verifica reglas de cumplimiento y calcula puntuaciones."
+  },
+  "estate-manager": {
+    "name": "Gestor de estates",
+    "description": "Gestiona múltiples instancias Databricks en diferentes regiones y nubes."
+  },
+  "master-data": {
+    "name": "Gestión de datos maestros",
+    "description": "Construye un registro dorado de tus datos."
+  },
+  "catalog-commander": {
+    "name": "Catalog Commander",
+    "description": "Explorador de catálogo lado a lado para gestión de activos."
+  },
+  "security": {
+    "name": "Características de seguridad",
+    "description": "Habilita seguridad avanzada como privacidad diferencial."
+  },
+  "entitlements": {
+    "name": "Derechos",
+    "description": "Gestiona privilegios de acceso mediante personas y grupos."
+  },
+  "entitlements-sync": {
+    "name": "Sincronización de derechos",
+    "description": "Sincroniza derechos con sistemas externos."
+  },
+  "search": {
+    "name": "Búsqueda",
+    "description": "Busca entre productos de datos, contratos y grafo de conocimiento."
+  },
+  "audit": {
+    "name": "Registro de auditoría",
+    "description": "Visualiza y filtra los registros de auditoría de la aplicación."
+  },
+  "settings": {
+    "name": "Configuración",
+    "description": "Configura ajustes de aplicación, jobs e integraciones."
+  },
+  "about": {
+    "name": "Acerca de",
+    "description": "Información sobre la aplicación y sus características."
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "home": "Home",
+  "groups": {
+    "dataProducts": "Prodotti dati",
+    "governance": "Governance",
+    "operations": "Operazioni",
+    "security": "Sicurezza",
+    "system": "Sistema"
+  }
+}

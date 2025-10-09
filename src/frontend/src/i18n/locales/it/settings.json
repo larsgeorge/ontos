@@ -1,0 +1,48 @@
+{
+  "title": "Impostazioni",
+  "tabs": {
+    "jobs": "Job & Workflow",
+    "roles": "Ruoli",
+    "semanticModels": "Modelli semantici",
+    "tags": "Tag"
+  },
+  "jobs": {
+    "title": "Configurazione job & workflow",
+    "description": "Configura il cluster job Databricks e abilita i workflow in background",
+    "jobClusterId": {
+      "label": "ID cluster job (opzionale)",
+      "placeholder": "Lascia vuoto per il calcolo serverless"
+    },
+    "availableWorkflows": {
+      "label": "Workflow disponibili",
+      "description": "Abilita o disabilita i workflow in background"
+    },
+    "noWorkflows": "Nessun workflow disponibile",
+    "saveButton": "Salva configurazione",
+    "messages": {
+      "saveSuccess": "Impostazioni salvate con successo",
+      "saveError": "Impossibile salvare le impostazioni"
+    }
+  },
+  "jobRuns": {
+    "viewHistory": "Visualizza cronologia esecuzioni",
+    "dialogTitle": "Cronologia esecuzioni: {{workflowName}}",
+    "dialogDescription": "Cronologia recente delle esecuzioni per questo workflow",
+    "emptyState": "Nessuna esecuzione trovata per questo workflow",
+    "runId": "ID esecuzione",
+    "runName": "Nome",
+    "status": "Stato",
+    "started": "Avviato",
+    "duration": "Durata",
+    "notified": "Notificato",
+    "statuses": {
+      "success": "Successo",
+      "failed": "Fallito",
+      "canceled": "Annullato",
+      "timedout": "Tempo scaduto",
+      "running": "In esecuzione",
+      "pending": "In attesa",
+      "unknown": "Sconosciuto"
+    }
+  }
+}

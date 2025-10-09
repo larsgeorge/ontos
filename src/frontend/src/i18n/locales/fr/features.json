@@ -1,0 +1,74 @@
+{
+  "data-domains": {
+    "name": "Domaines",
+    "description": "Organisez les produits de données et les actifs en domaines logiques."
+  },
+  "teams": {
+    "name": "Équipes",
+    "description": "Gérez les équipes et les membres d'équipe avec des remplacements de rôles."
+  },
+  "projects": {
+    "name": "Projets",
+    "description": "Gérez les projets et attribuez des équipes pour l'isolation des workspaces."
+  },
+  "data-contracts": {
+    "name": "Contrats",
+    "description": "Définissez et appliquez les normes de métadonnées techniques."
+  },
+  "data-products": {
+    "name": "Produits",
+    "description": "Regroupez et gérez les actifs Databricks liés avec des tags."
+  },
+  "semantic-models": {
+    "name": "Modèles sémantiques",
+    "description": "Explorez les modèles sémantiques et leurs termes (concepts et propriétés)."
+  },
+  "data-asset-reviews": {
+    "name": "Révision d'actifs",
+    "description": "Examinez et approuvez les actifs Databricks comme les tables, vues et fonctions."
+  },
+  "compliance": {
+    "name": "Conformité",
+    "description": "Créez, vérifiez les règles de conformité et calculez les scores."
+  },
+  "estate-manager": {
+    "name": "Gestionnaire d'estates",
+    "description": "Gérez plusieurs instances Databricks dans différentes régions et clouds."
+  },
+  "master-data": {
+    "name": "Gestion des données de référence",
+    "description": "Construisez un enregistrement d'or de vos données."
+  },
+  "catalog-commander": {
+    "name": "Catalog Commander",
+    "description": "Explorateur de catalogue côte à côte pour la gestion des actifs."
+  },
+  "security": {
+    "name": "Fonctionnalités de sécurité",
+    "description": "Activez la sécurité avancée comme la confidentialité différentielle."
+  },
+  "entitlements": {
+    "name": "Droits",
+    "description": "Gérez les privilèges d'accès via des personas et des groupes."
+  },
+  "entitlements-sync": {
+    "name": "Synchronisation des droits",
+    "description": "Synchronisez les droits avec les systèmes externes."
+  },
+  "search": {
+    "name": "Recherche",
+    "description": "Recherchez parmi les produits de données, les contrats et le graphe de connaissances."
+  },
+  "audit": {
+    "name": "Journal d'audit",
+    "description": "Consultez et filtrez les journaux d'audit de l'application."
+  },
+  "settings": {
+    "name": "Paramètres",
+    "description": "Configurez les paramètres de l'application, les jobs et les intégrations."
+  },
+  "about": {
+    "name": "À propos",
+    "description": "Informations sur l'application et ses fonctionnalités."
+  }
+}

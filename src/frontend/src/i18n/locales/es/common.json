@@ -1,0 +1,51 @@
+{
+  "app": {
+    "name": "Ontos",
+    "tagline": "Gestione glosarios empresariales, contratos de datos, productos de datos, personas y más"
+  },
+  "actions": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "add": "Agregar",
+    "remove": "Eliminar",
+    "upload": "Subir",
+    "download": "Descargar",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "close": "Cerrar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "submit": "Enviar",
+    "reset": "Restablecer",
+    "apply": "Aplicar",
+    "refresh": "Actualizar",
+    "loading": "Cargando...",
+    "saving": "Guardando...",
+    "deleting": "Eliminando..."
+  },
+  "status": {
+    "success": "Éxito",
+    "error": "Error",
+    "warning": "Advertencia",
+    "info": "Info"
+  },
+  "validation": {
+    "required": "Este campo es obligatorio",
+    "invalid": "Valor inválido",
+    "email": "Dirección de correo electrónico inválida",
+    "url": "URL inválida"
+  },
+  "language": {
+    "label": "Idioma",
+    "english": "Inglés",
+    "german": "Alemán",
+    "japanese": "Japonés",
+    "french": "Francés",
+    "italian": "Italiano",
+    "spanish": "Español"
+  }
+}

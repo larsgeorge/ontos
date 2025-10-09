@@ -1,0 +1,74 @@
+{
+  "data-domains": {
+    "name": "Domini",
+    "description": "Organizza prodotti dati e risorse in domini logici."
+  },
+  "teams": {
+    "name": "Team",
+    "description": "Gestisci team e membri del team con sovrascritture dei ruoli."
+  },
+  "projects": {
+    "name": "Progetti",
+    "description": "Gestisci progetti e assegna team per l'isolamento dei workspace."
+  },
+  "data-contracts": {
+    "name": "Contratti",
+    "description": "Definisci e applica standard di metadati tecnici."
+  },
+  "data-products": {
+    "name": "Prodotti",
+    "description": "Raggruppa e gestisci risorse Databricks correlate con tag."
+  },
+  "semantic-models": {
+    "name": "Modelli semantici",
+    "description": "Esplora modelli semantici e i loro termini (concetti e proprietà)."
+  },
+  "data-asset-reviews": {
+    "name": "Revisione risorse",
+    "description": "Rivedi e approva risorse Databricks come tabelle, viste e funzioni."
+  },
+  "compliance": {
+    "name": "Conformità",
+    "description": "Crea, verifica regole di conformità e calcola punteggi."
+  },
+  "estate-manager": {
+    "name": "Gestore estate",
+    "description": "Gestisci più istanze Databricks in diverse regioni e cloud."
+  },
+  "master-data": {
+    "name": "Gestione dati master",
+    "description": "Costruisci un record d'oro dei tuoi dati."
+  },
+  "catalog-commander": {
+    "name": "Catalog Commander",
+    "description": "Esploratore catalogo affiancato per la gestione delle risorse."
+  },
+  "security": {
+    "name": "Funzionalità di sicurezza",
+    "description": "Abilita sicurezza avanzata come la privacy differenziale."
+  },
+  "entitlements": {
+    "name": "Diritti",
+    "description": "Gestisci privilegi di accesso tramite personas e gruppi."
+  },
+  "entitlements-sync": {
+    "name": "Sincronizzazione diritti",
+    "description": "Sincronizza i diritti con sistemi esterni."
+  },
+  "search": {
+    "name": "Ricerca",
+    "description": "Cerca tra prodotti dati, contratti e grafo della conoscenza."
+  },
+  "audit": {
+    "name": "Registro audit",
+    "description": "Visualizza e filtra i registri di audit dell'applicazione."
+  },
+  "settings": {
+    "name": "Impostazioni",
+    "description": "Configura impostazioni applicazione, job e integrazioni."
+  },
+  "about": {
+    "name": "Informazioni",
+    "description": "Informazioni sull'applicazione e le sue funzionalità."
+  }
+}

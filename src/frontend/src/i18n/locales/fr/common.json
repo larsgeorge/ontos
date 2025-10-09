@@ -1,0 +1,51 @@
+{
+  "app": {
+    "name": "Ontos",
+    "tagline": "Gérez les glossaires métier, les contrats de données, les produits de données, les personas et plus encore"
+  },
+  "actions": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "create": "Créer",
+    "add": "Ajouter",
+    "remove": "Retirer",
+    "upload": "Télécharger",
+    "download": "Télécharger",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "close": "Fermer",
+    "back": "Retour",
+    "next": "Suivant",
+    "previous": "Précédent",
+    "submit": "Soumettre",
+    "reset": "Réinitialiser",
+    "apply": "Appliquer",
+    "refresh": "Actualiser",
+    "loading": "Chargement...",
+    "saving": "Enregistrement...",
+    "deleting": "Suppression..."
+  },
+  "status": {
+    "success": "Succès",
+    "error": "Erreur",
+    "warning": "Avertissement",
+    "info": "Info"
+  },
+  "validation": {
+    "required": "Ce champ est obligatoire",
+    "invalid": "Valeur invalide",
+    "email": "Adresse e-mail invalide",
+    "url": "URL invalide"
+  },
+  "language": {
+    "label": "Langue",
+    "english": "Anglais",
+    "german": "Allemand",
+    "japanese": "Japonais",
+    "french": "Français",
+    "italian": "Italien",
+    "spanish": "Espagnol"
+  }
+}

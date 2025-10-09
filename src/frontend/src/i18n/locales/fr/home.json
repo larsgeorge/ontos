@@ -1,0 +1,146 @@
+{
+  "title": "Bienvenue sur Ontos",
+  "tagline": "Gérez les modèles sémantiques, les contrats de données, les produits de données, les personas et plus encore",
+  "search": {
+    "placeholder": "Rechercher des produits de données, modèles sémantiques, contrats..."
+  },
+  "overview": {
+    "title": "Aperçu",
+    "loading": "Chargement...",
+    "noData": "Aucune donnée d'aperçu disponible pour les aperçus de fonctionnalités sélectionnés ou vos permissions.",
+    "error": "Erreur",
+    "tiles": {
+      "compliance": {
+        "title": "Conformité",
+        "description": "Score de conformité actuel",
+        "notAvailable": "N/D"
+      },
+      "dataContracts": {
+        "title": "Contrats de données",
+        "description": "Contrats actifs"
+      },
+      "dataProducts": {
+        "title": "Produits de données",
+        "description": "Total des produits de données"
+      },
+      "semanticModels": {
+        "title": "Modèles sémantiques",
+        "description": "Modèles / Termes"
+      },
+      "estates": {
+        "title": "Estates",
+        "description": "Aucun estate configuré",
+        "lastSync": "Dernière synchro : {{date}} ({{status}})",
+        "syncStatus": {
+          "success": "succès",
+          "failed": "échec",
+          "in_progress": "en cours",
+          "unknown": "inconnu"
+        }
+      }
+    }
+  },
+  "complianceTrend": {
+    "title": "Tendance de conformité",
+    "period": "Derniers 30 jours",
+    "loading": "Chargement des données de conformité...",
+    "error": "Erreur de chargement des données de tendance : {{error}}",
+    "noData": "Aucune donnée de conformité disponible pour la période sélectionnée.",
+    "chartLabel": "Score de conformité"
+  },
+  "noAccess": {
+    "message": "Vous n'avez actuellement aucun rôle spécifique assigné.",
+    "action": "Pour accéder aux fonctionnalités, veuillez",
+    "link": "demander l'accès à un rôle"
+  },
+  "quickActions": {
+    "title": "Actions rapides",
+    "loading": "Chargement...",
+    "noActions": "Aucune action disponible.",
+    "actions": {
+      "browseProducts": "Parcourir les produits de données",
+      "browseGlossary": "Parcourir les modèles sémantiques",
+      "createProduct": "Créer un produit de données",
+      "defineContract": "Définir un contrat de données",
+      "reviewAssets": "Examiner les actifs de données",
+      "manageEntitlements": "Gérer les droits",
+      "catalogCommander": "Catalog Commander",
+      "settings": "Paramètres"
+    }
+  },
+  "recentActivity": {
+    "title": "Activité récente",
+    "loading": "Chargement de l'activité récente...",
+    "error": "Échec du chargement de l'activité récente",
+    "noActivity": "Aucune activité récente.",
+    "entityLabel": "Entité :",
+    "actionLabel": "Action :",
+    "userLabel": "Utilisateur :",
+    "timeLabel": "Heure :",
+    "iriLabel": "Iri :",
+    "linkIdLabel": "ID de lien :",
+    "openButton": "Ouvrir",
+    "openDetails": "Ouvrir les détails",
+    "noDetails": "Aucun détail disponible",
+    "by": "par",
+    "at": "à"
+  },
+  "discoverySection": {
+    "title": "Découverte",
+    "dataDomains": "Domaines de données",
+    "exactMatchOnly": "Correspondances exactes uniquement",
+    "allDomains": "Tous les domaines",
+    "clearFilter": "Effacer le filtre de domaine",
+    "selectDomain": "Sélectionnez un domaine pour voir sa hiérarchie et filtrer les produits.",
+    "popularProducts": "Produits de données populaires",
+    "loading": "Chargement des produits...",
+    "error": "Échec du chargement des produits de données",
+    "noProducts": "Aucun produit de données trouvé.",
+    "domain": "Domaine",
+    "owner": "Propriétaire",
+    "unknown": "Inconnu",
+    "status": "N/D",
+    "untitled": "Sans titre",
+    "info": "Info"
+  },
+  "dataCurationSection": {
+    "title": "Curation de données",
+    "createDataProduct": {
+      "title": "Créer un produit de données",
+      "description": "Utilisez l'assistant pour définir un nouveau produit de données.",
+      "button": "Ouvrir"
+    },
+    "defineDataContract": {
+      "title": "Définir un contrat de données",
+      "description": "Créer ou mettre à jour un contrat technique.",
+      "button": "Ouvrir"
+    },
+    "createDataset": {
+      "title": "Créer un dataset",
+      "description": "Gérer les datasets pour le matching et le mastering.",
+      "button": "Ouvrir"
+    },
+    "createSchema": {
+      "title": "Créer un schéma",
+      "description": "Créer ou gérer des schémas et des permissions.",
+      "openButton": "Ouvrir",
+      "createButton": "Créer"
+    },
+    "createCatalog": {
+      "title": "Créer un catalogue",
+      "description": "Provisionner des catalogues et gérer l'accès.",
+      "openButton": "Ouvrir",
+      "createButton": "Créer"
+    }
+  },
+  "requiredActionsSection": {
+    "title": "Actions requises",
+    "pendingNotifications": "Notifications en attente",
+    "loading": "Chargement...",
+    "noActions": "Aucune action en attente.",
+    "openButton": "Ouvrir",
+    "markReadButton": "Marquer comme lu",
+    "readLabel": "Lu",
+    "alertMessage": "Cette liste affiche uniquement les notifications nécessitant une action assignées à votre/vos rôle(s)."
+  }
+}

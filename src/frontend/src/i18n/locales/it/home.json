@@ -1,0 +1,146 @@
+{
+  "title": "Benvenuto in Ontos",
+  "tagline": "Gestisci modelli semantici, contratti dati, prodotti dati, personas e altro ancora",
+  "search": {
+    "placeholder": "Cerca prodotti dati, modelli semantici, contratti..."
+  },
+  "overview": {
+    "title": "Panoramica",
+    "loading": "Caricamento...",
+    "noData": "Nessun dato di panoramica disponibile per le anteprime delle funzionalità selezionate o le tue autorizzazioni.",
+    "error": "Errore",
+    "tiles": {
+      "compliance": {
+        "title": "Conformità",
+        "description": "Punteggio di conformità attuale",
+        "notAvailable": "N/D"
+      },
+      "dataContracts": {
+        "title": "Contratti dati",
+        "description": "Contratti attivi"
+      },
+      "dataProducts": {
+        "title": "Prodotti dati",
+        "description": "Totale prodotti dati"
+      },
+      "semanticModels": {
+        "title": "Modelli semantici",
+        "description": "Modelli / Termini"
+      },
+      "estates": {
+        "title": "Estate",
+        "description": "Nessun estate configurato",
+        "lastSync": "Ultima sincronizzazione: {{date}} ({{status}})",
+        "syncStatus": {
+          "success": "successo",
+          "failed": "fallito",
+          "in_progress": "in corso",
+          "unknown": "sconosciuto"
+        }
+      }
+    }
+  },
+  "complianceTrend": {
+    "title": "Tendenza conformità",
+    "period": "Ultimi 30 giorni",
+    "loading": "Caricamento dati conformità...",
+    "error": "Errore nel caricamento dei dati di tendenza: {{error}}",
+    "noData": "Nessun dato di conformità disponibile per il periodo selezionato.",
+    "chartLabel": "Punteggio conformità"
+  },
+  "noAccess": {
+    "message": "Attualmente non hai un ruolo specifico assegnato.",
+    "action": "Per accedere alle funzionalità, per favore",
+    "link": "richiedi l'accesso a un ruolo"
+  },
+  "quickActions": {
+    "title": "Azioni rapide",
+    "loading": "Caricamento...",
+    "noActions": "Nessuna azione disponibile.",
+    "actions": {
+      "browseProducts": "Sfoglia prodotti dati",
+      "browseGlossary": "Sfoglia modelli semantici",
+      "createProduct": "Crea prodotto dati",
+      "defineContract": "Definisci contratto dati",
+      "reviewAssets": "Rivedi risorse dati",
+      "manageEntitlements": "Gestisci diritti",
+      "catalogCommander": "Catalog Commander",
+      "settings": "Impostazioni"
+    }
+  },
+  "recentActivity": {
+    "title": "Attività recente",
+    "loading": "Caricamento attività recente...",
+    "error": "Impossibile caricare l'attività recente",
+    "noActivity": "Nessuna attività recente.",
+    "entityLabel": "Entità:",
+    "actionLabel": "Azione:",
+    "userLabel": "Utente:",
+    "timeLabel": "Ora:",
+    "iriLabel": "Iri:",
+    "linkIdLabel": "ID collegamento:",
+    "openButton": "Apri",
+    "openDetails": "Apri dettagli",
+    "noDetails": "Nessun dettaglio disponibile",
+    "by": "da",
+    "at": "alle"
+  },
+  "discoverySection": {
+    "title": "Scoperta",
+    "dataDomains": "Domini dati",
+    "exactMatchOnly": "Solo corrispondenze esatte",
+    "allDomains": "Tutti i domini",
+    "clearFilter": "Cancella filtro dominio",
+    "selectDomain": "Seleziona un dominio per visualizzare la sua gerarchia e filtrare i prodotti.",
+    "popularProducts": "Prodotti dati popolari",
+    "loading": "Caricamento prodotti...",
+    "error": "Impossibile caricare i prodotti dati",
+    "noProducts": "Nessun prodotto dati trovato.",
+    "domain": "Dominio",
+    "owner": "Proprietario",
+    "unknown": "Sconosciuto",
+    "status": "N/D",
+    "untitled": "Senza titolo",
+    "info": "Info"
+  },
+  "dataCurationSection": {
+    "title": "Cura dati",
+    "createDataProduct": {
+      "title": "Crea prodotto dati",
+      "description": "Usa la procedura guidata per definire un nuovo prodotto dati.",
+      "button": "Apri"
+    },
+    "defineDataContract": {
+      "title": "Definisci contratto dati",
+      "description": "Crea o aggiorna un contratto tecnico.",
+      "button": "Apri"
+    },
+    "createDataset": {
+      "title": "Crea dataset",
+      "description": "Gestisci dataset per abbinamento e masterizzazione.",
+      "button": "Apri"
+    },
+    "createSchema": {
+      "title": "Crea schema",
+      "description": "Crea o gestisci schemi e permessi.",
+      "openButton": "Apri",
+      "createButton": "Crea"
+    },
+    "createCatalog": {
+      "title": "Crea catalogo",
+      "description": "Fornisci cataloghi e gestisci l'accesso.",
+      "openButton": "Apri",
+      "createButton": "Crea"
+    }
+  },
+  "requiredActionsSection": {
+    "title": "Azioni richieste",
+    "pendingNotifications": "Notifiche in sospeso",
+    "loading": "Caricamento...",
+    "noActions": "Nessuna azione in sospeso.",
+    "openButton": "Apri",
+    "markReadButton": "Segna come letto",
+    "readLabel": "Letto",
+    "alertMessage": "Questo elenco mostra solo le notifiche che richiedono azioni assegnate al/ai tuo/tuoi ruolo/i."
+  }
+}
