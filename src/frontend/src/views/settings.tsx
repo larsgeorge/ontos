@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useToast } from '@/hooks/use-toast';
-import { useApi } from '@/hooks/use-api';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings as SettingsIcon, History } from 'lucide-react';
+import { Settings as SettingsIcon } from 'lucide-react';
 import RolesSettings from '@/components/settings/roles-settings';
 import SemanticModelsSettings from '@/components/settings/semantic-models-settings';
 import TagsSettings from '@/components/settings/tags-settings';
-import { JobRunsDialog } from '@/components/settings/job-runs-dialog';
+import JobsSettings from '@/components/settings/jobs-settings';
 
 interface AppSettings {
   id: string;
@@ -29,21 +26,8 @@ interface AppSettings {
   gitToken: string;
 }
 
-// Shape returned by /api/settings for jobs/workflows configuration
-interface SettingsApiResponse {
-  job_cluster_id?: string | null;
-  enabled_jobs?: string[];
-  available_workflows?: { id: string; name: string; description?: string }[];
-  current_settings?: {
-    job_cluster_id?: string | null;
-    enabled_jobs?: string[];
-  };
-}
-
 export default function Settings() {
   const { t } = useTranslation(['settings', 'common']);
-  const { toast } = useToast();
-  const { get, post, put } = useApi();
   // Legacy general/databricks/git settings state (kept for existing tabs)
   const [settings, setSettings] = useState<AppSettings>({
     id: '',
@@ -59,84 +43,15 @@ export default function Settings() {
     gitBranch: '',
     gitToken: ''
   });
-  // New jobs/workflows settings state
-  const [jobClusterId, setJobClusterId] = useState<string>('');
-  const [availableWorkflows, setAvailableWorkflows] = useState<{ id: string; name: string; description?: string }[]>([]);
-  const [enabledJobs, setEnabledJobs] = useState<Record<string, boolean>>({});
+  // Local saving state for this view (not used for Jobs tab)
+  // Keeping these in case we later add saving of general fields
   const [isLoading, setIsLoading] = useState(false);
 
-  // Job runs dialog state
-  const [selectedWorkflow, setSelectedWorkflow] = useState<{ id: string; name: string } | null>(null);
-  const [jobRunsDialogOpen, setJobRunsDialogOpen] = useState(false);
+  useEffect(() => {}, []);
 
-  useEffect(() => {
-    fetchSettings();
-  }, []);
+  // Jobs save is handled within JobsSettings; keep no-op here to preserve structure
 
-  const fetchSettings = async () => {
-    try {
-      const response = await get<SettingsApiResponse>('/api/settings');
-      const data = response.data || {};
-      const clusterId = data.job_cluster_id ?? data.current_settings?.job_cluster_id ?? '';
-      setJobClusterId(clusterId || '');
-      const workflows = data.available_workflows || [];
-      setAvailableWorkflows(workflows);
-      const enabledSet = new Set<string>(data.enabled_jobs || data.current_settings?.enabled_jobs || []);
-      const toggles: Record<string, boolean> = {};
-      workflows.forEach(w => { toggles[w.id] = enabledSet.has(w.id); });
-      setEnabledJobs(toggles);
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-    }
-  };
-
-  const handleSave = async () => {
-    setIsLoading(true);
-    try {
-      const payload = {
-        job_cluster_id: jobClusterId || null,
-        enabled_jobs: Object.entries(enabledJobs).filter(([, v]) => v).map(([k]) => k),
-      };
-      
-      const response = await put('/api/settings', payload);
-      
-      // Check if the API returned an error
-      if (response.error) {
-        toast({
-          title: t('common:status.error'),
-          description: response.error,
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      // Success case
-      toast({
-        title: t('common:status.success'),
-        description: t('settings:jobs.messages.saveSuccess'),
-      });
-    } catch (error: any) {
-      console.error('Settings save error:', error);
-      
-      // Extract error message from network/other errors
-      let errorMessage = 'Failed to save settings';
-      if (error?.message) {
-        errorMessage = error.message;
-      }
-      
-      toast({
-        title: t('common:status.error'),
-        description: errorMessage,
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const toggleWorkflow = (workflow: string) => {
-    setEnabledJobs(prev => ({ ...prev, [workflow]: !prev[workflow] }));
-  };
+  // No job toggling here (moved into JobsSettings)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (!settings) return;
@@ -290,58 +205,7 @@ export default function Settings() {
         </TabsContent>
 
         <TabsContent value="jobs">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('settings:jobs.title')}</CardTitle>
-              <CardDescription>{t('settings:jobs.description')}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="job-cluster-id">{t('settings:jobs.jobClusterId.label')}</Label>
-                <Input
-                  id="job-cluster-id"
-                  value={jobClusterId}
-                  onChange={(e) => setJobClusterId(e.target.value)}
-                  placeholder={t('settings:jobs.jobClusterId.placeholder')}
-                />
-              </div>
-              {availableWorkflows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{t('settings:jobs.noWorkflows')}</p>
-              ) : (
-                <>
-                  <div className="space-y-2">
-                    <Label>{t('settings:jobs.availableWorkflows.label')}</Label>
-                    <p className="text-sm text-muted-foreground">{t('settings:jobs.availableWorkflows.description')}</p>
-                  </div>
-                  {availableWorkflows.map((wf) => (
-                    <div key={wf.id} className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-medium">{wf.name}</h3>
-                        {wf.description && (
-                          <p className="text-sm text-muted-foreground">{wf.description}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => {
-                            setSelectedWorkflow({ id: wf.id, name: wf.name });
-                            setJobRunsDialogOpen(true);
-                          }}
-                          title={t('settings:jobRuns.viewHistory')}
-                        >
-                          <History className="h-4 w-4" />
-                        </Button>
-                        <Switch checked={!!enabledJobs[wf.id]} onCheckedChange={() => toggleWorkflow(wf.id)} />
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
-            </CardContent>
-          </Card>
+          <JobsSettings />
         </TabsContent>
 
         <TabsContent value="roles">
@@ -355,21 +219,7 @@ export default function Settings() {
         </TabsContent>
       </Tabs>
 
-      <div className="mt-6">
-        <Button onClick={handleSave} disabled={isLoading}>
-          {isLoading ? t('common:actions.saving') : t('settings:jobs.saveButton')}
-        </Button>
-      </div>
-
-      {/* Job Runs Dialog */}
-      {selectedWorkflow && (
-        <JobRunsDialog
-          workflowId={selectedWorkflow.id}
-          workflowName={selectedWorkflow.name}
-          open={jobRunsDialogOpen}
-          onOpenChange={setJobRunsDialogOpen}
-        />
-      )}
+      <div className="mt-6" />
     </div>
   );
 } 

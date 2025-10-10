@@ -23,5 +23,34 @@
       "saveSuccess": "設定が正常に保存されました",
       "saveError": "設定の保存に失敗しました"
     }
+  },
+  "jobsActions": {
+    "start": "開始",
+    "stop": "停止",
+    "pause": "一時停止",
+    "resume": "再開",
+    "history": "実行履歴を表示",
+    "cannotDisableRunning": "実行中のワークフローは無効化できません"
+  },
+  "jobRuns": {
+    "viewHistory": "実行履歴を表示",
+    "dialogTitle": "実行履歴: {{workflowName}}",
+    "dialogDescription": "このワークフローの最近の実行履歴",
+    "emptyState": "このワークフローの実行は見つかりませんでした",
+    "runId": "実行ID",
+    "runName": "名前",
+    "status": "ステータス",
+    "started": "開始",
+    "duration": "所要時間",
+    "notified": "通知済み",
+    "statuses": {
+      "success": "成功",
+      "failed": "失敗",
+      "canceled": "キャンセル",
+      "timedout": "タイムアウト",
+      "running": "実行中",
+      "pending": "保留",
+      "unknown": "不明"
+    }
   }
 }

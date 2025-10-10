@@ -595,6 +595,143 @@ class JobsManager:
             logger.error(f"Error cancelling run {run_id}: {e}")
             raise
 
+    # --- Workflow/job helpers for status and scheduling controls ---
+    def get_active_run_id(self, job_id: int) -> Optional[int]:
+        """Return the latest active (RUNNING or PENDING) run id for a job if any."""
+        try:
+            runs = self._client.jobs.list_runs(job_id=job_id, active_only=True)
+            for run in runs:
+                try:
+                    if run.state and run.state.life_cycle_state in [
+                        RunLifeCycleState.RUNNING,
+                        RunLifeCycleState.PENDING,
+                    ]:
+                        return int(run.run_id)
+                except Exception:
+                    continue
+            return None
+        except Exception as e:
+            logger.error(f"Failed to list active runs for job {job_id}: {e}")
+            return None
+
+    def pause_job(self, job_id: int) -> None:
+        """Pause a scheduled/continuous job by setting pause_status to PAUSED."""
+        try:
+            job = self._client.jobs.get(job_id=job_id)
+            settings = job.settings
+            if not settings:
+                raise RuntimeError("Job has no settings; cannot pause")
+
+            # Determine if schedule or continuous is configured
+            if settings.schedule is not None:
+                new_settings = jobs.JobSettings(schedule=jobs.CronSchedule(
+                    quartz_cron_expression=settings.schedule.quartz_cron_expression,
+                    timezone_id=settings.schedule.timezone_id or 'UTC',
+                    pause_status=jobs.PauseStatus.PAUSED,
+                ))
+                self._client.jobs.update(job_id=job_id, new_settings=new_settings)
+                return
+            if getattr(settings, 'continuous', None) is not None:
+                new_settings = jobs.JobSettings(continuous=jobs.Continuous(
+                    pause_status=jobs.PauseStatus.PAUSED
+                ))
+                self._client.jobs.update(job_id=job_id, new_settings=new_settings)
+                return
+            raise RuntimeError("Job is not scheduled or continuous; pause unsupported")
+        except Exception as e:
+            logger.error(f"Failed to pause job {job_id}: {e}")
+            raise
+
+    def resume_job(self, job_id: int) -> None:
+        """Resume a scheduled/continuous job by setting pause_status to UNPAUSED."""
+        try:
+            job = self._client.jobs.get(job_id=job_id)
+            settings = job.settings
+            if not settings:
+                raise RuntimeError("Job has no settings; cannot resume")
+
+            if settings.schedule is not None:
+                new_settings = jobs.JobSettings(schedule=jobs.CronSchedule(
+                    quartz_cron_expression=settings.schedule.quartz_cron_expression,
+                    timezone_id=settings.schedule.timezone_id or 'UTC',
+                    pause_status=jobs.PauseStatus.UNPAUSED,
+                ))
+                self._client.jobs.update(job_id=job_id, new_settings=new_settings)
+                return
+            if getattr(settings, 'continuous', None) is not None:
+                new_settings = jobs.JobSettings(continuous=jobs.Continuous(
+                    pause_status=jobs.PauseStatus.UNPAUSED
+                ))
+                self._client.jobs.update(job_id=job_id, new_settings=new_settings)
+                return
+            raise RuntimeError("Job is not scheduled or continuous; resume unsupported")
+        except Exception as e:
+            logger.error(f"Failed to resume job {job_id}: {e}")
+            raise
+
+    def get_workflow_statuses(self, workflow_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Aggregate statuses for installed workflows.
+
+        Returns dict keyed by workflow_id with fields:
+          installed, job_id, is_running, current_run_id, last_result, last_ended_at,
+          pause_status (PAUSED|UNPAUSED|NONE), supports_pause
+        """
+        result: Dict[str, Any] = {}
+        try:
+            installations = workflow_installation_repo.get_all_installed(self._db)
+            for inst in installations:
+                if workflow_ids and inst.workflow_id not in workflow_ids:
+                    continue
+                status: Dict[str, Any] = {
+                    'workflow_id': inst.workflow_id,
+                    'installed': True,
+                    'job_id': int(inst.job_id),
+                    'is_running': False,
+                    'current_run_id': None,
+                    'last_result': None,
+                    'last_ended_at': None,
+                    'pause_status': 'NONE',
+                    'supports_pause': False,
+                }
+
+                # Active run
+                active_run_id = self.get_active_run_id(inst.job_id)
+                if active_run_id:
+                    status['is_running'] = True
+                    status['current_run_id'] = active_run_id
+
+                # Last run from DB cache if available
+                try:
+                    last_runs = workflow_job_run_repo.get_recent_runs(self._db, workflow_id=inst.workflow_id, limit=1)
+                    if last_runs:
+                        last = last_runs[0]
+                        status['last_result'] = (last.result_state or '').upper() or None
+                        status['last_ended_at'] = last.end_time
+                except Exception:
+                    pass
+
+                # Pause state / supports_pause
+                try:
+                    job = self._client.jobs.get(job_id=inst.job_id)
+                    settings = job.settings
+                    if settings:
+                        if settings.schedule is not None:
+                            status['supports_pause'] = True
+                            status['pause_status'] = (settings.schedule.pause_status.value if settings.schedule.pause_status else 'UNPAUSED')
+                        elif getattr(settings, 'continuous', None) is not None:
+                            status['supports_pause'] = True
+                            cont = settings.continuous
+                            status['pause_status'] = (cont.pause_status.value if cont and cont.pause_status else 'UNPAUSED')
+                except Exception as e:
+                    logger.debug(f"Failed to fetch pause status for job {inst.job_id}: {e}")
+
+                result[inst.workflow_id] = status
+
+            return result
+        except Exception as e:
+            logger.error(f"Failed to build workflow statuses: {e}")
+            return result
+
     def start_background_polling(self, interval_seconds: int = 300):
         """Start background polling of installed job states.
 

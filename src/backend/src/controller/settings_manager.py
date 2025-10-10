@@ -430,6 +430,23 @@ class SettingsManager:
         logger.info(f"Current enabled: {current_enabled}, Desired enabled: {desired_enabled}")
         logger.info(f"To install: {to_install}, To remove: {to_remove}")
 
+        # Prevent disabling running workflows
+        try:
+            running_blockers: List[str] = []
+            if getattr(self, '_jobs', None) and to_remove:
+                statuses = self._jobs.get_workflow_statuses(to_remove)
+                for wid, st in (statuses or {}).items():
+                    try:
+                        if st and st.get('is_running'):
+                            running_blockers.append(wid)
+                    except Exception:
+                        continue
+            if running_blockers:
+                raise RuntimeError(f"Cannot disable running workflow(s): {', '.join(sorted(running_blockers))}")
+        except Exception as e:
+            # Surface the error to caller
+            raise
+
         # Apply changes on Databricks and collect errors
         errors = []
 

@@ -24,6 +24,14 @@
       "saveError": "Error al guardar la configuración"
     }
   },
+  "jobsActions": {
+    "start": "Iniciar",
+    "stop": "Detener",
+    "pause": "Pausar programación",
+    "resume": "Reanudar",
+    "history": "Ver historial de ejecuciones",
+    "cannotDisableRunning": "No se puede deshabilitar un workflow en ejecución"
+  },
   "jobRuns": {
     "viewHistory": "Ver historial de ejecuciones",
     "dialogTitle": "Historial de ejecuciones: {{workflowName}}",

@@ -24,6 +24,14 @@
       "saveError": "Échec de l'enregistrement des paramètres"
     }
   },
+  "jobsActions": {
+    "start": "Démarrer",
+    "stop": "Arrêter",
+    "pause": "Mettre en pause",
+    "resume": "Reprendre",
+    "history": "Voir l'historique d'exécution",
+    "cannotDisableRunning": "Impossible de désactiver un workflow en cours d'exécution"
+  },
   "jobRuns": {
     "viewHistory": "Voir l'historique d'exécution",
     "dialogTitle": "Historique d'exécution : {{workflowName}}",

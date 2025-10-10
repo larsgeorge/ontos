@@ -24,6 +24,14 @@
       "saveError": "Failed to save settings"
     }
   },
+  "jobsActions": {
+    "start": "Start",
+    "stop": "Stop",
+    "pause": "Pause schedule",
+    "resume": "Resume",
+    "history": "View run history",
+    "cannotDisableRunning": "Cannot disable a running workflow"
+  },
   "jobRuns": {
     "viewHistory": "View run history",
     "dialogTitle": "Job Run History: {{workflowName}}",

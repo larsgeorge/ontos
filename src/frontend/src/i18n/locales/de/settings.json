@@ -23,5 +23,34 @@
       "saveSuccess": "Einstellungen erfolgreich gespeichert",
       "saveError": "Fehler beim Speichern der Einstellungen"
     }
+  },
+  "jobsActions": {
+    "start": "Start",
+    "stop": "Stopp",
+    "pause": "Zeitplan pausieren",
+    "resume": "Fortsetzen",
+    "history": "Ausführungsverlauf anzeigen",
+    "cannotDisableRunning": "Ausgeführten Workflow kann nicht deaktiviert werden"
+  },
+  "jobRuns": {
+    "viewHistory": "Ausführungsverlauf anzeigen",
+    "dialogTitle": "Ausführungsverlauf: {{workflowName}}",
+    "dialogDescription": "Neueste Ausführungen für diesen Workflow",
+    "emptyState": "Keine Ausführungen für diesen Workflow gefunden",
+    "runId": "Run-ID",
+    "runName": "Name",
+    "status": "Status",
+    "started": "Gestartet",
+    "duration": "Dauer",
+    "notified": "Benachrichtigt",
+    "statuses": {
+      "success": "Erfolgreich",
+      "failed": "Fehlgeschlagen",
+      "canceled": "Abgebrochen",
+      "timedout": "Zeitüberschreitung",
+      "running": "Läuft",
+      "pending": "Ausstehend",
+      "unknown": "Unbekannt"
+    }
   }
 }

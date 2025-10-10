@@ -24,6 +24,14 @@
       "saveError": "Impossibile salvare le impostazioni"
     }
   },
+  "jobsActions": {
+    "start": "Avvia",
+    "stop": "Ferma",
+    "pause": "Metti in pausa",
+    "resume": "Riprendi",
+    "history": "Visualizza cronologia esecuzioni",
+    "cannotDisableRunning": "Impossibile disabilitare un workflow in esecuzione"
+  },
   "jobRuns": {
     "viewHistory": "Visualizza cronologia esecuzioni",
     "dialogTitle": "Cronologia esecuzioni: {{workflowName}}",
