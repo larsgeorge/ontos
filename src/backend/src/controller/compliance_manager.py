@@ -14,7 +14,13 @@ from src.repositories.compliance_repository import (
     compliance_result_repo,
 )
 from ..models.compliance import CompliancePolicy, ComplianceRun, ComplianceResult
-from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl
+from src.common.compliance_dsl import evaluate_rule_on_object as eval_dsl, parse_rule, Evaluator
+from src.common.compliance_actions import ActionExecutor, ActionContext, get_action_registry
+from src.common.compliance_entities import (
+    create_entity_iterator,
+    parse_entity_filter,
+    EntityFilter,
+)
 
 
 logger = get_logger(__name__)
@@ -23,7 +29,7 @@ logger = get_logger(__name__)
 class ComplianceManager:
     def __init__(self):
         # Stateless; uses DB via repositories
-        pass
+        self.action_executor = ActionExecutor(get_action_registry())
 
     # --- Policy CRUD ---
     def load_from_yaml(self, db: Session, yaml_path: str) -> None:
@@ -315,19 +321,64 @@ class ComplianceManager:
         return objs
 
     def run_policy_inline(self, db: Session, *, policy: CompliancePolicyDb, limit: Optional[int] = None) -> ComplianceRunDb:
+        """Run a compliance policy with enhanced DSL support.
+
+        This method supports both the old simple DSL syntax and the new enhanced syntax
+        with MATCH, WHERE, ASSERT, ON_PASS, and ON_FAIL clauses.
+        """
         run = self.create_run(db, policy_id=policy.id)
         success = 0
         failure = 0
+
         try:
-            # crude scope parsing: read the WHERE obj.type IN [...] list
-            scope = 'all'
-            if 'WHERE' in policy.rule and 'ASSERT' in policy.rule:
-                scope = policy.rule.split('WHERE', 1)[1].split('ASSERT', 1)[0]
-            objects = self._iterate_objects(db, scope)
-            if limit is not None:
-                objects = objects[: max(0, int(limit))]
-            for obj in objects:
-                ok, msg = self._evaluate_rule_on_object(policy.rule, obj)
+            # Parse the rule using enhanced DSL
+            parsed_rule = parse_rule(policy.rule)
+
+            # Create entity iterator
+            from src.common.workspace_client import get_workspace_client
+            ws = get_workspace_client()
+            entity_iterator = create_entity_iterator(db=db, workspace_client=ws)
+
+            # Parse entity filter
+            entity_filter = parse_entity_filter(policy.rule)
+
+            # Iterate over entities
+            for obj in entity_iterator.iterate(entity_filter, limit=limit):
+                # Evaluate ASSERT clause
+                ok = True
+                msg = None
+
+                if parsed_rule.get('assert_clause'):
+                    try:
+                        evaluator = Evaluator(obj)
+                        result = evaluator.evaluate(parsed_rule['assert_clause'])
+                        ok = bool(result)
+                        if not ok:
+                            msg = f"Assertion failed for {obj.get('type')} {obj.get('name')}"
+                    except Exception as e:
+                        ok = False
+                        msg = f"Evaluation error: {str(e)}"
+
+                # Execute actions
+                actions = parsed_rule.get('on_pass_actions' if ok else 'on_fail_actions', [])
+                if actions:
+                    action_context = ActionContext(
+                        entity=obj,
+                        entity_type=obj.get('type', 'object'),
+                        entity_id=obj.get('id') or obj.get('full_name') or obj.get('name') or 'unknown',
+                        rule_id=policy.id,
+                        rule_name=policy.name,
+                        passed=ok,
+                        message=msg,
+                    )
+                    action_results = self.action_executor.execute_actions(actions, action_context)
+
+                    # Update message from FAIL action if present
+                    for ar in action_results:
+                        if ar.action_type == 'FAIL' and ar.message:
+                            msg = ar.message
+
+                # Store result
                 res = ComplianceResultDb(
                     id=str(uuid.uuid4()),
                     run_id=run.id,
@@ -339,14 +390,17 @@ class ComplianceManager:
                     details_json=None,
                 )
                 db.add(res)
+
                 if ok:
                     success += 1
                 else:
                     failure += 1
+
             total = max(1, success + failure)
             score = round(100.0 * (success / total), 2)
             self.complete_run(db, run, success_count=success, failure_count=failure, score=score)
             return run
+
         except Exception as e:
             logger.exception("Compliance inline run failed")
             self.complete_run(db, run, success_count=success, failure_count=failure, score=0.0, error_message=str(e))
