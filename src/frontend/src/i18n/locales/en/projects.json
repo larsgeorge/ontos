@@ -1,0 +1,36 @@
+{
+  "title": "Projects",
+  "addNewProject": "Add New Project",
+  "editProject": "Edit Project",
+  "deleteProject": "Delete Project",
+  "table": {
+    "name": "Name",
+    "description": "Description",
+    "teams": "Teams",
+    "tags": "Tags",
+    "lastUpdated": "Last Updated",
+    "actions": "Actions",
+    "moreTeams": "more",
+    "moreTags": "more"
+  },
+  "permissions": {
+    "deniedView": "You do not have permission to view projects.",
+    "deniedCreate": "You do not have permission to create projects.",
+    "deniedEdit": "You do not have permission to edit projects.",
+    "deniedDelete": "You do not have permission to delete projects.",
+    "permissionDenied": "Permission Denied"
+  },
+  "messages": {
+    "projectDeleted": "Project Deleted",
+    "projectDeletedSuccess": "The project was successfully deleted.",
+    "errorFetchingProjects": "Error fetching projects",
+    "errorDeletingProject": "Error Deleting Project",
+    "errorLoadingData": "Error Loading Data"
+  },
+  "deleteDialog": {
+    "title": "Are you absolutely sure?",
+    "description": "This action cannot be undone. This will permanently delete the project and remove it from all teams.",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  }
+}

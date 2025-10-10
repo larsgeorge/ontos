@@ -1,0 +1,36 @@
+{
+  "title": "Proyectos",
+  "addNewProject": "Agregar nuevo proyecto",
+  "editProject": "Editar proyecto",
+  "deleteProject": "Eliminar proyecto",
+  "table": {
+    "name": "Nombre",
+    "description": "Descripción",
+    "teams": "Equipos",
+    "tags": "Etiquetas",
+    "lastUpdated": "Última actualización",
+    "actions": "Acciones",
+    "moreTeams": "más",
+    "moreTags": "más"
+  },
+  "permissions": {
+    "deniedView": "No tiene permiso para ver proyectos.",
+    "deniedCreate": "No tiene permiso para crear proyectos.",
+    "deniedEdit": "No tiene permiso para editar proyectos.",
+    "deniedDelete": "No tiene permiso para eliminar proyectos.",
+    "permissionDenied": "Permiso denegado"
+  },
+  "messages": {
+    "projectDeleted": "Proyecto eliminado",
+    "projectDeletedSuccess": "El proyecto se eliminó correctamente.",
+    "errorFetchingProjects": "Error al obtener proyectos",
+    "errorDeletingProject": "Error al eliminar proyecto",
+    "errorLoadingData": "Error al cargar datos"
+  },
+  "deleteDialog": {
+    "title": "¿Estás absolutamente seguro?",
+    "description": "Esta acción no se puede deshacer. Esto eliminará permanentemente el proyecto y lo eliminará de todos los equipos.",
+    "cancel": "Cancelar",
+    "delete": "Eliminar"
+  }
+}

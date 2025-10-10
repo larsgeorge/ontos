@@ -3,7 +3,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { MoreHorizontal, PlusCircle, Loader2, AlertCircle, FolderOpen } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
-import { Project } from '@/types/project';
+import { ProjectRead } from '@/types/project';
 import { useApi } from '@/hooks/use-api';
 import TagChip from '@/components/ui/tag-chip';
 import { useToast } from "@/hooks/use-toast";
@@ -21,6 +21,7 @@ import { FeatureAccessLevel } from '@/types/settings';
 import { Toaster } from "@/components/ui/toaster";
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { ProjectFormDialog } from '@/components/projects/project-form-dialog';
+import { useTranslation } from 'react-i18next';
 
 // Check API response helper
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
@@ -40,6 +41,7 @@ export default function ProjectsView() {
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
   const [componentError, setComponentError] = useState<string | null>(null);
 
+  const { t } = useTranslation('projects');
   const { get: apiGet, delete: apiDelete, loading: apiIsLoading } = useApi();
   const { toast } = useToast();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
@@ -53,7 +55,7 @@ export default function ProjectsView() {
 
   const fetchProjects = useCallback(async () => {
     if (!canRead && !permissionsLoading) {
-        setComponentError("Permission Denied: Cannot view projects.");
+        setComponentError(t('permissions.deniedView'));
         return;
     }
     setComponentError(null);
@@ -65,28 +67,28 @@ export default function ProjectsView() {
       if (response.error) {
         setComponentError(response.error);
         setProjects([]);
-        toast({ variant: "destructive", title: "Error fetching projects", description: response.error });
+        toast({ variant: "destructive", title: t('messages.errorFetchingProjects'), description: response.error });
       }
     } catch (err: any) {
       setComponentError(err.message || 'Failed to load projects');
       setProjects([]);
-      toast({ variant: "destructive", title: "Error fetching projects", description: err.message });
+      toast({ variant: "destructive", title: t('messages.errorFetchingProjects'), description: err.message });
     }
-  }, [canRead, permissionsLoading, apiGet, toast, setComponentError]);
+  }, [canRead, permissionsLoading, apiGet, toast, setComponentError, t]);
 
   useEffect(() => {
     fetchProjects();
     setStaticSegments([]);
-    setDynamicTitle('Projects');
+    setDynamicTitle(t('title'));
     return () => {
         setStaticSegments([]);
         setDynamicTitle(null);
     };
-  }, [fetchProjects, setStaticSegments, setDynamicTitle]);
+  }, [fetchProjects, setStaticSegments, setDynamicTitle, t]);
 
   const handleOpenCreateDialog = () => {
     if (!canWrite) {
-        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to create projects." });
+        toast({ variant: "destructive", title: t('permissions.permissionDenied'), description: t('permissions.deniedCreate') });
         return;
     }
     setEditingProject(null);
@@ -95,7 +97,7 @@ export default function ProjectsView() {
 
   const handleOpenEditDialog = (project: ProjectRead) => {
     if (!canWrite) {
-        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to edit projects." });
+        toast({ variant: "destructive", title: t('permissions.permissionDenied'), description: t('permissions.deniedEdit') });
         return;
     }
     setEditingProject(project);
@@ -108,7 +110,7 @@ export default function ProjectsView() {
 
   const openDeleteDialog = (projectId: string) => {
     if (!canAdmin) {
-         toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to delete projects." });
+         toast({ variant: "destructive", title: t('permissions.permissionDenied'), description: t('permissions.deniedDelete') });
          return;
     }
     setDeletingProjectId(projectId);
@@ -126,10 +128,10 @@ export default function ProjectsView() {
         }
         throw new Error(errorMessage || 'Failed to delete project.');
       }
-      toast({ title: "Project Deleted", description: "The project was successfully deleted." });
+      toast({ title: t('messages.projectDeleted'), description: t('messages.projectDeletedSuccess') });
       fetchProjects();
     } catch (err: any) {
-       toast({ variant: "destructive", title: "Error Deleting Project", description: err.message || 'Failed to delete project.' });
+       toast({ variant: "destructive", title: t('messages.errorDeletingProject'), description: err.message || 'Failed to delete project.' });
        setComponentError(err.message || 'Failed to delete project.');
     } finally {
        setIsDeleteDialogOpen(false);
@@ -140,7 +142,7 @@ export default function ProjectsView() {
   const columns = useMemo<ColumnDef<ProjectRead>[]>(() => [
     {
       accessorKey: "name",
-      header: "Name",
+      header: t('table.name'),
       cell: ({ row }) => {
         const project = row.original;
         return (
@@ -157,7 +159,7 @@ export default function ProjectsView() {
     },
     {
       accessorKey: "description",
-      header: "Description",
+      header: t('table.description'),
       cell: ({ row }) => (
         <div className="truncate max-w-sm text-sm text-muted-foreground">
           {row.getValue("description") || '-'}
@@ -166,7 +168,7 @@ export default function ProjectsView() {
     },
     {
       accessorKey: "teams",
-      header: "Teams",
+      header: t('table.teams'),
       cell: ({ row }) => {
         const teams = row.original.teams;
         if (!teams || teams.length === 0) return '-';
@@ -183,7 +185,7 @@ export default function ProjectsView() {
             ))}
             {teams.length > 3 && (
               <Badge variant="outline" className="text-xs">
-                +{teams.length - 3} more
+                +{teams.length - 3} {t('table.moreTeams')}
               </Badge>
             )}
           </div>
@@ -192,7 +194,7 @@ export default function ProjectsView() {
     },
     {
       accessorKey: "tags",
-      header: "Tags",
+      header: t('table.tags'),
       cell: ({ row }) => {
         const tags = row.original.tags;
         if (!tags || tags.length === 0) return '-';
@@ -203,7 +205,7 @@ export default function ProjectsView() {
             ))}
             {tags.length > 2 && (
               <Badge variant="outline" className="text-xs">
-                +{tags.length - 2} more
+                +{tags.length - 2} {t('table.moreTags')}
               </Badge>
             )}
           </div>
@@ -212,7 +214,7 @@ export default function ProjectsView() {
     },
     {
       accessorKey: "updated_at",
-      header: "Last Updated",
+      header: t('table.lastUpdated'),
       cell: ({ row }) => {
          const dateValue = row.getValue("updated_at");
          return dateValue ? <RelativeDate date={dateValue as string | Date | number} /> : 'N/A';
@@ -220,6 +222,7 @@ export default function ProjectsView() {
     },
     {
       id: "actions",
+      header: t('table.actions'),
       cell: ({ row }) => {
         const project = row.original;
         return (
@@ -231,9 +234,9 @@ export default function ProjectsView() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuLabel>{t('table.actions')}</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => handleOpenEditDialog(project)} disabled={!canWrite}>
-                Edit Project
+                {t('editProject')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -241,24 +244,24 @@ export default function ProjectsView() {
                 className="text-red-600 focus:text-red-600 focus:bg-red-50"
                 disabled={!canAdmin}
               >
-                Delete Project
+                {t('deleteProject')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         );
       },
     },
-  ], [canWrite, canAdmin]);
+  ], [canWrite, canAdmin, t]);
 
   return (
     <div className="py-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
            <FolderOpen className="w-8 h-8" />
-           Projects
+           {t('title')}
         </h1>
         <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading || apiIsLoading}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Add New Project
+            <PlusCircle className="mr-2 h-4 w-4" /> {t('addNewProject')}
         </Button>
       </div>
 
@@ -269,13 +272,13 @@ export default function ProjectsView() {
       ) : !canRead ? (
          <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Permission Denied</AlertTitle>
-              <AlertDescription>You do not have permission to view projects.</AlertDescription>
+              <AlertTitle>{t('permissions.permissionDenied')}</AlertTitle>
+              <AlertDescription>{t('permissions.deniedView')}</AlertDescription>
          </Alert>
       ) : componentError ? (
           <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error Loading Data</AlertTitle>
+              <AlertTitle>{t('messages.errorLoadingData')}</AlertTitle>
               <AlertDescription>{componentError}</AlertDescription>
           </Alert>
       ) : (
@@ -298,15 +301,15 @@ export default function ProjectsView() {
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogTitle>{t('deleteDialog.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the project and remove it from all teams.
+              {t('deleteDialog.description')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeletingProjectId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setDeletingProjectId(null)}>{t('deleteDialog.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700" disabled={apiIsLoading || permissionsLoading}>
-               {(apiIsLoading || permissionsLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete
+               {(apiIsLoading || permissionsLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {t('deleteDialog.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

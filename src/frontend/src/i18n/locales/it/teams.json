@@ -1,0 +1,36 @@
+{
+  "title": "Team",
+  "addNewTeam": "Aggiungi nuovo team",
+  "editTeam": "Modifica team",
+  "deleteTeam": "Elimina team",
+  "showingTeamsForProject": "Visualizzazione team per progetto:",
+  "table": {
+    "name": "Nome",
+    "description": "Descrizione",
+    "members": "Membri",
+    "lastUpdated": "Ultimo aggiornamento",
+    "actions": "Azioni",
+    "domainPrefix": "↳ Dominio:",
+    "moreMembers": "altri"
+  },
+  "permissions": {
+    "deniedView": "Non hai il permesso di visualizzare i team.",
+    "deniedCreate": "Non hai il permesso di creare team.",
+    "deniedEdit": "Non hai il permesso di modificare i team.",
+    "deniedDelete": "Non hai il permesso di eliminare i team.",
+    "permissionDenied": "Permesso negato"
+  },
+  "messages": {
+    "teamDeleted": "Team eliminato",
+    "teamDeletedSuccess": "Il team è stato eliminato con successo.",
+    "errorFetchingTeams": "Errore nel recupero dei team",
+    "errorDeletingTeam": "Errore nell'eliminazione del team",
+    "errorLoadingData": "Errore nel caricamento dei dati"
+  },
+  "deleteDialog": {
+    "title": "Sei assolutamente sicuro?",
+    "description": "Questa azione non può essere annullata. Questo eliminerà permanentemente il team e tutti i suoi membri.",
+    "cancel": "Annulla",
+    "delete": "Elimina"
+  }
+}

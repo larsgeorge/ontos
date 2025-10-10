@@ -1,0 +1,36 @@
+{
+  "title": "Teams",
+  "addNewTeam": "Neues Team hinzufügen",
+  "editTeam": "Team bearbeiten",
+  "deleteTeam": "Team löschen",
+  "showingTeamsForProject": "Teams für Projekt anzeigen:",
+  "table": {
+    "name": "Name",
+    "description": "Beschreibung",
+    "members": "Mitglieder",
+    "lastUpdated": "Zuletzt aktualisiert",
+    "actions": "Aktionen",
+    "domainPrefix": "↳ Bereich:",
+    "moreMembers": "weitere"
+  },
+  "permissions": {
+    "deniedView": "Sie haben keine Berechtigung, Teams anzuzeigen.",
+    "deniedCreate": "Sie haben keine Berechtigung, Teams zu erstellen.",
+    "deniedEdit": "Sie haben keine Berechtigung, Teams zu bearbeiten.",
+    "deniedDelete": "Sie haben keine Berechtigung, Teams zu löschen.",
+    "permissionDenied": "Zugriff verweigert"
+  },
+  "messages": {
+    "teamDeleted": "Team gelöscht",
+    "teamDeletedSuccess": "Das Team wurde erfolgreich gelöscht.",
+    "errorFetchingTeams": "Fehler beim Abrufen der Teams",
+    "errorDeletingTeam": "Fehler beim Löschen des Teams",
+    "errorLoadingData": "Fehler beim Laden der Daten"
+  },
+  "deleteDialog": {
+    "title": "Sind Sie absolut sicher?",
+    "description": "Diese Aktion kann nicht rückgängig gemacht werden. Dies wird das Team und alle seine Mitglieder dauerhaft löschen.",
+    "cancel": "Abbrechen",
+    "delete": "Löschen"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "filter": "フィルター",
+  "items": "アイテム",
+  "columns": "列",
+  "selected": "選択済み",
+  "noResults": "結果がありません。",
+  "rowsSelected": "行が選択されています。",
+  "of": "/",
+  "pagination": {
+    "rowsPerPage": "ページあたりの行数",
+    "page": "ページ",
+    "goToFirstPage": "最初のページへ",
+    "goToPreviousPage": "前のページへ",
+    "goToNextPage": "次のページへ",
+    "goToLastPage": "最後のページへ"
+  }
+}

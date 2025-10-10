@@ -1,0 +1,36 @@
+{
+  "title": "Teams",
+  "addNewTeam": "Add New Team",
+  "editTeam": "Edit Team",
+  "deleteTeam": "Delete Team",
+  "showingTeamsForProject": "Showing teams for project:",
+  "table": {
+    "name": "Name",
+    "description": "Description",
+    "members": "Members",
+    "lastUpdated": "Last Updated",
+    "actions": "Actions",
+    "domainPrefix": "↳ Domain:",
+    "moreMembers": "more"
+  },
+  "permissions": {
+    "deniedView": "You do not have permission to view teams.",
+    "deniedCreate": "You do not have permission to create teams.",
+    "deniedEdit": "You do not have permission to edit teams.",
+    "deniedDelete": "You do not have permission to delete teams.",
+    "permissionDenied": "Permission Denied"
+  },
+  "messages": {
+    "teamDeleted": "Team Deleted",
+    "teamDeletedSuccess": "The team was successfully deleted.",
+    "errorFetchingTeams": "Error fetching teams",
+    "errorDeletingTeam": "Error Deleting Team",
+    "errorLoadingData": "Error Loading Data"
+  },
+  "deleteDialog": {
+    "title": "Are you absolutely sure?",
+    "description": "This action cannot be undone. This will permanently delete the team and all its members.",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  }
+}

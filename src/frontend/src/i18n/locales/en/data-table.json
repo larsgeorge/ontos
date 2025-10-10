@@ -1,0 +1,17 @@
+{
+  "filter": "Filter",
+  "items": "items",
+  "columns": "Columns",
+  "selected": "selected",
+  "noResults": "No results.",
+  "rowsSelected": "row(s) selected.",
+  "of": "of",
+  "pagination": {
+    "rowsPerPage": "Rows per page",
+    "page": "Page",
+    "goToFirstPage": "Go to first page",
+    "goToPreviousPage": "Go to previous page",
+    "goToNextPage": "Go to next page",
+    "goToLastPage": "Go to last page"
+  }
+}

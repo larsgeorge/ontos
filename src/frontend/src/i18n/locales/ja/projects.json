@@ -1,0 +1,36 @@
+{
+  "title": "プロジェクト",
+  "addNewProject": "新しいプロジェクトを追加",
+  "editProject": "プロジェクトを編集",
+  "deleteProject": "プロジェクトを削除",
+  "table": {
+    "name": "名前",
+    "description": "説明",
+    "teams": "チーム",
+    "tags": "タグ",
+    "lastUpdated": "最終更新",
+    "actions": "アクション",
+    "moreTeams": "さらに",
+    "moreTags": "さらに"
+  },
+  "permissions": {
+    "deniedView": "プロジェクトを表示する権限がありません。",
+    "deniedCreate": "プロジェクトを作成する権限がありません。",
+    "deniedEdit": "プロジェクトを編集する権限がありません。",
+    "deniedDelete": "プロジェクトを削除する権限がありません。",
+    "permissionDenied": "権限が拒否されました"
+  },
+  "messages": {
+    "projectDeleted": "プロジェクトが削除されました",
+    "projectDeletedSuccess": "プロジェクトが正常に削除されました。",
+    "errorFetchingProjects": "プロジェクトの取得エラー",
+    "errorDeletingProject": "プロジェクトの削除エラー",
+    "errorLoadingData": "データの読み込みエラー"
+  },
+  "deleteDialog": {
+    "title": "本当によろしいですか？",
+    "description": "この操作は元に戻せません。プロジェクトが完全に削除され、すべてのチームから削除されます。",
+    "cancel": "キャンセル",
+    "delete": "削除"
+  }
+}

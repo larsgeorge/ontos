@@ -1,0 +1,36 @@
+{
+  "title": "Projekte",
+  "addNewProject": "Neues Projekt hinzufügen",
+  "editProject": "Projekt bearbeiten",
+  "deleteProject": "Projekt löschen",
+  "table": {
+    "name": "Name",
+    "description": "Beschreibung",
+    "teams": "Teams",
+    "tags": "Tags",
+    "lastUpdated": "Zuletzt aktualisiert",
+    "actions": "Aktionen",
+    "moreTeams": "weitere",
+    "moreTags": "weitere"
+  },
+  "permissions": {
+    "deniedView": "Sie haben keine Berechtigung, Projekte anzuzeigen.",
+    "deniedCreate": "Sie haben keine Berechtigung, Projekte zu erstellen.",
+    "deniedEdit": "Sie haben keine Berechtigung, Projekte zu bearbeiten.",
+    "deniedDelete": "Sie haben keine Berechtigung, Projekte zu löschen.",
+    "permissionDenied": "Zugriff verweigert"
+  },
+  "messages": {
+    "projectDeleted": "Projekt gelöscht",
+    "projectDeletedSuccess": "Das Projekt wurde erfolgreich gelöscht.",
+    "errorFetchingProjects": "Fehler beim Abrufen der Projekte",
+    "errorDeletingProject": "Fehler beim Löschen des Projekts",
+    "errorLoadingData": "Fehler beim Laden der Daten"
+  },
+  "deleteDialog": {
+    "title": "Sind Sie absolut sicher?",
+    "description": "Diese Aktion kann nicht rückgängig gemacht werden. Dies wird das Projekt dauerhaft löschen und aus allen Teams entfernen.",
+    "cancel": "Abbrechen",
+    "delete": "Löschen"
+  }
+}

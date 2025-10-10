@@ -1,0 +1,36 @@
+{
+  "title": "チーム",
+  "addNewTeam": "新しいチームを追加",
+  "editTeam": "チームを編集",
+  "deleteTeam": "チームを削除",
+  "showingTeamsForProject": "プロジェクトのチームを表示:",
+  "table": {
+    "name": "名前",
+    "description": "説明",
+    "members": "メンバー",
+    "lastUpdated": "最終更新",
+    "actions": "アクション",
+    "domainPrefix": "↳ ドメイン:",
+    "moreMembers": "さらに"
+  },
+  "permissions": {
+    "deniedView": "チームを表示する権限がありません。",
+    "deniedCreate": "チームを作成する権限がありません。",
+    "deniedEdit": "チームを編集する権限がありません。",
+    "deniedDelete": "チームを削除する権限がありません。",
+    "permissionDenied": "権限が拒否されました"
+  },
+  "messages": {
+    "teamDeleted": "チームが削除されました",
+    "teamDeletedSuccess": "チームが正常に削除されました。",
+    "errorFetchingTeams": "チームの取得エラー",
+    "errorDeletingTeam": "チームの削除エラー",
+    "errorLoadingData": "データの読み込みエラー"
+  },
+  "deleteDialog": {
+    "title": "本当によろしいですか？",
+    "description": "この操作は元に戻せません。チームとすべてのメンバーが完全に削除されます。",
+    "cancel": "キャンセル",
+    "delete": "削除"
+  }
+}

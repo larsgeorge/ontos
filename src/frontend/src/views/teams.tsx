@@ -23,6 +23,7 @@ import { useProjectContext } from '@/stores/project-store';
 import { TeamFormDialog } from '@/components/teams/team-form-dialog';
 import { useNavigate } from 'react-router-dom';
 import { useDomains } from '@/hooks/use-domains';
+import { useTranslation } from 'react-i18next';
 
 // Check API response helper
 const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?: string | null | undefined }, name: string): T => {
@@ -42,6 +43,7 @@ export default function TeamsView() {
   const [deletingTeamId, setDeletingTeamId] = useState<string | null>(null);
   const [componentError, setComponentError] = useState<string | null>(null);
 
+  const { t } = useTranslation('teams');
   const { get: apiGet, delete: apiDelete, loading: apiIsLoading } = useApi();
   const { toast } = useToast();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
@@ -58,7 +60,7 @@ export default function TeamsView() {
 
   const fetchTeams = useCallback(async () => {
     if (!canRead && !permissionsLoading) {
-        setComponentError("Permission Denied: Cannot view teams.");
+        setComponentError(t('permissions.deniedView'));
         return;
     }
     setComponentError(null);
@@ -76,28 +78,28 @@ export default function TeamsView() {
       if (response.error) {
         setComponentError(response.error);
         setTeams([]);
-        toast({ variant: "destructive", title: "Error fetching teams", description: response.error });
+        toast({ variant: "destructive", title: t('messages.errorFetchingTeams'), description: response.error });
       }
     } catch (err: any) {
       setComponentError(err.message || 'Failed to load teams');
       setTeams([]);
-      toast({ variant: "destructive", title: "Error fetching teams", description: err.message });
+      toast({ variant: "destructive", title: t('messages.errorFetchingTeams'), description: err.message });
     }
-  }, [canRead, permissionsLoading, apiGet, toast, setComponentError, hasProjectContext, currentProject]);
+  }, [canRead, permissionsLoading, apiGet, toast, setComponentError, hasProjectContext, currentProject, t]);
 
   useEffect(() => {
     fetchTeams();
     setStaticSegments([]);
-    setDynamicTitle('Teams');
+    setDynamicTitle(t('title'));
     return () => {
         setStaticSegments([]);
         setDynamicTitle(null);
     };
-  }, [fetchTeams, setStaticSegments, setDynamicTitle]);
+  }, [fetchTeams, setStaticSegments, setDynamicTitle, t]);
 
   const handleOpenCreateDialog = () => {
     if (!canWrite) {
-        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to create teams." });
+        toast({ variant: "destructive", title: t('permissions.permissionDenied'), description: t('permissions.deniedCreate') });
         return;
     }
     setEditingTeam(null);
@@ -106,7 +108,7 @@ export default function TeamsView() {
 
   const handleOpenEditDialog = (team: TeamRead) => {
     if (!canWrite) {
-        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to edit teams." });
+        toast({ variant: "destructive", title: t('permissions.permissionDenied'), description: t('permissions.deniedEdit') });
         return;
     }
     setEditingTeam(team);
@@ -119,7 +121,7 @@ export default function TeamsView() {
 
   const openDeleteDialog = (teamId: string) => {
     if (!canAdmin) {
-         toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to delete teams." });
+         toast({ variant: "destructive", title: t('permissions.permissionDenied'), description: t('permissions.deniedDelete') });
          return;
     }
     setDeletingTeamId(teamId);
@@ -137,10 +139,10 @@ export default function TeamsView() {
         }
         throw new Error(errorMessage || 'Failed to delete team.');
       }
-      toast({ title: "Team Deleted", description: "The team was successfully deleted." });
+      toast({ title: t('messages.teamDeleted'), description: t('messages.teamDeletedSuccess') });
       fetchTeams();
     } catch (err: any) {
-       toast({ variant: "destructive", title: "Error Deleting Team", description: err.message || 'Failed to delete team.' });
+       toast({ variant: "destructive", title: t('messages.errorDeletingTeam'), description: err.message || 'Failed to delete team.' });
        setComponentError(err.message || 'Failed to delete team.');
     } finally {
        setIsDeleteDialogOpen(false);
@@ -151,7 +153,7 @@ export default function TeamsView() {
   const columns = useMemo<ColumnDef<TeamRead>[]>(() => [
     {
       accessorKey: "name",
-      header: "Name",
+      header: t('table.name'),
       cell: ({ row }) => {
         const team = row.original;
         const domainName = team.domain_name || getDomainName(team.domain_id);
@@ -166,7 +168,7 @@ export default function TeamsView() {
                   navigate(`/data-domains/${team.domain_id}`);
                 }}
               >
-                ↳ Domain: {domainName}
+                {t('table.domainPrefix')} {domainName}
               </div>
             )}
           </div>
@@ -175,7 +177,7 @@ export default function TeamsView() {
     },
     {
       accessorKey: "description",
-      header: "Description",
+      header: t('table.description'),
       cell: ({ row }) => (
         <div className="truncate max-w-sm text-sm text-muted-foreground">
           {row.getValue("description") || '-'}
@@ -184,7 +186,7 @@ export default function TeamsView() {
     },
     {
       accessorKey: "members",
-      header: "Members",
+      header: t('table.members'),
       cell: ({ row }) => {
         const members = row.original.members;
         if (!members || members.length === 0) return '-';
@@ -216,7 +218,7 @@ export default function TeamsView() {
             ))}
             {members.length > 3 && (
               <Badge variant="outline" className="text-xs">
-                +{members.length - 3} more
+                +{members.length - 3} {t('table.moreMembers')}
               </Badge>
             )}
           </div>
@@ -225,7 +227,7 @@ export default function TeamsView() {
     },
     {
       accessorKey: "updated_at",
-      header: "Last Updated",
+      header: t('table.lastUpdated'),
       cell: ({ row }) => {
          const dateValue = row.getValue("updated_at");
          return dateValue ? <RelativeDate date={dateValue as string | Date | number} /> : 'N/A';
@@ -233,6 +235,7 @@ export default function TeamsView() {
     },
     {
       id: "actions",
+      header: t('table.actions'),
       cell: ({ row }) => {
         const team = row.original;
         return (
@@ -244,9 +247,9 @@ export default function TeamsView() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuLabel>{t('table.actions')}</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => handleOpenEditDialog(team)} disabled={!canWrite}>
-                Edit Team
+                {t('editTeam')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -254,14 +257,14 @@ export default function TeamsView() {
                 className="text-red-600 focus:text-red-600 focus:bg-red-50"
                 disabled={!canAdmin}
               >
-                Delete Team
+                {t('deleteTeam')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         );
       },
     },
-  ], [canWrite, canAdmin, getDomainName, navigate]);
+  ], [canWrite, canAdmin, getDomainName, navigate, t]);
 
   return (
     <div className="py-6">
@@ -269,16 +272,16 @@ export default function TeamsView() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
              <UserCheck className="w-8 h-8" />
-             Teams
+             {t('title')}
           </h1>
           {hasProjectContext && currentProject && (
             <p className="text-muted-foreground mt-1">
-              Showing teams for project: <span className="font-medium">{currentProject.name}</span>
+              {t('showingTeamsForProject')} <span className="font-medium">{currentProject.name}</span>
             </p>
           )}
         </div>
         <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading || apiIsLoading}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Add New Team
+            <PlusCircle className="mr-2 h-4 w-4" /> {t('addNewTeam')}
         </Button>
       </div>
 
@@ -289,13 +292,13 @@ export default function TeamsView() {
       ) : !canRead ? (
          <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Permission Denied</AlertTitle>
-              <AlertDescription>You do not have permission to view teams.</AlertDescription>
+              <AlertTitle>{t('permissions.permissionDenied')}</AlertTitle>
+              <AlertDescription>{t('permissions.deniedView')}</AlertDescription>
          </Alert>
       ) : componentError ? (
           <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error Loading Data</AlertTitle>
+              <AlertTitle>{t('messages.errorLoadingData')}</AlertTitle>
               <AlertDescription>{componentError}</AlertDescription>
           </Alert>
       ) : (
@@ -318,15 +321,15 @@ export default function TeamsView() {
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogTitle>{t('deleteDialog.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the team and all its members.
+              {t('deleteDialog.description')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeletingTeamId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setDeletingTeamId(null)}>{t('deleteDialog.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700" disabled={apiIsLoading || permissionsLoading}>
-               {(apiIsLoading || permissionsLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete
+               {(apiIsLoading || permissionsLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {t('deleteDialog.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

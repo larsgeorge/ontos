@@ -1,0 +1,17 @@
+{
+  "filter": "Filtrer",
+  "items": "éléments",
+  "columns": "Colonnes",
+  "selected": "sélectionné(s)",
+  "noResults": "Aucun résultat.",
+  "rowsSelected": "ligne(s) sélectionnée(s).",
+  "of": "sur",
+  "pagination": {
+    "rowsPerPage": "Lignes par page",
+    "page": "Page",
+    "goToFirstPage": "Aller à la première page",
+    "goToPreviousPage": "Aller à la page précédente",
+    "goToNextPage": "Aller à la page suivante",
+    "goToLastPage": "Aller à la dernière page"
+  }
+}
