@@ -1,0 +1,57 @@
+costs:
+  - entity_type: data_product
+    entity_name: POS Transaction Stream v1
+    items:
+      - title: Staff
+        description: Monthly HR cost for developers
+        cost_center: HR
+        amount_cents: 450000
+        currency: USD
+        start_month: 2025-10-01
+      - title: Consulting
+        description: External support
+        cost_center: OTHER
+        custom_center_name: 3343
+        amount_cents: 250000
+        currency: USD
+        start_month: 2025-10-01
+      - title: Storage
+        description: Table storage and retention
+        cost_center: STORAGE
+        amount_cents: 120000
+        currency: USD
+        start_month: 2025-10-01
+      - title: Maintenance
+        description: Tooling subscriptions and upkeep
+        cost_center: MAINTENANCE
+        amount_cents: 80000
+        currency: USD
+        start_month: 2025-10-01
+      - title: Infra
+        description: Databricks serverless usage (synced)
+        cost_center: INFRASTRUCTURE
+        amount_cents: 300000
+        currency: USD
+        start_month: 2025-10-01
+  - entity_type: data_product
+    entity_name: Prepared Sales Transactions v1
+    items:
+      - title: Infra
+        description: Databricks serverless usage (synced)
+        cost_center: INFRASTRUCTURE
+        amount_cents: 220000
+        currency: USD
+        start_month: 2025-10-01
+      - title: Staff
+        description: Data engineer on-call
+        cost_center: HR
+        amount_cents: 350000
+        currency: USD
+        start_month: 2025-10-01
+      - title: Storage
+        description: Delta tables
+        cost_center: STORAGE
+        amount_cents: 90000
+        currency: USD
+        start_month: 2025-10-01
+

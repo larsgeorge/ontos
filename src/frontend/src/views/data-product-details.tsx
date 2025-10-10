@@ -24,6 +24,7 @@ import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { CommentSidebar } from '@/components/comments';
 import { useDomains } from '@/hooks/use-domains';
 import RequestAccessDialog from '@/components/access/request-access-dialog';
+import EntityCostsPanel from '@/components/costs/entity-costs-panel';
 
 // Helper Function Type Definition (copied from DataProducts view for checking API responses)
 type CheckApiResponseFn = <T>(
@@ -74,9 +75,9 @@ export default function DataProductDetails() {
 
   // Permissions
   const featureId = 'data-products';
-  const canRead = !permissionsLoading && hasPermission(featureId, 'Read-only');
-  const canWrite = !permissionsLoading && hasPermission(featureId, 'Read/Write');
-  const canAdmin = !permissionsLoading && hasPermission(featureId, 'Admin');
+  const canRead = !permissionsLoading && hasPermission(featureId, Settings.FeatureAccessLevel.READ_ONLY);
+  const canWrite = !permissionsLoading && hasPermission(featureId, Settings.FeatureAccessLevel.READ_WRITE);
+  const canAdmin = !permissionsLoading && hasPermission(featureId, Settings.FeatureAccessLevel.ADMIN);
 
   // Helper to format dates safely
   const formatDate = (dateString: string | undefined): string => {
@@ -386,7 +387,7 @@ export default function DataProductDetails() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid md:grid-cols-4 gap-4">
-            <div className="space-y-1"><Label>Owner:</Label> <span className="text-sm block">{product.info.owner}</span></div>
+            <div className="space-y-1"><Label>Owner:</Label> <span className="text-sm block">{product.info.owner_team_id || 'N/A'}</span></div>
             <div className="space-y-1">
               <Label>Domain:</Label>
               {(() => {
@@ -490,7 +491,12 @@ export default function DataProductDetails() {
         </CardContent>
       </Card>
 
-      {/* Metadata Panel */}
+      {/* Costs Panel */}
+      {product.id && (
+        <EntityCostsPanel entityId={product.id} entityType="data_product" />
+      )}
+
+      {/* Metadata Panel */} 
       {product.id && (
         <EntityMetadataPanel entityId={product.id} entityType="data_product" />
       )}

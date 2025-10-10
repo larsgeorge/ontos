@@ -1,0 +1,16 @@
+name: data_product_costs_sync
+description: Aggregate Databricks system table usage into monthly app cost items
+entrypoint: data_product_costs_sync.py
+params:
+  - name: month
+    type: string
+    default: "${env:MONTH|auto}"
+  - name: product_tag_key
+    type: string
+    default: data_product_id
+env:
+  - name: DATABRICKS_CATALOG
+    value: "${env:DATABRICKS_CATALOG}"
+  - name: DATABRICKS_SCHEMA
+    value: "${env:DATABRICKS_SCHEMA}"
+

@@ -72,6 +72,7 @@ from src.common.search_registry import SEARCHABLE_ASSET_MANAGERS
 from src.common.config import get_settings
 from src.common.logging import get_logger
 from src.utils.metadata_seed_loader import seed_metadata_from_yaml
+from src.utils.costs_seed_loader import seed_costs_from_yaml
 
 logger = get_logger(__name__)
 
@@ -429,6 +430,17 @@ def load_initial_data(app: FastAPI) -> None:
                 logger.debug(f"Metadata YAML not found at {yaml_path}; skipping metadata seeding.")
         except Exception as e:
             logger.error(f"Failed seeding example metadata at startup: {e}", exc_info=True)
+
+        # Seed example costs
+        try:
+            costs_yaml = Path(__file__).parent.parent / "data" / "costs.yaml"
+            if costs_yaml.exists():
+                seed_costs_from_yaml(db, costs_yaml)
+                logger.info("Seeded example cost items from YAML during startup.")
+            else:
+                logger.debug(f"Costs YAML not found at {costs_yaml}; skipping cost seeding.")
+        except Exception as e:
+            logger.error(f"Failed seeding example costs at startup: {e}", exc_info=True)
 
         # No final commit needed here if managers commit internally or role creation already committed
         logger.info("Initial data loading process completed for all managers.")

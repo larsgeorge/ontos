@@ -49,6 +49,7 @@ from src.routes import (
     tags_routes,
     teams_routes,
     projects_routes,
+    costs_routes,
 )
 
 from src.common.database import init_db, get_session_factory, SQLAlchemySession
@@ -204,6 +205,7 @@ workspace_routes.register_routes(app)
 tags_routes.register_routes(app)
 teams_routes.register_routes(app)
 projects_routes.register_routes(app)
+costs_routes.register_routes(app)
 
 # Define other specific API routes BEFORE the catch-all
 @app.get("/api/time")

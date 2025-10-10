@@ -627,6 +627,23 @@ class DataProductsManager(SearchableAsset):
                      logger.warning(f"Skipping product due to missing id or info.title: {product}")
                      continue
                      
+                # Normalize tags as strings for SearchIndexItem
+                tag_strings: List[str] = []
+                try:
+                    for t in (product.tags or []):
+                        if isinstance(t, dict):
+                            fqn = t.get('tag_fqn')
+                            if fqn:
+                                tag_strings.append(str(fqn))
+                            elif t.get('tag_id'):
+                                tag_strings.append(str(t.get('tag_id')))
+                            else:
+                                tag_strings.append(str(t))
+                        else:
+                            tag_strings.append(str(t))
+                except Exception:
+                    tag_strings = []
+
                 items.append(
                     SearchIndexItem(
                         id=f"product::{product.id}",
@@ -637,7 +654,7 @@ class DataProductsManager(SearchableAsset):
                         title=product.info.title,
                         description=product.info.description or "",
                         link=f"/data-products/{product.id}",
-                        tags=product.tags or []
+                        tags=tag_strings
                         # Add other fields like owner, status, domain if desired
                         # owner=product.info.owner,
                         # status=product.info.status,
