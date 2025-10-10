@@ -1,4 +1,4 @@
-name: data_product_costs_sync
+name: "Data Product Costs Sync"
 description: Aggregate Databricks system table usage into monthly app cost items
 entrypoint: data_product_costs_sync.py
 params:
@@ -14,3 +14,5 @@ env:
   - name: DATABRICKS_SCHEMA
     value: "${env:DATABRICKS_SCHEMA}"
 
+tags:
+  owner: "ontos"

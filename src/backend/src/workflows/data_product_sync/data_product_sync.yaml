@@ -22,6 +22,7 @@ tags:
   team: "data-platform"
   workflow-type: "streaming"
   data-source: "data-products"
+  owner: "ontos"
 
 # No timeout for continuous jobs (runs indefinitely)
 # timeout_seconds: not applicable for continuous jobs

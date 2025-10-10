@@ -25,6 +25,7 @@ tags:
   team: "data-governance"
   workflow-type: "sync"
   data-source: "business-glossary"
+  owner: "ontos"
 
 # Job timeout (in seconds) - 2 hours for large syncs
 timeout_seconds: 7200

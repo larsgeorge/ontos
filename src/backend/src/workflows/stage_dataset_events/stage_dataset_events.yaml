@@ -6,3 +6,6 @@ tasks:
     spark_python_task:
       python_file: "stage_dataset_events.py"
     existing_cluster_id: "cluster-id" 
+
+tags:
+  owner: "ontos"

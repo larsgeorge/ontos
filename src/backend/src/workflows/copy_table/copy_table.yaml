@@ -26,6 +26,7 @@ tags:
   environment: "production"
   team: "data-engineering"
   cost-center: "analytics"
+  owner: "ontos"
 
 # Optional: Job timeout (in seconds) - 1 hour
 timeout_seconds: 3600
