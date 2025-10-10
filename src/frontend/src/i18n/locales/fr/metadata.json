@@ -1,0 +1,94 @@
+{
+  "title": "Métadonnées",
+  "description": "Notes, liens et pièces jointes.",
+  "previewRenderedPage": "Aperçu de la page rendue",
+  "notes": {
+    "title": "Notes supplémentaires",
+    "add": "Ajouter",
+    "refresh": "Actualiser",
+    "noNotes": "Pas encore de notes.",
+    "preview": "Aperçu",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "editTitle": "Modifier la note",
+    "addTitle": "Ajouter une note",
+    "table": {
+      "title": "Titre",
+      "description": "Description",
+      "created": "Créé",
+      "actions": "Actions"
+    },
+    "form": {
+      "title": "Titre",
+      "shortDescription": "Brève description",
+      "content": "Contenu (Markdown)",
+      "save": "Enregistrer",
+      "cancel": "Annuler"
+    },
+    "messages": {
+      "deleteFailed": "Échec de la suppression",
+      "addFailed": "Échec de l'ajout de la note",
+      "updateFailed": "Échec de la mise à jour"
+    }
+  },
+  "links": {
+    "title": "Liens connexes",
+    "add": "Ajouter",
+    "refresh": "Actualiser",
+    "noLinks": "Pas encore de liens.",
+    "open": "Ouvrir",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "editTitle": "Modifier le lien",
+    "addTitle": "Ajouter un lien",
+    "table": {
+      "title": "Titre",
+      "url": "URL",
+      "description": "Description",
+      "created": "Créé",
+      "actions": "Actions"
+    },
+    "form": {
+      "title": "Titre",
+      "url": "URL",
+      "shortDescription": "Brève description",
+      "save": "Enregistrer",
+      "cancel": "Annuler"
+    },
+    "messages": {
+      "deleteFailed": "Échec de la suppression",
+      "addFailed": "Échec de l'ajout du lien",
+      "updateFailed": "Échec de la mise à jour"
+    }
+  },
+  "documents": {
+    "title": "Documents joints",
+    "add": "Ajouter",
+    "refresh": "Actualiser",
+    "noDocuments": "Aucun document téléchargé.",
+    "preview": "Aperçu",
+    "delete": "Supprimer",
+    "table": {
+      "title": "Titre",
+      "filename": "Nom du fichier",
+      "description": "Description",
+      "size": "Taille",
+      "created": "Créé",
+      "actions": "Actions"
+    },
+    "form": {
+      "title": "Titre",
+      "shortDescription": "Brève description",
+      "file": "Fichier",
+      "upload": "Télécharger",
+      "cancel": "Annuler"
+    },
+    "messages": {
+      "deleteFailed": "Échec de la suppression",
+      "uploadFailed": "Échec du téléchargement"
+    }
+  },
+  "messages": {
+    "loadFailed": "Échec du chargement des métadonnées"
+  }
+}

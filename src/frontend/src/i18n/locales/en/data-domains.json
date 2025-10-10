@@ -1,0 +1,38 @@
+{
+  "title": "Data Domains",
+  "addNewDomain": "Add New Domain",
+  "viewDetails": "View Details",
+  "editDomain": "Edit Domain",
+  "deleteDomain": "Delete Domain",
+  "noDomainsYet": "No data domains yet.",
+  "table": {
+    "name": "Name",
+    "description": "Description",
+    "owners": "Owners",
+    "tags": "Tags",
+    "children": "Children",
+    "lastUpdated": "Last Updated",
+    "actions": "Actions",
+    "parentPrefix": "↳ Parent:"
+  },
+  "permissions": {
+    "deniedView": "You do not have permission to view data domains.",
+    "deniedCreate": "You do not have permission to create data domains.",
+    "deniedEdit": "You do not have permission to edit data domains.",
+    "deniedDelete": "You do not have permission to delete data domains.",
+    "permissionDenied": "Permission Denied"
+  },
+  "messages": {
+    "domainDeleted": "Domain Deleted",
+    "domainDeletedSuccess": "The data domain was successfully deleted.",
+    "errorFetchingDomains": "Error fetching domains",
+    "errorDeletingDomain": "Error Deleting Domain",
+    "errorLoadingData": "Error Loading Data"
+  },
+  "deleteDialog": {
+    "title": "Are you absolutely sure?",
+    "description": "This action cannot be undone. This will permanently delete the data domain.",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  }
+}

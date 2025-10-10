@@ -1,0 +1,94 @@
+{
+  "title": "Metadata",
+  "description": "Notes, links, and attachments.",
+  "previewRenderedPage": "Preview rendered page",
+  "notes": {
+    "title": "Additional Notes",
+    "add": "Add",
+    "refresh": "Refresh",
+    "noNotes": "No notes yet.",
+    "preview": "Preview",
+    "edit": "Edit",
+    "delete": "Delete",
+    "editTitle": "Edit note",
+    "addTitle": "Add note",
+    "table": {
+      "title": "Title",
+      "description": "Description",
+      "created": "Created",
+      "actions": "Actions"
+    },
+    "form": {
+      "title": "Title",
+      "shortDescription": "Short Description",
+      "content": "Content (Markdown)",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "messages": {
+      "deleteFailed": "Delete failed",
+      "addFailed": "Add note failed",
+      "updateFailed": "Update failed"
+    }
+  },
+  "links": {
+    "title": "Related Links",
+    "add": "Add",
+    "refresh": "Refresh",
+    "noLinks": "No links yet.",
+    "open": "Open",
+    "edit": "Edit",
+    "delete": "Delete",
+    "editTitle": "Edit link",
+    "addTitle": "Add link",
+    "table": {
+      "title": "Title",
+      "url": "URL",
+      "description": "Description",
+      "created": "Created",
+      "actions": "Actions"
+    },
+    "form": {
+      "title": "Title",
+      "url": "URL",
+      "shortDescription": "Short Description",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "messages": {
+      "deleteFailed": "Delete failed",
+      "addFailed": "Add link failed",
+      "updateFailed": "Update failed"
+    }
+  },
+  "documents": {
+    "title": "Attached Documents",
+    "add": "Add",
+    "refresh": "Refresh",
+    "noDocuments": "No documents uploaded.",
+    "preview": "Preview",
+    "delete": "Delete",
+    "table": {
+      "title": "Title",
+      "filename": "Filename",
+      "description": "Description",
+      "size": "Size",
+      "created": "Created",
+      "actions": "Actions"
+    },
+    "form": {
+      "title": "Title",
+      "shortDescription": "Short Description",
+      "file": "File",
+      "upload": "Upload",
+      "cancel": "Cancel"
+    },
+    "messages": {
+      "deleteFailed": "Delete failed",
+      "uploadFailed": "Upload failed"
+    }
+  },
+  "messages": {
+    "loadFailed": "Metadata load failed"
+  }
+}

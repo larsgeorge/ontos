@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import MarkdownViewer from '@/components/ui/markdown-viewer';
 import EntityInfoDialog from '@/components/metadata/entity-info-dialog';
+import { useTranslation } from 'react-i18next';
 
 export type EntityKind = 'data_domain' | 'data_product' | 'data_contract';
 
@@ -28,6 +29,7 @@ interface Props {
 
 const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
   const { toast } = useToast();
+  const { t } = useTranslation('metadata');
 
   const [richTexts, setRichTexts] = React.useState<RichTextItem[]>([]);
   const [links, setLinks] = React.useState<LinkItem[]>([]);
@@ -78,7 +80,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
       setLinks(Array.isArray(li) ? li : []);
       setDocuments(Array.isArray(docs) ? docs : []);
     } catch (e: any) {
-      toast({ title: 'Metadata load failed', description: e.message, variant: 'destructive' });
+      toast({ title: t('messages.loadFailed'), description: e.message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -96,7 +98,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
     <Card>
       <CardHeader>
         <CardTitle className="text-xl flex items-center gap-2">
-          Metadata
+          {t('title')}
           {entityType === 'data_product' && (
             <TooltipProvider>
               <Tooltip>
@@ -105,18 +107,18 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     <Eye className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Preview rendered page</TooltipContent>
+                <TooltipContent>{t('previewRenderedPage')}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
         </CardTitle>
-        <CardDescription>Notes, links, and attachments.</CardDescription>
+        <CardDescription>{t('description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Notes */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <div className="text-base font-medium flex items-center"><FileText className="mr-2 h-5 w-5 text-primary" />Additional Notes</div>
+            <div className="text-base font-medium flex items-center"><FileText className="mr-2 h-5 w-5 text-primary" />{t('notes.title')}</div>
             <TooltipProvider>
               <div className="flex items-center gap-1 border rounded-md bg-muted/40 px-1 py-0.5">
                 {!addingNote && (
@@ -126,7 +128,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                         <Plus className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Add</TooltipContent>
+                    <TooltipContent>{t('notes.add')}</TooltipContent>
                   </Tooltip>
                 )}
                 <Tooltip>
@@ -135,7 +137,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                       <RefreshCcw className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Refresh</TooltipContent>
+                  <TooltipContent>{t('notes.refresh')}</TooltipContent>
                 </Tooltip>
               </div>
             </TooltipProvider>
@@ -143,17 +145,17 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
           {!addingNote ? (
             <div>
               {loading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t('common:actions.loading')}</div>
               ) : richTexts.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No notes yet.</div>
+                <div className="text-sm text-muted-foreground">{t('notes.noNotes')}</div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead className="w-24">Actions</TableHead>
+                      <TableHead>{t('notes.table.title')}</TableHead>
+                      <TableHead>{t('notes.table.description')}</TableHead>
+                      <TableHead>{t('notes.table.created')}</TableHead>
+                      <TableHead className="w-24">{t('notes.table.actions')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -171,7 +173,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                                     <Eye className="h-4 w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Preview</TooltipContent>
+                                <TooltipContent>{t('notes.preview')}</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                             <TooltipProvider>
@@ -181,15 +183,15 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                                     <Pencil className="h-4 w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Edit</TooltipContent>
+                                <TooltipContent>{t('notes.edit')}</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                             <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={async () => {
                               try {
                                 const resp = await fetch(`/api/rich-texts/${n.id}`, { method: 'DELETE' });
-                                if (!resp.ok) throw new Error('Delete failed');
+                                if (!resp.ok) throw new Error(t('notes.messages.deleteFailed'));
                                 fetchMetadata();
-                              } catch (e: any) { toast({ title: 'Delete failed', description: e.message, variant: 'destructive' }); }
+                              } catch (e: any) { toast({ title: t('notes.messages.deleteFailed'), description: e.message, variant: 'destructive' }); }
                             }}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -203,9 +205,9 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
             </div>
           ) : (
             <div className="space-y-2">
-              <div><Label htmlFor="note-title">Title</Label><Input id="note-title" value={noteTitle} onChange={e => setNoteTitle(e.target.value)} /></div>
-              <div><Label htmlFor="note-desc">Short Description</Label><Input id="note-desc" value={noteDesc} onChange={e => setNoteDesc(e.target.value)} /></div>
-              <div><Label htmlFor="note-content">Content (Markdown)</Label><Textarea id="note-content" rows={6} value={noteContent} onChange={e => setNoteContent(e.target.value)} /></div>
+              <div><Label htmlFor="note-title">{t('notes.form.title')}</Label><Input id="note-title" value={noteTitle} onChange={e => setNoteTitle(e.target.value)} /></div>
+              <div><Label htmlFor="note-desc">{t('notes.form.shortDescription')}</Label><Input id="note-desc" value={noteDesc} onChange={e => setNoteDesc(e.target.value)} /></div>
+              <div><Label htmlFor="note-content">{t('notes.form.content')}</Label><Textarea id="note-content" rows={6} value={noteContent} onChange={e => setNoteContent(e.target.value)} /></div>
               <div className="flex gap-2">
                 <Button size="sm" onClick={async () => {
                   try {
@@ -214,9 +216,9 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     if (!resp.ok) throw new Error(await resp.text());
                     setNoteTitle(''); setNoteDesc(''); setNoteContent(''); setAddingNote(false);
                     fetchMetadata();
-                  } catch (e: any) { toast({ title: 'Add note failed', description: e.message, variant: 'destructive' }); }
-                }}>Save</Button>
-                <Button size="sm" variant="outline" onClick={() => setAddingNote(false)}>Cancel</Button>
+                  } catch (e: any) { toast({ title: t('notes.messages.addFailed'), description: e.message, variant: 'destructive' }); }
+                }}>{t('notes.form.save')}</Button>
+                <Button size="sm" variant="outline" onClick={() => setAddingNote(false)}>{t('notes.form.cancel')}</Button>
               </div>
             </div>
           )}
@@ -227,7 +229,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
         {/* Links */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <div className="text-base font-medium flex items-center"><LinkIcon className="mr-2 h-5 w-5 text-primary" />Related Links</div>
+            <div className="text-base font-medium flex items-center"><LinkIcon className="mr-2 h-5 w-5 text-primary" />{t('links.title')}</div>
             <TooltipProvider>
               <div className="flex items-center gap-1 border rounded-md bg-muted/40 px-1 py-0.5">
                 {!addingLink && (
@@ -237,7 +239,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                         <Plus className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Add</TooltipContent>
+                    <TooltipContent>{t('links.add')}</TooltipContent>
                   </Tooltip>
                 )}
                 <Tooltip>
@@ -246,7 +248,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                       <RefreshCcw className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Refresh</TooltipContent>
+                  <TooltipContent>{t('links.refresh')}</TooltipContent>
                 </Tooltip>
               </div>
             </TooltipProvider>
@@ -254,18 +256,18 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
           {!addingLink ? (
             <div>
               {loading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t('common:actions.loading')}</div>
               ) : links.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No links yet.</div>
+                <div className="text-sm text-muted-foreground">{t('links.noLinks')}</div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Title</TableHead>
-                      <TableHead>URL</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead className="w-24">Actions</TableHead>
+                      <TableHead>{t('links.table.title')}</TableHead>
+                      <TableHead>{t('links.table.url')}</TableHead>
+                      <TableHead>{t('links.table.description')}</TableHead>
+                      <TableHead>{t('links.table.created')}</TableHead>
+                      <TableHead className="w-24">{t('links.table.actions')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -284,7 +286,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                                     <Eye className="h-4 w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Open</TooltipContent>
+                                <TooltipContent>{t('links.open')}</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                             <TooltipProvider>
@@ -294,15 +296,15 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                                     <Pencil className="h-4 w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Edit</TooltipContent>
+                                <TooltipContent>{t('links.edit')}</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                             <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={async () => {
                               try {
                                 const resp = await fetch(`/api/links/${l.id}`, { method: 'DELETE' });
-                                if (!resp.ok) throw new Error('Delete failed');
+                                if (!resp.ok) throw new Error(t('links.messages.deleteFailed'));
                                 fetchMetadata();
-                              } catch (e: any) { toast({ title: 'Delete failed', description: e.message, variant: 'destructive' }); }
+                              } catch (e: any) { toast({ title: t('links.messages.deleteFailed'), description: e.message, variant: 'destructive' }); }
                             }}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -316,9 +318,9 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
             </div>
           ) : (
             <div className="space-y-2">
-              <div><Label htmlFor="link-title">Title</Label><Input id="link-title" value={linkTitle} onChange={e => setLinkTitle(e.target.value)} /></div>
-              <div><Label htmlFor="link-url">URL</Label><Input id="link-url" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} /></div>
-              <div><Label htmlFor="link-desc">Short Description</Label><Input id="link-desc" value={linkDesc} onChange={e => setLinkDesc(e.target.value)} /></div>
+              <div><Label htmlFor="link-title">{t('links.form.title')}</Label><Input id="link-title" value={linkTitle} onChange={e => setLinkTitle(e.target.value)} /></div>
+              <div><Label htmlFor="link-url">{t('links.form.url')}</Label><Input id="link-url" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} /></div>
+              <div><Label htmlFor="link-desc">{t('links.form.shortDescription')}</Label><Input id="link-desc" value={linkDesc} onChange={e => setLinkDesc(e.target.value)} /></div>
               <div className="flex gap-2">
                 <Button size="sm" onClick={async () => {
                   try {
@@ -327,9 +329,9 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     if (!resp.ok) throw new Error(await resp.text());
                     setLinkTitle(''); setLinkDesc(''); setLinkUrl(''); setAddingLink(false);
                     fetchMetadata();
-                  } catch (e: any) { toast({ title: 'Add link failed', description: e.message, variant: 'destructive' }); }
-                }}>Save</Button>
-                <Button size="sm" variant="outline" onClick={() => setAddingLink(false)}>Cancel</Button>
+                  } catch (e: any) { toast({ title: t('links.messages.addFailed'), description: e.message, variant: 'destructive' }); }
+                }}>{t('links.form.save')}</Button>
+                <Button size="sm" variant="outline" onClick={() => setAddingLink(false)}>{t('links.form.cancel')}</Button>
               </div>
             </div>
           )}
@@ -340,7 +342,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
         {/* Documents */}
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <div className="text-base font-medium flex items-center"><Paperclip className="mr-2 h-5 w-5 text-primary" />Attached Documents</div>
+            <div className="text-base font-medium flex items-center"><Paperclip className="mr-2 h-5 w-5 text-primary" />{t('documents.title')}</div>
             <TooltipProvider>
               <div className="flex items-center gap-1 border rounded-md bg-muted/40 px-1 py-0.5">
                 {!addingDoc && (
@@ -350,7 +352,7 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                         <Plus className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Add</TooltipContent>
+                    <TooltipContent>{t('documents.add')}</TooltipContent>
                   </Tooltip>
                 )}
                 <Tooltip>
@@ -359,16 +361,16 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                       <RefreshCcw className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Refresh</TooltipContent>
+                  <TooltipContent>{t('documents.refresh')}</TooltipContent>
                 </Tooltip>
               </div>
             </TooltipProvider>
           </div>
           {addingDoc && (
             <div className="space-y-2 mb-3">
-              <div><Label htmlFor="doc-title">Title</Label><Input id="doc-title" value={docTitle} onChange={e => setDocTitle(e.target.value)} /></div>
-              <div><Label htmlFor="doc-desc">Short Description</Label><Input id="doc-desc" value={docDesc} onChange={e => setDocDesc(e.target.value)} /></div>
-              <div><Label htmlFor="doc-file">File</Label><Input id="doc-file" type="file" onChange={e => setDocFile(e.target.files?.[0] || null)} /></div>
+              <div><Label htmlFor="doc-title">{t('documents.form.title')}</Label><Input id="doc-title" value={docTitle} onChange={e => setDocTitle(e.target.value)} /></div>
+              <div><Label htmlFor="doc-desc">{t('documents.form.shortDescription')}</Label><Input id="doc-desc" value={docDesc} onChange={e => setDocDesc(e.target.value)} /></div>
+              <div><Label htmlFor="doc-file">{t('documents.form.file')}</Label><Input id="doc-file" type="file" onChange={e => setDocFile(e.target.files?.[0] || null)} /></div>
               <div className="flex gap-2">
                 <Button size="sm" disabled={uploadingDoc || !docFile || !docTitle} onClick={async () => {
                   try {
@@ -382,26 +384,26 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                     if (!resp.ok) throw new Error(await resp.text());
                     setDocTitle(''); setDocDesc(''); setDocFile(null); setUploadingDoc(false); setAddingDoc(false);
                     fetchMetadata();
-                  } catch (e: any) { setUploadingDoc(false); toast({ title: 'Upload failed', description: e.message, variant: 'destructive' }); }
-                }}>Upload</Button>
-                <Button size="sm" variant="outline" onClick={() => setAddingDoc(false)}>Cancel</Button>
+                  } catch (e: any) { setUploadingDoc(false); toast({ title: t('documents.messages.uploadFailed'), description: e.message, variant: 'destructive' }); }
+                }}>{t('documents.form.upload')}</Button>
+                <Button size="sm" variant="outline" onClick={() => setAddingDoc(false)}>{t('documents.form.cancel')}</Button>
               </div>
             </div>
           )}
           {loading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {t('common:actions.loading')}</div>
           ) : documents.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No documents uploaded.</div>
+            <div className="text-sm text-muted-foreground">{t('documents.noDocuments')}</div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Filename</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="w-24">Actions</TableHead>
+                  <TableHead>{t('documents.table.title')}</TableHead>
+                  <TableHead>{t('documents.table.filename')}</TableHead>
+                  <TableHead>{t('documents.table.description')}</TableHead>
+                  <TableHead>{t('documents.table.size')}</TableHead>
+                  <TableHead>{t('documents.table.created')}</TableHead>
+                  <TableHead className="w-24">{t('documents.table.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -421,12 +423,12 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Preview</TooltipContent>
+                            <TooltipContent>{t('documents.preview')}</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                         <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={async () => {
-                          try { const resp = await fetch(`/api/documents/${d.id}`, { method: 'DELETE' }); if (!resp.ok) throw new Error('Delete failed'); fetchMetadata(); }
-                          catch (e: any) { toast({ title: 'Delete failed', description: e.message, variant: 'destructive' }); }
+                          try { const resp = await fetch(`/api/documents/${d.id}`, { method: 'DELETE' }); if (!resp.ok) throw new Error(t('documents.messages.deleteFailed')); fetchMetadata(); }
+                          catch (e: any) { toast({ title: t('documents.messages.deleteFailed'), description: e.message, variant: 'destructive' }); }
                         }}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -477,24 +479,24 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
         <Dialog open={!!editingNote} onOpenChange={(open) => { if (!open) setEditingNote(null); }}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Edit note</DialogTitle>
+              <DialogTitle>{t('notes.editTitle')}</DialogTitle>
             </DialogHeader>
             {editingNote && (
               <div className="space-y-3">
                 <div>
-                  <Label htmlFor="edit-note-title">Title</Label>
+                  <Label htmlFor="edit-note-title">{t('notes.form.title')}</Label>
                   <Input id="edit-note-title" value={editNoteTitle} onChange={(e) => setEditNoteTitle(e.target.value)} />
                 </div>
                 <div>
-                  <Label htmlFor="edit-note-desc">Short Description</Label>
+                  <Label htmlFor="edit-note-desc">{t('notes.form.shortDescription')}</Label>
                   <Input id="edit-note-desc" value={editNoteDesc} onChange={(e) => setEditNoteDesc(e.target.value)} />
                 </div>
                 <div>
-                  <Label htmlFor="edit-note-content">Content (Markdown)</Label>
+                  <Label htmlFor="edit-note-content">{t('notes.form.content')}</Label>
                   <Textarea id="edit-note-content" rows={8} value={editNoteContent} onChange={(e) => setEditNoteContent(e.target.value)} />
                 </div>
                 <div className="flex gap-2 justify-end">
-                  <Button variant="outline" onClick={() => setEditingNote(null)}>Cancel</Button>
+                  <Button variant="outline" onClick={() => setEditingNote(null)}>{t('notes.form.cancel')}</Button>
                   <Button
                     onClick={async () => {
                       try {
@@ -512,11 +514,11 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                         setEditingNote(null);
                         fetchMetadata();
                       } catch (e: any) {
-                        toast({ title: 'Update failed', description: e.message, variant: 'destructive' });
+                        toast({ title: t('notes.messages.updateFailed'), description: e.message, variant: 'destructive' });
                       }
                     }}
                     disabled={!editNoteTitle}
-                  >Save</Button>
+                  >{t('notes.form.save')}</Button>
                 </div>
               </div>
             )}
@@ -527,24 +529,24 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
         <Dialog open={!!editingLink} onOpenChange={(open) => { if (!open) setEditingLink(null); }}>
           <DialogContent className="max-w-xl">
             <DialogHeader>
-              <DialogTitle>Edit link</DialogTitle>
+              <DialogTitle>{t('links.editTitle')}</DialogTitle>
             </DialogHeader>
             {editingLink && (
               <div className="space-y-3">
                 <div>
-                  <Label htmlFor="edit-link-title">Title</Label>
+                  <Label htmlFor="edit-link-title">{t('links.form.title')}</Label>
                   <Input id="edit-link-title" value={editLinkTitle} onChange={(e) => setEditLinkTitle(e.target.value)} />
                 </div>
                 <div>
-                  <Label htmlFor="edit-link-url">URL</Label>
+                  <Label htmlFor="edit-link-url">{t('links.form.url')}</Label>
                   <Input id="edit-link-url" value={editLinkUrl} onChange={(e) => setEditLinkUrl(e.target.value)} />
                 </div>
                 <div>
-                  <Label htmlFor="edit-link-desc">Short Description</Label>
+                  <Label htmlFor="edit-link-desc">{t('links.form.shortDescription')}</Label>
                   <Input id="edit-link-desc" value={editLinkDesc} onChange={(e) => setEditLinkDesc(e.target.value)} />
                 </div>
                 <div className="flex gap-2 justify-end">
-                  <Button variant="outline" onClick={() => setEditingLink(null)}>Cancel</Button>
+                  <Button variant="outline" onClick={() => setEditingLink(null)}>{t('links.form.cancel')}</Button>
                   <Button
                     onClick={async () => {
                       try {
@@ -562,11 +564,11 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
                         setEditingLink(null);
                         fetchMetadata();
                       } catch (e: any) {
-                        toast({ title: 'Update failed', description: e.message, variant: 'destructive' });
+                        toast({ title: t('links.messages.updateFailed'), description: e.message, variant: 'destructive' });
                       }
                     }}
                     disabled={!editLinkTitle || !editLinkUrl}
-                  >Save</Button>
+                  >{t('links.form.save')}</Button>
                 </div>
               </div>
             )}

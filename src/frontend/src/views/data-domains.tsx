@@ -25,6 +25,7 @@ import { useNavigate } from 'react-router-dom';
 import DataDomainGraphView from '@/components/data-domains/data-domain-graph-view';
 import { ViewModeToggle } from '@/components/common/view-mode-toggle';
 import { useProjectContext } from '@/stores/project-store';
+import { useTranslation } from 'react-i18next';
 
 // Placeholder for Graph View
 // const DataDomainGraphViewPlaceholder = () => (
@@ -62,6 +63,7 @@ export default function DataDomainsView() {
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
   const { currentProject, hasProjectContext } = useProjectContext();
+  const { t } = useTranslation('data-domains');
 
   const featureId = 'data-domains';
   const canRead = !permissionsLoading && hasPermission(featureId, FeatureAccessLevel.READ_ONLY);
@@ -70,7 +72,7 @@ export default function DataDomainsView() {
 
   const fetchDataDomains = useCallback(async () => {
     if (!canRead && !permissionsLoading) {
-        setComponentError("Permission Denied: Cannot view data domains.");
+        setComponentError(t('permissions.deniedView'));
         return;
     }
     setComponentError(null);
@@ -88,28 +90,28 @@ export default function DataDomainsView() {
       if (response.error) {
         setComponentError(response.error);
         setDomains([]);
-        toast({ variant: "destructive", title: "Error fetching domains", description: response.error });
+        toast({ variant: "destructive", title: t('messages.errorFetchingDomains'), description: response.error });
       }
     } catch (err: any) {
       setComponentError(err.message || 'Failed to load data domains');
       setDomains([]);
-      toast({ variant: "destructive", title: "Error fetching domains", description: err.message });
+      toast({ variant: "destructive", title: t('messages.errorFetchingDomains'), description: err.message });
     }
-  }, [canRead, permissionsLoading, apiGet, toast, setComponentError, hasProjectContext, currentProject]);
+  }, [canRead, permissionsLoading, apiGet, toast, setComponentError, hasProjectContext, currentProject, t]);
 
   useEffect(() => {
     fetchDataDomains();
     setStaticSegments([]);
-    setDynamicTitle('Data Domains');
+    setDynamicTitle(t('title'));
     return () => {
         setStaticSegments([]);
         setDynamicTitle(null);
     };
-  }, [fetchDataDomains, setStaticSegments, setDynamicTitle]);
+  }, [fetchDataDomains, setStaticSegments, setDynamicTitle, t]);
 
   const handleOpenCreateDialog = () => {
     if (!canWrite) {
-        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to create data domains." });
+        toast({ variant: "destructive", title: t('permissions.permissionDenied'), description: t('permissions.deniedCreate') });
         return;
     }
     setEditingDomain(null);
@@ -118,7 +120,7 @@ export default function DataDomainsView() {
 
   const handleOpenEditDialog = (domain: DataDomain) => {
     if (!canWrite) {
-        toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to edit data domains." });
+        toast({ variant: "destructive", title: t('permissions.permissionDenied'), description: t('permissions.deniedEdit') });
         return;
     }
     setEditingDomain(domain);
@@ -131,7 +133,7 @@ export default function DataDomainsView() {
 
   const openDeleteDialog = (domainId: string) => {
     if (!canAdmin) {
-         toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to delete data domains." });
+         toast({ variant: "destructive", title: t('permissions.permissionDenied'), description: t('permissions.deniedDelete') });
          return;
     }
     setDeletingDomainId(domainId);
@@ -149,10 +151,10 @@ export default function DataDomainsView() {
         }
         throw new Error(errorMessage || 'Failed to delete domain.');
       }
-      toast({ title: "Domain Deleted", description: "The data domain was successfully deleted." });
+      toast({ title: t('messages.domainDeleted'), description: t('messages.domainDeletedSuccess') });
       fetchDataDomains();
     } catch (err: any) {
-       toast({ variant: "destructive", title: "Error Deleting Domain", description: err.message || 'Failed to delete domain.' });
+       toast({ variant: "destructive", title: t('messages.errorDeletingDomain'), description: err.message || 'Failed to delete domain.' });
        setComponentError(err.message || 'Failed to delete domain.');
     } finally {
        setIsDeleteDialogOpen(false);
@@ -167,26 +169,26 @@ export default function DataDomainsView() {
   const columns = useMemo<ColumnDef<DataDomain>[]>(() => [
     {
       accessorKey: "name",
-      header: "Name",
+      header: t('table.name'),
       cell: ({ row }) => {
         const domain = row.original;
         return (
           <div>
-            <span 
+            <span
               className="font-medium cursor-pointer hover:underline"
               onClick={() => handleNavigateToDomain(domain.id)}
             >
               {domain.name}
             </span>
             {domain.parent_name && (
-              <div 
+              <div
                 className="text-xs text-muted-foreground cursor-pointer hover:underline"
                 onClick={(e) => {
-                    e.stopPropagation(); 
+                    e.stopPropagation();
                     if (domain.parent_id) handleNavigateToDomain(domain.parent_id);
                 }}
               >
-                ↳ Parent: {domain.parent_name}
+                {t('table.parentPrefix')} {domain.parent_name}
               </div>
             )}
           </div>
@@ -195,7 +197,7 @@ export default function DataDomainsView() {
     },
     {
       accessorKey: "description",
-      header: "Description",
+      header: t('table.description'),
       cell: ({ row }) => (
         <div className="truncate max-w-sm text-sm text-muted-foreground">
           {row.getValue("description") || '-'}
@@ -204,7 +206,7 @@ export default function DataDomainsView() {
     },
     {
       accessorKey: "owner",
-      header: "Owners",
+      header: t('table.owners'),
       cell: ({ row }) => {
         const owners = row.original.owner;
         if (!owners || owners.length === 0) return '-' ;
@@ -219,7 +221,7 @@ export default function DataDomainsView() {
     },
     {
       accessorKey: "tags",
-      header: "Tags",
+      header: t('table.tags'),
       cell: ({ row }) => {
         const tags = row.original.tags;
         if (!tags || tags.length === 0) return '-' ;
@@ -234,12 +236,12 @@ export default function DataDomainsView() {
     },
     {
         accessorKey: "children_count",
-        header: "Children",
+        header: t('table.children'),
         cell: ({ row }) => row.original.children_count ?? 0,
     },
     {
       accessorKey: "updated_at",
-      header: "Last Updated",
+      header: t('table.lastUpdated'),
       cell: ({ row }) => {
          const dateValue = row.getValue("updated_at");
          return dateValue ? <RelativeDate date={dateValue as string | Date | number} /> : 'N/A';
@@ -258,12 +260,12 @@ export default function DataDomainsView() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuLabel>{t('table.actions')}</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => handleNavigateToDomain(domain.id)}>
-                View Details
+                {t('viewDetails')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleOpenEditDialog(domain)} disabled={!canWrite}>
-                Edit Domain
+                {t('editDomain')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -271,31 +273,31 @@ export default function DataDomainsView() {
                 className="text-red-600 focus:text-red-600 focus:bg-red-50"
                 disabled={!canAdmin}
               >
-                Delete Domain
+                {t('deleteDomain')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         );
       },
     },
-  ], [canWrite, canAdmin, navigate]);
+  ], [canWrite, canAdmin, navigate, t]);
 
   return (
     <div className="py-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
            <BoxSelect className="w-8 h-8" />
-           Data Domains
+           {t('title')}
         </h1>
         <div className="flex items-center gap-2">
-            <ViewModeToggle 
+            <ViewModeToggle
                 currentView={viewMode}
                 onViewChange={setViewMode}
                 tableViewIcon={<TableIcon className="h-4 w-4" />}
                 graphViewIcon={<WorkflowIcon className="h-4 w-4" />}
             />
             <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading || apiIsLoading}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Add New Domain
+                <PlusCircle className="mr-2 h-4 w-4" /> {t('addNewDomain')}
             </Button>
         </div>
       </div>
@@ -307,29 +309,29 @@ export default function DataDomainsView() {
       ) : !canRead ? (
          <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Permission Denied</AlertTitle>
-              <AlertDescription>You do not have permission to view data domains.</AlertDescription>
+              <AlertTitle>{t('permissions.permissionDenied')}</AlertTitle>
+              <AlertDescription>{t('permissions.deniedView')}</AlertDescription>
          </Alert>
       ) : componentError ? (
           <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error Loading Data</AlertTitle>
+              <AlertTitle>{t('messages.errorLoadingData')}</AlertTitle>
               <AlertDescription>{componentError}</AlertDescription>
           </Alert>
       ) : viewMode === 'table' ? (
         <>
-          <DataTable 
-             columns={columns} 
-             data={domains} 
+          <DataTable
+             columns={columns}
+             data={domains}
              searchColumn="name"
-             toolbarActions={null} 
+             toolbarActions={null}
           />
           <DataDomainFormDialog
             isOpen={isFormOpen}
             onOpenChange={setIsFormOpen}
             domain={editingDomain}
             onSubmitSuccess={handleFormSubmitSuccess}
-            allDomains={domains} 
+            allDomains={domains}
           />
         </>
       ) : (
@@ -339,21 +341,21 @@ export default function DataDomainsView() {
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogTitle>{t('deleteDialog.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the data domain.
+              {t('deleteDialog.description')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeletingDomainId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setDeletingDomainId(null)}>{t('deleteDialog.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700" disabled={apiIsLoading || permissionsLoading}>
-               {(apiIsLoading || permissionsLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Delete
+               {(apiIsLoading || permissionsLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} {t('deleteDialog.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
-      <Toaster /> 
+
+      <Toaster />
     </div>
   );
 }

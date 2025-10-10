@@ -1,0 +1,38 @@
+{
+  "title": "Datenbereiche",
+  "addNewDomain": "Neuen Bereich hinzufügen",
+  "viewDetails": "Details anzeigen",
+  "editDomain": "Bereich bearbeiten",
+  "deleteDomain": "Bereich löschen",
+  "noDomainsYet": "Noch keine Datenbereiche.",
+  "table": {
+    "name": "Name",
+    "description": "Beschreibung",
+    "owners": "Eigentümer",
+    "tags": "Tags",
+    "children": "Kinder",
+    "lastUpdated": "Zuletzt aktualisiert",
+    "actions": "Aktionen",
+    "parentPrefix": "↳ Übergeordnet:"
+  },
+  "permissions": {
+    "deniedView": "Sie haben keine Berechtigung, Datenbereiche anzuzeigen.",
+    "deniedCreate": "Sie haben keine Berechtigung, Datenbereiche zu erstellen.",
+    "deniedEdit": "Sie haben keine Berechtigung, Datenbereiche zu bearbeiten.",
+    "deniedDelete": "Sie haben keine Berechtigung, Datenbereiche zu löschen.",
+    "permissionDenied": "Zugriff verweigert"
+  },
+  "messages": {
+    "domainDeleted": "Bereich gelöscht",
+    "domainDeletedSuccess": "Der Datenbereich wurde erfolgreich gelöscht.",
+    "errorFetchingDomains": "Fehler beim Abrufen der Bereiche",
+    "errorDeletingDomain": "Fehler beim Löschen des Bereichs",
+    "errorLoadingData": "Fehler beim Laden der Daten"
+  },
+  "deleteDialog": {
+    "title": "Sind Sie absolut sicher?",
+    "description": "Diese Aktion kann nicht rückgängig gemacht werden. Dies wird den Datenbereich dauerhaft löschen.",
+    "cancel": "Abbrechen",
+    "delete": "Löschen"
+  }
+}

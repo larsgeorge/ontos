@@ -1,0 +1,38 @@
+{
+  "title": "データドメイン",
+  "addNewDomain": "新しいドメインを追加",
+  "viewDetails": "詳細を表示",
+  "editDomain": "ドメインを編集",
+  "deleteDomain": "ドメインを削除",
+  "noDomainsYet": "まだデータドメインはありません。",
+  "table": {
+    "name": "名前",
+    "description": "説明",
+    "owners": "所有者",
+    "tags": "タグ",
+    "children": "子",
+    "lastUpdated": "最終更新",
+    "actions": "アクション",
+    "parentPrefix": "↳ 親:"
+  },
+  "permissions": {
+    "deniedView": "データドメインを表示する権限がありません。",
+    "deniedCreate": "データドメインを作成する権限がありません。",
+    "deniedEdit": "データドメインを編集する権限がありません。",
+    "deniedDelete": "データドメインを削除する権限がありません。",
+    "permissionDenied": "権限が拒否されました"
+  },
+  "messages": {
+    "domainDeleted": "ドメインが削除されました",
+    "domainDeletedSuccess": "データドメインが正常に削除されました。",
+    "errorFetchingDomains": "ドメインの取得エラー",
+    "errorDeletingDomain": "ドメインの削除エラー",
+    "errorLoadingData": "データの読み込みエラー"
+  },
+  "deleteDialog": {
+    "title": "本当によろしいですか？",
+    "description": "この操作は元に戻せません。データドメインが完全に削除されます。",
+    "cancel": "キャンセル",
+    "delete": "削除"
+  }
+}

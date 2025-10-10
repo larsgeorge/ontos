@@ -1,0 +1,94 @@
+{
+  "title": "メタデータ",
+  "description": "メモ、リンク、添付ファイル。",
+  "previewRenderedPage": "レンダリングされたページをプレビュー",
+  "notes": {
+    "title": "追加メモ",
+    "add": "追加",
+    "refresh": "更新",
+    "noNotes": "まだメモはありません。",
+    "preview": "プレビュー",
+    "edit": "編集",
+    "delete": "削除",
+    "editTitle": "メモを編集",
+    "addTitle": "メモを追加",
+    "table": {
+      "title": "タイトル",
+      "description": "説明",
+      "created": "作成日",
+      "actions": "アクション"
+    },
+    "form": {
+      "title": "タイトル",
+      "shortDescription": "簡単な説明",
+      "content": "内容（マークダウン）",
+      "save": "保存",
+      "cancel": "キャンセル"
+    },
+    "messages": {
+      "deleteFailed": "削除に失敗しました",
+      "addFailed": "メモの追加に失敗しました",
+      "updateFailed": "更新に失敗しました"
+    }
+  },
+  "links": {
+    "title": "関連リンク",
+    "add": "追加",
+    "refresh": "更新",
+    "noLinks": "まだリンクはありません。",
+    "open": "開く",
+    "edit": "編集",
+    "delete": "削除",
+    "editTitle": "リンクを編集",
+    "addTitle": "リンクを追加",
+    "table": {
+      "title": "タイトル",
+      "url": "URL",
+      "description": "説明",
+      "created": "作成日",
+      "actions": "アクション"
+    },
+    "form": {
+      "title": "タイトル",
+      "url": "URL",
+      "shortDescription": "簡単な説明",
+      "save": "保存",
+      "cancel": "キャンセル"
+    },
+    "messages": {
+      "deleteFailed": "削除に失敗しました",
+      "addFailed": "リンクの追加に失敗しました",
+      "updateFailed": "更新に失敗しました"
+    }
+  },
+  "documents": {
+    "title": "添付ドキュメント",
+    "add": "追加",
+    "refresh": "更新",
+    "noDocuments": "アップロードされたドキュメントはありません。",
+    "preview": "プレビュー",
+    "delete": "削除",
+    "table": {
+      "title": "タイトル",
+      "filename": "ファイル名",
+      "description": "説明",
+      "size": "サイズ",
+      "created": "作成日",
+      "actions": "アクション"
+    },
+    "form": {
+      "title": "タイトル",
+      "shortDescription": "簡単な説明",
+      "file": "ファイル",
+      "upload": "アップロード",
+      "cancel": "キャンセル"
+    },
+    "messages": {
+      "deleteFailed": "削除に失敗しました",
+      "uploadFailed": "アップロードに失敗しました"
+    }
+  },
+  "messages": {
+    "loadFailed": "メタデータの読み込みに失敗しました"
+  }
+}

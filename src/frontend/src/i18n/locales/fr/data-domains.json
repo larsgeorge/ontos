@@ -1,0 +1,38 @@
+{
+  "title": "Domaines de données",
+  "addNewDomain": "Ajouter un nouveau domaine",
+  "viewDetails": "Voir les détails",
+  "editDomain": "Modifier le domaine",
+  "deleteDomain": "Supprimer le domaine",
+  "noDomainsYet": "Pas encore de domaines de données.",
+  "table": {
+    "name": "Nom",
+    "description": "Description",
+    "owners": "Propriétaires",
+    "tags": "Étiquettes",
+    "children": "Enfants",
+    "lastUpdated": "Dernière mise à jour",
+    "actions": "Actions",
+    "parentPrefix": "↳ Parent :"
+  },
+  "permissions": {
+    "deniedView": "Vous n'avez pas la permission de voir les domaines de données.",
+    "deniedCreate": "Vous n'avez pas la permission de créer des domaines de données.",
+    "deniedEdit": "Vous n'avez pas la permission de modifier les domaines de données.",
+    "deniedDelete": "Vous n'avez pas la permission de supprimer les domaines de données.",
+    "permissionDenied": "Permission refusée"
+  },
+  "messages": {
+    "domainDeleted": "Domaine supprimé",
+    "domainDeletedSuccess": "Le domaine de données a été supprimé avec succès.",
+    "errorFetchingDomains": "Erreur lors de la récupération des domaines",
+    "errorDeletingDomain": "Erreur lors de la suppression du domaine",
+    "errorLoadingData": "Erreur lors du chargement des données"
+  },
+  "deleteDialog": {
+    "title": "Êtes-vous absolument sûr ?",
+    "description": "Cette action ne peut pas être annulée. Cela supprimera définitivement le domaine de données.",
+    "cancel": "Annuler",
+    "delete": "Supprimer"
+  }
+}

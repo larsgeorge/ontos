@@ -1,0 +1,94 @@
+{
+  "title": "Metadatos",
+  "description": "Notas, enlaces y adjuntos.",
+  "previewRenderedPage": "Vista previa de la página renderizada",
+  "notes": {
+    "title": "Notas adicionales",
+    "add": "Agregar",
+    "refresh": "Actualizar",
+    "noNotes": "Aún no hay notas.",
+    "preview": "Vista previa",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "editTitle": "Editar nota",
+    "addTitle": "Agregar nota",
+    "table": {
+      "title": "Título",
+      "description": "Descripción",
+      "created": "Creado",
+      "actions": "Acciones"
+    },
+    "form": {
+      "title": "Título",
+      "shortDescription": "Descripción breve",
+      "content": "Contenido (Markdown)",
+      "save": "Guardar",
+      "cancel": "Cancelar"
+    },
+    "messages": {
+      "deleteFailed": "Error al eliminar",
+      "addFailed": "Error al agregar nota",
+      "updateFailed": "Error al actualizar"
+    }
+  },
+  "links": {
+    "title": "Enlaces relacionados",
+    "add": "Agregar",
+    "refresh": "Actualizar",
+    "noLinks": "Aún no hay enlaces.",
+    "open": "Abrir",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "editTitle": "Editar enlace",
+    "addTitle": "Agregar enlace",
+    "table": {
+      "title": "Título",
+      "url": "URL",
+      "description": "Descripción",
+      "created": "Creado",
+      "actions": "Acciones"
+    },
+    "form": {
+      "title": "Título",
+      "url": "URL",
+      "shortDescription": "Descripción breve",
+      "save": "Guardar",
+      "cancel": "Cancelar"
+    },
+    "messages": {
+      "deleteFailed": "Error al eliminar",
+      "addFailed": "Error al agregar enlace",
+      "updateFailed": "Error al actualizar"
+    }
+  },
+  "documents": {
+    "title": "Documentos adjuntos",
+    "add": "Agregar",
+    "refresh": "Actualizar",
+    "noDocuments": "No se han cargado documentos.",
+    "preview": "Vista previa",
+    "delete": "Eliminar",
+    "table": {
+      "title": "Título",
+      "filename": "Nombre del archivo",
+      "description": "Descripción",
+      "size": "Tamaño",
+      "created": "Creado",
+      "actions": "Acciones"
+    },
+    "form": {
+      "title": "Título",
+      "shortDescription": "Descripción breve",
+      "file": "Archivo",
+      "upload": "Cargar",
+      "cancel": "Cancelar"
+    },
+    "messages": {
+      "deleteFailed": "Error al eliminar",
+      "uploadFailed": "Error al cargar"
+    }
+  },
+  "messages": {
+    "loadFailed": "Error al cargar metadatos"
+  }
+}

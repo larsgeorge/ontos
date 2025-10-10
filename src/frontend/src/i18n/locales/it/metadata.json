@@ -1,0 +1,94 @@
+{
+  "title": "Metadati",
+  "description": "Note, link e allegati.",
+  "previewRenderedPage": "Anteprima pagina renderizzata",
+  "notes": {
+    "title": "Note aggiuntive",
+    "add": "Aggiungi",
+    "refresh": "Aggiorna",
+    "noNotes": "Nessuna nota ancora.",
+    "preview": "Anteprima",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "editTitle": "Modifica nota",
+    "addTitle": "Aggiungi nota",
+    "table": {
+      "title": "Titolo",
+      "description": "Descrizione",
+      "created": "Creato",
+      "actions": "Azioni"
+    },
+    "form": {
+      "title": "Titolo",
+      "shortDescription": "Breve descrizione",
+      "content": "Contenuto (Markdown)",
+      "save": "Salva",
+      "cancel": "Annulla"
+    },
+    "messages": {
+      "deleteFailed": "Eliminazione fallita",
+      "addFailed": "Aggiunta nota fallita",
+      "updateFailed": "Aggiornamento fallito"
+    }
+  },
+  "links": {
+    "title": "Link correlati",
+    "add": "Aggiungi",
+    "refresh": "Aggiorna",
+    "noLinks": "Nessun link ancora.",
+    "open": "Apri",
+    "edit": "Modifica",
+    "delete": "Elimina",
+    "editTitle": "Modifica link",
+    "addTitle": "Aggiungi link",
+    "table": {
+      "title": "Titolo",
+      "url": "URL",
+      "description": "Descrizione",
+      "created": "Creato",
+      "actions": "Azioni"
+    },
+    "form": {
+      "title": "Titolo",
+      "url": "URL",
+      "shortDescription": "Breve descrizione",
+      "save": "Salva",
+      "cancel": "Annulla"
+    },
+    "messages": {
+      "deleteFailed": "Eliminazione fallita",
+      "addFailed": "Aggiunta link fallita",
+      "updateFailed": "Aggiornamento fallito"
+    }
+  },
+  "documents": {
+    "title": "Documenti allegati",
+    "add": "Aggiungi",
+    "refresh": "Aggiorna",
+    "noDocuments": "Nessun documento caricato.",
+    "preview": "Anteprima",
+    "delete": "Elimina",
+    "table": {
+      "title": "Titolo",
+      "filename": "Nome file",
+      "description": "Descrizione",
+      "size": "Dimensione",
+      "created": "Creato",
+      "actions": "Azioni"
+    },
+    "form": {
+      "title": "Titolo",
+      "shortDescription": "Breve descrizione",
+      "file": "File",
+      "upload": "Carica",
+      "cancel": "Annulla"
+    },
+    "messages": {
+      "deleteFailed": "Eliminazione fallita",
+      "uploadFailed": "Caricamento fallito"
+    }
+  },
+  "messages": {
+    "loadFailed": "Caricamento metadati fallito"
+  }
+}

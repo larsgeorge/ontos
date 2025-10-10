@@ -1,0 +1,38 @@
+{
+  "title": "Domini dati",
+  "addNewDomain": "Aggiungi nuovo dominio",
+  "viewDetails": "Visualizza dettagli",
+  "editDomain": "Modifica dominio",
+  "deleteDomain": "Elimina dominio",
+  "noDomainsYet": "Nessun dominio dati ancora.",
+  "table": {
+    "name": "Nome",
+    "description": "Descrizione",
+    "owners": "Proprietari",
+    "tags": "Tag",
+    "children": "Figli",
+    "lastUpdated": "Ultimo aggiornamento",
+    "actions": "Azioni",
+    "parentPrefix": "↳ Genitore:"
+  },
+  "permissions": {
+    "deniedView": "Non hai il permesso di visualizzare i domini dati.",
+    "deniedCreate": "Non hai il permesso di creare domini dati.",
+    "deniedEdit": "Non hai il permesso di modificare i domini dati.",
+    "deniedDelete": "Non hai il permesso di eliminare i domini dati.",
+    "permissionDenied": "Permesso negato"
+  },
+  "messages": {
+    "domainDeleted": "Dominio eliminato",
+    "domainDeletedSuccess": "Il dominio dati è stato eliminato con successo.",
+    "errorFetchingDomains": "Errore nel recupero dei domini",
+    "errorDeletingDomain": "Errore nell'eliminazione del dominio",
+    "errorLoadingData": "Errore nel caricamento dei dati"
+  },
+  "deleteDialog": {
+    "title": "Sei assolutamente sicuro?",
+    "description": "Questa azione non può essere annullata. Questo eliminerà permanentemente il dominio dati.",
+    "cancel": "Annulla",
+    "delete": "Elimina"
+  }
+}
