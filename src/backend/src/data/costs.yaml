@@ -11,7 +11,7 @@ costs:
       - title: Consulting
         description: External support
         cost_center: OTHER
-        custom_center_name: 3343
+        custom_center_name: "3343"
         amount_cents: 250000
         currency: USD
         start_month: 2025-10-01

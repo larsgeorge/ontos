@@ -82,13 +82,22 @@ def seed_costs_from_yaml(db: Session, yaml_path: Path, *, user_email: str = "sys
 
             for item in block.get("items", []) or []:
                 try:
+                    # Normalize fields from YAML
+                    cost_center_value = item.get("cost_center")
+                    raw_custom = item.get("custom_center_name")
+                    custom_str = (str(raw_custom).strip() if raw_custom is not None else None)
+                    if cost_center_value == "OTHER" and not custom_str:
+                        logger.warning(
+                            f"Missing custom_center_name for OTHER cost_center on {entity_type}:{entity_name} item '{item.get('title')}'"
+                        )
+
                     create = CostItemCreate(
                         entity_type=entity_type,
                         entity_id=entity_id,
                         title=item.get("title"),
                         description=item.get("description"),
-                        cost_center=item.get("cost_center"),
-                        custom_center_name=item.get("custom_center_name"),
+                        cost_center=cost_center_value,
+                        custom_center_name=(custom_str if cost_center_value == "OTHER" and custom_str else None),
                         amount_cents=int(item.get("amount_cents", 0)),
                         currency=item.get("currency", "USD").upper(),
                         start_month=datetime.strptime(str(item.get("start_month")), "%Y-%m-%d").date(),
