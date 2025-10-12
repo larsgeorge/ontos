@@ -9,6 +9,8 @@ export interface DataDomain {
   id: string;
   name: string;
   description?: string | null;
+  // Optional: legacy owners list retained for backward compatibility in UI
+  owner?: string[] | null;
   owner_team_id?: string | null; // UUID of the owning team
   tags?: AssignedTag[] | null; // Rich tags with metadata
   parent_id?: string | null;

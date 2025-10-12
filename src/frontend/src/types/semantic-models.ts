@@ -5,7 +5,7 @@ interface TaggedAsset {
   path: string;
 }
 
-export interface GlossaryTerm {
+export interface SemanticTerm {
   id: string;
   name: string;
   definition: string;
@@ -18,11 +18,11 @@ export interface GlossaryTerm {
   status: string;
   created_at: string;
   updated_at: string;
-  source_glossary_id: string;
+  source_model_id: string;
   taggedAssets?: TaggedAsset[];
 }
 
-export interface BusinessGlossary {
+export interface SemanticModelDefinition {
   id: string;
   name: string;
   description: string;
@@ -32,9 +32,9 @@ export interface BusinessGlossary {
   owner: string;
   status: string;
   tags: string[];
-  terms: { [key: string]: GlossaryTerm };
-  parent_glossary_ids: string[];
-  children?: BusinessGlossary[];
+  terms: { [key: string]: SemanticTerm };
+  parent_model_ids: string[];
+  children?: SemanticModelDefinition[];
   created_at: string;
   updated_at: string;
   taggedAssets?: TaggedAsset[];

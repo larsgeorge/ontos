@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { 
-  OntologyTaxonomy, 
+  SemanticModel, 
   OntologyConcept, 
   ConceptHierarchy, 
   GroupedConcepts,
@@ -539,9 +539,9 @@ const TaggedAssetsView: React.FC<TaggedAssetsViewProps> = ({ concept }) => {
   );
 };
 
-export default function BusinessGlossary() {
+export default function SemanticModelsView() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [taxonomies, setTaxonomies] = useState<OntologyTaxonomy[]>([]);
+  const [taxonomies, setTaxonomies] = useState<SemanticModel[]>([]);
   const [groupedConcepts, setGroupedConcepts] = useState<GroupedConcepts>({});
   const [selectedConcept, setSelectedConcept] = useState<OntologyConcept | null>(null);
   const [selectedHierarchy, setSelectedHierarchy] = useState<ConceptHierarchy | null>(null);

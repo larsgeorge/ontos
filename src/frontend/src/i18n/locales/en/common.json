@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Ontos",
-    "tagline": "Manage business glossaries, data contracts, data products, personas, and more"
+  "tagline": "Manage semantic models, data contracts, data products, personas, and more"
   },
   "actions": {
     "save": "Save",

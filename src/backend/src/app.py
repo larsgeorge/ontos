@@ -56,7 +56,7 @@ from src.common.database import init_db, get_session_factory, SQLAlchemySession
 from src.controller.data_products_manager import DataProductsManager
 from src.controller.data_asset_reviews_manager import DataAssetReviewManager
 from src.controller.data_contracts_manager import DataContractsManager
-from src.controller.business_glossaries_manager import BusinessGlossariesManager
+from src.controller.semantic_models_manager import SemanticModelsManager
 from src.controller.search_manager import SearchManager
 from src.common.workspace_client import get_workspace_client
 from src.controller.settings_manager import SettingsManager

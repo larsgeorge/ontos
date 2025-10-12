@@ -15,7 +15,7 @@ from src.models.semantic_models import (
 from src.models.ontology import (
     OntologyConcept,
     OntologyProperty,
-    OntologyTaxonomy,
+    SemanticModel,
     ConceptHierarchy,
     TaxonomyStats,
     ConceptSearchResult
@@ -652,7 +652,7 @@ class SemanticModelsManager:
 
     # --- New Ontology Methods ---
     
-    def get_taxonomies(self) -> List[OntologyTaxonomy]:
+    def get_taxonomies(self) -> List[SemanticModel]:
         """Get all available taxonomies/ontologies with their metadata"""
         taxonomies = []
         
@@ -745,7 +745,7 @@ class SemanticModelsManager:
                 name = context_str
                 format_str = None
             
-            taxonomies.append(OntologyTaxonomy(
+            taxonomies.append(SemanticModel(
                 name=name,
                 description=f"{source_type.title()} taxonomy: {name}",
                 source_type=source_type,
@@ -1131,4 +1131,24 @@ class SemanticModelsManager:
             concepts_by_type=concepts_by_type,
             top_level_concepts=top_level_concepts
         )
+
+    def get_grouped_concepts(self) -> Dict[str, List[OntologyConcept]]:
+        """Return all concepts grouped by their source context name.
+
+        Group key is derived from OntologyConcept.source_context, or 'Unassigned' when missing.
+        Concepts in each group are sorted by label (fallback to IRI).
+        """
+        concepts = self.get_concepts_by_taxonomy()
+        grouped: Dict[str, List[OntologyConcept]] = {}
+
+        for concept in concepts:
+            source = concept.source_context or "Unassigned"
+            if source not in grouped:
+                grouped[source] = []
+            grouped[source].append(concept)
+
+        for source in grouped:
+            grouped[source].sort(key=lambda c: (c.label or c.iri))
+
+        return grouped
 

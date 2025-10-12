@@ -20,7 +20,7 @@ from src.controller.jobs_manager import JobsManager
 from src.controller.data_products_manager import DataProductsManager
 from src.controller.data_asset_reviews_manager import DataAssetReviewManager
 from src.controller.data_contracts_manager import DataContractsManager
-from src.controller.business_glossaries_manager import BusinessGlossariesManager
+# Business glossaries manager has been removed in favor of SemanticModelsManager
 from src.controller.search_manager import SearchManager
 from src.controller.users_manager import UsersManager
 from src.controller.authorization_manager import AuthorizationManager
@@ -163,7 +163,8 @@ def initialize_managers(app: FastAPI):
             set_app_state_manager('semantic_models_manager', app.state.semantic_models_manager)
         except Exception:
             pass
-        app.state.business_glossaries_manager = BusinessGlossariesManager(data_dir=data_dir, semantic_models_manager=app.state.semantic_models_manager)
+        # Remove BusinessGlossariesManager; rely solely on SemanticModelsManager
+        # app.state.business_glossaries_manager = BusinessGlossariesManager(data_dir=data_dir, semantic_models_manager=app.state.semantic_models_manager)
 
         # Teams and Projects Managers
         app.state.teams_manager = TeamsManager()
@@ -363,7 +364,7 @@ def load_initial_data(app: FastAPI) -> None:
         data_product_manager = getattr(app.state, 'data_products_manager', None) # Corrected name
         data_domain_manager = getattr(app.state, 'data_domain_manager', None)
         data_contracts_manager = getattr(app.state, 'data_contracts_manager', None) # Add
-        business_glossaries_manager = getattr(app.state, 'business_glossaries_manager', None) # Add
+        business_glossaries_manager = None
         notifications_manager = getattr(app.state, 'notifications_manager', None) # Add this line
         teams_manager = getattr(app.state, 'teams_manager', None)
         projects_manager = getattr(app.state, 'projects_manager', None)
@@ -394,15 +395,12 @@ def load_initial_data(app: FastAPI) -> None:
             data_product_manager.load_initial_data(db)
         if data_asset_review_manager and hasattr(data_asset_review_manager, 'load_initial_data'):
             data_asset_review_manager.load_initial_data(db)
-        if business_glossaries_manager and hasattr(business_glossaries_manager, 'load_initial_data'):
-            business_glossaries_manager.load_initial_data(db)
+        # Glossaries initial data loading removed
         semantic_models_manager = getattr(app.state, 'semantic_models_manager', None)
         if semantic_models_manager and hasattr(semantic_models_manager, 'load_initial_data'):
             semantic_models_manager.load_initial_data(db)
             # After loading semantic models, make sure business glossaries manager is connected
-            business_glossaries_manager = getattr(app.state, 'business_glossaries_manager', None)
-            if business_glossaries_manager and hasattr(business_glossaries_manager, 'set_semantic_models_manager'):
-                business_glossaries_manager.set_semantic_models_manager(semantic_models_manager)
+            pass
         if notifications_manager and hasattr(notifications_manager, 'load_initial_data'):
             notifications_manager.load_initial_data(db)
         

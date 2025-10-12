@@ -4,9 +4,8 @@ from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Depends, Request, Query
 
-from src.controller.business_glossaries_manager import BusinessGlossariesManager
+from src.controller.semantic_models_manager import SemanticModelsManager
 from src.models.ontology import (
-    OntologyTaxonomy,
     OntologyConcept,
     ConceptHierarchy,
     TaxonomyStats,
@@ -19,57 +18,106 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["semantic-models"])
 
-def get_semantic_models_manager(request: Request) -> BusinessGlossariesManager:
-    """Retrieves the BusinessGlossariesManager singleton from app.state."""
-    manager = getattr(request.app.state, 'business_glossaries_manager', None)
+def get_semantic_models_manager(request: Request) -> SemanticModelsManager:
+    """Retrieves the SemanticModelsManager singleton from app.state."""
+    manager = getattr(request.app.state, 'semantic_models_manager', None)
     if manager is None:
-        logger.critical("BusinessGlossariesManager instance not found in app.state!")
+        logger.critical("SemanticModelsManager instance not found in app.state!")
         raise HTTPException(status_code=500, detail="Semantic Models service is not available.")
-    if not isinstance(manager, BusinessGlossariesManager):
-        logger.critical(f"Object found at app.state.business_glossaries_manager is not a BusinessGlossariesManager instance (Type: {type(manager)})!")
+    if not isinstance(manager, SemanticModelsManager):
+        logger.critical(f"Object found at app.state.semantic_models_manager is not a SemanticModelsManager instance (Type: {type(manager)})!")
         raise HTTPException(status_code=500, detail="Semantic Models service configuration error.")
     return manager
 
 # --- Semantic Models endpoints ---
 
 @router.get('/semantic-models')
-async def get_taxonomies(manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)) -> dict:
-    """Get all available taxonomies"""
+async def get_semantic_models(manager: SemanticModelsManager = Depends(get_semantic_models_manager)) -> dict:
+    """Get all available semantic models (formerly taxonomies)"""
     try:
-        logger.info("Retrieving all taxonomies from semantic knowledge graph")
-        taxonomies = manager.get_taxonomies()
-        return {'taxonomies': [taxonomy.model_dump() for taxonomy in taxonomies]}
+        logger.info("Retrieving all semantic models from semantic knowledge graph")
+        models = manager.get_taxonomies()
+        # New key name for the list endpoint
+        return {'semantic_models': [m.model_dump() for m in models]}
     except Exception as e:
-        logger.error(f"Error retrieving taxonomies: {e!s}")
+        logger.error(f"Error retrieving semantic models: {e!s}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get('/semantic-models/concepts')
-async def get_concepts(
-    taxonomy_name: Optional[str] = Query(None, description="Filter by taxonomy name"),
-    search: Optional[str] = Query(None, description="Search query"),
-    limit: int = Query(100, description="Maximum number of results"),
-    manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)
-) -> dict:
-    """Get concepts, optionally filtered by taxonomy or search query"""
+async def list_simple_concepts(
+    q: Optional[str] = Query(None, description="Simple text filter for concepts"),
+    limit: int = Query(50, description="Maximum number of results"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager)
+) -> List[dict]:
+    """Return a simple flat list of concepts for selection dialogs.
+
+    Shape: [{ value, label, type }]
+    """
     try:
-        if search:
-            logger.info(f"Searching concepts with query: '{search}' in taxonomy: {taxonomy_name}")
-            results = manager.search_concepts(search, taxonomy_name, limit)
-            concepts = [result.concept for result in results]
-        else:
-            logger.info(f"Retrieving concepts from taxonomy: {taxonomy_name or 'all'}")
-            concepts = manager.get_concepts_by_taxonomy(taxonomy_name)
-        
-        return {
-            'concepts': [concept.model_dump() for concept in concepts[:limit]]
-        }
+        results = manager.search_concepts(q or "", limit=limit)
+        return results
     except Exception as e:
-        logger.error(f"Error retrieving concepts: {e!s}")
+        logger.error(f"Error retrieving simple concepts: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get('/semantic-models/concepts/suggestions')
+async def list_concept_suggestions(
+    q: Optional[str] = Query(None, description="Simple text filter for concepts"),
+    parent_iris: Optional[str] = Query(None, description="Comma-separated parent concept IRIs"),
+    limit: int = Query(50, description="Maximum number of results"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager)
+) -> dict:
+    """Return suggested child concepts (if parent_iris provided) and other matches.
+
+    Shape: { suggested: ConceptItem[], other: ConceptItem[] }
+    """
+    try:
+        parents_list = [p for p in (parent_iris.split(',') if parent_iris else []) if p]
+        data = manager.search_concepts_with_suggestions(text_filter=(q or ""), parent_iris=parents_list, limit=limit)
+        return data
+    except Exception as e:
+        logger.error(f"Error retrieving concept suggestions: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get('/semantic-models/properties')
+async def list_simple_properties(
+    q: Optional[str] = Query(None, description="Simple text filter for properties"),
+    limit: int = Query(50, description="Maximum number of results"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager)
+) -> List[dict]:
+    """Return a simple flat list of properties for selection dialogs.
+
+    Shape: [{ value, label, type: 'property' }]
+    """
+    try:
+        results = manager.search_properties(q or "", limit=limit)
+        return results
+    except Exception as e:
+        logger.error(f"Error retrieving simple properties: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get('/semantic-models/properties/suggestions')
+async def list_property_suggestions(
+    q: Optional[str] = Query(None, description="Simple text filter for properties"),
+    parent_iris: Optional[str] = Query(None, description="Comma-separated parent concept IRIs (unused for properties)"),
+    limit: int = Query(50, description="Maximum number of results"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager)
+) -> dict:
+    """Return suggested properties (typically empty) and other matches.
+
+    Shape: { suggested: ConceptItem[], other: ConceptItem[] }
+    """
+    try:
+        parents_list = [p for p in (parent_iris.split(',') if parent_iris else []) if p]
+        data = manager.search_properties_with_suggestions(text_filter=(q or ""), parent_iris=parents_list, limit=limit)
+        return data
+    except Exception as e:
+        logger.error(f"Error retrieving property suggestions: {e!s}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get('/semantic-models/concepts-grouped')
 async def get_concepts_grouped(
-    manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager)
 ) -> dict:
     """Get all concepts grouped by taxonomy source"""
     try:
@@ -89,7 +137,7 @@ async def get_concepts_grouped(
 @router.get('/semantic-models/concepts/{concept_iri:path}/hierarchy')
 async def get_concept_hierarchy(
     concept_iri: str,
-    manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager)
 ) -> dict:
     """Get hierarchical relationships for a concept"""
     try:
@@ -109,7 +157,7 @@ async def get_concept_hierarchy(
 @router.get('/semantic-models/concepts/{concept_iri:path}')
 async def get_concept_details(
     concept_iri: str,
-    manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager)
 ) -> dict:
     """Get detailed information about a specific concept"""
     try:
@@ -128,7 +176,7 @@ async def get_concept_details(
 
 @router.get('/semantic-models/stats')
 async def get_taxonomy_stats(
-    manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager)
 ) -> dict:
     """Get statistics about loaded taxonomies"""
     try:
@@ -144,12 +192,13 @@ async def search_concepts(
     q: str = Query(..., description="Search query"),
     taxonomy: Optional[str] = Query(None, description="Filter by taxonomy name"),
     limit: int = Query(50, description="Maximum number of results"),
-    manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager)
 ) -> dict:
     """Search for concepts by text query"""
     try:
         logger.info(f"Searching concepts with query: '{q}' in taxonomy: {taxonomy}")
-        results = manager.search_concepts(q, taxonomy, limit)
+        # Use the ontology-aware search that returns ConceptSearchResult items
+        results = manager.search_ontology_concepts(q, taxonomy, limit)
         
         return {
             'results': [result.model_dump() for result in results]
@@ -158,89 +207,7 @@ async def search_concepts(
         logger.error(f"Error searching concepts: {e!s}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- Legacy endpoints for backwards compatibility ---
-
-@router.post('/semantic-models')
-async def create_glossary(glossary_data: dict, manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)):
-    """Create a new business glossary (legacy)"""
-    try:
-        glossary = manager.create_glossary(
-            name=glossary_data['name'],
-            description=glossary_data['description'],
-            scope=glossary_data['scope'],
-            org_unit=glossary_data['org_unit'],
-            domain=glossary_data['domain'],
-            parent_glossary_ids=glossary_data.get('parent_glossary_ids', []),
-            tags=glossary_data.get('tags', [])
-        )
-        return glossary.to_dict()
-    except Exception as e:
-        logger.error(f"Error creating glossary: {e!s}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-@router.put('/semantic-models/{glossary_id}')
-async def update_glossary(glossary_id: str, glossary_data: dict, manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)):
-    """Update a glossary (legacy)"""
-    try:
-        updated_glossary = manager.update_glossary(glossary_id, glossary_data)
-        if not updated_glossary:
-            raise HTTPException(status_code=404, detail="Glossary not found")
-        return updated_glossary
-    except Exception as e:
-        logger.error(f"Error updating glossary {glossary_id}: {e!s}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-@router.delete('/semantic-models/{glossary_id}')
-async def delete_glossary(glossary_id: str, manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)):
-    """Delete a glossary (legacy)"""
-    try:
-        manager.delete_glossary(glossary_id)
-        return None
-    except Exception as e:
-        logger.error(f"Error deleting glossary {glossary_id}: {e!s}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-@router.get('/semantic-models/{glossary_id}/terms')
-async def get_terms(glossary_id: str, manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)):
-    """Get terms for a glossary (legacy)"""
-    try:
-        glossary = manager.get_glossary(glossary_id)
-        if not glossary:
-            raise HTTPException(status_code=404, detail="Glossary not found")
-        return [term.to_dict() for term in glossary.terms.values()]
-    except Exception as e:
-        logger.error(f"Error getting terms for glossary {glossary_id}: {e!s}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-@router.post('/semantic-models/{glossary_id}/terms')
-async def create_term(glossary_id: str, term_data: dict, manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)):
-    """Create a new term in a glossary (legacy)"""
-    try:
-        glossary = manager.get_glossary(glossary_id)
-        if not glossary:
-            raise HTTPException(status_code=404, detail="Glossary not found")
-
-        term = manager.create_term(**term_data)
-        manager.add_term_to_glossary(glossary, term)
-        return term.to_dict()
-    except Exception as e:
-        logger.error(f"Error creating term: {e!s}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-@router.delete('/semantic-models/{glossary_id}/terms/{term_id}')
-async def delete_term(glossary_id: str, term_id: str, manager: BusinessGlossariesManager = Depends(get_semantic_models_manager)):
-    """Delete a term from a glossary (legacy)"""
-    try:
-        glossary = manager.get_glossary(glossary_id)
-        if not glossary:
-            raise HTTPException(status_code=404, detail="Glossary not found")
-
-        if manager.delete_term_from_glossary(glossary, term_id):
-            return None
-        raise HTTPException(status_code=404, detail="Term not found")
-    except Exception as e:
-        logger.error(f"Error deleting term {term_id}: {e!s}")
-        raise HTTPException(status_code=400, detail=str(e))
+"""Legacy Business Glossary endpoints removed during rename to Semantic Models."""
 
 def register_routes(app):
     """Register routes with the app"""

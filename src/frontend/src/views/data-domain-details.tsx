@@ -20,6 +20,7 @@ import { RelativeDate } from '@/components/common/relative-date';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { DataDomainMiniGraph } from '@/components/data-domains/data-domain-mini-graph';
+import { DataDomainFormDialog } from '@/components/data-domains/data-domain-form-dialog';
 import { CommentSidebar } from '@/components/comments';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
@@ -237,6 +238,7 @@ export default function DataDomainDetailsView() {
   const [domainTeams, setDomainTeams] = useState<TeamSummary[]>([]);
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Metadata: Rich Texts, Links, Documents
   interface RichTextItem { id: string; entity_id: string; entity_type: string; title: string; short_description?: string | null; content_markdown: string; created_at?: string; }
@@ -394,6 +396,9 @@ export default function DataDomainDetailsView() {
 
   const entityType = 'data_domain';
 
+  // Load all domains for parent selection in edit dialog
+  const { domains, refetch: refetchDomains } = useDomains();
+
   const truncate = (text?: string | null, maxLen: number = 80) => {
     if (!text) return '';
     return text.length > maxLen ? text.slice(0, maxLen - 1) + '…' : text;
@@ -492,6 +497,15 @@ export default function DataDomainDetailsView() {
     setTeamDialogOpen(true);
   };
 
+  const handleEditSuccess = async (updated: DataDomain) => {
+    // Refresh current domain data and the cached domains list
+    setDomain(updated);
+    if (domainId) {
+      await fetchDomainDetails(domainId);
+    }
+    await refetchDomains();
+  };
+
   useEffect(() => {
     setStaticSegments([{ label: 'Data Domains', path: '/data-domains' }]);
     if (domainId) {
@@ -566,7 +580,7 @@ export default function DataDomainDetailsView() {
             onToggle={() => setIsCommentSidebarOpen(!isCommentSidebarOpen)}
             className="h-8"
           />
-          <Button variant="outline" size="sm" onClick={() => alert('Edit Domain functionality to be implemented for this page')}>
+          <Button variant="outline" size="sm" onClick={() => setIsEditDialogOpen(true)}>
               <Edit3 className="mr-2 h-4 w-4" /> Edit
           </Button>
         </div>
@@ -751,6 +765,15 @@ export default function DataDomainDetailsView() {
         team={selectedTeam}
         onSubmitSuccess={handleTeamDialogSuccess}
         initialDomainId={selectedTeam ? undefined : domainId}
+      />
+
+      {/* Edit Domain Dialog */}
+      <DataDomainFormDialog
+        isOpen={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        domain={domain}
+        onSubmitSuccess={handleEditSuccess}
+        allDomains={domains}
       />
     </div>
   );

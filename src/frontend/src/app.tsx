@@ -16,7 +16,7 @@ import DataProducts from './views/data-products';
 import DataProductDetails from './views/data-product-details';
 import DataContracts from './views/data-contracts';
 import DataContractDetails from './views/data-contract-details';
-import SemanticModels from './views/business-glossary';
+import SemanticModels from './views/semantic-models';
 import Compliance from './views/compliance';
 import CompliancePolicyDetails from './views/compliance-policy-details';
 import ComplianceRunDetails from './views/compliance-run-details';

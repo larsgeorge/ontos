@@ -26,11 +26,11 @@ class OntologyConcept(BaseModel):
     examples: List[str] = []
     
     
-class OntologyTaxonomy(BaseModel):
-    """Represents a taxonomy/ontology source"""
+class SemanticModel(BaseModel):
+    """Represents a loaded semantic model (taxonomy/ontology source)"""
     name: str
     description: Optional[str] = None
-    source_type: str  # 'file' | 'database' | 'external'
+    source_type: str  # 'file' | 'database' | 'external' | 'schema'
     format: Optional[str] = None  # 'ttl' | 'rdf' | 'owl'
     concepts_count: int = 0
     properties_count: int = 0
@@ -55,6 +55,6 @@ class ConceptSearchResult(BaseModel):
 class TaxonomyStats(BaseModel):
     total_concepts: int
     total_properties: int
-    taxonomies: List[OntologyTaxonomy]
+    taxonomies: List[SemanticModel]
     concepts_by_type: Dict[str, int] = {}
     top_level_concepts: int = 0

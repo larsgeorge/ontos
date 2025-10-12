@@ -1,10 +1,10 @@
-name: "Business Glossary Sync"
+name: "Semantic Models Sync"
 description: "Sync business glossary terms and relationships from source to UC."
 format: "MULTI_TASK"
 tasks:
-  - task_key: "business_glossary_sync"
+  - task_key: "semantic_models_sync"
     spark_python_task:
-      python_file: "business_glossary_sync.py"
+      python_file: "semantic_models_sync.py"
     # existing_cluster_id will be injected from settings if not present
 
 # Schedule to run every 4 hours
@@ -15,7 +15,7 @@ schedule:
 
 # Job parameters for configuration
 parameters:
-  source_system: "external_glossary"
+  source_system: "external_semantic_models"
   sync_mode: "incremental"
   batch_size: "1000"
 
@@ -24,7 +24,7 @@ tags:
   environment: "production"
   team: "data-governance"
   workflow-type: "sync"
-  data-source: "business-glossary"
+  data-source: "semantic-models"
   owner: "ontos"
 
 # Job timeout (in seconds) - 2 hours for large syncs

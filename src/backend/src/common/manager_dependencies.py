@@ -15,7 +15,7 @@ from src.controller.data_products_manager import DataProductsManager
 from src.controller.data_domains_manager import DataDomainManager
 # Add imports for other managers if they need dependency getters
 from src.controller.data_contracts_manager import DataContractsManager
-from src.controller.business_glossaries_manager import BusinessGlossariesManager
+from src.controller.semantic_models_manager import SemanticModelsManager
 from src.controller.search_manager import SearchManager
 from src.controller.semantic_models_manager import SemanticModelsManager
 from src.controller.metadata_manager import MetadataManager
@@ -96,11 +96,11 @@ def get_data_contracts_manager(request: Request) -> DataContractsManager:
         raise HTTPException(status_code=503, detail="Data Contracts service not configured.")
     return manager
 
-def get_business_glossaries_manager(request: Request) -> BusinessGlossariesManager:
-    manager = getattr(request.app.state, 'business_glossaries_manager', None)
+def get_semantic_models_manager(request: Request) -> SemanticModelsManager:
+    manager = getattr(request.app.state, 'semantic_models_manager', None)
     if not manager:
-        logger.critical("BusinessGlossariesManager not found in application state during request!")
-        raise HTTPException(status_code=503, detail="Business Glossary service not configured.")
+        logger.critical("SemanticModelsManager not found in application state during request!")
+        raise HTTPException(status_code=503, detail="Semantic Models service not configured.")
     return manager
 
 def get_search_manager(request: Request) -> SearchManager:

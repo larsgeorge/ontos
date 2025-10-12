@@ -1,0 +1,33 @@
+name: "UC Tag Sync"
+description: "Sync Ontos metadata to UC governed tags"
+format: "MULTI_TASK"
+tasks:
+  - task_key: "uc_tag_sync"
+    spark_python_task:
+      python_file: "uc_tag_sync.py"
+
+# Schedule to run every 4 hours
+schedule:
+  quartz_cron_expression: "0 0 */4 * * ?"
+  timezone_id: "UTC"
+  pause_status: "UNPAUSED"
+
+# Parameters for configuration
+parameters:
+  prefix: "x_ontos_"
+  reconcile: "true"
+  dry_run: "false"
+  batch_size: "500"
+
+# Job timeout (in seconds)
+timeout_seconds: 3600
+
+max_concurrent_runs: 1
+
+tags:
+  environment: "production"
+  team: "data-governance"
+  workflow-type: "sync"
+  owner: "ontos"
+
+

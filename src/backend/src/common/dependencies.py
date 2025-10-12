@@ -15,7 +15,7 @@ from src.controller.data_domains_manager import DataDomainManager # Add import
 from databricks.sdk import WorkspaceClient # Added for WorkspaceClientDep
 # Import other managers
 from src.controller.data_contracts_manager import DataContractsManager
-from src.controller.business_glossaries_manager import BusinessGlossariesManager
+from src.controller.semantic_models_manager import SemanticModelsManager
 from src.controller.search_manager import SearchManager
 from src.controller.tags_manager import TagsManager # Import TagsManager
 
@@ -35,12 +35,11 @@ from src.common.manager_dependencies import (
     get_audit_manager, 
     get_users_manager,
     get_data_asset_review_manager,
-    get_notifications_manager, # Added
-    get_data_products_manager, # Added
-    get_data_domain_manager, # Add import
-    # Add imports for new getters
+    get_notifications_manager,
+    get_data_products_manager,
+    get_data_domain_manager,
     get_data_contracts_manager,
-    get_business_glossaries_manager,
+    get_semantic_models_manager,
     get_search_manager,
 )
 # Import workspace client getter separately as it might be structured differently
@@ -105,7 +104,7 @@ NotificationsManagerDep = Annotated[NotificationsManager, Depends(get_notificati
 DataProductsManagerDep = Annotated[DataProductsManager, Depends(get_data_products_manager)]
 DataDomainManagerDep = Annotated[DataDomainManager, Depends(get_data_domain_manager)]
 DataContractsManagerDep = Annotated[DataContractsManager, Depends(get_data_contracts_manager)]
-BusinessGlossariesManagerDep = Annotated[BusinessGlossariesManager, Depends(get_business_glossaries_manager)]
+SemanticModelsManagerDep = Annotated[SemanticModelsManager, Depends(get_semantic_models_manager)]
 SearchManagerDep = Annotated[SearchManager, Depends(get_search_manager)]
 
 # Permission Checker Dependency

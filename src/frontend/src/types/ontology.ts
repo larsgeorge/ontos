@@ -26,7 +26,7 @@ export interface OntologyConcept {
   examples: string[];
 }
 
-export interface OntologyTaxonomy {
+export interface SemanticModel {
   name: string;
   description?: string;
   source_type: 'file' | 'database' | 'external' | 'schema';
@@ -53,7 +53,7 @@ export interface ConceptSearchResult {
 export interface TaxonomyStats {
   total_concepts: number;
   total_properties: number;
-  taxonomies: OntologyTaxonomy[];
+  taxonomies: SemanticModel[];
   concepts_by_type: Record<string, number>;
   top_level_concepts: number;
 }
