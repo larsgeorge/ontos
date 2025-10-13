@@ -3,6 +3,56 @@
   "addNewProject": "Agregar nuevo proyecto",
   "editProject": "Editar proyecto",
   "deleteProject": "Eliminar proyecto",
+  "form": {
+    "dialog": {
+      "createTitle": "Crear nuevo proyecto",
+      "editTitle": "Editar proyecto",
+      "createDescription": "Cree un nuevo proyecto y asigne equipos para el aislamiento del espacio de trabajo.",
+      "editDescription": "Actualice los detalles del proyecto y las asignaciones de equipos."
+    },
+    "sections": {
+      "info": "Información del proyecto",
+      "teams": "Asignaciones de equipos",
+      "tags": "Etiquetas"
+    },
+    "labels": {
+      "name": "Nombre del proyecto *",
+      "title": "Título para mostrar",
+      "description": "Descripción",
+      "projectType": "Tipo de proyecto",
+      "assignTeams": "Asignar equipos",
+      "assignedTeams": "Equipos asignados:"
+    },
+    "placeholders": {
+      "name": "Ingrese el nombre del proyecto",
+      "title": "Ingrese el título para mostrar (opcional)",
+      "description": "Ingrese la descripción del proyecto (opcional)",
+      "selectProjectType": "Seleccione el tipo de proyecto",
+      "assignTeams": "Seleccione equipos para asignar a este proyecto",
+      "noTeamsAvailable": "No hay equipos disponibles",
+      "allTeamsAssigned": "Todos los equipos ya asignados",
+      "enterTag": "Ingrese etiqueta",
+      "noTagsHelp": "Aún no se han agregado etiquetas. Haga clic en \"Agregar etiqueta\" para agregar etiquetas del proyecto."
+    },
+    "types": {
+      "PERSONAL": "PERSONAL",
+      "TEAM": "TEAM"
+    },
+    "buttons": {
+      "addTag": "Agregar etiqueta",
+      "update": "Actualizar proyecto",
+      "create": "Crear proyecto"
+    },
+    "toasts": {
+      "createdTitle": "Proyecto creado",
+      "updatedTitle": "Proyecto actualizado",
+      "createdDescription": "El proyecto \"{{name}}\" se ha creado correctamente.",
+      "updatedDescription": "El proyecto \"{{name}}\" se ha actualizado correctamente.",
+      "createFailedTitle": "Error al crear el proyecto",
+      "updateFailedTitle": "Error al actualizar el proyecto",
+      "failedDescription": "Se produjo un error inesperado."
+    }
+  },
   "table": {
     "name": "Nombre",
     "description": "Descripción",

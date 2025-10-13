@@ -3,6 +3,56 @@
   "addNewProject": "Neues Projekt hinzufügen",
   "editProject": "Projekt bearbeiten",
   "deleteProject": "Projekt löschen",
+  "form": {
+    "dialog": {
+      "createTitle": "Neues Projekt erstellen",
+      "editTitle": "Projekt bearbeiten",
+      "createDescription": "Erstellen Sie ein neues Projekt und weisen Sie Teams zur Arbeitsbereichsisolation zu.",
+      "editDescription": "Projektinformationen und Teambereiche aktualisieren."
+    },
+    "sections": {
+      "info": "Projektinformationen",
+      "teams": "Teamzuweisungen",
+      "tags": "Tags"
+    },
+    "labels": {
+      "name": "Projektname *",
+      "title": "Anzeigename",
+      "description": "Beschreibung",
+      "projectType": "Projekttyp",
+      "assignTeams": "Teams zuweisen",
+      "assignedTeams": "Zugewiesene Teams:"
+    },
+    "placeholders": {
+      "name": "Projektnamen eingeben",
+      "title": "Anzeigename eingeben (optional)",
+      "description": "Projektbeschreibung eingeben (optional)",
+      "selectProjectType": "Projekttyp auswählen",
+      "assignTeams": "Teams für dieses Projekt auswählen",
+      "noTeamsAvailable": "Keine Teams verfügbar",
+      "allTeamsAssigned": "Alle Teams bereits zugewiesen",
+      "enterTag": "Tag eingeben",
+      "noTagsHelp": "Noch keine Tags hinzugefügt. Klicken Sie auf \"Tag hinzufügen\", um Tags hinzuzufügen."
+    },
+    "types": {
+      "PERSONAL": "PERSONAL",
+      "TEAM": "TEAM"
+    },
+    "buttons": {
+      "addTag": "Tag hinzufügen",
+      "update": "Projekt aktualisieren",
+      "create": "Projekt erstellen"
+    },
+    "toasts": {
+      "createdTitle": "Projekt erstellt",
+      "updatedTitle": "Projekt aktualisiert",
+      "createdDescription": "Projekt \"{{name}}\" wurde erfolgreich erstellt.",
+      "updatedDescription": "Projekt \"{{name}}\" wurde erfolgreich aktualisiert.",
+      "createFailedTitle": "Projekt konnte nicht erstellt werden",
+      "updateFailedTitle": "Projekt konnte nicht aktualisiert werden",
+      "failedDescription": "Es ist ein unerwarteter Fehler aufgetreten."
+    }
+  },
   "table": {
     "name": "Name",
     "description": "Beschreibung",

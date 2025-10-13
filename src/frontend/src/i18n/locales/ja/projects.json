@@ -3,6 +3,56 @@
   "addNewProject": "新しいプロジェクトを追加",
   "editProject": "プロジェクトを編集",
   "deleteProject": "プロジェクトを削除",
+  "form": {
+    "dialog": {
+      "createTitle": "新規プロジェクトの作成",
+      "editTitle": "プロジェクトを編集",
+      "createDescription": "新しいプロジェクトを作成し、ワークスペース分離のためにチームを割り当てます。",
+      "editDescription": "プロジェクトの詳細とチーム割り当てを更新します。"
+    },
+    "sections": {
+      "info": "プロジェクト情報",
+      "teams": "チームの割り当て",
+      "tags": "タグ"
+    },
+    "labels": {
+      "name": "プロジェクト名 *",
+      "title": "表示タイトル",
+      "description": "説明",
+      "projectType": "プロジェクト種別",
+      "assignTeams": "チームを割り当て",
+      "assignedTeams": "割り当て済みのチーム:"
+    },
+    "placeholders": {
+      "name": "プロジェクト名を入力",
+      "title": "表示タイトルを入力（任意）",
+      "description": "プロジェクトの説明を入力（任意）",
+      "selectProjectType": "プロジェクト種別を選択",
+      "assignTeams": "このプロジェクトに割り当てるチームを選択",
+      "noTeamsAvailable": "利用可能なチームはありません",
+      "allTeamsAssigned": "すべてのチームがすでに割り当て済みです",
+      "enterTag": "タグを入力",
+      "noTagsHelp": "まだタグが追加されていません。\"タグを追加\"をクリックしてプロジェクトタグを追加してください。"
+    },
+    "types": {
+      "PERSONAL": "PERSONAL",
+      "TEAM": "TEAM"
+    },
+    "buttons": {
+      "addTag": "タグを追加",
+      "update": "プロジェクトを更新",
+      "create": "プロジェクトを作成"
+    },
+    "toasts": {
+      "createdTitle": "プロジェクトを作成しました",
+      "updatedTitle": "プロジェクトを更新しました",
+      "createdDescription": "プロジェクト\"{{name}}\"を正常に作成しました。",
+      "updatedDescription": "プロジェクト\"{{name}}\"を正常に更新しました。",
+      "createFailedTitle": "プロジェクトの作成に失敗しました",
+      "updateFailedTitle": "プロジェクトの更新に失敗しました",
+      "failedDescription": "予期しないエラーが発生しました。"
+    }
+  },
   "table": {
     "name": "名前",
     "description": "説明",

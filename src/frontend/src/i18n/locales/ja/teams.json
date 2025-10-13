@@ -4,6 +4,58 @@
   "editTeam": "チームを編集",
   "deleteTeam": "チームを削除",
   "showingTeamsForProject": "プロジェクトのチームを表示:",
+  "form": {
+    "dialog": {
+      "createTitle": "新規チームの作成",
+      "editTitle": "チームを編集",
+      "createDescription": "メンバーとロール上書きを含む新しいチームを作成します。",
+      "editDescription": "チームの詳細とメンバーを更新します。"
+    },
+    "sections": {
+      "info": "チーム情報",
+      "members": "チームメンバー",
+      "tags": "タグ"
+    },
+    "labels": {
+      "name": "チーム名 *",
+      "title": "表示タイトル",
+      "description": "説明",
+      "domain": "データドメイン",
+      "type": "種類",
+      "identifier": "メール / グループ名",
+      "roleOverride": "ロール上書き",
+      "noOverride": "上書きなし"
+    },
+    "placeholders": {
+      "name": "チーム名を入力",
+      "title": "表示タイトルを入力（任意）",
+      "description": "チームの説明を入力（任意）",
+      "selectDomain": "データドメインを選択（任意）",
+      "userEmail": "user@example.com",
+      "groupName": "グループ名",
+      "noMembersHelp": "まだメンバーが追加されていません。\"メンバーを追加\"をクリックしてチーム作成を開始してください。",
+      "tagSearch": "このチームのタグを検索して選択..."
+    },
+    "memberTypes": {
+      "user": "ユーザー",
+      "group": "グループ"
+    },
+    "buttons": {
+      "addMember": "メンバーを追加",
+      "removeMember": "メンバーを削除",
+      "update": "チームを更新",
+      "create": "チームを作成"
+    },
+    "toasts": {
+      "createdTitle": "チームを作成しました",
+      "updatedTitle": "チームを更新しました",
+      "createdDescription": "チーム\"{{name}}\"を正常に作成しました。",
+      "updatedDescription": "チーム\"{{name}}\"を正常に更新しました。",
+      "createFailedTitle": "チームの作成に失敗しました",
+      "updateFailedTitle": "チームの更新に失敗しました",
+      "failedDescription": "予期しないエラーが発生しました。"
+    }
+  },
   "table": {
     "name": "名前",
     "description": "説明",

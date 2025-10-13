@@ -4,6 +4,58 @@
   "editTeam": "Editar equipo",
   "deleteTeam": "Eliminar equipo",
   "showingTeamsForProject": "Mostrando equipos para proyecto:",
+  "form": {
+    "dialog": {
+      "createTitle": "Crear nuevo equipo",
+      "editTitle": "Editar equipo",
+      "createDescription": "Cree un nuevo equipo con miembros y anulaciones de rol.",
+      "editDescription": "Actualice los detalles del equipo y los miembros."
+    },
+    "sections": {
+      "info": "Información del equipo",
+      "members": "Miembros del equipo",
+      "tags": "Etiquetas"
+    },
+    "labels": {
+      "name": "Nombre del equipo *",
+      "title": "Título para mostrar",
+      "description": "Descripción",
+      "domain": "Dominio de datos",
+      "type": "Tipo",
+      "identifier": "Correo / Nombre de grupo",
+      "roleOverride": "Anulación de rol",
+      "noOverride": "Sin anulación"
+    },
+    "placeholders": {
+      "name": "Ingrese el nombre del equipo",
+      "title": "Ingrese el título para mostrar (opcional)",
+      "description": "Ingrese la descripción del equipo (opcional)",
+      "selectDomain": "Seleccione un dominio de datos (opcional)",
+      "userEmail": "usuario@ejemplo.com",
+      "groupName": "nombre-grupo",
+      "noMembersHelp": "Aún no se han agregado miembros. Haga clic en \"Agregar miembro\" para comenzar a crear su equipo.",
+      "tagSearch": "Busque y seleccione etiquetas para este equipo..."
+    },
+    "memberTypes": {
+      "user": "Usuario",
+      "group": "Grupo"
+    },
+    "buttons": {
+      "addMember": "Agregar miembro",
+      "removeMember": "Quitar miembro",
+      "update": "Actualizar equipo",
+      "create": "Crear equipo"
+    },
+    "toasts": {
+      "createdTitle": "Equipo creado",
+      "updatedTitle": "Equipo actualizado",
+      "createdDescription": "El equipo \"{{name}}\" se ha creado correctamente.",
+      "updatedDescription": "El equipo \"{{name}}\" se ha actualizado correctamente.",
+      "createFailedTitle": "Error al crear el equipo",
+      "updateFailedTitle": "Error al actualizar el equipo",
+      "failedDescription": "Se produjo un error inesperado."
+    }
+  },
   "table": {
     "name": "Nombre",
     "description": "Descripción",

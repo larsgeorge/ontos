@@ -4,6 +4,58 @@
   "editTeam": "Modifier l'équipe",
   "deleteTeam": "Supprimer l'équipe",
   "showingTeamsForProject": "Affichage des équipes pour le projet :",
+  "form": {
+    "dialog": {
+      "createTitle": "Créer une nouvelle équipe",
+      "editTitle": "Modifier l'équipe",
+      "createDescription": "Créer une nouvelle équipe avec des membres et des remplacements de rôle.",
+      "editDescription": "Mettre à jour les détails de l'équipe et les membres."
+    },
+    "sections": {
+      "info": "Informations sur l'équipe",
+      "members": "Membres de l'équipe",
+      "tags": "Étiquettes"
+    },
+    "labels": {
+      "name": "Nom de l'équipe *",
+      "title": "Titre d'affichage",
+      "description": "Description",
+      "domain": "Domaine de données",
+      "type": "Type",
+      "identifier": "E-mail / Nom du groupe",
+      "roleOverride": "Remplacement de rôle",
+      "noOverride": "Aucun remplacement"
+    },
+    "placeholders": {
+      "name": "Saisir le nom de l'équipe",
+      "title": "Saisir le titre d'affichage (optionnel)",
+      "description": "Saisir la description de l'équipe (optionnel)",
+      "selectDomain": "Sélectionner un domaine de données (optionnel)",
+      "userEmail": "utilisateur@exemple.com",
+      "groupName": "nom-du-groupe",
+      "noMembersHelp": "Aucun membre ajouté. Cliquez sur \"Ajouter un membre\" pour commencer à créer votre équipe.",
+      "tagSearch": "Rechercher et sélectionner des étiquettes pour cette équipe..."
+    },
+    "memberTypes": {
+      "user": "Utilisateur",
+      "group": "Groupe"
+    },
+    "buttons": {
+      "addMember": "Ajouter un membre",
+      "removeMember": "Supprimer le membre",
+      "update": "Mettre à jour l'équipe",
+      "create": "Créer l'équipe"
+    },
+    "toasts": {
+      "createdTitle": "Équipe créée",
+      "updatedTitle": "Équipe mise à jour",
+      "createdDescription": "L'équipe \"{{name}}\" a été créée avec succès.",
+      "updatedDescription": "L'équipe \"{{name}}\" a été mise à jour avec succès.",
+      "createFailedTitle": "Échec de la création de l'équipe",
+      "updateFailedTitle": "Échec de la mise à jour de l'équipe",
+      "failedDescription": "Une erreur inattendue s'est produite."
+    }
+  },
   "table": {
     "name": "Nom",
     "description": "Description",

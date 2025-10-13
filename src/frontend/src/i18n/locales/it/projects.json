@@ -3,6 +3,56 @@
   "addNewProject": "Aggiungi nuovo progetto",
   "editProject": "Modifica progetto",
   "deleteProject": "Elimina progetto",
+  "form": {
+    "dialog": {
+      "createTitle": "Crea nuovo progetto",
+      "editTitle": "Modifica progetto",
+      "createDescription": "Crea un nuovo progetto e assegna i team per l'isolamento dell'area di lavoro.",
+      "editDescription": "Aggiorna i dettagli del progetto e le assegnazioni dei team."
+    },
+    "sections": {
+      "info": "Informazioni sul progetto",
+      "teams": "Assegnazioni dei team",
+      "tags": "Tag"
+    },
+    "labels": {
+      "name": "Nome del progetto *",
+      "title": "Titolo visualizzato",
+      "description": "Descrizione",
+      "projectType": "Tipo di progetto",
+      "assignTeams": "Assegna team",
+      "assignedTeams": "Team assegnati:"
+    },
+    "placeholders": {
+      "name": "Inserisci il nome del progetto",
+      "title": "Inserisci il titolo visualizzato (opzionale)",
+      "description": "Inserisci la descrizione del progetto (opzionale)",
+      "selectProjectType": "Seleziona il tipo di progetto",
+      "assignTeams": "Seleziona i team da assegnare a questo progetto",
+      "noTeamsAvailable": "Nessun team disponibile",
+      "allTeamsAssigned": "Tutti i team già assegnati",
+      "enterTag": "Inserisci tag",
+      "noTagsHelp": "Nessun tag aggiunto. Clicca \"Aggiungi tag\" per aggiungere tag al progetto."
+    },
+    "types": {
+      "PERSONAL": "PERSONAL",
+      "TEAM": "TEAM"
+    },
+    "buttons": {
+      "addTag": "Aggiungi tag",
+      "update": "Aggiorna progetto",
+      "create": "Crea progetto"
+    },
+    "toasts": {
+      "createdTitle": "Progetto creato",
+      "updatedTitle": "Progetto aggiornato",
+      "createdDescription": "Il progetto \"{{name}}\" è stato creato con successo.",
+      "updatedDescription": "Il progetto \"{{name}}\" è stato aggiornato con successo.",
+      "createFailedTitle": "Creazione del progetto non riuscita",
+      "updateFailedTitle": "Aggiornamento del progetto non riuscito",
+      "failedDescription": "Si è verificato un errore imprevisto."
+    }
+  },
   "table": {
     "name": "Nome",
     "description": "Descrizione",

@@ -3,6 +3,56 @@
   "addNewProject": "Add New Project",
   "editProject": "Edit Project",
   "deleteProject": "Delete Project",
+  "form": {
+    "dialog": {
+      "createTitle": "Create New Project",
+      "editTitle": "Edit Project",
+      "createDescription": "Create a new project and assign teams for workspace isolation.",
+      "editDescription": "Update project details and team assignments."
+    },
+    "sections": {
+      "info": "Project Information",
+      "teams": "Team Assignments",
+      "tags": "Tags"
+    },
+    "labels": {
+      "name": "Project Name *",
+      "title": "Display Title",
+      "description": "Description",
+      "projectType": "Project Type",
+      "assignTeams": "Assign Teams",
+      "assignedTeams": "Assigned Teams:"
+    },
+    "placeholders": {
+      "name": "Enter project name",
+      "title": "Enter display title (optional)",
+      "description": "Enter project description (optional)",
+      "selectProjectType": "Select project type",
+      "assignTeams": "Select teams to assign to this project",
+      "noTeamsAvailable": "No teams available",
+      "allTeamsAssigned": "All teams already assigned",
+      "enterTag": "Enter tag",
+      "noTagsHelp": "No tags added yet. Click \"Add Tag\" to add project tags."
+    },
+    "types": {
+      "PERSONAL": "PERSONAL",
+      "TEAM": "TEAM"
+    },
+    "buttons": {
+      "addTag": "Add Tag",
+      "update": "Update Project",
+      "create": "Create Project"
+    },
+    "toasts": {
+      "createdTitle": "Project Created",
+      "updatedTitle": "Project Updated",
+      "createdDescription": "Project \"{{name}}\" has been created successfully.",
+      "updatedDescription": "Project \"{{name}}\" has been updated successfully.",
+      "createFailedTitle": "Failed to Create Project",
+      "updateFailedTitle": "Failed to Update Project",
+      "failedDescription": "An unexpected error occurred."
+    }
+  },
   "table": {
     "name": "Name",
     "description": "Description",

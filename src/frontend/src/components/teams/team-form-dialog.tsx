@@ -5,8 +5,6 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import TagSelector from '@/components/ui/tag-selector';
 import {
   Dialog,
@@ -32,10 +30,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Plus, Trash2, User, Users, X } from 'lucide-react';
+import { Loader2, Plus, Trash2, User, Users } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
-import { TeamRead, TeamCreate, TeamUpdate, MemberType, TeamMember } from '@/types/team';
+import { TeamRead, TeamCreate, TeamUpdate, TeamMember } from '@/types/team';
 import { DataDomain } from '@/types/data-domain';
 
 // Form schema
@@ -77,6 +76,7 @@ export function TeamFormDialog({
 
   const { get: apiGet, post: apiPost, put: apiPut, delete: apiDelete } = useApi();
   const { toast } = useToast();
+  const { t } = useTranslation(['teams', 'common']);
 
   const form = useForm<TeamFormData>({
     resolver: zodResolver(teamFormSchema),
@@ -254,8 +254,10 @@ export function TeamFormDialog({
 
 
       toast({
-        title: team ? 'Team Updated' : 'Team Created',
-        description: `Team "${cleanedData.name}" has been ${team ? 'updated' : 'created'} successfully.`,
+        title: team ? t('teams:form.toasts.updatedTitle') : t('teams:form.toasts.createdTitle'),
+        description: team
+          ? t('teams:form.toasts.updatedDescription', { name: cleanedData.name })
+          : t('teams:form.toasts.createdDescription', { name: cleanedData.name }),
       });
 
       onSubmitSuccess(response.data as TeamRead);
@@ -263,8 +265,8 @@ export function TeamFormDialog({
     } catch (error) {
       toast({
         variant: 'destructive',
-        title: team ? 'Failed to Update Team' : 'Failed to Create Team',
-        description: error instanceof Error ? error.message : 'An unexpected error occurred.',
+        title: team ? t('teams:form.toasts.updateFailedTitle') : t('teams:form.toasts.createFailedTitle'),
+        description: error instanceof Error ? error.message : t('teams:form.toasts.failedDescription'),
       });
     } finally {
       setIsSubmitting(false);
@@ -275,9 +277,9 @@ export function TeamFormDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{team ? 'Edit Team' : 'Create New Team'}</DialogTitle>
+          <DialogTitle>{team ? t('teams:form.dialog.editTitle') : t('teams:form.dialog.createTitle')}</DialogTitle>
           <DialogDescription>
-            {team ? 'Update team details and members.' : 'Create a new team with members and role overrides.'}
+            {team ? t('teams:form.dialog.editDescription') : t('teams:form.dialog.createDescription')}
           </DialogDescription>
         </DialogHeader>
 
@@ -285,16 +287,16 @@ export function TeamFormDialog({
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
             {/* Basic Team Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Team Information</h3>
+              <h3 className="text-lg font-medium">{t('teams:form.sections.info')}</h3>
 
               <FormField
                 control={form.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Team Name *</FormLabel>
+                    <FormLabel>{t('teams:form.labels.name')}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter team name" {...field} />
+                      <Input placeholder={t('teams:form.placeholders.name')} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -306,9 +308,9 @@ export function TeamFormDialog({
                 name="title"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Display Title</FormLabel>
+                    <FormLabel>{t('teams:form.labels.title')}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter display title (optional)" {...field} />
+                      <Input placeholder={t('teams:form.placeholders.title')} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -320,9 +322,9 @@ export function TeamFormDialog({
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Description</FormLabel>
+                    <FormLabel>{t('teams:form.labels.description')}</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Enter team description (optional)" {...field} />
+                      <Textarea placeholder={t('teams:form.placeholders.description')} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -334,11 +336,11 @@ export function TeamFormDialog({
                 name="domain_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Data Domain</FormLabel>
+                    <FormLabel>{t('teams:form.labels.domain')}</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select a data domain (optional)" />
+                          <SelectValue placeholder={t('teams:form.placeholders.selectDomain')} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -359,7 +361,7 @@ export function TeamFormDialog({
             {/* Team Members */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium">Team Members</h3>
+                <h3 className="text-lg font-medium">{t('teams:form.sections.members')}</h3>
                 <Button
                   type="button"
                   variant="outline"
@@ -367,14 +369,12 @@ export function TeamFormDialog({
                   onClick={handleAddMember}
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Member
+                  {t('teams:form.buttons.addMember')}
                 </Button>
               </div>
 
               {memberFields.length === 0 ? (
-                <div className="text-center py-6 text-muted-foreground">
-                  No team members added yet. Click "Add Member" to start building your team.
-                </div>
+                <div className="text-center py-6 text-muted-foreground">{t('teams:form.placeholders.noMembersHelp')}</div>
               ) : (
                 <div className="space-y-3">
                   {memberFields.map((field, index) => (
@@ -386,7 +386,7 @@ export function TeamFormDialog({
                             name={`members.${index}.member_type`}
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Type</FormLabel>
+                                <FormLabel>{t('teams:form.labels.type')}</FormLabel>
                                 <Select onValueChange={field.onChange} value={field.value}>
                                   <FormControl>
                                     <SelectTrigger>
@@ -397,13 +397,13 @@ export function TeamFormDialog({
                                     <SelectItem value="user">
                                       <div className="flex items-center gap-2">
                                         <User className="w-4 h-4" />
-                                        User
+                                        {t('teams:form.memberTypes.user')}
                                       </div>
                                     </SelectItem>
                                     <SelectItem value="group">
                                       <div className="flex items-center gap-2">
                                         <Users className="w-4 h-4" />
-                                        Group
+                                        {t('teams:form.memberTypes.group')}
                                       </div>
                                     </SelectItem>
                                   </SelectContent>
@@ -418,16 +418,10 @@ export function TeamFormDialog({
                             name={`members.${index}.member_identifier`}
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>
-                                  {form.watch(`members.${index}.member_type`) === 'user' ? 'Email' : 'Group Name'}
-                                </FormLabel>
+                                <FormLabel>{t('teams:form.labels.identifier')}</FormLabel>
                                 <FormControl>
                                   <Input
-                                    placeholder={
-                                      form.watch(`members.${index}.member_type`) === 'user'
-                                        ? 'user@example.com'
-                                        : 'group-name'
-                                    }
+                                    placeholder={form.watch(`members.${index}.member_type`) === 'user' ? t('teams:form.placeholders.userEmail') : t('teams:form.placeholders.groupName')}
                                     {...field}
                                   />
                                 </FormControl>
@@ -441,15 +435,15 @@ export function TeamFormDialog({
                             name={`members.${index}.app_role_override`}
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Role Override</FormLabel>
+                                <FormLabel>{t('teams:form.labels.roleOverride')}</FormLabel>
                                 <Select onValueChange={field.onChange} value={field.value}>
                                   <FormControl>
                                     <SelectTrigger>
-                                      <SelectValue placeholder="No override" />
+                                      <SelectValue placeholder={t('teams:form.labels.noOverride')} />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    <SelectItem value="none">No override</SelectItem>
+                                    <SelectItem value="none">{t('teams:form.labels.noOverride')}</SelectItem>
                                     {availableRoles.map((role) => (
                                       <SelectItem key={role} value={role}>
                                         {role}
@@ -458,7 +452,7 @@ export function TeamFormDialog({
                                   </SelectContent>
                                 </Select>
                                 <FormDescription>
-                                  Override group-based role for this member
+                                  {t('teams:form.labels.roleOverride')}
                                 </FormDescription>
                                 <FormMessage />
                               </FormItem>
@@ -488,17 +482,17 @@ export function TeamFormDialog({
               name="tags"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Tags</FormLabel>
+                  <FormLabel>{t('teams:form.sections.tags')}</FormLabel>
                   <FormControl>
                     <TagSelector
                       value={field.value || []}
                       onChange={field.onChange}
-                      placeholder="Search and select tags for this team..."
+                      placeholder={t('teams:form.placeholders.tagSearch')}
                       allowCreate={true}
                     />
                   </FormControl>
                   <FormDescription>
-                    Add tags to categorize and organize this team
+                    {t('teams:form.sections.tags')}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -512,11 +506,11 @@ export function TeamFormDialog({
                 onClick={() => onOpenChange(false)}
                 disabled={isSubmitting}
               >
-                Cancel
+                {t('common:actions.cancel')}
               </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                {team ? 'Update Team' : 'Create Team'}
+                {team ? t('teams:form.buttons.update') : t('teams:form.buttons.create')}
               </Button>
             </DialogFooter>
           </form>

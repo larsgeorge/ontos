@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Loader2, Plus, FolderOpen, Users, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { ProjectRead, ProjectCreate, ProjectUpdate } from '@/types/project';
@@ -65,6 +66,7 @@ export function ProjectFormDialog({
 
   const { get: apiGet, post: apiPost, put: apiPut } = useApi();
   const { toast } = useToast();
+  const { t } = useTranslation(['projects', 'common']);
 
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectFormSchema),
@@ -176,8 +178,10 @@ export function ProjectFormDialog({
       }
 
       toast({
-        title: project ? 'Project Updated' : 'Project Created',
-        description: `Project "${cleanedData.name}" has been ${project ? 'updated' : 'created'} successfully.`,
+        title: project ? t('projects:form.toasts.updatedTitle') : t('projects:form.toasts.createdTitle'),
+        description: project
+          ? t('projects:form.toasts.updatedDescription', { name: cleanedData.name })
+          : t('projects:form.toasts.createdDescription', { name: cleanedData.name }),
       });
 
       onSubmitSuccess(response.data as ProjectRead);
@@ -185,8 +189,8 @@ export function ProjectFormDialog({
     } catch (error) {
       toast({
         variant: 'destructive',
-        title: project ? 'Failed to Update Project' : 'Failed to Create Project',
-        description: error instanceof Error ? error.message : 'An unexpected error occurred.',
+        title: project ? t('projects:form.toasts.updateFailedTitle') : t('projects:form.toasts.createFailedTitle'),
+        description: error instanceof Error ? error.message : t('projects:form.toasts.failedDescription'),
       });
     } finally {
       setIsSubmitting(false);
@@ -202,10 +206,10 @@ export function ProjectFormDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FolderOpen className="w-5 h-5" />
-            {project ? 'Edit Project' : 'Create New Project'}
+            {project ? t('projects:form.dialog.editTitle') : t('projects:form.dialog.createTitle')}
           </DialogTitle>
           <DialogDescription>
-            {project ? 'Update project details and team assignments.' : 'Create a new project and assign teams for workspace isolation.'}
+            {project ? t('projects:form.dialog.editDescription') : t('projects:form.dialog.createDescription')}
           </DialogDescription>
         </DialogHeader>
 
@@ -213,16 +217,16 @@ export function ProjectFormDialog({
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
             {/* Basic Project Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Project Information</h3>
+              <h3 className="text-lg font-medium">{t('projects:form.sections.info')}</h3>
 
               <FormField
                 control={form.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Project Name *</FormLabel>
+                    <FormLabel>{t('projects:form.labels.name')}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter project name" {...field} />
+                      <Input placeholder={t('projects:form.placeholders.name')} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -234,9 +238,9 @@ export function ProjectFormDialog({
                 name="title"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Display Title</FormLabel>
+                    <FormLabel>{t('projects:form.labels.title')}</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter display title (optional)" {...field} />
+                      <Input placeholder={t('projects:form.placeholders.title')} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -248,9 +252,9 @@ export function ProjectFormDialog({
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Description</FormLabel>
+                    <FormLabel>{t('projects:form.labels.description')}</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Enter project description (optional)" {...field} />
+                      <Textarea placeholder={t('projects:form.placeholders.description')} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -262,16 +266,16 @@ export function ProjectFormDialog({
                 name="project_type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Project Type</FormLabel>
+                    <FormLabel>{t('projects:form.labels.projectType')}</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select project type" />
+                          <SelectValue placeholder={t('projects:form.placeholders.selectProjectType')} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="PERSONAL">PERSONAL</SelectItem>
-                        <SelectItem value="TEAM">TEAM</SelectItem>
+                        <SelectItem value="PERSONAL">{t('projects:form.types.PERSONAL')}</SelectItem>
+                        <SelectItem value="TEAM">{t('projects:form.types.TEAM')}</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -282,14 +286,14 @@ export function ProjectFormDialog({
 
             {/* Team Assignments */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium">Team Assignments</h3>
+              <h3 className="text-lg font-medium">{t('projects:form.sections.teams')}</h3>
 
               <FormField
                 control={form.control}
                 name="team_ids"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Assign Teams</FormLabel>
+                    <FormLabel>{t('projects:form.labels.assignTeams')}</FormLabel>
                     <Select
                       onValueChange={(value) => {
                         if (value && !field.value?.includes(value)) {
@@ -299,7 +303,7 @@ export function ProjectFormDialog({
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select teams to assign to this project" />
+                          <SelectValue placeholder={t('projects:form.placeholders.assignTeams')} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -319,7 +323,7 @@ export function ProjectFormDialog({
                           ))}
                         {availableTeams.filter(team => !selectedTeamIds.includes(team.id)).length === 0 && (
                           <SelectItem value="none" disabled>
-                            {availableTeams.length === 0 ? 'No teams available' : 'All teams already assigned'}
+                            {availableTeams.length === 0 ? t('projects:form.placeholders.noTeamsAvailable') : t('projects:form.placeholders.allTeamsAssigned')}
                           </SelectItem>
                         )}
                       </SelectContent>
@@ -332,7 +336,7 @@ export function ProjectFormDialog({
               {/* Selected Teams Display */}
               {selectedTeams.length > 0 && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Assigned Teams:</label>
+                  <label className="text-sm font-medium">{t('projects:form.labels.assignedTeams')}</label>
                   <div className="flex flex-wrap gap-2">
                     {selectedTeams.map((team) => (
                       <Badge
@@ -362,7 +366,7 @@ export function ProjectFormDialog({
             {/* Tags */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium">Tags</h3>
+                <h3 className="text-lg font-medium">{t('projects:form.sections.tags')}</h3>
                 <Button
                   type="button"
                   variant="outline"
@@ -370,14 +374,12 @@ export function ProjectFormDialog({
                   onClick={handleAddTag}
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Tag
+                  {t('projects:form.buttons.addTag')}
                 </Button>
               </div>
 
               {tagFields.length === 0 ? (
-                <div className="text-center py-4 text-muted-foreground">
-                  No tags added yet. Click "Add Tag" to add project tags.
-                </div>
+                <div className="text-center py-4 text-muted-foreground">{t('projects:form.placeholders.noTagsHelp')}</div>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {tagFields.map((field, index) => {
@@ -392,7 +394,7 @@ export function ProjectFormDialog({
                               <FormItem>
                                 <FormControl>
                                   <Input
-                                    placeholder="Enter tag"
+                                    placeholder={t('projects:form.placeholders.enterTag')}
                                     className="w-24 h-8 text-xs"
                                     {...field}
                                   />
@@ -441,11 +443,11 @@ export function ProjectFormDialog({
                 onClick={() => onOpenChange(false)}
                 disabled={isSubmitting}
               >
-                Cancel
+                {t('common:actions.cancel')}
               </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                {project ? 'Update Project' : 'Create Project'}
+                {project ? t('projects:form.buttons.update') : t('projects:form.buttons.create')}
               </Button>
             </DialogFooter>
           </form>

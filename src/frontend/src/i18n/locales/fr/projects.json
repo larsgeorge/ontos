@@ -3,6 +3,56 @@
   "addNewProject": "Ajouter un nouveau projet",
   "editProject": "Modifier le projet",
   "deleteProject": "Supprimer le projet",
+  "form": {
+    "dialog": {
+      "createTitle": "Créer un nouveau projet",
+      "editTitle": "Modifier le projet",
+      "createDescription": "Créer un nouveau projet et attribuer des équipes pour l'isolation de l'espace de travail.",
+      "editDescription": "Mettre à jour les détails du projet et les affectations d'équipe."
+    },
+    "sections": {
+      "info": "Informations sur le projet",
+      "teams": "Affectations d'équipe",
+      "tags": "Étiquettes"
+    },
+    "labels": {
+      "name": "Nom du projet *",
+      "title": "Titre d'affichage",
+      "description": "Description",
+      "projectType": "Type de projet",
+      "assignTeams": "Affecter des équipes",
+      "assignedTeams": "Équipes attribuées :"
+    },
+    "placeholders": {
+      "name": "Saisir le nom du projet",
+      "title": "Saisir le titre d'affichage (optionnel)",
+      "description": "Saisir la description du projet (optionnel)",
+      "selectProjectType": "Sélectionner le type de projet",
+      "assignTeams": "Sélectionner des équipes à attribuer à ce projet",
+      "noTeamsAvailable": "Aucune équipe disponible",
+      "allTeamsAssigned": "Toutes les équipes déjà attribuées",
+      "enterTag": "Saisir une étiquette",
+      "noTagsHelp": "Aucune étiquette ajoutée pour le moment. Cliquez sur \"Ajouter une étiquette\" pour ajouter des étiquettes de projet."
+    },
+    "types": {
+      "PERSONAL": "PERSONAL",
+      "TEAM": "TEAM"
+    },
+    "buttons": {
+      "addTag": "Ajouter une étiquette",
+      "update": "Mettre à jour le projet",
+      "create": "Créer le projet"
+    },
+    "toasts": {
+      "createdTitle": "Projet créé",
+      "updatedTitle": "Projet mis à jour",
+      "createdDescription": "Le projet \"{{name}}\" a été créé avec succès.",
+      "updatedDescription": "Le projet \"{{name}}\" a été mis à jour avec succès.",
+      "createFailedTitle": "Échec de la création du projet",
+      "updateFailedTitle": "Échec de la mise à jour du projet",
+      "failedDescription": "Une erreur inattendue s'est produite."
+    }
+  },
   "table": {
     "name": "Nom",
     "description": "Description",

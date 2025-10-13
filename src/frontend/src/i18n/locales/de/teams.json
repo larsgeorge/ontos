@@ -4,6 +4,58 @@
   "editTeam": "Team bearbeiten",
   "deleteTeam": "Team löschen",
   "showingTeamsForProject": "Teams für Projekt anzeigen:",
+  "form": {
+    "dialog": {
+      "createTitle": "Neues Team erstellen",
+      "editTitle": "Team bearbeiten",
+      "createDescription": "Erstellen Sie ein neues Team mit Mitgliedern und Rollenüberschreibungen.",
+      "editDescription": "Teamdetails und Mitglieder aktualisieren."
+    },
+    "sections": {
+      "info": "Teaminformationen",
+      "members": "Teammitglieder",
+      "tags": "Tags"
+    },
+    "labels": {
+      "name": "Teamname *",
+      "title": "Anzeigename",
+      "description": "Beschreibung",
+      "domain": "Datenbereich",
+      "type": "Typ",
+      "identifier": "E-Mail / Gruppenname",
+      "roleOverride": "Rollenüberschreibung",
+      "noOverride": "Keine Überschreibung"
+    },
+    "placeholders": {
+      "name": "Teamnamen eingeben",
+      "title": "Anzeigename eingeben (optional)",
+      "description": "Teambeschreibung eingeben (optional)",
+      "selectDomain": "Datenbereich auswählen (optional)",
+      "userEmail": "user@example.com",
+      "groupName": "gruppen-name",
+      "noMembersHelp": "Noch keine Mitglieder. Klicken Sie auf \"Mitglied hinzufügen\".",
+      "tagSearch": "Tags für dieses Team suchen und auswählen..."
+    },
+    "memberTypes": {
+      "user": "Benutzer",
+      "group": "Gruppe"
+    },
+    "buttons": {
+      "addMember": "Mitglied hinzufügen",
+      "removeMember": "Mitglied entfernen",
+      "update": "Team aktualisieren",
+      "create": "Team erstellen"
+    },
+    "toasts": {
+      "createdTitle": "Team erstellt",
+      "updatedTitle": "Team aktualisiert",
+      "createdDescription": "Team \"{{name}}\" wurde erfolgreich erstellt.",
+      "updatedDescription": "Team \"{{name}}\" wurde erfolgreich aktualisiert.",
+      "createFailedTitle": "Team konnte nicht erstellt werden",
+      "updateFailedTitle": "Team konnte nicht aktualisiert werden",
+      "failedDescription": "Es ist ein unerwarteter Fehler aufgetreten."
+    }
+  },
   "table": {
     "name": "Name",
     "description": "Beschreibung",
