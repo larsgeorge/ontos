@@ -519,6 +519,42 @@ export default function DataContractDetails() {
     }
   }
 
+  const handleSubmitForReview = async () => {
+    if (!contractId) return;
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/submit`, { method: 'POST' });
+      if (!res.ok) throw new Error(`Submit failed (${res.status})`);
+      await fetchDetails();
+      toast({ title: 'Submitted', description: 'Contract submitted for review.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Submit failed', variant: 'destructive' });
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!contractId) return;
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/approve`, { method: 'POST' });
+      if (!res.ok) throw new Error(`Approve failed (${res.status})`);
+      await fetchDetails();
+      toast({ title: 'Approved', description: 'Contract approved.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Approve failed', variant: 'destructive' });
+    }
+  };
+
+  const handleReject = async () => {
+    if (!contractId) return;
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/reject`, { method: 'POST' });
+      if (!res.ok) throw new Error(`Reject failed (${res.status})`);
+      await fetchDetails();
+      toast({ title: 'Rejected', description: 'Contract rejected.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Reject failed', variant: 'destructive' });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -545,6 +581,16 @@ export default function DataContractDetails() {
           Back to List
         </Button>
         <div className="flex items-center gap-2">
+          {/* Lifecycle actions */}
+          {contract && (contract.status?.toLowerCase() === 'draft') && (
+            <Button size="sm" onClick={handleSubmitForReview}>Submit for Review</Button>
+          )}
+          {contract && (['proposed','under_review'].includes((contract.status || '').toLowerCase())) && (
+            <>
+              <Button size="sm" variant="outline" onClick={handleApprove}>Approve</Button>
+              <Button size="sm" variant="destructive" onClick={handleReject}>Reject</Button>
+            </>
+          )}
           <CommentSidebar
             entityType="data_contract"
             entityId={contractId!}

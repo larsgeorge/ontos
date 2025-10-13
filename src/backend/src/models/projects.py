@@ -16,6 +16,7 @@ class ProjectBase(BaseModel):
     owner_team_id: Optional[str] = Field(None, description="UUID of the team that manages this project")
     tags: Optional[List[AssignedTagCreate]] = Field(None, description="Optional list of rich tags with metadata")
     metadata: Optional[dict] = Field(None, description="Optional metadata (links, images, etc.)")
+    project_type: Optional[str] = Field(None, description="Type of project: PERSONAL or TEAM")
 
 
 class ProjectCreate(ProjectBase):
@@ -31,6 +32,7 @@ class ProjectUpdate(BaseModel):
     owner_team_id: Optional[str] = Field(None, description="Updated UUID of the team that manages this project")
     tags: Optional[List[AssignedTagCreate]] = Field(None, description="Updated list of rich tags with metadata")
     metadata: Optional[dict] = Field(None, description="Updated metadata")
+    project_type: Optional[str] = Field(None, description="Updated project type: PERSONAL or TEAM")
 
 
 class ProjectTeamAssignment(BaseModel):

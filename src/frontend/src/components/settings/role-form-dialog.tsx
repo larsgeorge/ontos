@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
-import { AppRole, FeatureConfig, FeatureAccessLevel, HomeSection } from '@/types/settings';
+import { AppRole, FeatureConfig, FeatureAccessLevel, HomeSection, ApprovalEntity } from '@/types/settings';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { ACCESS_LEVEL_ORDER } from '../../lib/permissions';
@@ -72,6 +72,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         assigned_groups: initialRole?.assigned_groups || [],
         feature_permissions: initialRole?.feature_permissions || getDefaultPermissions(featuresConfig),
         home_sections: initialRole?.home_sections || [],
+        approval_privileges: initialRole?.approval_privileges || {},
     };
 
     const {
@@ -92,6 +93,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 assigned_groups: [], 
                 feature_permissions: getDefaultPermissions(featuresConfig),
                 home_sections: [],
+                approval_privileges: {},
             };
 
             // Adjust permissions before resetting
@@ -109,7 +111,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 });
             }
 
-            const roleData = { ...baseRoleData, feature_permissions: adjustedPermissions };
+            const roleData = { ...baseRoleData, feature_permissions: adjustedPermissions } as AppRole;
 
             reset(roleData);
             setFormError(null);
@@ -122,7 +124,8 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 assigned_groups: [], 
                 feature_permissions: getDefaultPermissions(featuresConfig),
                 home_sections: [],
-            });
+                approval_privileges: {},
+            } as AppRole);
         }
     }, [isOpen, initialRole, reset, featuresConfig]);
 
@@ -133,8 +136,6 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                     return; // Prevent closing
                 }
             }
-            // Remove the reset here; onSubmit handles resetting after successful save.
-            // reset({ ...defaultValues, id: '', feature_permissions: getDefaultPermissions(featuresConfig) });
             setFormError(null);
         }
         onOpenChange(open);
@@ -143,57 +144,45 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
     const onSubmit = async (data: AppRole) => {
         setFormError(null);
 
-        // Prepare payload - use a base type that doesn't strictly require 'id' for create
-        const basePayload = {
+        // Prepare payload
+        const basePayload: AppRole = {
             ...data,
-            // Safely handle assigned_groups conversion by casting to unknown first
             assigned_groups: Array.isArray(data.assigned_groups)
                 ? data.assigned_groups
-                : typeof (data.assigned_groups as unknown) === 'string' // Cast before type check
-                    ? (data.assigned_groups as string).split(',').map((g: string) => g.trim()).filter(Boolean) // Cast again for split
-                    : [], // Default to empty array
-        };
+                : typeof (data.assigned_groups as unknown) === 'string'
+                    ? (data.assigned_groups as unknown as string).split(',').map((g: string) => g.trim()).filter(Boolean)
+                    : [],
+            approval_privileges: data.approval_privileges || {},
+        } as AppRole;
 
         try {
             let response;
             if (isEditMode) {
-                 // For update, we need the full AppRole payload including the original ID
                 const updatePayload: AppRole = {
                     ...basePayload,
-                    id: initialRole!.id, // Use the existing ID from initialRole
-                };
-                // Wrap the payload in { "role_data": ... } as FastAPI seems to expect it
-                // const nestedPayload = { role_data: updatePayload }; 
-                response = await put<AppRole>(`/api/settings/roles/${updatePayload.id}`, updatePayload); // Send updatePayload directly
+                    id: initialRole!.id,
+                } as AppRole;
+                response = await put<AppRole>(`/api/settings/roles/${updatePayload.id}`, updatePayload);
             } else {
-                // For create, construct a new payload explicitly excluding the 'id' field.
-                const { id, ...createPayloadWithoutId } = basePayload;
-                // DO NOT Wrap the payload in { "role_data": ... } 
-                // const nestedPayload = { role_data: createPayload }; 
-                response = await post<AppRole>('/api/settings/roles', createPayloadWithoutId); // Send createPayload directly
+                const { id, ...createPayloadWithoutId } = basePayload as any;
+                response = await post<AppRole>('/api/settings/roles', createPayloadWithoutId);
             }
 
             if (response.error || (response.data as any)?.detail) {
                 const errorDetail = (response.data as any)?.detail;
                 let errorMessage = response.error || 'Unknown error';
-                // Attempt to extract a more specific message from FastAPI validation errors
                 if (Array.isArray(errorDetail) && errorDetail.length > 0 && errorDetail[0].msg) {
                     errorMessage = errorDetail[0].msg;
                 }
                 throw new Error(errorMessage);
             }
 
-            const savedRoleData = response.data as AppRole; // Get the saved data from response
+            const savedRoleData = response.data as AppRole;
             toast({ title: 'Success', description: `Role "${savedRoleData.name}" ${isEditMode ? 'updated' : 'created'}.` });
-            
-            // Reset the form with the saved data BEFORE closing to clear isDirty
-            // Explicitly set keepDirty: false to force isDirty state to false
-            reset(savedRoleData, { keepDirty: false }); 
-
+            reset(savedRoleData, { keepDirty: false });
             onSubmitSuccess();
-            // Defer closing to allow form state (isDirty) to settle after reset
             setTimeout(() => {
-                onOpenChange(false); // Directly close the dialog via the parent callback
+                onOpenChange(false);
             }, 0);
 
         } catch (err: any) {
@@ -210,7 +199,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 <DialogHeader>
                     <DialogTitle>{isEditMode ? 'Edit Role' : 'Create Role'}</DialogTitle>
                     <DialogDescription>
-                        Define the role name, assigned groups, and feature permissions.
+                        Define the role name, assigned groups, feature permissions, and approval privileges.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -223,7 +212,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                 <Input
                                     id="name"
                                     {...register("name", { required: "Role name is required" })}
-                                    readOnly={isEditMode && initialRole?.id === 'admin'} // Don't allow renaming admin
+                                    readOnly={isEditMode && initialRole?.id === 'admin'}
                                     className={(isEditMode && initialRole?.id === 'admin') ? "bg-muted" : ""}
                                 />
                                 {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name.message}</p>}
@@ -268,6 +257,23 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                 defaultChecked={defaultValues.home_sections?.includes(section)}
                                             />
                                             <span>{section.replace('_', ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Approval Privileges */}
+                            <div className="space-y-3 pt-4 border-t">
+                                <h4 className="font-medium">Approval Privileges</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {Object.values(ApprovalEntity).map(entity => (
+                                        <label key={entity} className="flex items-center gap-2 text-sm">
+                                            <input
+                                                type="checkbox"
+                                                {...register(`approval_privileges.${entity}` as const)}
+                                                defaultChecked={Boolean(defaultValues.approval_privileges?.[entity as keyof typeof defaultValues.approval_privileges])}
+                                            />
+                                            <span>{entity.replace('_', ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}</span>
                                         </label>
                                     ))}
                                 </div>

@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, Plus, Trash2, FolderOpen, Users, X } from 'lucide-react';
+import { Loader2, Plus, FolderOpen, Users, X } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { ProjectRead, ProjectCreate, ProjectUpdate } from '@/types/project';
@@ -42,6 +42,7 @@ const projectFormSchema = z.object({
   description: z.string().optional(),
   tags: z.array(z.string()).optional(),
   team_ids: z.array(z.string()).optional(),
+  project_type: z.enum(['PERSONAL', 'TEAM']).optional(),
 });
 
 type ProjectFormData = z.infer<typeof projectFormSchema>;
@@ -73,12 +74,13 @@ export function ProjectFormDialog({
       description: '',
       tags: [],
       team_ids: [],
+      project_type: 'TEAM',
     },
   });
 
-  const { fields: tagFields, append: addTag, remove: removeTag } = useFieldArray({
+  const { fields: tagFields, append: addTag, remove: removeTag } = useFieldArray<any>({
     control: form.control,
-    name: 'tags',
+    name: 'tags' as const,
   });
 
   // Fetch data when dialog opens
@@ -92,8 +94,9 @@ export function ProjectFormDialog({
           name: project.name,
           title: project.title || '',
           description: project.description || '',
-          tags: project.tags || [],
+          tags: (project.tags || []).map((tag: any) => typeof tag === 'string' ? tag : (tag?.name ?? tag?.value ?? tag?.tag ?? '')),
           team_ids: project.teams?.map(team => team.id) || [],
+          project_type: (project.project_type as any) || 'TEAM',
         });
       } else {
         // Create mode - reset form
@@ -103,6 +106,7 @@ export function ProjectFormDialog({
           description: '',
           tags: [],
           team_ids: [],
+          project_type: 'TEAM',
         });
       }
     }
@@ -120,7 +124,7 @@ export function ProjectFormDialog({
   };
 
   const handleAddTag = () => {
-    addTag('');
+    addTag('' as any);
   };
 
   const handleSubmit = async (data: ProjectFormData) => {
@@ -131,6 +135,7 @@ export function ProjectFormDialog({
         ...data,
         tags: data.tags?.filter(tag => tag.trim() !== '') || [],
         team_ids: data.team_ids || [],
+        project_type: data.project_type || 'TEAM',
       };
 
       let response;
@@ -142,6 +147,7 @@ export function ProjectFormDialog({
           description: cleanedData.description || undefined,
           tags: cleanedData.tags,
           metadata: undefined,
+          project_type: cleanedData.project_type,
         };
         response = await apiPut<ProjectRead>(`/api/projects/${project.id}`, updateData);
 
@@ -160,6 +166,7 @@ export function ProjectFormDialog({
           tags: cleanedData.tags,
           metadata: undefined,
           team_ids: cleanedData.team_ids,
+          project_type: cleanedData.project_type,
         };
         response = await apiPost<ProjectRead>('/api/projects', createData);
       }
@@ -191,7 +198,7 @@ export function ProjectFormDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-height-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FolderOpen className="w-5 h-5" />
@@ -249,6 +256,28 @@ export function ProjectFormDialog({
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="project_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project Type</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select project type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="PERSONAL">PERSONAL</SelectItem>
+                        <SelectItem value="TEAM">TEAM</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             {/* Team Assignments */}
@@ -275,8 +304,8 @@ export function ProjectFormDialog({
                       </FormControl>
                       <SelectContent>
                         {availableTeams
-                          .filter(team => !selectedTeamIds.includes(team.id))
-                          .map((team) => (
+                          .filter((team) => !selectedTeamIds.includes(team.id))
+                          .map((team: TeamSummary) => (
                             <SelectItem key={team.id} value={team.id}>
                               <div className="flex items-center justify-between w-full">
                                 <span>{team.name}</span>

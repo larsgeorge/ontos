@@ -1,6 +1,7 @@
 projects:
   - name: "customer-360"
     title: "Customer 360 Initiative"
+    project_type: "TEAM"
     description: "Comprehensive customer data platform and analytics"
     owner_team_name: "analytics-team"
     tags:
@@ -19,6 +20,7 @@ projects:
 
   - name: "financial-reporting"
     title: "Financial Reporting Modernization"
+    project_type: "TEAM"
     description: "Modernize financial reporting infrastructure and processes"
     owner_team_name: "governance-team"
     tags:
@@ -37,6 +39,7 @@ projects:
 
   - name: "ml-platform"
     title: "Machine Learning Platform"
+    project_type: "TEAM"
     description: "Build and deploy ML infrastructure and services"
     owner_team_name: "data-science"
     tags:
@@ -54,6 +57,7 @@ projects:
 
   - name: "data-governance-pilot"
     title: "Data Governance Pilot Program"
+    project_type: "TEAM"
     description: "Pilot program for implementing data governance best practices"
     owner_team_name: "governance-team"
     tags:
@@ -71,6 +75,7 @@ projects:
 
   - name: "real-time-analytics"
     title: "Real-time Analytics Platform"
+    project_type: "TEAM"
     description: "Build real-time streaming analytics capabilities"
     owner_team_name: "data-engineering"
     tags:

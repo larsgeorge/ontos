@@ -448,7 +448,9 @@ class ProjectsManager:
                         'description': project_data.get('description', ''),
                         'tags': project_data.get('tags', []),
                         'metadata': project_data.get('metadata', {}),
-                        'team_ids': []  # Will assign teams separately
+                        'team_ids': [],  # Will assign teams separately
+                        # Respect YAML-specified project_type when provided; fallback to DB default otherwise
+                        'project_type': project_data.get('project_type')
                     }
 
                     # Resolve owner_team_name to owner_team_id if provided

@@ -17,6 +17,8 @@ class AppRoleDb(Base):
     assigned_groups = Column(Text, nullable=False, default='[]')
     feature_permissions = Column(Text, nullable=False, default='{}')
     home_sections = Column(Text, nullable=False, default='[]')
+    # Approval privileges JSON (e.g., {"CONTRACTS": true, "PRODUCTS": true})
+    approval_privileges = Column(Text, nullable=False, default='{}')
 
     # Add timestamp columns - Make them nullable
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=True)

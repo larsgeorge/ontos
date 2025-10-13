@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 import json
 import uuid
+import yaml
 
 from databricks.sdk import WorkspaceClient
 from pydantic import ValidationError
@@ -15,7 +16,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.controller.notifications_manager import NotificationsManager
 from src.models.notifications import NotificationType, Notification
-from src.models.settings import JobCluster, AppRole, AppRoleCreate, AppRoleUpdate, HomeSection
+from src.models.settings import JobCluster, AppRole, AppRoleCreate, AppRoleUpdate, HomeSection, ApprovalEntity
 from src.models.workflow_installations import WorkflowInstallation
 from src.common.features import get_feature_config, FeatureAccessLevel, get_all_access_levels, APP_FEATURES, ACCESS_LEVEL_ORDER
 from src.common.logging import get_logger
@@ -27,6 +28,7 @@ logger = get_logger(__name__)
 
 # Define the path for storing roles configuration
 # ROLES_YAML_PATH = Path("api/data/app_roles.yaml")
+ROLES_YAML_PATH = Path(__file__).parent.parent / 'data' / 'settings.yaml'
 
 # --- Default Role Definitions --- 
 
@@ -280,6 +282,72 @@ class SettingsManager:
 
             logger.info("No existing roles found. Creating default roles...")
             
+            # Try to load role defaults from YAML; generate file from in-code defaults if missing
+            roles_from_yaml: List[Dict[str, Any]] = []
+            try:
+                if ROLES_YAML_PATH.exists():
+                    with open(ROLES_YAML_PATH, 'r') as f:
+                        raw = yaml.safe_load(f) or {}
+                        if isinstance(raw, dict) and 'roles' in raw and isinstance(raw['roles'], list):
+                            roles_from_yaml = raw['roles']
+                        elif isinstance(raw, list):
+                            roles_from_yaml = raw
+                        else:
+                            logger.warning(f"Unsupported YAML structure in {ROLES_YAML_PATH}. Expected list or {'roles': [...]}.")
+                else:
+                    # Build YAML from current in-code defaults on first run
+                    logger.info(f"Roles YAML not found at {ROLES_YAML_PATH}. Creating with default roles...")
+                    try:
+                        ROLES_YAML_PATH.parent.mkdir(parents=True, exist_ok=True)
+                        # Start with names/descriptions
+                        generated_roles: List[Dict[str, Any]] = []
+                        for role_def in DEFAULT_ROLES:
+                            name = role_def.get('name')
+                            base: Dict[str, Any] = {
+                                'name': name,
+                                'description': role_def.get('description'),
+                            }
+                            # Only include non-admin explicit permissions; admin will be expanded at runtime
+                            if name != 'Admin':
+                                base['feature_permissions'] = {
+                                    feat_id: DEFAULT_ROLE_PERMISSIONS.get(name, {}).get(feat_id, FeatureAccessLevel.NONE).value
+                                    for feat_id in DEFAULT_ROLE_PERMISSIONS.get(name, {})
+                                }
+                                # Default home sections per role (mirrors in-code defaults)
+                                if name == 'Data Consumer':
+                                    base['home_sections'] = [HomeSection.DISCOVERY.value]
+                                elif name == 'Data Producer':
+                                    base['home_sections'] = [HomeSection.DATA_CURATION.value, HomeSection.DISCOVERY.value]
+                                elif name in ("Data Steward", "Security Officer", "Data Governance Officer"):
+                                    base['home_sections'] = [HomeSection.REQUIRED_ACTIONS.value, HomeSection.DISCOVERY.value]
+                                else:
+                                    base['home_sections'] = [HomeSection.DISCOVERY.value]
+                                # Default approval privileges per role
+                                if name == 'Data Governance Officer':
+                                    base['approval_privileges'] = {
+                                        'DOMAINS': True,
+                                        'CONTRACTS': True,
+                                        'PRODUCTS': True,
+                                        'BUSINESS_TERMS': True,
+                                        'ASSET_REVIEWS': True,
+                                    }
+                                elif name == 'Data Steward':
+                                    base['approval_privileges'] = {
+                                        'CONTRACTS': True,
+                                        'PRODUCTS': True,
+                                        'ASSET_REVIEWS': True,
+                                    }
+                            generated_roles.append(base)
+
+                        with open(ROLES_YAML_PATH, 'w') as f:
+                            yaml.safe_dump({'roles': generated_roles}, f, sort_keys=False)
+                        roles_from_yaml = generated_roles
+                        logger.info(f"Created default roles YAML at {ROLES_YAML_PATH}")
+                    except Exception as gen_e:
+                        logger.error(f"Failed creating roles YAML at {ROLES_YAML_PATH}: {gen_e}")
+            except Exception as yaml_e:
+                logger.error(f"Failed reading roles YAML at {ROLES_YAML_PATH}: {yaml_e}")
+
             # Parse Admin Groups
             admin_groups = []
             try:
@@ -299,26 +367,65 @@ class SettingsManager:
             all_features_config = get_feature_config() # Get the full config
             logger.info(f"Found features: {list(all_features_config.keys())}")
 
-            for role_def in DEFAULT_ROLES:
+            roles_to_apply: List[Dict[str, Any]] = roles_from_yaml if roles_from_yaml else DEFAULT_ROLES
+
+            for role_def in roles_to_apply:
                 role_data = role_def.copy()
                 role_name = role_data["name"]
                 
                 if role_name == "Admin":
-                    role_data["assigned_groups"] = admin_groups
-                    role_data["feature_permissions"] = {
-                        feat_id: FeatureAccessLevel.ADMIN
-                        for feat_id in all_features_config
-                    }
+                    role_data["assigned_groups"] = role_data.get("assigned_groups") or admin_groups
+                    # If YAML provided explicit permissions, honor them; otherwise grant Admin to all features
+                    provided_perms = role_data.get("feature_permissions") or {}
+                    if provided_perms:
+                        final_permissions: Dict[str, FeatureAccessLevel] = {}
+                        for feat_id, lvl in provided_perms.items():
+                            if feat_id not in all_features_config:
+                                logger.warning(f"Unknown feature id '{feat_id}' in Admin permissions from YAML; skipping")
+                                continue
+                            try:
+                                lvl_enum = FeatureAccessLevel(lvl)
+                            except Exception:
+                                logger.warning(f"Invalid access level '{lvl}' for feature '{feat_id}' in Admin YAML; using NONE")
+                                lvl_enum = FeatureAccessLevel.NONE
+                            allowed_levels = all_features_config[feat_id].get('allowed_levels', [])
+                            final_permissions[feat_id] = lvl_enum if lvl_enum in allowed_levels else FeatureAccessLevel.NONE
+                        role_data["feature_permissions"] = final_permissions
+                    else:
+                        role_data["feature_permissions"] = {
+                            feat_id: FeatureAccessLevel.ADMIN
+                            for feat_id in all_features_config
+                        }
                     logger.info(f"Assigning default ADMIN permissions to Admin role for features: {list(all_features_config.keys())}")
                     # Default home sections for Admin
                     role_data["home_sections"] = [
                         HomeSection.REQUIRED_ACTIONS,
                         HomeSection.DATA_CURATION,
                         HomeSection.DISCOVERY,
-                    ]
+                    ] if not role_data.get("home_sections") else [HomeSection(s) if not isinstance(s, HomeSection) else s for s in role_data.get("home_sections", [])]
+                    # Default approval privileges: all true
+                    role_data["approval_privileges"] = role_data.get("approval_privileges") or {
+                        "DOMAINS": True,
+                        "CONTRACTS": True,
+                        "PRODUCTS": True,
+                        "BUSINESS_TERMS": True,
+                        "ASSET_REVIEWS": True,
+                    }
                 else:
-                    role_data["assigned_groups"] = []
-                    desired_permissions = DEFAULT_ROLE_PERMISSIONS.get(role_name, {})
+                    role_data["assigned_groups"] = role_data.get("assigned_groups") or []
+                    # Prefer permissions from YAML when provided; otherwise fall back to in-code defaults
+                    provided_perms = role_data.get("feature_permissions") or {}
+                    if provided_perms:
+                        # Normalize provided perms to enums
+                        desired_permissions = {}
+                        for feat_id, lvl in provided_perms.items():
+                            try:
+                                desired_permissions[feat_id] = FeatureAccessLevel(lvl) if not isinstance(lvl, FeatureAccessLevel) else lvl
+                            except Exception:
+                                logger.warning(f"Invalid access level '{lvl}' for feature '{feat_id}' in role '{role_name}' from YAML; using NONE")
+                                desired_permissions[feat_id] = FeatureAccessLevel.NONE
+                    else:
+                        desired_permissions = DEFAULT_ROLE_PERMISSIONS.get(role_name, {})
                     final_permissions = {}
                     for feat_id, feature_config in all_features_config.items():
                         desired_level = desired_permissions.get(feat_id, FeatureAccessLevel.NONE)
@@ -339,14 +446,39 @@ class SettingsManager:
                     logger.info(f"Assigning default permissions for role '{role_name}': { {k: v.value for k,v in final_permissions.items()} }")
 
                     # Default home sections per role
-                    if role_name == "Data Consumer":
-                        role_data["home_sections"] = [HomeSection.DISCOVERY]
-                    elif role_name == "Data Producer":
-                        role_data["home_sections"] = [HomeSection.DATA_CURATION, HomeSection.DISCOVERY]
-                    elif role_name in ("Data Steward", "Security Officer", "Data Governance Officer"):
-                        role_data["home_sections"] = [HomeSection.REQUIRED_ACTIONS, HomeSection.DISCOVERY]
+                    if role_data.get("home_sections"):
+                        role_data["home_sections"] = [HomeSection(s) if not isinstance(s, HomeSection) else s for s in role_data.get("home_sections", [])]
                     else:
-                        role_data["home_sections"] = [HomeSection.DISCOVERY]
+                        if role_name == "Data Consumer":
+                            role_data["home_sections"] = [HomeSection.DISCOVERY]
+                        elif role_name == "Data Producer":
+                            role_data["home_sections"] = [HomeSection.DATA_CURATION, HomeSection.DISCOVERY]
+                        elif role_name in ("Data Steward", "Security Officer", "Data Governance Officer"):
+                            role_data["home_sections"] = [HomeSection.REQUIRED_ACTIONS, HomeSection.DISCOVERY]
+                        else:
+                            role_data["home_sections"] = [HomeSection.DISCOVERY]
+
+                    # Default approval privileges per role
+                    if role_data.get("approval_privileges") is not None:
+                        # Keep as provided (Pydantic can coerce keys to enums)
+                        role_data["approval_privileges"] = role_data.get("approval_privileges")
+                    else:
+                        if role_name == "Data Governance Officer":
+                            role_data["approval_privileges"] = {
+                                "DOMAINS": True,
+                                "CONTRACTS": True,
+                                "PRODUCTS": True,
+                                "BUSINESS_TERMS": True,
+                                "ASSET_REVIEWS": True,
+                            }
+                        elif role_name == "Data Steward":
+                            role_data["approval_privileges"] = {
+                                "CONTRACTS": True,
+                                "PRODUCTS": True,
+                                "ASSET_REVIEWS": True,
+                            }
+                        else:
+                            role_data["approval_privileges"] = {}
 
                 logger.debug(f"Final permissions data for role '{role_name}': {role_data['feature_permissions']}")
 
@@ -636,6 +768,14 @@ class SettingsManager:
             logger.warning(f"Could not parse or convert home_sections JSON for role ID {role_db.id}: {getattr(role_db, 'home_sections', None)}. Error: {e}")
             home_sections = []
 
+        # Parse approval privileges
+        try:
+            approval_privs_raw = json.loads(getattr(role_db, 'approval_privileges', '{}') or '{}')
+            approval_privileges = { ApprovalEntity(k): bool(v) for k, v in approval_privs_raw.items() if isinstance(k, str) }
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            logger.warning(f"Could not parse or convert approval_privileges JSON for role ID {role_db.id}: {getattr(role_db, 'approval_privileges', None)}. Error: {e}")
+            approval_privileges = {}
+
         return AppRole(
             id=role_db.id, # Keep UUID
             name=role_db.name,
@@ -643,6 +783,7 @@ class SettingsManager:
             assigned_groups=assigned_groups,
             feature_permissions=feature_permissions,
             home_sections=home_sections,
+            approval_privileges=approval_privileges,
             # created_at=role_db.created_at, # Uncomment if needed
             # updated_at=role_db.updated_at  # Uncomment if needed
         )
@@ -686,6 +827,28 @@ class SettingsManager:
                     # Persist backfill
                     self.app_role_repo.update(db=self._db, db_obj=role_db, obj_in={'home_sections': default_sections})
                     updated_any = True
+
+                # Backfill approval_privileges defaults if missing
+                try:
+                    ap_raw = json.loads(getattr(role_db, 'approval_privileges', '{}') or '{}')
+                except Exception:
+                    ap_raw = {}
+                if not ap_raw:
+                    name = (role_db.name or '').strip()
+                    defaults: dict[str, bool] = {}
+                    if name in ("Admin", "Data Governance Officer"):
+                        defaults = { e.value: True for e in ApprovalEntity }
+                    elif name == "Data Steward":
+                        defaults = {
+                            ApprovalEntity.CONTRACTS.value: True,
+                            ApprovalEntity.PRODUCTS.value: True,
+                            ApprovalEntity.ASSET_REVIEWS.value: True,
+                        }
+                    else:
+                        defaults = {}
+                    if defaults:
+                        self.app_role_repo.update(db=self._db, db_obj=role_db, obj_in={'approval_privileges': defaults})
+                        updated_any = True
 
             if updated_any:
                 # Flush once after backfill

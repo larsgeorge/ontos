@@ -34,6 +34,11 @@ class AppRoleRepository(CRUDBase[AppRoleDb, AppRoleCreate, AppRoleUpdate]):
         # Home sections stored as list of strings
         home_sections_list = getattr(obj_in, 'home_sections', [])
         db_obj_data['home_sections'] = json.dumps(home_sections_list)
+        # Approval privileges stored as dict of booleans
+        approval_privs = getattr(obj_in, 'approval_privileges', {}) or {}
+        # Keys are enums or strings; normalize to strings
+        approval_privs_str = { (k.value if hasattr(k, 'value') else str(k)): bool(v) for k, v in approval_privs.items() }
+        db_obj_data['approval_privileges'] = json.dumps(approval_privs_str)
         db_obj = self.model(**db_obj_data)
         db.add(db_obj)
         db.flush() # Use flush instead of commit within repository method
@@ -58,6 +63,10 @@ class AppRoleRepository(CRUDBase[AppRoleDb, AppRoleCreate, AppRoleUpdate]):
             )
         if 'home_sections' in update_data and update_data['home_sections'] is not None:
             update_data['home_sections'] = json.dumps(update_data['home_sections'])
+        if 'approval_privileges' in update_data and update_data['approval_privileges'] is not None:
+            ap = update_data['approval_privileges'] or {}
+            ap_norm = { (k.value if hasattr(k, 'value') else str(k)): bool(v) for k, v in ap.items() }
+            update_data['approval_privileges'] = json.dumps(ap_norm)
 
         logger.debug(f"Updating AppRoleDb {db_obj.id} with data: {update_data}")
         # Use the base class update method which handles attribute setting

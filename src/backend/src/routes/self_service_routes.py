@@ -43,6 +43,21 @@ def _username_slug(email: Optional[str]) -> str:
     return slug or "user"
 
 
+def _is_sandbox_allowed(settings, catalog: str, schema: str) -> bool:
+    try:
+        if not settings.sandbox_enforce_allowlist:
+            return True
+        # Exact allowlist
+        if catalog in (settings.sandbox_allowed_catalogs or []):
+            return (schema in (settings.sandbox_allowed_schemas or []))
+        # Prefix allowlist
+        if any(catalog.startswith(pfx) for pfx in (settings.sandbox_allowed_catalog_prefixes or [])):
+            return (schema in (settings.sandbox_allowed_schemas or []))
+        return False
+    except Exception:
+        return False
+
+
 def _load_compliance_mapping() -> Dict[str, Any]:
     """Load compliance mapping from YAML via ConfigManager.
 
@@ -156,6 +171,7 @@ async def bootstrap_self_service(
                 'title': f"Personal Project for {current_user.email}",
                 'description': "Auto-created personal project",
                 'owner_team_id': team.id if team else None,
+                'project_type': 'PERSONAL',
                 'created_by': current_user.email,
                 'updated_by': current_user.email,
             })
@@ -163,7 +179,7 @@ async def bootstrap_self_service(
         # Suggest default UC sandbox names
         settings = get_settings()
         default_catalog = f"user_{username_slug}"
-        default_schema = "sandbox"
+        default_schema = settings.sandbox_default_schema or "sandbox"
 
         return {
             'team': {'id': team.id, 'name': team.name} if team else None,
@@ -212,7 +228,7 @@ async def self_service_create(
         auto_fix = bool(payload.get('autoFix', True))
         default_to_user_catalog = bool(payload.get('defaultToUserCatalog', True))
         requested_catalog = (payload.get('catalog') or '').strip()
-        requested_schema = (payload.get('schema') or '').strip() or 'sandbox'
+        requested_schema = (payload.get('schema') or '').strip() or (get_settings().sandbox_default_schema or 'sandbox')
         if not requested_catalog and default_to_user_catalog:
             requested_catalog = f"user_{username_slug}"
 
@@ -233,6 +249,9 @@ async def self_service_create(
                 obj = _apply_autofix('catalog', obj, mapping, getattr(current_user, 'email', None), project)
             all_passed, res = _eval_policies(db, obj, list(mapping.get('catalog', {}).get('policies', [])) if isinstance(mapping.get('catalog'), dict) else [])
             compliance_results.extend(res)
+            # Enforce sandbox allowlist for catalog creation
+            if not _is_sandbox_allowed(get_settings(), requested_catalog, requested_schema or (get_settings().sandbox_default_schema or 'sandbox')):
+                raise HTTPException(status_code=403, detail="Catalog not allowed by sandbox policy")
             # Create catalog (idempotent)
             try:
                 ws.catalogs.get(requested_catalog)
@@ -248,6 +267,9 @@ async def self_service_create(
                 obj = _apply_autofix('schema', obj, mapping, getattr(current_user, 'email', None), project)
             all_passed, res = _eval_policies(db, obj, list(mapping.get('schema', {}).get('policies', [])) if isinstance(mapping.get('schema'), dict) else [])
             compliance_results.extend(res)
+            # Enforce sandbox allowlist for schema creation
+            if not _is_sandbox_allowed(get_settings(), requested_catalog, requested_schema):
+                raise HTTPException(status_code=403, detail="Schema not allowed by sandbox policy")
             # Ensure catalog then schema
             try:
                 try:
@@ -277,6 +299,9 @@ async def self_service_create(
 
         # Ensure parents
         try:
+            # Enforce sandbox allowlist for table creation
+            if not _is_sandbox_allowed(get_settings(), requested_catalog, requested_schema):
+                raise HTTPException(status_code=403, detail="Table location not allowed by sandbox policy")
             try:
                 ws.catalogs.get(requested_catalog)
             except Exception:

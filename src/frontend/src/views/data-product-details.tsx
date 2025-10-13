@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DataProduct, InputPort, OutputPort, DataProductStatus, DataProductOwner, DataProductType } from '@/types/data-product'; // Import Port types
 import DataProductWizardDialog from '@/components/data-products/data-product-wizard-dialog';
@@ -56,7 +56,7 @@ export default function DataProductDetails() {
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments); // For potential parent path
   const { hasPermission, isLoading: permissionsLoading } = usePermissions(); // Use permissions hook
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications); // Get refresh action
-  const { getDomainName, getDomainIdByName } = useDomains();
+  const { getDomainIdByName } = useDomains();
 
   const [product, setProduct] = useState<DataProduct | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,10 +67,10 @@ export default function DataProductDetails() {
   const [links, setLinks] = useState<EntitySemanticLink[]>([]);
   const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false);
   const [isRequestAccessDialogOpen, setIsRequestAccessDialogOpen] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   // State for dropdown values needed by the dialog
   const [statuses, setStatuses] = useState<DataProductStatus[]>([]);
-  const [productTypes, setProductTypes] = useState<DataProductType[]>([]);
   const [owners, setOwners] = useState<DataProductOwner[]>([]);
 
   // Permissions
@@ -119,7 +119,7 @@ export default function DataProductDetails() {
     setDynamicTitle('Loading...'); // Set loading state for the dynamic part
     try {
       // Fetch product details and dropdown values concurrently
-      const [productResp, statusesResp, ownersResp, typesResp, linksResp] = await Promise.all([
+      const [productResp, statusesResp, ownersResp, _typesResp, linksResp] = await Promise.all([
         get<DataProduct>(`/api/data-products/${productId}`),
         get<DataProductStatus[]>('/api/data-products/statuses'),
         get<DataProductOwner[]>('/api/data-products/owners'),
@@ -131,12 +131,11 @@ export default function DataProductDetails() {
       const productData = checkApiResponse(productResp, 'Product Details');
       const statusesData = checkApiResponse(statusesResp, 'Statuses');
       const ownersData = checkApiResponse(ownersResp, 'Owners');
-      const typesData = checkApiResponse(typesResp, 'Product Types');
+      // const typesData = checkApiResponse(typesResp, 'Product Types'); // not used
 
       // Set state
       setProduct(productData);
       setStatuses(Array.isArray(statusesData) ? statusesData : []);
-      setProductTypes(Array.isArray(typesData) ? typesData : []);
       setOwners(Array.isArray(ownersData) ? ownersData : []);
       setLinks(Array.isArray(linksResp.data) ? linksResp.data : []);
 
@@ -149,12 +148,57 @@ export default function DataProductDetails() {
       setProduct(null); // Clear product on error
       // Clear dropdowns on error too?
       setStatuses([]);
-      setProductTypes([]);
+      // setProductTypes([]);
       setOwners([]);
       setDynamicTitle('Error'); // Set error state or null
       toast({ title: 'Error', description: `Failed to load data: ${errorMessage}`, variant: 'destructive' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubmitCertification = async () => {
+    if (!productId) return;
+    setIsTransitioning(true);
+    try {
+      const res = await fetch(`/api/data-products/${productId}/submit-certification`, { method: 'POST' });
+      if (!res.ok) throw new Error(`Submit certification failed (${res.status})`);
+      await fetchDetailsAndDropdowns();
+      toast({ title: 'Submitted', description: 'Product submitted for certification.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Submit certification failed', variant: 'destructive' });
+    } finally {
+      setIsTransitioning(false);
+    }
+  };
+
+  const handleCertify = async () => {
+    if (!productId) return;
+    setIsTransitioning(true);
+    try {
+      const res = await fetch(`/api/data-products/${productId}/certify`, { method: 'POST' });
+      if (!res.ok) throw new Error(`Certify failed (${res.status})`);
+      await fetchDetailsAndDropdowns();
+      toast({ title: 'Certified', description: 'Product certified.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Certify failed', variant: 'destructive' });
+    } finally {
+      setIsTransitioning(false);
+    }
+  };
+
+  const handleRejectCertification = async () => {
+    if (!productId) return;
+    setIsTransitioning(true);
+    try {
+      const res = await fetch(`/api/data-products/${productId}/reject-certification`, { method: 'POST' });
+      if (!res.ok) throw new Error(`Reject failed (${res.status})`);
+      await fetchDetailsAndDropdowns();
+      toast({ title: 'Rejected', description: 'Certification request rejected.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Reject failed', variant: 'destructive' });
+    } finally {
+      setIsTransitioning(false);
     }
   };
 
@@ -183,7 +227,7 @@ export default function DataProductDetails() {
   };
 
   // Handler for successful wizard submission (shared logic with list view)
-  const handleWizardSubmitSuccess = (savedProduct: DataProduct) => {
+  const handleWizardSubmitSuccess = (_: DataProduct) => {
     setIsEditWizardOpen(false); // Close the wizard
     fetchDetailsAndDropdowns(); // Refetch details to show updates
   };
@@ -386,6 +430,18 @@ export default function DataProductDetails() {
           {product.info.description && <CardDescription className="pt-1">{product.info.description}</CardDescription>}
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Lifecycle actions */}
+          <div className="flex items-center gap-2">
+            {product.info?.status?.toUpperCase() === 'SANDBOX' && (
+              <Button size="sm" onClick={handleSubmitCertification} disabled={isTransitioning}>Submit for Certification</Button>
+            )}
+            {product.info?.status?.toUpperCase() === 'PENDING_CERTIFICATION' && (
+              <>
+                <Button size="sm" variant="outline" onClick={handleCertify} disabled={isTransitioning}>Certify</Button>
+                <Button size="sm" variant="destructive" onClick={handleRejectCertification} disabled={isTransitioning}>Reject</Button>
+              </>
+            )}
+          </div>
           <div className="grid md:grid-cols-4 gap-4">
             <div className="space-y-1"><Label>Owner:</Label> <span className="text-sm block">{product.info.owner_team_id || 'N/A'}</span></div>
             <div className="space-y-1">

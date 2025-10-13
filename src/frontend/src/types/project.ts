@@ -13,6 +13,7 @@ export interface Project {
   created_by: string;
   updated_by: string;
   teams: TeamSummary[];
+  project_type?: 'PERSONAL' | 'TEAM';
 }
 
 export interface ProjectCreate {
@@ -22,6 +23,7 @@ export interface ProjectCreate {
   tags?: (string | AssignedTag)[] | null;
   metadata?: Record<string, any> | null;
   team_ids?: string[] | null;
+  project_type?: 'PERSONAL' | 'TEAM';
 }
 
 export interface ProjectUpdate {
@@ -30,6 +32,7 @@ export interface ProjectUpdate {
   description?: string | null;
   tags?: (string | AssignedTag)[] | null;
   metadata?: Record<string, any> | null;
+  project_type?: 'PERSONAL' | 'TEAM';
 }
 
 export interface ProjectSummary {
@@ -61,3 +64,6 @@ export interface ProjectAccessRequestResponse {
   message: string;
   project_name: string;
 }
+
+// Convenience alias for API responses
+export interface ProjectRead extends Project {}

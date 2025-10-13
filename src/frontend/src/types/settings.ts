@@ -20,6 +20,17 @@ export enum HomeSection {
     DISCOVERY = 'DISCOVERY',
 }
 
+// --- Approval Privileges ---
+export enum ApprovalEntity {
+    DOMAINS = 'DOMAINS',
+    CONTRACTS = 'CONTRACTS',
+    PRODUCTS = 'PRODUCTS',
+    BUSINESS_TERMS = 'BUSINESS_TERMS',
+    ASSET_REVIEWS = 'ASSET_REVIEWS',
+}
+
+export type ApprovalPrivileges = Partial<Record<ApprovalEntity, boolean>>;
+
 export interface AppRole {
     id: string;
     name: string;
@@ -27,6 +38,7 @@ export interface AppRole {
     assigned_groups: string[];
     feature_permissions: Record<string, FeatureAccessLevel>;
     home_sections?: HomeSection[];
+    approval_privileges?: ApprovalPrivileges;
 }
 
 export type UserPermissions = Record<string, FeatureAccessLevel>;

@@ -44,7 +44,7 @@ from src.models.data_contracts_api import (
     DataContractCommentRead,
 )
 from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
-from src.common.authorization import PermissionChecker
+from src.common.authorization import PermissionChecker, ApprovalChecker
 from src.common.features import FeatureAccessLevel
 import yaml
 
@@ -107,12 +107,122 @@ async def get_contracts(
 @router.get('/data-contracts/{contract_id}', response_model=DataContractRead)
 async def get_contract(contract_id: str, db: DBSessionDep, _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))):
     """Get a specific data contract with full ODCS structure"""
+    contract = data_contract_repo.get_with_all(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    return _build_contract_read_from_db(db, contract)
+
+
+# --- Lifecycle Transition Endpoints (minimal) ---
+
+@router.post('/data-contracts/{contract_id}/submit')
+async def submit_contract(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
+):
     try:
-        contract = data_contract_repo.get_with_all(db, id=contract_id)
+        contract = db.query(DataContractDb).filter(DataContractDb.id == contract_id).first()
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
+        from_status = (contract.status or '').lower()
+        if from_status != 'draft':
+            raise HTTPException(status_code=409, detail=f"Invalid transition from {contract.status} to PROPOSED")
+        contract.status = 'proposed'
+        db.add(contract)
+        db.flush()
+        # Audit
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else 'anonymous',
+            ip_address=request.client.host if request.client else None,
+            feature='data-contracts',
+            action='SUBMIT',
+            success=True,
+            details={ 'contract_id': contract_id, 'from': from_status, 'to': contract.status }
+        )
+        return { 'status': contract.status }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Submit contract failed")
+        raise HTTPException(status_code=500, detail=str(e))
 
-        return _build_contract_read_from_db(db, contract)
+
+@router.post('/data-contracts/{contract_id}/approve')
+async def approve_contract(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(ApprovalChecker('CONTRACTS')),
+):
+    try:
+        contract = db.query(DataContractDb).filter(DataContractDb.id == contract_id).first()
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+        from_status = (contract.status or '').lower()
+        if from_status not in ('proposed', 'under_review'):
+            raise HTTPException(status_code=409, detail=f"Invalid transition from {contract.status} to APPROVED")
+        contract.status = 'approved'
+        db.add(contract)
+        db.flush()
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else 'anonymous',
+            ip_address=request.client.host if request.client else None,
+            feature='data-contracts',
+            action='APPROVE',
+            success=True,
+            details={ 'contract_id': contract_id, 'from': from_status, 'to': contract.status }
+        )
+        return { 'status': contract.status }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Approve contract failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-contracts/{contract_id}/reject')
+async def reject_contract(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(ApprovalChecker('CONTRACTS')),
+):
+    try:
+        contract = db.query(DataContractDb).filter(DataContractDb.id == contract_id).first()
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+        from_status = (contract.status or '').lower()
+        if from_status not in ('proposed', 'under_review'):
+            raise HTTPException(status_code=409, detail=f"Invalid transition from {contract.status} to REJECTED")
+        contract.status = 'rejected'
+        db.add(contract)
+        db.flush()
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else 'anonymous',
+            ip_address=request.client.host if request.client else None,
+            feature='data-contracts',
+            action='REJECT',
+            success=True,
+            details={ 'contract_id': contract_id, 'from': from_status, 'to': contract.status }
+        )
+        return { 'status': contract.status }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Reject contract failed")
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1471,12 +1581,6 @@ async def add_comment(
     response_status_code = 500
     details_for_audit = {
         "params": {"contract_id": contract_id},
-        "body_preview": _extract_details_default(
-            request=request,
-            response_or_exc=None,
-            route_args=(),
-            route_kwargs={'contract_id': contract_id, 'payload': payload}
-        )
     }
     try:
         if not data_contract_repo.get(db, id=contract_id):
@@ -1547,12 +1651,6 @@ async def create_version(
     response_status_code = 500
     details_for_audit = {
         "params": {"contract_id": contract_id},
-        "body_preview": _extract_details_default(
-            request=request,
-            response_or_exc=None,
-            route_args=(),
-            route_kwargs={'contract_id': contract_id, 'payload': payload}
-        )
     }
     try:
         original = data_contract_repo.get(db, id=contract_id)

@@ -14,7 +14,9 @@ from databricks.sdk.errors import NotFound
 from src.controller.users_manager import UsersManager
 from src.common.config import get_settings, Settings
 # Import from the new dependencies file
-from src.common.manager_dependencies import get_auth_manager, get_users_manager
+from src.common.manager_dependencies import get_auth_manager, get_users_manager, get_settings_manager
+from src.controller.settings_manager import SettingsManager
+from src.models.settings import ApprovalEntity
 
 logger = get_logger(__name__)
 
@@ -334,3 +336,58 @@ def require_data_product_read() -> PermissionChecker:
 # Project access convenience functions
 def require_project_access(project_id_param: str = "project_id") -> ProjectAccessChecker:
     return ProjectAccessChecker(project_id_param) 
+
+
+class ApprovalChecker:
+    """FastAPI Dependency to check if the user has approval privilege for an entity.
+
+    Example: ApprovalChecker(ApprovalEntity.CONTRACTS) or ApprovalChecker('CONTRACTS')
+    """
+    def __init__(self, entity: ApprovalEntity | str):
+        self.entity = ApprovalEntity(entity) if not isinstance(entity, ApprovalEntity) else entity
+        logger.debug(f"ApprovalChecker initialized for entity '{self.entity.value}'")
+
+    async def __call__(
+        self,
+        request: Request,
+        user_details: UserInfo = Depends(get_user_details_from_sdk),
+        settings_manager: SettingsManager = Depends(get_settings_manager)
+    ):
+        try:
+            # If a role override is applied, use it
+            applied_role_id = settings_manager.get_applied_role_override_for_user(user_details.email)
+            approval = False
+            if applied_role_id:
+                role = settings_manager.get_app_role(applied_role_id)
+                ap = (role.approval_privileges or {}) if role else {}
+                approval = bool(ap.get(self.entity, False))
+            else:
+                # Union across roles assigned to user's groups
+                user_groups = set(user_details.groups or [])
+                roles = settings_manager.list_app_roles()
+                ap_union: dict[ApprovalEntity, bool] = {}
+                for role in roles:
+                    try:
+                        role_groups = set(role.assigned_groups or [])
+                        if not role_groups.intersection(user_groups):
+                            continue
+                        for k, v in (role.approval_privileges or {}).items():
+                            ap_union[ApprovalEntity(k)] = ap_union.get(ApprovalEntity(k), False) or bool(v)
+                    except Exception:
+                        continue
+                approval = bool(ap_union.get(self.entity, False))
+
+            if not approval:
+                logger.warning(
+                    f"Approval denied for user '{user_details.user or user_details.email}' on entity '{self.entity.value}'"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Insufficient approval privilege for '{self.entity.value}'."
+                )
+            return
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error during approval check for '{self.entity.value}': {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Error checking approval privileges")

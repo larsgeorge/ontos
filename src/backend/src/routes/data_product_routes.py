@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 import yaml
 from fastapi import APIRouter, HTTPException, UploadFile, File, Body, Depends, Request, BackgroundTasks
 from pydantic import ValidationError
+import json
 import uuid
 from sqlalchemy.orm import Session
 
@@ -13,7 +14,7 @@ from src.models.data_products import DataProduct, GenieSpaceRequest, NewVersionR
 from src.models.users import UserInfo
 from databricks.sdk.errors import PermissionDenied
 
-from src.common.authorization import PermissionChecker
+from src.common.authorization import PermissionChecker, ApprovalChecker
 from src.common.features import FeatureAccessLevel
 
 from src.common.dependencies import (
@@ -44,6 +45,119 @@ def get_data_products_manager(
         logger.critical(f"Object found at app.state.data_products_manager is not a DataProductsManager instance (Type: {type(manager)})!")
         raise HTTPException(status_code=500, detail="Data Products service configuration error.")
     return manager
+
+
+# --- Lifecycle transitions (minimal) ---
+
+@router.post('/data-products/{product_id}/submit-certification')
+async def submit_product_certification(
+    product_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
+):
+    try:
+        from src.db_models.data_products import DataProductDb, InfoDb
+        product = db.query(DataProductDb).filter(DataProductDb.id == product_id).first()
+        if not product or not product.info:
+            raise HTTPException(status_code=404, detail="Data product not found")
+        cur = (product.info.status or '').upper()
+        if cur != 'SANDBOX':
+            raise HTTPException(status_code=409, detail=f"Invalid transition from {product.info.status} to PENDING_CERTIFICATION")
+        product.info.status = 'PENDING_CERTIFICATION'
+        db.add(product.info)
+        db.flush()
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action='SUBMIT_CERTIFICATION',
+            success=True,
+            details={ 'product_id': product_id, 'from': cur, 'to': product.info.status }
+        )
+        return { 'status': product.info.status }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Submit product certification failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-products/{product_id}/certify')
+async def certify_product(
+    product_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(ApprovalChecker('PRODUCTS'))
+):
+    try:
+        from src.db_models.data_products import DataProductDb
+        product = db.query(DataProductDb).filter(DataProductDb.id == product_id).first()
+        if not product or not product.info:
+            raise HTTPException(status_code=404, detail="Data product not found")
+        cur = (product.info.status or '').upper()
+        if cur != 'PENDING_CERTIFICATION':
+            raise HTTPException(status_code=409, detail=f"Invalid transition from {product.info.status} to CERTIFIED")
+        product.info.status = 'CERTIFIED'
+        db.add(product.info)
+        db.flush()
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action='CERTIFY',
+            success=True,
+            details={ 'product_id': product_id, 'from': cur, 'to': product.info.status }
+        )
+        return { 'status': product.info.status }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Certify product failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-products/{product_id}/reject-certification')
+async def reject_product_certification(
+    product_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(ApprovalChecker('PRODUCTS'))
+):
+    try:
+        from src.db_models.data_products import DataProductDb
+        product = db.query(DataProductDb).filter(DataProductDb.id == product_id).first()
+        if not product or not product.info:
+            raise HTTPException(status_code=404, detail="Data product not found")
+        cur = (product.info.status or '').upper()
+        if cur != 'PENDING_CERTIFICATION':
+            raise HTTPException(status_code=409, detail=f"Invalid transition from {product.info.status} to SANDBOX")
+        product.info.status = 'SANDBOX'
+        db.add(product.info)
+        db.flush()
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action='REJECT_CERTIFICATION',
+            success=True,
+            details={ 'product_id': product_id, 'from': cur, 'to': product.info.status }
+        )
+        return { 'status': product.info.status }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Reject product certification failed")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get('/data-products/statuses', response_model=List[str])
 async def get_data_product_statuses(
@@ -347,12 +461,6 @@ async def create_data_product_version(
     response_status_code = 500
     details_for_audit = {
         "params": {"original_product_id": product_id, "requested_new_version": version_request.new_version},
-        "body_preview": _extract_details_default(
-            request=request, 
-            response_or_exc=None, 
-            route_args=(), 
-            route_kwargs={'product_id': product_id, 'version_request': version_request}
-        )
     }
     new_product_response = None
 
@@ -435,12 +543,7 @@ async def update_data_product(
             feature=DATA_PRODUCTS_FEATURE_ID,
             action="UPDATE",
             success=False, 
-            details=_extract_details_default(
-                request=request, 
-                response_or_exc=exc, 
-                route_args=(), 
-                route_kwargs={'product_id': product_id, 'product_update': product_update}
-            )
+            details={"error": "mismatch id"}
         )
         raise exc
 
@@ -448,12 +551,6 @@ async def update_data_product(
     response_status_code = 500 
     details_for_audit = {
         "params": {"product_id": product_id},
-        "body_preview": _extract_details_default(
-            request=request, 
-            response_or_exc=None, 
-            route_args=(), 
-            route_kwargs={'product_id': product_id, 'product_update': product_update}
-        )
     }
     updated_product_response = None
     exception_details = None

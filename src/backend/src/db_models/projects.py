@@ -25,6 +25,8 @@ class ProjectDb(Base):
     name = Column(String, nullable=False, unique=True)
     title = Column(String, nullable=True)
     description = Column(Text, nullable=True)
+    # Project type: PERSONAL or TEAM (string for portability)
+    project_type = Column(String, nullable=False, index=True, default='PERSONAL')
 
     # Project ownership
     owner_team_id = Column(String, ForeignKey('teams.id'), nullable=True, index=True)  # Team that manages this project

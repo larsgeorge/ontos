@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, PlusCircle, Loader2, AlertCircle, FolderOpen } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, Loader2, AlertCircle, FolderOpen, User, Users } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { ProjectRead } from '@/types/project';
@@ -104,7 +104,7 @@ export default function ProjectsView() {
     setIsFormOpen(true);
   };
 
-  const handleFormSubmitSuccess = (savedProject: ProjectRead) => {
+  const handleFormSubmitSuccess = (_savedProject: ProjectRead) => {
     fetchProjects();
   };
 
@@ -145,14 +145,19 @@ export default function ProjectsView() {
       header: t('table.name'),
       cell: ({ row }) => {
         const project = row.original;
+        const isPersonal = ((project as any).project_type || '').toUpperCase() === 'PERSONAL';
+        const Icon = isPersonal ? User : Users;
         return (
-          <div>
-            <span className="font-medium">{project.name}</span>
-            {project.title && (
-              <div className="text-xs text-muted-foreground">
-                {project.title}
-              </div>
-            )}
+          <div className="flex items-start gap-2">
+            <Icon className="w-4 h-4 mt-0.5 text-muted-foreground" />
+            <div>
+              <span className="font-medium">{project.name}</span>
+              {project.title && (
+                <div className="text-xs text-muted-foreground">
+                  {project.title}
+                </div>
+              )}
+            </div>
           </div>
         );
       },
@@ -174,7 +179,7 @@ export default function ProjectsView() {
         if (!teams || teams.length === 0) return '-';
         return (
           <div className="flex flex-col space-y-0.5">
-            {teams.slice(0, 3).map((team, index) => (
+            {teams.slice(0, 3).map((team: any, index: number) => (
               <Badge
                 key={index}
                 variant="secondary"

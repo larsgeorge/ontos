@@ -1,0 +1,187 @@
+roles:
+  - name: Admin
+    description: Default role: Admin
+    # assigned_groups may be injected from env APP_ADMIN_DEFAULT_GROUPS on first run
+    # feature_permissions omitted: Admin will be granted ADMIN for all features by default
+    home_sections:
+      - REQUIRED_ACTIONS
+      - DATA_CURATION
+      - DISCOVERY
+    approval_privileges:
+      DOMAINS: true
+      CONTRACTS: true
+      PRODUCTS: true
+      BUSINESS_TERMS: true
+      ASSET_REVIEWS: true
+
+  - name: Data Governance Officer
+    description: Default role: Data Governance Officer
+    feature_permissions:
+      data-domains: Admin
+      data-products: Admin
+      data-contracts: Admin
+      teams: Read-only
+      projects: Read-only
+      business-glossary: Admin
+      compliance: Admin
+      estate-manager: Admin
+      master-data: Admin
+      security: Admin
+      entitlements: Admin
+      entitlements-sync: Admin
+      data-asset-reviews: Admin
+      catalog-commander: Full
+      settings: Read-only
+    home_sections:
+      - REQUIRED_ACTIONS
+      - DISCOVERY
+    approval_privileges:
+      DOMAINS: true
+      CONTRACTS: true
+      PRODUCTS: true
+      BUSINESS_TERMS: true
+      ASSET_REVIEWS: true
+
+  - name: Data Steward
+    description: Default role: Data Steward
+    feature_permissions:
+      data-domains: Read/Write
+      data-products: Read/Write
+      data-contracts: Read/Write
+      teams: Read-only
+      projects: Read-only
+      business-glossary: Read/Write
+      compliance: Read-only
+      data-asset-reviews: Read/Write
+      catalog-commander: Read-only
+    home_sections:
+      - REQUIRED_ACTIONS
+      - DISCOVERY
+    approval_privileges:
+      CONTRACTS: true
+      PRODUCTS: true
+      ASSET_REVIEWS: true
+
+  - name: Data Consumer
+    description: Default role: Data Consumer
+    feature_permissions:
+      data-domains: Read-only
+      data-products: Read-only
+      data-contracts: Read-only
+      teams: Read-only
+      projects: Read-only
+      business-glossary: Read-only
+      catalog-commander: Read-only
+    home_sections:
+      - DISCOVERY
+
+  - name: Data Producer
+    description: Default role: Data Producer
+    feature_permissions:
+      data-domains: Read-only
+      data-products: Read/Write
+      data-contracts: Read/Write
+      teams: Read/Write
+      projects: Read/Write
+      business-glossary: Read-only
+      catalog-commander: Read-only
+    home_sections:
+      - DATA_CURATION
+      - DISCOVERY
+
+  - name: Security Officer
+    description: Default role: Security Officer
+    feature_permissions:
+      security: Admin
+      entitlements: Admin
+      entitlements-sync: Admin
+      compliance: Read/Write
+      data-asset-reviews: Read-only
+    home_sections:
+      - REQUIRED_ACTIONS
+      - DISCOVERY
+roles:
+- name: Admin
+  description: 'Default role: Admin'
+- name: Data Governance Officer
+  description: 'Default role: Data Governance Officer'
+  feature_permissions:
+    data-domains: Admin
+    data-products: Admin
+    data-contracts: Admin
+    teams: Read-only
+    projects: Read-only
+    business-glossary: Admin
+    compliance: Admin
+    estate-manager: Admin
+    master-data: Admin
+    security: Admin
+    entitlements: Admin
+    entitlements-sync: Admin
+    data-asset-reviews: Admin
+    catalog-commander: Full
+    settings: Read-only
+  home_sections:
+  - REQUIRED_ACTIONS
+  - DISCOVERY
+  approval_privileges:
+    DOMAINS: true
+    CONTRACTS: true
+    PRODUCTS: true
+    BUSINESS_TERMS: true
+    ASSET_REVIEWS: true
+- name: Data Steward
+  description: 'Default role: Data Steward'
+  feature_permissions:
+    data-domains: Read/Write
+    data-products: Read/Write
+    data-contracts: Read/Write
+    teams: Read-only
+    projects: Read-only
+    business-glossary: Read/Write
+    compliance: Read-only
+    data-asset-reviews: Read/Write
+    catalog-commander: Read-only
+  home_sections:
+  - REQUIRED_ACTIONS
+  - DISCOVERY
+  approval_privileges:
+    CONTRACTS: true
+    PRODUCTS: true
+    ASSET_REVIEWS: true
+- name: Data Consumer
+  description: 'Default role: Data Consumer'
+  feature_permissions:
+    data-domains: Read-only
+    data-products: Read-only
+    data-contracts: Read-only
+    teams: Read-only
+    projects: Read-only
+    business-glossary: Read-only
+    catalog-commander: Read-only
+  home_sections:
+  - DISCOVERY
+- name: Data Producer
+  description: 'Default role: Data Producer'
+  feature_permissions:
+    data-domains: Read-only
+    data-products: Read/Write
+    data-contracts: Read/Write
+    teams: Read/Write
+    projects: Read/Write
+    business-glossary: Read-only
+    catalog-commander: Read-only
+  home_sections:
+  - DATA_CURATION
+  - DISCOVERY
+- name: Security Officer
+  description: 'Default role: Security Officer'
+  feature_permissions:
+    security: Admin
+    entitlements: Admin
+    entitlements-sync: Admin
+    compliance: Read/Write
+    data-asset-reviews: Read-only
+  home_sections:
+  - REQUIRED_ACTIONS
+  - DISCOVERY

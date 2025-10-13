@@ -206,6 +206,8 @@ tags_routes.register_routes(app)
 teams_routes.register_routes(app)
 projects_routes.register_routes(app)
 costs_routes.register_routes(app)
+from src.routes import approvals_routes
+approvals_routes.register_routes(app)
 
 # Define other specific API routes BEFORE the catch-all
 @app.get("/api/time")
