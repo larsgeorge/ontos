@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, BackgroundTasks
 
 from src.models.teams import (
     TeamCreate,
@@ -18,7 +18,9 @@ from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
     DBSessionDep,
-    CurrentUserDep
+    CurrentUserDep,
+    AuditManagerDep,
+    AuditCurrentUserDep
 )
 from src.models.users import UserInfo
 from src.common.errors import NotFoundError, ConflictError
@@ -45,24 +47,48 @@ def get_teams_manager():
     dependencies=[Depends(PermissionChecker(TEAMS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))]
 )
 def create_team(
+    request: Request,
     team_in: TeamCreate,
     db: DBSessionDep,
-    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     manager = Depends(get_teams_manager)
 ):
     """Creates a new team."""
+    success = False
+    details_for_audit = {
+        "params": {"team_name": team_in.name, "domain_id": team_in.domain_id if hasattr(team_in, 'domain_id') else None},
+    }
+    created_team_id = None
+
     logger.info(f"User '{current_user.email}' attempting to create team: {team_in.name}")
     try:
         created_team = manager.create_team(db=db, team_in=team_in, current_user_id=current_user.email)
         db.commit()
+        success = True
+        created_team_id = str(created_team.id)
         return created_team
     except ConflictError as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except Exception as e:
         db.rollback()
         logger.exception(f"Failed to create team '{team_in.name}': {e}")
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create team: {e!s}")
+    finally:
+        if created_team_id:
+            details_for_audit["created_resource_id"] = created_team_id
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=TEAMS_FEATURE_ID,
+            action="CREATE",
+            success=success,
+            details=details_for_audit
+        )
 
 
 @router.get(
@@ -130,12 +156,19 @@ def get_team(
 )
 def update_team(
     team_id: str,
+    request: Request,
     team_in: TeamUpdate,
     db: DBSessionDep,
-    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     manager = Depends(get_teams_manager)
 ):
     """Updates an existing team."""
+    success = False
+    details_for_audit = {
+        "params": {"team_id": team_id},
+    }
+
     logger.info(f"User '{current_user.email}' attempting to update team: {team_id}")
     try:
         updated_team = manager.update_team(
@@ -145,17 +178,33 @@ def update_team(
             current_user_id=current_user.email
         )
         db.commit()
+        success = True
         return updated_team
     except NotFoundError as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ConflictError as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except Exception as e:
         db.rollback()
         logger.exception(f"Failed to update team {team_id}: {e}")
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update team: {e!s}")
+    finally:
+        if success:
+            details_for_audit["updated_resource_id"] = team_id
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=TEAMS_FEATURE_ID,
+            action="UPDATE",
+            success=success,
+            details=details_for_audit
+        )
 
 
 @router.delete(
@@ -166,23 +215,45 @@ def update_team(
 )
 def delete_team(
     team_id: str,
+    request: Request,
     db: DBSessionDep,
-    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     manager = Depends(get_teams_manager)
 ):
     """Deletes a team. Requires Admin privileges."""
+    success = False
+    details_for_audit = {
+        "params": {"team_id": team_id},
+    }
+
     logger.info(f"User '{current_user.email}' attempting to delete team: {team_id}")
     try:
         deleted_team = manager.delete_team(db=db, team_id=team_id)
         db.commit()
+        success = True
         return deleted_team
     except NotFoundError as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         db.rollback()
         logger.exception(f"Failed to delete team {team_id}: {e}")
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete team: {e!s}")
+    finally:
+        if success:
+            details_for_audit["deleted_resource_id"] = team_id
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=TEAMS_FEATURE_ID,
+            action="DELETE",
+            success=success,
+            details=details_for_audit
+        )
 
 
 # Team Member Routes
@@ -194,12 +265,20 @@ def delete_team(
 )
 def add_team_member(
     team_id: str,
+    request: Request,
     member_in: TeamMemberCreate,
     db: DBSessionDep,
-    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     manager = Depends(get_teams_manager)
 ):
     """Adds a member to a team."""
+    success = False
+    details_for_audit = {
+        "params": {"team_id": team_id, "member_identifier": member_in.member_identifier},
+    }
+    created_member_id = None
+
     logger.info(f"User '{current_user.email}' adding member {member_in.member_identifier} to team {team_id}")
     try:
         member = manager.add_team_member(
@@ -209,17 +288,34 @@ def add_team_member(
             current_user_id=current_user.email
         )
         db.commit()
+        success = True
+        created_member_id = str(member.id) if hasattr(member, 'id') else None
         return member
     except NotFoundError as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ConflictError as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except Exception as e:
         db.rollback()
         logger.exception(f"Failed to add member to team: {e}")
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to add team member: {e!s}")
+    finally:
+        if created_member_id:
+            details_for_audit["created_resource_id"] = created_member_id
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=TEAMS_FEATURE_ID,
+            action="ADD_MEMBER",
+            success=success,
+            details=details_for_audit
+        )
 
 
 @router.get(
@@ -249,12 +345,19 @@ def get_team_members(
 def update_team_member(
     team_id: str,
     member_id: str,
+    request: Request,
     member_in: TeamMemberUpdate,
     db: DBSessionDep,
-    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     manager = Depends(get_teams_manager)
 ):
     """Updates a team member."""
+    success = False
+    details_for_audit = {
+        "params": {"team_id": team_id, "member_id": member_id},
+    }
+
     logger.info(f"User '{current_user.email}' updating team member {member_id} in team {team_id}")
     try:
         updated_member = manager.update_team_member(
@@ -265,14 +368,29 @@ def update_team_member(
             current_user_id=current_user.email
         )
         db.commit()
+        success = True
         return updated_member
     except NotFoundError as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         db.rollback()
         logger.exception(f"Failed to update team member: {e}")
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update team member: {e!s}")
+    finally:
+        if success:
+            details_for_audit["updated_resource_id"] = member_id
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=TEAMS_FEATURE_ID,
+            action="UPDATE_MEMBER",
+            success=success,
+            details=details_for_audit
+        )
 
 
 @router.delete(
@@ -283,24 +401,46 @@ def update_team_member(
 def remove_team_member(
     team_id: str,
     member_identifier: str,
+    request: Request,
     db: DBSessionDep,
-    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     manager = Depends(get_teams_manager)
 ):
     """Removes a member from a team."""
+    success = False
+    details_for_audit = {
+        "params": {"team_id": team_id, "member_identifier": member_identifier},
+    }
+
     logger.info(f"User '{current_user.email}' removing member {member_identifier} from team {team_id}")
     try:
-        success = manager.remove_team_member(db=db, team_id=team_id, member_identifier=member_identifier)
-        if not success:
+        removed = manager.remove_team_member(db=db, team_id=team_id, member_identifier=member_identifier)
+        if not removed:
+            details_for_audit["exception"] = {"type": "NotFoundError", "message": f"Member '{member_identifier}' not found in team"}
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Member '{member_identifier}' not found in team")
         db.commit()
+        success = True
         return None
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         logger.exception(f"Failed to remove team member: {e}")
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to remove team member: {e!s}")
+    finally:
+        if success:
+            details_for_audit["deleted_resource_id"] = member_identifier
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=TEAMS_FEATURE_ID,
+            action="REMOVE_MEMBER",
+            success=success,
+            details=details_for_audit
+        )
 
 
 # Domain-specific routes

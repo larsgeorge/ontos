@@ -377,74 +377,69 @@ async def get_data_products(
 
 @router.post('/data-products', response_model=DataProduct, status_code=201)
 async def create_data_product(
-    request: Request, # Moved request to be before parameters with defaults
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     payload: Dict[str, Any] = Body(...),
     manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
-    # Remove all the audit logging setup variables
-    # success = False
-    # response_status_code = 500 # Default to internal server error
-    # created_product_id_for_log = payload.get('id', 'N/A_PreCreate')
-    # details_for_audit = {
-    #     "params": {"product_id_in_payload": created_product_id_for_log},
-    #     "body_preview": _extract_details_default(payload=payload) # Extract from payload
-    # }
+    success = False
+    details_for_audit = {
+        "params": {"product_id_in_payload": payload.get('id', 'N/A_PreCreate')},
+    }
+    created_product_response = None
 
     try:
         logger.info(f"Received raw payload for creation: {payload}")
         product_id = payload.get('id')
 
         if product_id and manager.get_product(product_id):
-             # response_status_code = 409 # Handled by HTTPException
-             raise HTTPException(status_code=409, detail=f"Data product with ID {product_id} already exists.")
+            raise HTTPException(status_code=409, detail=f"Data product with ID {product_id} already exists.")
 
         if not product_id:
-             generated_id = str(uuid.uuid4())
-             payload['id'] = generated_id
-             # created_product_id_for_log = generated_id # Update for logging
-             # details_for_audit["params"]["generated_product_id"] = generated_id
-             logger.info(f"Generated ID for new product: {payload['id']}")
-        # else:
-             # created_product_id_for_log = product_id # Ensure it's set if provided initially
+            generated_id = str(uuid.uuid4())
+            payload['id'] = generated_id
+            details_for_audit["params"]["generated_product_id"] = generated_id
+            logger.info(f"Generated ID for new product: {payload['id']}")
 
         try:
             validated_model = DataProduct(**payload)
         except ValidationError as e:
-             # response_status_code = 422 # Handled by HTTPException
-             logger.error(f"Validation failed for payload (ID: {payload.get('id', 'N/A_Validation')}): {e}")
-             error_details = e.errors() if hasattr(e, 'errors') else str(e)
-             # details_for_audit["validation_error"] = error_details
-             raise HTTPException(status_code=422, detail=error_details)
+            logger.error(f"Validation failed for payload (ID: {payload.get('id', 'N/A_Validation')}): {e}")
+            error_details = e.errors() if hasattr(e, 'errors') else str(e)
+            details_for_audit["validation_error"] = error_details
+            raise HTTPException(status_code=422, detail=error_details)
 
-        # The manager.create_product method should handle its own DB session if needed
-        # or take db as an argument if it cannot get it from its own initialization.
-        # Assuming manager can handle its session, or it's passed if required (e.g. via app.state or another Depends).
-        created_product = manager.create_product(payload) 
-        
-        # --- Add created ID to request.state for audit logging --- 
-        if created_product and hasattr(created_product, 'id'):
-            request.state.audit_created_resource_id = str(created_product.id)
-        # -----------------------------------------------------------
-        
-        logger.info(f"Successfully created data product with ID: {created_product.id if created_product else payload.get('id')}")
-        return created_product
+        created_product_response = manager.create_product(payload)
+        success = True
+
+        if created_product_response and hasattr(created_product_response, 'id'):
+            details_for_audit["created_resource_id"] = str(created_product_response.id)
+
+        logger.info(f"Successfully created data product with ID: {created_product_response.id if created_product_response else payload.get('id')}")
+        return created_product_response
 
     except HTTPException as http_exc:
-        # success = False # Ensure success is false if it was an HTTPException
-        # response_status_code = http_exc.status_code
-        # details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
-        raise # Re-raise standard exceptions
+        details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
+        raise
     except Exception as e:
-        # success = False
-        # response_status_code = 500 # Explicitly set for general exceptions
         error_msg = f"Unexpected error creating data product (ID: {payload.get('id', 'N/A_Exception')}): {e!s}"
         logger.exception(error_msg)
-        # details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail=error_msg)
-    # finally:
-        # Remove audit log call from here
-        # audit_manager.log_action(...)
+    finally:
+        background_tasks.add_task(
+            audit_manager.log_action_background,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action="CREATE",
+            success=success,
+            details=details_for_audit.copy()
+        )
 
 @router.post("/data-products/{product_id}/versions", response_model=DataProduct, status_code=201)
 async def create_data_product_version(

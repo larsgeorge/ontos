@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 
 from src.models.projects import (
     ProjectCreate,
@@ -21,7 +21,9 @@ from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
     DBSessionDep,
     CurrentUserDep,
-    NotificationsManagerDep
+    NotificationsManagerDep,
+    AuditManagerDep,
+    AuditCurrentUserDep
 )
 from src.models.users import UserInfo
 from src.common.errors import NotFoundError, ConflictError
@@ -48,24 +50,48 @@ def get_projects_manager():
     dependencies=[Depends(PermissionChecker(PROJECTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))]
 )
 def create_project(
+    request: Request,
     project_in: ProjectCreate,
     db: DBSessionDep,
-    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     manager = Depends(get_projects_manager)
 ):
     """Creates a new project."""
+    success = False
+    details_for_audit = {
+        "params": {"project_name": project_in.name, "owner_team_id": project_in.owner_team_id if hasattr(project_in, 'owner_team_id') else None},
+    }
+    created_project_id = None
+
     logger.info(f"User '{current_user.email}' attempting to create project: {project_in.name}")
     try:
         created_project = manager.create_project(db=db, project_in=project_in, current_user_id=current_user.email)
         db.commit()
+        success = True
+        created_project_id = str(created_project.id)
         return created_project
     except ConflictError as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except Exception as e:
         db.rollback()
         logger.exception(f"Failed to create project '{project_in.name}': {e}")
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create project: {e!s}")
+    finally:
+        if created_project_id:
+            details_for_audit["created_resource_id"] = created_project_id
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=PROJECTS_FEATURE_ID,
+            action="CREATE",
+            success=success,
+            details=details_for_audit
+        )
 
 
 @router.get(
@@ -131,12 +157,19 @@ def get_project(
 )
 def update_project(
     project_id: str,
+    request: Request,
     project_in: ProjectUpdate,
     db: DBSessionDep,
-    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     manager = Depends(get_projects_manager)
 ):
     """Updates an existing project."""
+    success = False
+    details_for_audit = {
+        "params": {"project_id": project_id},
+    }
+
     logger.info(f"User '{current_user.email}' attempting to update project: {project_id}")
     try:
         updated_project = manager.update_project(
@@ -146,17 +179,33 @@ def update_project(
             current_user_id=current_user.email
         )
         db.commit()
+        success = True
         return updated_project
     except NotFoundError as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ConflictError as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except Exception as e:
         db.rollback()
         logger.exception(f"Failed to update project {project_id}: {e}")
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update project: {e!s}")
+    finally:
+        if success:
+            details_for_audit["updated_resource_id"] = project_id
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=PROJECTS_FEATURE_ID,
+            action="UPDATE",
+            success=success,
+            details=details_for_audit
+        )
 
 
 @router.delete(
@@ -167,23 +216,45 @@ def update_project(
 )
 def delete_project(
     project_id: str,
+    request: Request,
     db: DBSessionDep,
-    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     manager = Depends(get_projects_manager)
 ):
     """Deletes a project. Requires Admin privileges."""
+    success = False
+    details_for_audit = {
+        "params": {"project_id": project_id},
+    }
+
     logger.info(f"User '{current_user.email}' attempting to delete project: {project_id}")
     try:
         deleted_project = manager.delete_project(db=db, project_id=project_id)
         db.commit()
+        success = True
         return deleted_project
     except NotFoundError as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         db.rollback()
         logger.exception(f"Failed to delete project {project_id}: {e}")
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete project: {e!s}")
+    finally:
+        if success:
+            details_for_audit["deleted_resource_id"] = project_id
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=PROJECTS_FEATURE_ID,
+            action="DELETE",
+            success=success,
+            details=details_for_audit
+        )
 
 
 # Team Assignment Routes
@@ -336,13 +407,21 @@ def set_current_project(
     status_code=status.HTTP_201_CREATED
 )
 async def request_project_access(
+    http_request: Request,
     request: ProjectAccessRequest,
+    background_tasks: BackgroundTasks,
     db: DBSessionDep,
-    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     notifications_manager: NotificationsManagerDep,
     manager = Depends(get_projects_manager)
 ):
     """Request access to a project by sending notifications to project team members."""
+    success = False
+    details_for_audit = {
+        "params": {"project_id": request.project_id, "requester": current_user.email},
+    }
+
     logger.info(f"User '{current_user.email}' requesting access to project: {request.project_id}")
     try:
         user_groups = current_user.groups or []
@@ -354,17 +433,31 @@ async def request_project_access(
             notifications_manager=notifications_manager
         )
         db.commit()
+        success = True
         return response
     except NotFoundError as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ConflictError as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except Exception as e:
         db.rollback()
         logger.exception(f"Failed to request project access: {e}")
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to request project access: {e!s}")
+    finally:
+        background_tasks.add_task(
+            audit_manager.log_action_background,
+            username=current_user.username,
+            ip_address=http_request.client.host if http_request.client else None,
+            feature=PROJECTS_FEATURE_ID,
+            action="REQUEST_ACCESS",
+            success=success,
+            details=details_for_audit.copy()
+        )
 
 
 def register_routes(app):

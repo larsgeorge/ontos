@@ -421,13 +421,21 @@ def _build_contract_read_from_db(db, db_contract) -> DataContractRead:
 
 @router.post('/data-contracts', response_model=DataContractRead)
 async def create_contract(
+    request: Request,
     db: DBSessionDep,
-    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     contract_data: DataContractCreate = Body(...),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
     """Create a new data contract with normalized ODCS structure"""
+    success = False
+    details_for_audit = {
+        "params": {"contract_name": contract_data.name if contract_data.name else "N/A"},
+    }
+    created_contract_id = None
+
     try:
         # Validate required fields for app usability
         if not contract_data.name or not contract_data.name.strip():
@@ -633,25 +641,51 @@ async def create_contract(
             logger.info(f"Created {total_semantic_links} semantic links for contract {created.id}")
 
         db.commit()
-        
+        success = True
+        created_contract_id = created.id
+
         # Load with relationships for response
         created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
         return _build_contract_read_from_db(db, created_with_relations)
-        
+
+    except HTTPException as http_exc:
+        db.rollback()
+        details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
+        raise
     except Exception as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if created_contract_id:
+            details_for_audit["created_resource_id"] = created_contract_id
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="data-contracts",
+            action="CREATE",
+            success=success,
+            details=details_for_audit
+        )
 
 @router.put('/data-contracts/{contract_id}', response_model=DataContractRead)
 async def update_contract(
     contract_id: str,
+    request: Request,
     db: DBSessionDep,
-    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     contract_data: DataContractUpdate = Body(...),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
     """Update a data contract"""
+    success = False
+    details_for_audit = {
+        "params": {"contract_id": contract_id},
+    }
+
     try:
         db_obj = data_contract_repo.get(db, id=contract_id)
         if not db_obj:
@@ -841,14 +875,32 @@ async def update_contract(
                     # Future enhancement: add property_id foreign key to DataQualityCheckDb
 
         db.commit()
+        success = True
 
         # Load with relationships for full response
         updated_with_relations = data_contract_repo.get_with_all(db, id=contract_id)
         return _build_contract_read_from_db(db, updated_with_relations)
+
+    except HTTPException as http_exc:
+        details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
+        raise
     except Exception as e:
         error_msg = f"Error updating data contract {contract_id}: {e!s}"
         logger.error(error_msg)
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail=error_msg)
+    finally:
+        if success:
+            details_for_audit["updated_resource_id"] = contract_id
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="data-contracts",
+            action="UPDATE",
+            success=success,
+            details=details_for_audit
+        )
 
 @router.delete('/data-contracts/{contract_id}', status_code=204)
 async def delete_contract(
@@ -905,12 +957,19 @@ async def delete_contract(
 async def upload_contract(
     request: Request,
     db: DBSessionDep,
-    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
     file: UploadFile = File(...),
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
     """Upload a contract file and parse it into normalized ODCS structure"""
+    success = False
+    details_for_audit = {
+        "params": {"filename": file.filename if file.filename else "N/A"},
+    }
+    created_contract_id = None
+
     try:
         content_type = file.content_type
         filename = file.filename or 'uploaded_contract'
@@ -1513,16 +1572,33 @@ async def upload_contract(
             logger.info(f"Processed {total_semantic_links} semantic links during upload for contract {created.id}")
 
         db.commit()
+        success = True
+        created_contract_id = created.id
 
         # Load with relationships for response
         created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
         return _build_contract_read_from_db(db, created_with_relations)
-        
-    except HTTPException:
+
+    except HTTPException as http_exc:
+        db.rollback()
+        details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
         raise
     except Exception as e:
         db.rollback()
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+    finally:
+        if created_contract_id:
+            details_for_audit["created_resource_id"] = created_contract_id
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="data-contracts",
+            action="UPLOAD",
+            success=success,
+            details=details_for_audit
+        )
 
 # Old document-based export removed - use /data-contracts/{contract_id}/odcs/export instead
 

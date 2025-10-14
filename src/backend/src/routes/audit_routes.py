@@ -3,17 +3,16 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query
 
-from src.common.dependencies import DBSessionDep, AuditManagerDep, require_permission
+from src.common.dependencies import DBSessionDep, AuditManagerDep
+from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.models.audit_log import PaginatedAuditLogResponse
 
-router = APIRouter(prefix="/api", tags=["Audit Trail"]) 
+router = APIRouter(prefix="/api", tags=["Audit Trail"])
 
 @router.get(
-    "/audit", 
+    "/audit",
     response_model=PaginatedAuditLogResponse,
-    # Secure this endpoint: require READ access to the AUDIT feature
-    dependencies=[Depends(lambda: require_permission(feature='audit', level=FeatureAccessLevel.READ_ONLY))]
 )
 async def get_audit_trail(
     db: DBSessionDep,
@@ -26,6 +25,7 @@ async def get_audit_trail(
     feature: Optional[str] = Query(None, description="Filter logs by feature name"),
     action: Optional[str] = Query(None, description="Filter logs by action type (e.g., CREATE, UPDATE, DELETE)"),
     success: Optional[bool] = Query(None, description="Filter logs by success status"),
+    _: bool = Depends(PermissionChecker('audit', FeatureAccessLevel.READ_ONLY))
 ):
     """Retrieve audit log entries with optional filtering and pagination."""
     total, logs = await audit_manager.get_audit_logs(

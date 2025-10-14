@@ -10,7 +10,7 @@ from src.db_models.audit_log import AuditLogDb # Corrected import
 
 class AuditLogRepository(CRUDBase[AuditLogDb, AuditLogCreate, AuditLogCreate]):
     
-    async def get_multi(
+    def get_multi(
         self,
         db: Session,
         *,
@@ -40,11 +40,11 @@ class AuditLogRepository(CRUDBase[AuditLogDb, AuditLogCreate, AuditLogCreate]):
             statement = statement.where(self.model.success == success)
 
         statement = statement.offset(skip).limit(limit)
-        
-        result = await db.execute(statement)
+
+        result = db.execute(statement)
         return result.scalars().all()
 
-    async def get_multi_count(
+    def get_multi_count(
         self,
         db: Session,
         *,
@@ -71,7 +71,7 @@ class AuditLogRepository(CRUDBase[AuditLogDb, AuditLogCreate, AuditLogCreate]):
         if success is not None:
             statement = statement.where(self.model.success == success)
 
-        result = await db.execute(statement)
+        result = db.execute(statement)
         return result.scalar_one()
 
 

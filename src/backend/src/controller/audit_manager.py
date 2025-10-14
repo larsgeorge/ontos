@@ -102,10 +102,10 @@ class AuditManager:
             db.rollback() # Rollback only the audit transaction on error
             # Do not re-raise here, as it's a background task
 
-    # Original log_action (can be kept for synchronous logging if needed elsewhere, e.g., failures)
+    # Original log_action (now uses independent session and commits)
     def log_action(
         self,
-        db: Session, # Takes the request's session
+        db: Session, # Ignored - kept for backwards compatibility
         *,
         username: str,
         ip_address: Optional[str],
@@ -114,7 +114,13 @@ class AuditManager:
         success: bool,
         details: Optional[Dict[str, Any]] = None
     ):
-        """Logs an action synchronously using the provided DB session (NO commit)."""
+        """Logs an action synchronously using an INDEPENDENT DB session with auto-commit."""
+        session_factory = get_session_factory()
+        if not session_factory:
+            main_logger = get_logger(__name__)
+            main_logger.error("Cannot log audit action: DB session factory not available.")
+            return
+
         log_entry_data = {
             "username": username,
             "ip_address": ip_address,
@@ -123,14 +129,14 @@ class AuditManager:
             "success": success,
             "details": details or {},
         }
-        # Log ONLY to DB using the passed session (no commit)
+
         try:
-            log_entry = AuditLogCreate(**log_entry_data)
-            self.repository.create(db=db, obj_in=log_entry)
+            with session_factory() as independent_db:
+                # Use the internal logging logic which commits
+                self._log_action_internal(db=independent_db, log_entry_data=log_entry_data)
         except Exception as e:
             main_logger = get_logger(__name__)
-            main_logger.error(f"[SYNC] Failed to add audit log to session: {e}", exc_info=True)
-            # db.rollback() # Don't rollback the request session here
+            main_logger.error(f"[SYNC] Failed to write audit log: {e}", exc_info=True)
 
     # New method for background task
     async def log_action_background(
@@ -186,7 +192,7 @@ class AuditManager:
     ) -> tuple[int, List[AuditLogRead]]:
         """Retrieves audit logs from the database with filtering and pagination."""
         try:
-            total_count = await self.repository.get_multi_count(
+            total_count = self.repository.get_multi_count(
                 db,
                 start_time=start_time,
                 end_time=end_time,
@@ -195,7 +201,7 @@ class AuditManager:
                 action=action,
                 success=success,
             )
-            db_logs = await self.repository.get_multi(
+            db_logs = self.repository.get_multi(
                 db,
                 skip=skip,
                 limit=limit,
