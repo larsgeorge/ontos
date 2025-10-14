@@ -20,6 +20,7 @@ from ..common.dependencies import (
 from ..models.settings import HandleRoleRequest
 from ..models.notifications import Notification, NotificationType
 from ..controller.notifications_manager import NotificationsManager
+from ..common.config import get_settings
 
 # Configure logging
 from src.common.logging import get_logger
@@ -83,6 +84,21 @@ async def update_settings(
             success=success,
             details=details
         )
+
+@router.get('/settings/llm')
+async def get_llm_config():
+    """Get LLM configuration (publicly accessible for UI)"""
+    try:
+        app_settings = get_settings()
+        return {
+            "enabled": app_settings.LLM_ENABLED,
+            "endpoint": app_settings.LLM_ENDPOINT,
+            "disclaimer_text": app_settings.LLM_DISCLAIMER_TEXT,
+            # Do not expose system_prompt or injection_check_prompt to frontend
+        }
+    except Exception as e:
+        logger.error(f"Error getting LLM config: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get('/settings/health')
 async def health_check(manager: SettingsManager = Depends(get_settings_manager)):

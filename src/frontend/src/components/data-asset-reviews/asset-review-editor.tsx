@@ -7,15 +7,16 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, AlertCircle, SparklesIcon } from 'lucide-react';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from "@/hooks/use-toast";
-import { 
-    ReviewedAsset, 
-    ReviewedAssetStatus, 
-    AssetType, 
-    AssetDefinition, 
-    TablePreview, 
+import {
+    ReviewedAsset,
+    ReviewedAssetStatus,
+    AssetType,
+    AssetDefinition,
+    TablePreview,
     ReviewedAssetUpdate,
     AssetAnalysisResponse
 } from '@/types/data-asset-review';
+import { LLMConfig } from '@/types/llm';
 import { DataTable } from "@/components/ui/data-table"; // For table preview
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -25,6 +26,7 @@ import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 import python from 'react-syntax-highlighter/dist/esm/languages/prism/python';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
+import LLMConsentDialog, { hasLLMConsent } from '@/components/common/llm-consent-dialog';
 
 // Register languages
 SyntaxHighlighter.registerLanguage('sql', sql);
@@ -51,7 +53,7 @@ const checkApiResponse = <T,>(response: { data?: T | { detail?: string }, error?
 };
 
 export default function AssetReviewEditor({ requestId, asset, api, onReviewSave }: AssetReviewEditorProps) {
-    const { get, put } = api;
+    const { get, put, post } = api;
     const { toast } = useToast();
 
     // Content State
@@ -65,10 +67,31 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
     const [comments, setComments] = useState<string>(asset.comments || '');
     const [isSaving, setIsSaving] = useState(false);
 
+    // LLM Configuration State
+    const [llmConfig, setLlmConfig] = useState<LLMConfig | null>(null);
+    const [showConsentDialog, setShowConsentDialog] = useState(false);
+
     // LLM Analysis State
     const [analysisResult, setAnalysisResult] = useState<AssetAnalysisResponse | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+    // Fetch LLM configuration on mount
+    useEffect(() => {
+        const fetchLLMConfig = async () => {
+            try {
+                const response = await get<LLMConfig>('/api/settings/llm');
+                const config = checkApiResponse(response, 'LLM Config');
+                setLlmConfig(config);
+            } catch (err: any) {
+                console.error('Error fetching LLM config:', err);
+                // Set disabled config on error
+                setLlmConfig({ enabled: false, endpoint: null, system_prompt: null, disclaimer_text: '' });
+            }
+        };
+
+        fetchLLMConfig();
+    }, [get]);
 
     // Fetch content based on asset type
     useEffect(() => {
@@ -127,16 +150,37 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
         }
     };
 
-    const handleAiAnalysis = async () => {
+    const handleAiAnalysisClick = () => {
+        // Check if LLM is enabled
+        if (!llmConfig || !llmConfig.enabled) {
+            toast({
+                title: 'AI Features Disabled',
+                description: 'AI-powered analysis is currently disabled in settings.',
+                variant: 'destructive'
+            });
+            return;
+        }
+
+        // Check if user has consented
+        if (!hasLLMConsent(llmConfig)) {
+            setShowConsentDialog(true);
+            return;
+        }
+
+        // Proceed with analysis
+        performAiAnalysis();
+    };
+
+    const performAiAnalysis = async () => {
         if (!requestId || !asset.id) return;
         setIsAnalyzing(true);
         setAnalysisError(null);
-        setAnalysisResult(null); 
+        setAnalysisResult(null);
 
         try {
-            const response = await api.post<AssetAnalysisResponse>(
-                `/api/data-asset-reviews/${requestId}/assets/${asset.id}/analyze`, 
-                {} 
+            const response = await post<AssetAnalysisResponse>(
+                `/api/data-asset-reviews/${requestId}/assets/${asset.id}/analyze`,
+                {}
             );
             const result = checkApiResponse(response, 'AI Analysis');
             setAnalysisResult(result);
@@ -267,14 +311,14 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
                 </div>
              )}
 
-            {/* AI Analysis Section - Conditionally shown for VIEW and FUNCTION */}
-            {(asset.asset_type === AssetType.VIEW || asset.asset_type === AssetType.FUNCTION || asset.asset_type === AssetType.NOTEBOOK) && (
+            {/* AI Analysis Section - Conditionally shown based on LLM config and asset type */}
+            {llmConfig && llmConfig.enabled && (asset.asset_type === AssetType.VIEW || asset.asset_type === AssetType.FUNCTION || asset.asset_type === AssetType.NOTEBOOK) && (
                 <div className="mt-6 border-t space-y-3">
                     <h4 className="font-medium text-lg flex items-center">
                         <SparklesIcon className="w-5 h-5 mr-2 text-purple-500" /> AI Assisted Review
                     </h4>
-                    <Button 
-                        onClick={handleAiAnalysis} 
+                    <Button
+                        onClick={handleAiAnalysisClick}
                         disabled={isAnalyzing || isLoadingContent || !definition}
                         title={!definition && !isLoadingContent ? "Asset content (definition) must be loaded to run AI analysis." : ""}
                     >
@@ -290,22 +334,44 @@ export default function AssetReviewEditor({ requestId, asset, api, onReviewSave 
                     {analysisResult && (
                         <Card className="mt-2">
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-base">AI Analysis Summary</CardTitle>
+                                <CardTitle className="text-base">
+                                    AI Analysis Summary
+                                    {!analysisResult.phase1_passed && (
+                                        <Badge variant="destructive" className="ml-2">Security Warning</Badge>
+                                    )}
+                                </CardTitle>
                                 <p className="text-xs text-muted-foreground">
-                                    Model: {analysisResult.model_used || 'N/A'} | 
+                                    Model: {analysisResult.model_used || 'N/A'} |
                                     Generated: <RelativeDate date={analysisResult.timestamp} />
                                 </p>
                             </CardHeader>
                             <CardContent>
-                                <div className="markdown-container prose prose-xs dark:prose-invert max-w-none p-3 bg-muted rounded-md overflow-x-auto">
-                                    <ReactMarkdown>
+                                {/* Render as plain text if security check failed */}
+                                {!analysisResult.render_as_markdown ? (
+                                    <div className="p-3 bg-muted rounded-md font-mono text-xs whitespace-pre-wrap">
                                         {analysisResult.analysis_summary}
-                                    </ReactMarkdown>
-                                </div>
+                                    </div>
+                                ) : (
+                                    <div className="markdown-container prose prose-xs dark:prose-invert max-w-none p-3 bg-muted rounded-md overflow-x-auto">
+                                        <ReactMarkdown>
+                                            {analysisResult.analysis_summary}
+                                        </ReactMarkdown>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     )}
                 </div>
+            )}
+
+            {/* LLM Consent Dialog */}
+            {showConsentDialog && llmConfig && (
+                <LLMConsentDialog
+                    open={showConsentDialog}
+                    onOpenChange={setShowConsentDialog}
+                    onAccept={performAiAnalysis}
+                    llmConfig={llmConfig}
+                />
             )}
         </div>
     );

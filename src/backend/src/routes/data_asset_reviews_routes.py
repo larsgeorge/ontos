@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any, Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -258,6 +258,7 @@ async def get_table_preview(
 
 @router.post("/data-asset-reviews/{request_id}/assets/{asset_id}/analyze", response_model=AssetAnalysisResponse)
 async def analyze_asset_with_llm(
+    request: Request,  # Added to extract user token
     request_id: str,
     asset_id: str,
     manager: DataAssetReviewManagerDep,
@@ -267,6 +268,13 @@ async def analyze_asset_with_llm(
     logger.info(f"Received request to analyze asset {asset_id} in request {request_id} with LLM.")
 
     try:
+        # Extract user token from request headers (Databricks Apps context)
+        user_token = request.headers.get("x-forwarded-access-token")
+        if user_token:
+            logger.debug("Using user token from x-forwarded-access-token header")
+        else:
+            logger.debug("No user token in headers, will use DATABRICKS_TOKEN")
+
         # 1. Fetch the reviewed asset to get its FQN and type
         # get_reviewed_asset is synchronous, so it can be called directly.
         reviewed_asset_api = manager.get_reviewed_asset(request_id=request_id, asset_id=asset_id)
@@ -283,16 +291,17 @@ async def analyze_asset_with_llm(
             # Consider if asset_type is TABLE or MODEL, for which definition might be None
             # but we might want to send schema or other metadata. For now, only code.
             if reviewed_asset_api.asset_type not in [AssetType.VIEW, AssetType.FUNCTION, AssetType.NOTEBOOK]:
-                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"LLM content analysis currently only supports VIEW, FUNCTION, or NOTEBOOK types, not {reviewed_asset_api.asset_type.value}. Content could not be retrieved.") 
+                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"LLM content analysis currently only supports VIEW, FUNCTION, or NOTEBOOK types, not {reviewed_asset_api.asset_type.value}. Content could not be retrieved.")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset content not found or not available for analysis.")
 
-        # 3. Call the manager's analysis method (which is synchronous)
+        # 3. Call the manager's analysis method with user token (synchronous)
         # To call a synchronous method from an async route, FastAPI handles it by running it in a thread pool.
         analysis_result = manager.analyze_asset_content(
             request_id=request_id,
             asset_id=asset_id,
             asset_content=asset_content,
-            asset_type=reviewed_asset_api.asset_type
+            asset_type=reviewed_asset_api.asset_type,
+            user_token=user_token  # Pass user token for Databricks Apps
         )
 
         if not analysis_result:

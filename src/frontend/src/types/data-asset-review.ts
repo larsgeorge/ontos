@@ -100,4 +100,7 @@ export interface AssetAnalysisResponse {
     analysis_summary: string;
     model_used?: string | null;
     timestamp: string; // ISO date string
+    // Security metadata for two-phased verification
+    phase1_passed: boolean;
+    render_as_markdown: boolean;
 } 

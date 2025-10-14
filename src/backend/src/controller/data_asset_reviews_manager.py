@@ -326,81 +326,69 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
             logger.error(f"Unexpected error getting reviewed asset {asset_id}: {e}")
             raise
     
-    def analyze_asset_content(self, request_id: str, asset_id: str, asset_content: str, asset_type: AssetType) -> Optional[AssetAnalysisResponse]:
-        """Analyzes asset content using an LLM via Databricks Serving Endpoint (using MLflow client)."""
-        settings: Settings = get_settings()
-        endpoint_name = settings.SERVING_ENDPOINT
+    def analyze_asset_content(self, request_id: str, asset_id: str, asset_content: str, asset_type: AssetType, user_token: Optional[str] = None) -> Optional[AssetAnalysisResponse]:
+        """
+        Analyzes asset content using LLM with two-phased security verification.
 
-        if not endpoint_name:
-            logger.warning("SERVING_ENDPOINT is not configured. Cannot perform LLM analysis.")
-            return None
-        
-        # No need for explicit DATABRICKS_HOST or DATABRICKS_TOKEN handling here,
-        # as get_deploy_client('databricks') should use environment context or MLflow config.
+        Phase 1: Security check for injection attempts
+        Phase 2: Content analysis with configured prompt (only if phase 1 passes)
 
-        system_prompt = "You are a Data Steward tasked with reviewing metadata, data, and SQL/Python code to check if any sensitive information is used. These include PII data, like names, addresses, age, social security numbers, credit card numbers etc. Look at the provided text and identify insecure coding or sensitive data and return a summary."
-        
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": asset_content}
-        ]
-        
-        # Define max_tokens, can be configurable if needed
-        max_tokens = 1024 
-
+        Args:
+            request_id: Review request ID
+            asset_id: Asset ID within the request
+            asset_content: Content to analyze
+            asset_type: Type of asset
+            user_token: Per-user access token from x-forwarded-access-token header (Databricks Apps)
+        """
         try:
-            # Lazy import MLflow deployments client to avoid hard dependency at startup
-            try:
-                from mlflow.deployments import get_deploy_client  # type: ignore
-            except Exception as import_err:
-                logger.warning(
-                    "MLflow is not available or failed to import (optional feature). "
-                    f"Skipping LLM analysis. Error: {import_err}"
+            # Import LLM service
+            from src.common.llm_service import get_llm_service
+
+            llm_service = get_llm_service()
+
+            # Check if LLM is enabled
+            if not llm_service.is_enabled():
+                logger.warning("LLM analysis requested but LLM is disabled in settings")
+                return None
+
+            logger.info(f"Analyzing asset {asset_id} (type: {asset_type.value}) content with LLM (two-phased)")
+
+            # Call the two-phased analysis with user token
+            result = llm_service.analyze_content(asset_content, user_token=user_token)
+
+            if not result.success and not result.phase1_passed:
+                # Phase 1 failed - return with security warning
+                # The result.content contains the security warning message
+                logger.warning(f"Phase 1 security check failed for asset {asset_id}: {result.error_message}")
+                return AssetAnalysisResponse(
+                    request_id=request_id,
+                    asset_id=asset_id,
+                    analysis_summary=result.content,  # Contains security warning
+                    model_used=result.model_used,
+                    timestamp=result.timestamp,
+                    phase1_passed=False,
+                    render_as_markdown=False  # Must display as plain text
                 )
+
+            if not result.success:
+                # Phase 2 failed or other error
+                logger.error(f"LLM analysis failed for asset {asset_id}: {result.error_message}")
                 return None
 
-            logger.info(f"Sending content of asset {asset_id} (type: {asset_type.value}) to MLflow deployment endpoint: {endpoint_name}")
-            
-            deploy_client = get_deploy_client('databricks')
-            response_payload = deploy_client.predict(
-                endpoint=endpoint_name,
-                inputs={'messages': messages, "max_tokens": max_tokens},
-            )
-
-            # Handle response based on common patterns for Databricks model serving
-            assistant_response_content = None
-            if "choices" in response_payload and response_payload["choices"]:
-                # Common for OpenAI-compatible (like Foundation Model APIs) or similar chat completion formats
-                message = response_payload["choices"][0].get("message")
-                if message and "content" in message:
-                    assistant_response_content = message["content"]
-            elif "candidates" in response_payload and response_payload["candidates"]:
-                 # Another common format, e.g. Vertex AI on Databricks
-                candidate = response_payload["candidates"][0]
-                if "content" in candidate:
-                    assistant_response_content = candidate["content"]
-            # Add other potential response structures if your endpoint has a different one.
-            # The example _query_endpoint directly returns `res["messages"]` or `res["choices"][0]["message"]`
-            # which implies the output is already structured. We need the actual text content.
-
-            if not assistant_response_content:
-                logger.warning(f"LLM analysis for asset {asset_id} returned an unexpected or empty payload structure: {response_payload}")
-                # Fallback or error based on the provided _query_endpoint example which raises an exception for unknown formats
-                # For now, we'll log and return None, but you might want to raise an exception like in the example.
-                # raise Exception("LLM endpoint returned an unrecognized response format.")
-                return None
-
-            logger.info(f"LLM analysis successful for asset {asset_id}.")
+            # Success: Both phases passed
+            logger.info(f"LLM analysis successful for asset {asset_id} (both phases passed)")
             return AssetAnalysisResponse(
                 request_id=request_id,
                 asset_id=asset_id,
-                analysis_summary=str(assistant_response_content).strip(), # Ensure it's a string
-                model_used=endpoint_name,
-                timestamp=datetime.utcnow()
+                analysis_summary=result.content,
+                model_used=result.model_used,
+                timestamp=result.timestamp,
+                phase1_passed=True,
+                render_as_markdown=True  # Safe to render as markdown
             )
 
         except Exception as e:
-            logger.error(f"Error during LLM analysis for asset {asset_id} (request {request_id}) using MLflow client: {e}", exc_info=True)
+            logger.error(f"Error during LLM analysis for asset {asset_id} (request {request_id}): {e}", exc_info=True)
             return None
 
     # Add methods for getting asset content (text/data preview) using ws_client
