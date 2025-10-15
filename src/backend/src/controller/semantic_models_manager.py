@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from src.db_models.semantic_models import SemanticModelDb
 from src.models.semantic_models import (
-    SemanticModel,
+    SemanticModel as SemanticModelApi,
     SemanticModelCreate,
     SemanticModelUpdate,
     SemanticModelPreview,
@@ -15,7 +15,7 @@ from src.models.semantic_models import (
 from src.models.ontology import (
     OntologyConcept,
     OntologyProperty,
-    SemanticModel,
+    SemanticModel as SemanticModelOntology,
     ConceptHierarchy,
     TaxonomyStats,
     ConceptSearchResult
@@ -40,15 +40,15 @@ class SemanticModelsManager:
         except Exception as e:
             logger.error(f"Failed to rebuild graph during initialization: {e}")
 
-    def list(self) -> List[SemanticModel]:
+    def list(self) -> List[SemanticModelApi]:
         items = semantic_models_repo.get_multi(self._db)
         return [self._to_api(m) for m in items]
 
-    def get(self, model_id: str) -> Optional[SemanticModel]:
+    def get(self, model_id: str) -> Optional[SemanticModelApi]:
         m = semantic_models_repo.get(self._db, id=model_id)
         return self._to_api(m) if m else None
 
-    def create(self, data: SemanticModelCreate, created_by: Optional[str]) -> SemanticModel:
+    def create(self, data: SemanticModelCreate, created_by: Optional[str]) -> SemanticModelApi:
         db_obj = semantic_models_repo.create(self._db, obj_in=data)
         if created_by:
             db_obj.created_by = created_by
@@ -58,7 +58,7 @@ class SemanticModelsManager:
         self._db.refresh(db_obj)
         return self._to_api(db_obj)
 
-    def update(self, model_id: str, update: SemanticModelUpdate, updated_by: Optional[str]) -> Optional[SemanticModel]:
+    def update(self, model_id: str, update: SemanticModelUpdate, updated_by: Optional[str]) -> Optional[SemanticModelApi]:
         db_obj = semantic_models_repo.get(self._db, id=model_id)
         if not db_obj:
             return None
@@ -70,7 +70,7 @@ class SemanticModelsManager:
         self._db.refresh(updated)
         return self._to_api(updated)
 
-    def replace_content(self, model_id: str, content_text: str, original_filename: Optional[str], content_type: Optional[str], size_bytes: Optional[int], updated_by: Optional[str]) -> Optional[SemanticModel]:
+    def replace_content(self, model_id: str, content_text: str, original_filename: Optional[str], content_type: Optional[str], size_bytes: Optional[int], updated_by: Optional[str]) -> Optional[SemanticModelApi]:
         db_obj = semantic_models_repo.get(self._db, id=model_id)
         if not db_obj:
             return None
@@ -103,8 +103,8 @@ class SemanticModelsManager:
             preview=db_obj.content_text[:max_chars] if db_obj.content_text else ""
         )
 
-    def _to_api(self, db_obj: SemanticModelDb) -> SemanticModel:
-        return SemanticModel(
+    def _to_api(self, db_obj: SemanticModelDb) -> SemanticModelApi:
+        return SemanticModelApi(
             id=db_obj.id,
             name=db_obj.name,
             format=db_obj.format,  # type: ignore
@@ -652,7 +652,7 @@ class SemanticModelsManager:
 
     # --- New Ontology Methods ---
     
-    def get_taxonomies(self) -> List[SemanticModel]:
+    def get_taxonomies(self) -> List[SemanticModelOntology]:
         """Get all available taxonomies/ontologies with their metadata"""
         taxonomies = []
         
@@ -745,7 +745,7 @@ class SemanticModelsManager:
                 name = context_str
                 format_str = None
             
-            taxonomies.append(SemanticModel(
+            taxonomies.append(SemanticModelOntology(
                 name=name,
                 description=f"{source_type.title()} taxonomy: {name}",
                 source_type=source_type,
@@ -803,10 +803,17 @@ class SemanticModelsManager:
                     ?concept rdfs:label ?someLabel .
                     ?concept rdfs:comment ?someComment .
                 }
-                OPTIONAL { ?concept rdfs:label ?label }
-                OPTIONAL { ?concept skos:prefLabel ?label }
-                OPTIONAL { ?concept rdfs:comment ?comment }
-                OPTIONAL { ?concept skos:definition ?comment }
+                # Extract labels with priority: skos:prefLabel > rdfs:label
+                # Use STR() to handle language tags properly
+                OPTIONAL { ?concept skos:prefLabel ?skos_pref_label }
+                OPTIONAL { ?concept rdfs:label ?rdfs_label }
+                BIND(COALESCE(STR(?skos_pref_label), STR(?rdfs_label)) AS ?label)
+
+                # Extract comments/definitions with priority: skos:definition > rdfs:comment
+                OPTIONAL { ?concept skos:definition ?skos_definition }
+                OPTIONAL { ?concept rdfs:comment ?rdfs_comment }
+                BIND(COALESCE(STR(?skos_definition), STR(?rdfs_comment)) AS ?comment)
+
                 # Filter out basic RDF/RDFS/SKOS vocabulary terms
                 FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/1999/02/22-rdf-syntax-ns#"))
                 FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2000/01/rdf-schema#"))

@@ -165,11 +165,11 @@ const UnifiedConceptTree: React.FC<UnifiedConceptTreeProps> = ({
   const treeData = useMemo(() => {
     const conceptMap = new Map<string, OntologyConcept>();
     const hierarchy = new Map<string, string[]>();
-    
-    // Filter out ConceptSchemes and individuals, but keep classes and concepts
+
+    // Only show classes and concepts (explicit positive filtering to match graph)
     const baseConcepts = concepts.filter(concept => {
       const conceptType = (concept as any).concept_type as string;
-      return conceptType !== 'individual' && conceptType !== 'concept_scheme';
+      return conceptType === 'class' || conceptType === 'concept';
     });
     
     // Build concept map and hierarchy
@@ -1305,7 +1305,7 @@ export default function SemanticModelsView() {
                     </p>
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {Object.values(groupedConcepts).flat().length} concepts
+                    {Object.values(groupedConcepts).flat().filter(c => c.concept_type === 'class' || c.concept_type === 'concept').length} concepts
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-3 text-xs">
