@@ -624,7 +624,9 @@ class SemanticModelsManager:
             rows = self._db.execute(sql_text("SELECT id, name FROM data_contracts")).fetchall()
             for r in rows:
                 subj = URIRef(f"urn:ontos:data_contract:{r[0]}")
+                # Add both internal type and ODCS standard type
                 context.add((subj, RDF.type, URIRef("urn:ontos:entity-type:data_contract")))
+                context.add((subj, RDF.type, URIRef("http://odcs.bitol.io/terms#DataContract")))
                 if r[1]:
                     context.add((subj, RDFS.label, Literal(str(r[1]))))
         except Exception as e:

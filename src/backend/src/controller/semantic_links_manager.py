@@ -1,6 +1,7 @@
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+import re
 
 from src.db_models.semantic_links import EntitySemanticLinkDb
 from src.models.semantic_links import EntitySemanticLink, EntitySemanticLinkCreate
@@ -8,11 +9,15 @@ from src.repositories.semantic_links_repository import entity_semantic_links_rep
 from src.common.logging import get_logger
 from src.controller.change_log_manager import change_log_manager
 
+if TYPE_CHECKING:
+    from src.controller.semantic_models_manager import SemanticModelsManager
+
 logger = get_logger(__name__)
 
 class SemanticLinksManager:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, semantic_models_manager: Optional['SemanticModelsManager'] = None):
         self._db = db
+        self._semantic_models_manager = semantic_models_manager
 
     def _resolve_entity_name(self, entity_id: str, entity_type: str) -> Optional[str]:
         """Resolve the readable name for an entity based on its type and ID."""
@@ -65,8 +70,62 @@ class SemanticLinksManager:
         return [self._to_api(it) for it in items]
 
     def list_for_iri(self, iri: str) -> List[EntitySemanticLink]:
+        """Get all entities linked to an IRI, including both explicit links and inferred type relationships."""
+        # Get explicit links from database
         items = entity_semantic_links_repo.list_for_iri(self._db, iri)
-        return [self._to_api(it) for it in items]
+        results = [self._to_api(it) for it in items]
+
+        # Add inferred links from RDF graph (entities with rdf:type matching this IRI)
+        if self._semantic_models_manager:
+            inferred = self._get_inferred_links_from_graph(iri)
+            results.extend(inferred)
+
+        return results
+
+    def _get_inferred_links_from_graph(self, iri: str) -> List[EntitySemanticLink]:
+        """Query RDF graph for entities that have rdf:type matching the given IRI."""
+        results = []
+
+        try:
+            # SPARQL query to find all subjects with this type
+            query = f"""
+            SELECT ?subject ?label WHERE {{
+                ?subject a <{iri}> .
+                OPTIONAL {{ ?subject <http://www.w3.org/2000/01/rdf-schema#label> ?label }}
+            }}
+            """
+
+            sparql_results = self._semantic_models_manager.query(query)
+
+            # Parse results and extract entity info from urn:ontos URIs
+            for row in sparql_results:
+                subject_uri = str(row.get('subject', ''))
+                label = str(row.get('label', '')) if row.get('label') else None
+
+                # Parse urn:ontos:{entity_type}:{entity_id} pattern
+                match = re.match(r'^urn:ontos:([^:]+):(.+)$', subject_uri)
+                if match:
+                    entity_type = match.group(1)
+                    entity_id = match.group(2)
+
+                    # Resolve entity name if label not available
+                    if not label:
+                        label = self._resolve_entity_name(entity_id, entity_type)
+
+                    # Create a pseudo-link object (no ID since it's inferred, not stored)
+                    results.append(EntitySemanticLink(
+                        id=f"inferred:{entity_type}:{entity_id}:{iri}",  # Synthetic ID
+                        entity_id=entity_id,
+                        entity_type=entity_type,  # type: ignore
+                        iri=iri,
+                        label=label,
+                    ))
+                    logger.debug(f"Inferred link: {entity_type}:{entity_id} -> {iri}")
+
+        except Exception as e:
+            logger.warning(f"Failed to get inferred links from graph for {iri}: {e}")
+
+        return results
 
     def _link_exists(self, entity_id: str, entity_type: str, iri: str) -> bool:
         """Check if a semantic link already exists for this entity/IRI combination"""

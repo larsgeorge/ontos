@@ -1,16 +1,18 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Request
 
 from src.common.dependencies import DBSessionDep, AuditCurrentUserDep
 from src.controller.semantic_links_manager import SemanticLinksManager
+from src.controller.semantic_models_manager import SemanticModelsManager
 from src.models.semantic_links import EntitySemanticLink, EntitySemanticLinkCreate
 
 
 router = APIRouter(prefix="/api/semantic-links", tags=["semantic-links"])
 
 
-def get_manager(db: DBSessionDep) -> SemanticLinksManager:
-    return SemanticLinksManager(db)
+def get_manager(request: Request, db: DBSessionDep) -> SemanticLinksManager:
+    semantic_models_manager = getattr(request.app.state, 'semantic_models_manager', None)
+    return SemanticLinksManager(db, semantic_models_manager=semantic_models_manager)
 
 
 @router.get("/entity/{entity_type}/{entity_id}", response_model=List[EntitySemanticLink])
