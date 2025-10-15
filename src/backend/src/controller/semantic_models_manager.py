@@ -1,5 +1,6 @@
 from typing import List, Optional, Dict, Any
 from pathlib import Path
+from datetime import datetime, timedelta
 from rdflib import Graph, ConjunctiveGraph, Dataset
 from rdflib.namespace import RDF, RDFS, SKOS
 from rdflib import URIRef, Literal, Namespace
@@ -27,12 +28,24 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 
+class CachedResult:
+    """Simple cache entry with TTL"""
+    def __init__(self, value: Any, ttl_seconds: int = 300):
+        self.value = value
+        self.expires_at = datetime.now() + timedelta(seconds=ttl_seconds)
+
+    def is_valid(self) -> bool:
+        return datetime.now() < self.expires_at
+
+
 class SemanticModelsManager:
     def __init__(self, db: Session, data_dir: Optional[Path] = None):
         self._db = db
         self._data_dir = data_dir or Path(__file__).parent.parent / "data"
         # Use ConjunctiveGraph to support named graphs/contexts
         self._graph = ConjunctiveGraph()
+        # Cache for expensive operations (TTL: 5 minutes)
+        self._cache: Dict[str, CachedResult] = {}
         logger.info(f"SemanticModelsManager initialized with data_dir: {self._data_dir}")
         # Load file-based taxonomies immediately
         try:
@@ -278,8 +291,32 @@ class SemanticModelsManager:
     def on_models_changed(self) -> None:
         try:
             self.rebuild_graph_from_enabled()
+            # Invalidate cache when models change
+            self._invalidate_cache()
         except Exception as e:
             logger.error(f"Failed to rebuild RDF graph: {e}")
+
+    def _invalidate_cache(self) -> None:
+        """Clear all cache entries"""
+        self._cache.clear()
+        logger.debug("Semantic models cache invalidated")
+
+    def _get_cached(self, key: str) -> Optional[Any]:
+        """Get cached value if still valid"""
+        if key in self._cache:
+            cached = self._cache[key]
+            if cached.is_valid():
+                logger.debug(f"Cache hit for key: {key}")
+                return cached.value
+            else:
+                logger.debug(f"Cache expired for key: {key}")
+                del self._cache[key]
+        return None
+
+    def _set_cached(self, key: str, value: Any, ttl_seconds: int = 300) -> None:
+        """Store value in cache with TTL"""
+        self._cache[key] = CachedResult(value, ttl_seconds)
+        logger.debug(f"Cached value for key: {key} (TTL: {ttl_seconds}s)")
 
     def query(self, sparql: str) -> List[dict]:
         # Return a simplified list of dicts for rows
@@ -656,8 +693,14 @@ class SemanticModelsManager:
     
     def get_taxonomies(self) -> List[SemanticModelOntology]:
         """Get all available taxonomies/ontologies with their metadata"""
+        # Check cache first
+        cache_key = "taxonomies"
+        cached = self._get_cached(cache_key)
+        if cached is not None:
+            return cached
+
         taxonomies = []
-        
+
         # Check if graph has any triples at all
         total_triples = len(self._graph)
         context_count = len(list(self._graph.contexts()))
@@ -755,13 +798,22 @@ class SemanticModelsManager:
                 concepts_count=concepts_count,
                 properties_count=properties_count
             ))
-        
-        return sorted(taxonomies, key=lambda t: (t.source_type, t.name))
+
+        result = sorted(taxonomies, key=lambda t: (t.source_type, t.name))
+        # Cache for 5 minutes
+        self._set_cached(cache_key, result, ttl_seconds=300)
+        return result
     
     def get_concepts_by_taxonomy(self, taxonomy_name: str = None) -> List[OntologyConcept]:
         """Get concepts, optionally filtered by taxonomy"""
+        # Check cache first
+        cache_key = f"concepts_by_taxonomy:{taxonomy_name or 'all'}"
+        cached = self._get_cached(cache_key)
+        if cached is not None:
+            return cached
+
         concepts = []
-        
+
         # Determine which contexts to search
         contexts_to_search = []
         if taxonomy_name:
@@ -912,7 +964,9 @@ class SemanticModelsManager:
                 if concept.iri in other_concept.parent_concepts:
                     if other_concept.iri not in concept.child_concepts:
                         concept.child_concepts.append(other_concept.iri)
-        
+
+        # Cache for 5 minutes
+        self._set_cached(cache_key, concepts, ttl_seconds=300)
         return concepts
     
     def get_concept_details(self, concept_iri: str) -> Optional[OntologyConcept]:
@@ -1118,22 +1172,28 @@ class SemanticModelsManager:
     
     def get_taxonomy_stats(self) -> TaxonomyStats:
         """Get statistics about loaded taxonomies"""
+        # Check cache first
+        cache_key = "taxonomy_stats"
+        cached = self._get_cached(cache_key)
+        if cached is not None:
+            return cached
+
         taxonomies = self.get_taxonomies()
-        
+
         total_concepts = sum(t.concepts_count for t in taxonomies)
         total_properties = sum(t.properties_count for t in taxonomies)
-        
+
         # Get concepts by type
         concepts_by_type = {}
         all_concepts = self.get_concepts_by_taxonomy()
         for concept in all_concepts:
             concept_type = concept.concept_type
             concepts_by_type[concept_type] = concepts_by_type.get(concept_type, 0) + 1
-        
+
         # Count top-level concepts (those without parents)
         top_level_concepts = sum(1 for concept in all_concepts if not concept.parent_concepts)
-        
-        return TaxonomyStats(
+
+        result = TaxonomyStats(
             total_concepts=total_concepts,
             total_properties=total_properties,
             taxonomies=taxonomies,
@@ -1141,12 +1201,22 @@ class SemanticModelsManager:
             top_level_concepts=top_level_concepts
         )
 
+        # Cache for 5 minutes
+        self._set_cached(cache_key, result, ttl_seconds=300)
+        return result
+
     def get_grouped_concepts(self) -> Dict[str, List[OntologyConcept]]:
         """Return all concepts grouped by their source context name.
 
         Group key is derived from OntologyConcept.source_context, or 'Unassigned' when missing.
         Concepts in each group are sorted by label (fallback to IRI).
         """
+        # Check cache first
+        cache_key = "grouped_concepts"
+        cached = self._get_cached(cache_key)
+        if cached is not None:
+            return cached
+
         concepts = self.get_concepts_by_taxonomy()
         grouped: Dict[str, List[OntologyConcept]] = {}
 
@@ -1159,5 +1229,7 @@ class SemanticModelsManager:
         for source in grouped:
             grouped[source].sort(key=lambda c: (c.label or c.iri))
 
+        # Cache for 5 minutes
+        self._set_cached(cache_key, grouped, ttl_seconds=300)
         return grouped
 

@@ -601,6 +601,7 @@ export default function SemanticModelsView() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fetchInProgressRef = useRef(false);
   // Tabs removed; show sections in a single view
   const [stats, setStats] = useState<TaxonomyStats | null>(null);
   const [showKnowledgeGraph, setShowKnowledgeGraph] = useState(false);
@@ -651,33 +652,40 @@ export default function SemanticModelsView() {
   }, [searchParams, groupedConcepts]); // React to changes in URL params and loaded concepts
 
   const fetchData = async () => {
+    // Prevent duplicate fetches
+    if (fetchInProgressRef.current) {
+      return;
+    }
+
     try {
+      fetchInProgressRef.current = true;
       setLoading(true);
-      
-      // Fetch taxonomies
-      const taxonomiesResponse = await fetch('/api/semantic-models');
+
+      // Fetch all data in parallel for better performance
+      const [taxonomiesResponse, conceptsResponse, statsResponse] = await Promise.all([
+        fetch('/api/semantic-models'),
+        fetch('/api/semantic-models/concepts-grouped'),
+        fetch('/api/semantic-models/stats'),
+      ]);
+
       if (!taxonomiesResponse.ok) throw new Error('Failed to fetch taxonomies');
-      const taxonomiesData = await taxonomiesResponse.json();
-      setTaxonomies(taxonomiesData.taxonomies || []);
-      
-      // Fetch grouped concepts
-      const conceptsResponse = await fetch('/api/semantic-models/concepts-grouped');
       if (!conceptsResponse.ok) throw new Error('Failed to fetch concepts');
-      const conceptsData = await conceptsResponse.json();
+
+      const [taxonomiesData, conceptsData, statsData] = await Promise.all([
+        taxonomiesResponse.json(),
+        conceptsResponse.json(),
+        statsResponse.ok ? statsResponse.json() : Promise.resolve({ stats: null }),
+      ]);
+
+      setTaxonomies(taxonomiesData.taxonomies || []);
       setGroupedConcepts(conceptsData.grouped_concepts || {});
-      
-      // Fetch stats
-      const statsResponse = await fetch('/api/semantic-models/stats');
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        setStats(statsData.stats);
-      }
-      
+      setStats(statsData.stats);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
     } finally {
       setLoading(false);
+      fetchInProgressRef.current = false;
     }
   };
 
