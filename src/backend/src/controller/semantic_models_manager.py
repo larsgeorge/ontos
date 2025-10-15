@@ -268,7 +268,7 @@ class SemanticModelsManager:
             context_name = "urn:semantic-links"
             context = self._graph.get_context(context_name)
             for link in links:
-                subj = URIRef(f"urn:ucapp:{link.entity_type}:{link.entity_id}")
+                subj = URIRef(f"urn:ontos:{link.entity_type}:{link.entity_id}")
                 obj = URIRef(link.iri)
                 context.add((subj, RDFS.seeAlso, obj))
         except Exception as e:
@@ -601,8 +601,8 @@ class SemanticModelsManager:
         try:
             rows = self._db.execute(sql_text("SELECT id, name FROM data_domains")).fetchall()
             for r in rows:
-                subj = URIRef(f"urn:ucapp:data_domain:{r[0]}")
-                context.add((subj, RDF.type, URIRef("urn:ucapp:entity-type:data_domain")))
+                subj = URIRef(f"urn:ontos:data_domain:{r[0]}")
+                context.add((subj, RDF.type, URIRef("urn:ontos:entity-type:data_domain")))
                 if r[1]:
                     context.add((subj, RDFS.label, Literal(str(r[1]))))
         except Exception as e:
@@ -612,8 +612,8 @@ class SemanticModelsManager:
         try:
             rows = self._db.execute(sql_text("SELECT data_product_id, title FROM data_product_info")).fetchall()
             for r in rows:
-                subj = URIRef(f"urn:ucapp:data_product:{r[0]}")
-                context.add((subj, RDF.type, URIRef("urn:ucapp:entity-type:data_product")))
+                subj = URIRef(f"urn:ontos:data_product:{r[0]}")
+                context.add((subj, RDF.type, URIRef("urn:ontos:entity-type:data_product")))
                 if r[1]:
                     context.add((subj, RDFS.label, Literal(str(r[1]))))
         except Exception as e:
@@ -623,8 +623,8 @@ class SemanticModelsManager:
         try:
             rows = self._db.execute(sql_text("SELECT id, name FROM data_contracts")).fetchall()
             for r in rows:
-                subj = URIRef(f"urn:ucapp:data_contract:{r[0]}")
-                context.add((subj, RDF.type, URIRef("urn:ucapp:entity-type:data_contract")))
+                subj = URIRef(f"urn:ontos:data_contract:{r[0]}")
+                context.add((subj, RDF.type, URIRef("urn:ontos:entity-type:data_contract")))
                 if r[1]:
                     context.add((subj, RDFS.label, Literal(str(r[1]))))
         except Exception as e:
@@ -634,7 +634,7 @@ class SemanticModelsManager:
         """Incrementally add a single semantic link triple into the graph without full rebuild."""
         try:
             context = self._graph.get_context("urn:semantic-links")
-            subj = URIRef(f"urn:ucapp:{entity_type}:{entity_id}")
+            subj = URIRef(f"urn:ontos:{entity_type}:{entity_id}")
             obj = URIRef(iri)
             context.add((subj, RDFS.seeAlso, obj))
         except Exception as e:
@@ -644,7 +644,7 @@ class SemanticModelsManager:
         """Incrementally remove a single semantic link triple from the graph without full rebuild."""
         try:
             context = self._graph.get_context("urn:semantic-links")
-            subj = URIRef(f"urn:ucapp:{entity_type}:{entity_id}")
+            subj = URIRef(f"urn:ontos:{entity_type}:{entity_id}")
             obj = URIRef(iri)
             context.remove((subj, RDFS.seeAlso, obj))
         except Exception as e:

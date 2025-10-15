@@ -91,7 +91,7 @@ const AppEntityHover: React.FC<{ iri: string; children: React.ReactNode }> = ({ 
 
 // Helper function to parse app entities
 const parseAppEntity = (iri: string): { entityType: 'data_product' | 'data_domain' | 'data_contract'; entityId: string } | null => {
-  const m = iri.match(/^urn:ucapp:(data_product|data_domain|data_contract):(.+)$/);
+  const m = iri.match(/^urn:ontos:(data_product|data_domain|data_contract):(.+)$/);
   if (!m) return null;
   return { entityType: m[1] as any, entityId: m[2] };
 };
@@ -401,7 +401,7 @@ export default function KGSearch({
                 <Button variant="outline" size="sm">Examples</Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-[420px] max-w-[80vw]">
-                <DropdownMenuItem onClick={() => setSparql('SELECT ?resource WHERE { ?resource ?p ?o . FILTER(REGEX(STR(?resource), "^urn:ucapp")) }')}>Resources in app namespace</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSparql('SELECT ?resource WHERE { ?resource ?p ?o . FILTER(REGEX(STR(?resource), "^urn:ontos")) }')}>Resources in app namespace</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSparql('SELECT ?s ?label WHERE { ?s <http://www.w3.org/2000/01/rdf-schema#label> ?label } LIMIT 50')}>Resources with rdfs:label</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSparql('SELECT ?s ?type WHERE { ?s a ?type } LIMIT 100')}>Subjects and their types</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSparql('SELECT ?p (COUNT(*) AS ?count) WHERE { ?s ?p ?o } GROUP BY ?p ORDER BY DESC(?count) LIMIT 25')}>Top predicates by frequency</DropdownMenuItem>

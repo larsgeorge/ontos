@@ -27,7 +27,7 @@ General Notes:
 #### SemanticLinksManager (`src/controller/semantic_links_manager.py`)
 - Manages traditional entity semantic links
 - Supports data domains, data products, data contracts, schemas, and properties
-- Creates subjects as `urn:ucapp:{entity_type}:{entity_id}`. The `entity_id` already encodes schema/property when applicable (e.g., `contractId#schema` or `contractId#schema#property`).
+- Creates subjects as `urn:ontos:{entity_type}:{entity_id}`. The `entity_id` already encodes schema/property when applicable (e.g., `contractId#schema` or `contractId#schema#property`).
 - Handles lifecycle management (create, update, delete, list)
 
 #### DataContractsManager (`src/controller/data_contracts_manager.py`)
@@ -119,8 +119,8 @@ semantic_links_manager.create_link(link)
 
 **URI Format:**
 - Entity references use URIRef format
-- Pattern: `urn:ucapp:{entity_type}:{entity_id}#{schema}#{property}`
-- Example: `urn:ucapp:data_contract:123-uuid#customers#email`
+- Pattern: `urn:ontos:{entity_type}:{entity_id}#{schema}#{property}`
+- Example: `urn:ontos:data_contract:123-uuid#customers#email`
 
 ### 2. ODCS Authoritative Definitions
 
