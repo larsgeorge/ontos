@@ -97,14 +97,19 @@ export default function ConceptsSearch({
       setConceptSearchQuery(urlQuery);
     }
 
-    if (urlIri && !initialSelectedConcept) {
-      // Load concept from IRI
+    if (urlIri) {
+      // Load concept from IRI using the exact IRI endpoint
       const loadConceptFromIri = async () => {
         try {
-          const res = await get<ConceptItem[]>(`/api/semantic-models/concepts?q=${encodeURIComponent(urlIri)}&limit=1`);
-          const concepts = res.data || [];
-          if (concepts.length > 0) {
-            await selectConcept(concepts[0]);
+          const res = await get<{ concept: any }>(`/api/semantic-models/concepts/${encodeURIComponent(urlIri)}`);
+          if (res.data && res.data.concept) {
+            const concept = res.data.concept;
+            const conceptItem: ConceptItem = {
+              value: concept.iri,
+              label: concept.label || concept.iri.split(/[/#]/).pop() || concept.iri,
+              type: 'class'
+            };
+            await selectConcept(conceptItem);
           }
         } catch (error) {
           console.error('Error loading concept from URL:', error);

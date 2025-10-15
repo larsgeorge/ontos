@@ -34,7 +34,14 @@ export default function SearchView() {
       setMode('kg');
     }
 
-    // Check for tab parameter to set initial mode
+    // Check for concepts_iri or concepts_query param (concepts mode)
+    const conceptsIri = params.get('concepts_iri');
+    const conceptsQuery = params.get('concepts_query');
+    if (conceptsIri || conceptsQuery) {
+      setMode('concepts');
+    }
+
+    // Check for tab parameter to set initial mode (takes precedence)
     const tabParam = params.get('tab');
     if (tabParam && ['app', 'kg', 'concepts', 'llm'].includes(tabParam)) {
       setMode(tabParam as 'app' | 'kg' | 'concepts' | 'llm');

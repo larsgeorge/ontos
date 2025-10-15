@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import type { 
   SemanticModel, 
   OntologyConcept, 
@@ -31,6 +31,7 @@ import {
   Search,
   Network,
   Loader2,
+  ExternalLink,
 } from 'lucide-react';
 import ReactFlow, { Node, Edge, Background, MarkerType, Controls, ConnectionMode, MiniMap, Position } from 'reactflow';
 import ForceGraph2D from 'react-force-graph-2d';
@@ -359,6 +360,8 @@ interface ConceptDetailsProps {
 }
 
 const ConceptDetails: React.FC<ConceptDetailsProps> = ({ concept, concepts, onSelectConcept }) => {
+  const navigate = useNavigate();
+  
   // Helper function to resolve IRI to concept label
   const getConceptLabel = (iri: string): string => {
     const foundConcept = concepts.find(c => c.iri === iri);
@@ -378,9 +381,20 @@ const ConceptDetails: React.FC<ConceptDetailsProps> = ({ concept, concepts, onSe
       <DetailItem 
         label="IRI" 
         value={
-          <code className="text-xs bg-muted p-1 rounded break-all">
-            {concept.iri}
-          </code>
+          <div className="flex items-center gap-2">
+            <code className="text-xs bg-muted p-1 rounded break-all">
+              {concept.iri}
+            </code>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 shrink-0"
+              onClick={() => navigate(`/search?concepts_iri=${encodeURIComponent(concept.iri)}`)}
+              title="Open in Concept Search"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </div>
         } 
       />
       
@@ -1219,7 +1233,7 @@ export default function SemanticModelsView() {
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Input
-                  type="search"
+                  type="text"
                   placeholder="Search concepts and terms..."
                   value={searchQuery}
                   onChange={(e) => {
@@ -1280,11 +1294,6 @@ export default function SemanticModelsView() {
                 onShowKnowledgeGraph={handleShowKnowledgeGraph}
                 searchQuery={searchQuery}
               />
-              {Object.keys(groupedConcepts).length === 0 && !loading && (
-                <div className="text-center text-muted-foreground py-8">
-                  No concepts found
-                </div>
-              )}
             </div>
           </ScrollArea>
         </div>
