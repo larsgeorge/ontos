@@ -21,6 +21,7 @@ from ..models.settings import HandleRoleRequest
 from ..models.notifications import Notification, NotificationType
 from ..controller.notifications_manager import NotificationsManager
 from ..common.config import get_settings
+from ..common.sanitization import sanitize_markdown_input
 
 # Configure logging
 from src.common.logging import get_logger
@@ -93,7 +94,7 @@ async def get_llm_config():
         return {
             "enabled": app_settings.LLM_ENABLED,
             "endpoint": app_settings.LLM_ENDPOINT,
-            "disclaimer_text": app_settings.LLM_DISCLAIMER_TEXT,
+            "disclaimer_text": sanitize_markdown_input(app_settings.LLM_DISCLAIMER_TEXT) if app_settings.LLM_DISCLAIMER_TEXT else None,
             # Do not expose system_prompt or injection_check_prompt to frontend
         }
     except Exception as e:

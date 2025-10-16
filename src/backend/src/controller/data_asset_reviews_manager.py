@@ -13,7 +13,6 @@ from databricks.sdk.errors import NotFound, PermissionDenied, DatabricksError
 import yaml # Import yaml
 from pathlib import Path # Import Path
 import os
-import bleach # Import bleach for HTML sanitization
 # from openai import OpenAI # Removed OpenAI client
 # NOTE: Avoid importing MLflow at module import time to prevent optional
 # dependency issues during app startup. We'll import lazily when needed.
@@ -42,28 +41,10 @@ from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.search_registry import searchable_asset
 
 from src.common.config import Settings, get_settings # Added Settings and get_settings
+from src.common.sanitization import sanitize_markdown_input # Import shared sanitization function
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
-
-# HTML/Markdown sanitization configuration
-ALLOWED_TAGS = [
-    'a', 'b', 'i', 'em', 'strong',
-    'p', 'ul', 'ol', 'li',
-    'blockquote', 'code', 'pre'
-]
-ALLOWED_ATTRIBUTES = {
-    'a': ['href', 'title']
-}
-
-def sanitize_markdown_input(user_input: str) -> str:
-    """Sanitize markdown/HTML input to prevent XSS attacks."""
-    return bleach.clean(
-        user_input,
-        tags=ALLOWED_TAGS,
-        attributes=ALLOWED_ATTRIBUTES,
-        strip=True
-    )
 
 @searchable_asset # Register this manager with the search system
 class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
