@@ -11,7 +11,7 @@ export function Sidebar({ isCollapsed }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-background transition-all duration-300 ease-in-out',
+        'fixed inset-y-0 left-0 z-50 flex flex-col border-r bg-background transition-all duration-300 ease-in-out overflow-x-hidden',
         isCollapsed ? 'w-14' : 'w-60' // Adjust width based on state
       )}
     >
