@@ -442,7 +442,7 @@ export default function Home() {
                     </div>
                 ) : (
                     <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={complianceData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                    <LineChart data={complianceData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis
                         dataKey="date"
@@ -457,7 +457,7 @@ export default function Home() {
                         axisLine={false}
                         tickLine={false}
                         style={{ fontSize: '0.75rem' }}
-                        width={40}
+                        width={50}
                         />
                         <Tooltip
                             contentStyle={{ fontSize: '0.875rem', borderRadius: '0.5rem', boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' }}
