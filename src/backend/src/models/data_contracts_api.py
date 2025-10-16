@@ -374,6 +374,7 @@ class DataContractUpdate(BaseModel):
     name: Optional[str] = None
     version: Optional[str] = None
     status: Optional[str] = None
+    published: Optional[bool] = None  # Marketplace publication status
     owner_team_id: Optional[str] = Field(None, alias='ownerTeamId')
     kind: Optional[str] = None
     apiVersion: Optional[str] = Field(None, alias='api_version')
@@ -396,6 +397,7 @@ class DataContractRead(BaseModel):
     name: str  # Required for app usability
     version: str  # Required by ODCS
     status: str  # Required by ODCS
+    published: bool = False  # Marketplace publication status
     owner_team_id: Optional[str] = Field(None, alias='ownerTeamId')
     kind: str = Field('DataContract')  # Required by ODCS
     # Ensure JSON uses camelCase key 'apiVersion' so frontend reads it

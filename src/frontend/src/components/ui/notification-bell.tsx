@@ -8,6 +8,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 import { ScrollArea } from './scroll-area';
 import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request-dialog';
 import ConfirmAccessRequestDialog from '@/components/access/confirm-access-request-dialog';
+import HandleStewardReviewDialog from '@/components/data-contracts/handle-steward-review-dialog';
+import HandlePublishRequestDialog from '@/components/data-contracts/handle-publish-request-dialog';
+import HandleDeployRequestDialog from '@/components/data-contracts/handle-deploy-request-dialog';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { NotificationType } from '@/types/notification';
 
@@ -26,6 +29,12 @@ export default function NotificationBell() {
   const [selectedNotificationPayload, setSelectedNotificationPayload] = useState<Record<string, any> | null>(null);
   const [isAccessDialogOpen, setIsAccessDialogOpen] = useState(false);
   const [selectedAccessPayload, setSelectedAccessPayload] = useState<Record<string, any> | null>(null);
+  const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
+  const [selectedReviewPayload, setSelectedReviewPayload] = useState<Record<string, any> | null>(null);
+  const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
+  const [selectedPublishPayload, setSelectedPublishPayload] = useState<Record<string, any> | null>(null);
+  const [isDeployDialogOpen, setIsDeployDialogOpen] = useState(false);
+  const [selectedDeployPayload, setSelectedDeployPayload] = useState<Record<string, any> | null>(null);
 
   useEffect(() => {
     fetchNotifications();
@@ -57,10 +66,45 @@ export default function NotificationBell() {
     }
   };
 
+  const handleOpenReviewDialog = (payload: Record<string, any> | undefined | null) => {
+    if (payload) {
+      setSelectedReviewPayload(payload);
+      setIsReviewDialogOpen(true);
+    } else {
+      console.error("Cannot open review dialog: payload is missing.");
+    }
+  };
+
+  const handleOpenPublishDialog = (payload: Record<string, any> | undefined | null) => {
+    if (payload) {
+      setSelectedPublishPayload(payload);
+      setIsPublishDialogOpen(true);
+    } else {
+      console.error("Cannot open publish dialog: payload is missing.");
+    }
+  };
+
+  const handleOpenDeployDialog = (payload: Record<string, any> | undefined | null) => {
+    if (payload) {
+      setSelectedDeployPayload(payload);
+      setIsDeployDialogOpen(true);
+    } else {
+      console.error("Cannot open deploy dialog: payload is missing.");
+    }
+  };
+
   const handleDecisionMade = () => {
     fetchNotifications();
     setSelectedNotificationPayload(null);
     setIsConfirmDialogOpen(false);
+    setSelectedAccessPayload(null);
+    setIsAccessDialogOpen(false);
+    setSelectedReviewPayload(null);
+    setIsReviewDialogOpen(false);
+    setSelectedPublishPayload(null);
+    setIsPublishDialogOpen(false);
+    setSelectedDeployPayload(null);
+    setIsDeployDialogOpen(false);
   };
 
   const getIcon = (type: NotificationType) => {
@@ -194,12 +238,54 @@ export default function NotificationBell() {
                       {notification.read ? "View Details" : "Handle Request"}
                     </Button>
                   )}
+                  {notification.action_type === 'handle_steward_review' && notification.action_payload && (
+                    <Button
+                      variant={notification.read ? "outline" : "default"}
+                      size="sm"
+                      className="mt-2 h-7 px-2 text-xs gap-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenReviewDialog(notification.action_payload);
+                      }}
+                    >
+                      <CheckSquare className="h-3.5 w-3.5" />
+                      {notification.read ? "View Details" : "Review Contract"}
+                    </Button>
+                  )}
+                  {notification.action_type === 'handle_publish_request' && notification.action_payload && (
+                    <Button
+                      variant={notification.read ? "outline" : "default"}
+                      size="sm"
+                      className="mt-2 h-7 px-2 text-xs gap-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenPublishDialog(notification.action_payload);
+                      }}
+                    >
+                      <CheckSquare className="h-3.5 w-3.5" />
+                      {notification.read ? "View Details" : "Handle Publish"}
+                    </Button>
+                  )}
+                  {notification.action_type === 'handle_deploy_request' && notification.action_payload && (
+                    <Button
+                      variant={notification.read ? "outline" : "default"}
+                      size="sm"
+                      className="mt-2 h-7 px-2 text-xs gap-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenDeployDialog(notification.action_payload);
+                      }}
+                    >
+                      <CheckSquare className="h-3.5 w-3.5" />
+                      {notification.read ? "View Details" : "Handle Deploy"}
+                    </Button>
+                  )}
                   {(notification.type === 'job_progress' || notification.action_type === 'job_progress') && (notification.data || notification.action_payload) && (
                     <div className="mt-2">
                       <Progress value={Number((notification.data || notification.action_payload)?.progress ?? 0)} />
-                      {(notification.data || notification.action_payload)?.status && (
+                      {((notification.data || notification.action_payload)?.status) && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          Status: {String((notification.data || notification.action_payload).status)}
+                          Status: {String((notification.data || notification.action_payload)?.status)}
                         </p>
                       )}
                       {(notification.data || notification.action_payload)?.run_id && (
@@ -252,6 +338,38 @@ export default function NotificationBell() {
         requesterEmail={selectedAccessPayload?.requester_email ?? 'Unknown User'}
         entityType={(selectedAccessPayload?.entity_type ?? 'data_product') as 'data_product' | 'data_contract'}
         entityId={selectedAccessPayload?.entity_id ?? 'Unknown ID'}
+        onDecisionMade={handleDecisionMade}
+      />
+    )}
+    {selectedReviewPayload && (
+      <HandleStewardReviewDialog
+        isOpen={isReviewDialogOpen}
+        onOpenChange={setIsReviewDialogOpen}
+        contractId={selectedReviewPayload.contract_id ?? 'Unknown ID'}
+        contractName={selectedReviewPayload.contract_name}
+        requesterEmail={selectedReviewPayload.requester_email ?? 'Unknown User'}
+        onDecisionMade={handleDecisionMade}
+      />
+    )}
+    {selectedPublishPayload && (
+      <HandlePublishRequestDialog
+        isOpen={isPublishDialogOpen}
+        onOpenChange={setIsPublishDialogOpen}
+        contractId={selectedPublishPayload.contract_id ?? 'Unknown ID'}
+        contractName={selectedPublishPayload.contract_name}
+        requesterEmail={selectedPublishPayload.requester_email ?? 'Unknown User'}
+        onDecisionMade={handleDecisionMade}
+      />
+    )}
+    {selectedDeployPayload && (
+      <HandleDeployRequestDialog
+        isOpen={isDeployDialogOpen}
+        onOpenChange={setIsDeployDialogOpen}
+        contractId={selectedDeployPayload.contract_id ?? 'Unknown ID'}
+        contractName={selectedDeployPayload.contract_name}
+        requesterEmail={selectedDeployPayload.requester_email ?? 'Unknown User'}
+        catalog={selectedDeployPayload.catalog}
+        schema={selectedDeployPayload.schema}
         onDecisionMade={handleDecisionMade}
       />
     )}

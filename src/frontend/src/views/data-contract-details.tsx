@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Rocket, Shapes, Columns2, Database } from 'lucide-react'
+import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Shapes, Columns2, Database } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -18,7 +18,7 @@ import { useDomains } from '@/hooks/use-domains'
 import type { EntitySemanticLink } from '@/types/semantic-link'
 import type { DataContract, SchemaObject, QualityRule, TeamMember, ServerConfig, SLARequirements } from '@/types/data-contract'
 import useBreadcrumbStore from '@/stores/breadcrumb-store'
-import RequestAccessDialog from '@/components/access/request-access-dialog'
+import RequestContractActionDialog from '@/components/data-contracts/request-contract-action-dialog'
 import CreateVersionDialog from '@/components/data-products/create-version-dialog'
 import DataContractBasicFormDialog from '@/components/data-contracts/data-contract-basic-form-dialog'
 import SchemaFormDialog from '@/components/data-contracts/schema-form-dialog'
@@ -26,8 +26,6 @@ import QualityRuleFormDialog from '@/components/data-contracts/quality-rule-form
 import TeamMemberFormDialog from '@/components/data-contracts/team-member-form-dialog'
 import ServerConfigFormDialog from '@/components/data-contracts/server-config-form-dialog'
 import SLAFormDialog from '@/components/data-contracts/sla-form-dialog'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 
 // Define column structure for schema properties
 type SchemaProperty = {
@@ -134,18 +132,12 @@ export default function DataContractDetails() {
   const [error, setError] = useState<string | null>(null)
   const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false)
   const [iriDialogOpen, setIriDialogOpen] = useState(false)
-  const [isRequestAccessDialogOpen, setIsRequestAccessDialogOpen] = useState(false)
+  const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false)
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false)
   const [links, setLinks] = useState<EntitySemanticLink[]>([])
   const [selectedSchemaIndex, setSelectedSchemaIndex] = useState(0)
   const [schemaLinks, setSchemaLinks] = useState<Record<string, EntitySemanticLink[]>>({})
   const [propertyLinks, setPropertyLinks] = useState<Record<string, EntitySemanticLink[]>>({})
-  const [isDeploying, setIsDeploying] = useState(false)
-  const [deployError, setDeployError] = useState<string | null>(null)
-  const [deploySuccess, setDeploySuccess] = useState<string | null>(null)
-  const [deployCatalog, setDeployCatalog] = useState('')
-  const [deploySchema, setDeploySchema] = useState('')
-  const [isDeployDialogOpen, setIsDeployDialogOpen] = useState(false)
 
   // Dialog states for CRUD operations
   const [isBasicFormOpen, setIsBasicFormOpen] = useState(false)
@@ -480,45 +472,6 @@ export default function DataContractDetails() {
     }
   }
 
-  const openDeploy = () => {
-    // If schema has a physicalName with catalog.schema.table, suggest defaults from there
-    try {
-      const sobj = contract?.schema?.[0]
-      const phys = sobj?.physicalName || ''
-      const parts = (phys || '').split('.')
-      if (parts.length === 3) {
-        setDeployCatalog(prev => prev || parts[0])
-        setDeploySchema(prev => prev || parts[1])
-      }
-    } catch {}
-    setIsDeployDialogOpen(true)
-  }
-
-  const handleDeploy = async () => {
-    if (!contract) return
-    try {
-      setIsDeploying(true)
-      setDeployError(null)
-      setDeploySuccess(null)
-      const res = await fetch(`/api/self-service/deploy/${contract.id}` , {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ defaultCatalog: deployCatalog, defaultSchema: deploySchema })
-      })
-      if (!res.ok) {
-        const txt = await res.text()
-        throw new Error(txt || `HTTP ${res.status}`)
-      }
-      const data = await res.json()
-      setDeploySuccess(Array.isArray(data?.created) ? data.created.join(', ') : 'Deployed')
-      setIsDeployDialogOpen(false)
-    } catch (e: any) {
-      setDeployError(e?.message || 'Failed to deploy')
-    } finally {
-      setIsDeploying(false)
-    }
-  }
-
   const handleSubmitForReview = async () => {
     if (!contractId) return;
     try {
@@ -598,11 +551,10 @@ export default function DataContractDetails() {
             onToggle={() => setIsCommentSidebarOpen(!isCommentSidebarOpen)}
             className="h-8"
           />
-          <Button variant="outline" onClick={() => setIsRequestAccessDialogOpen(true)} size="sm"><KeyRound className="mr-2 h-4 w-4" /> Request Access</Button>
+          <Button variant="outline" onClick={() => setIsRequestDialogOpen(true)} size="sm"><KeyRound className="mr-2 h-4 w-4" /> Request...</Button>
           <Button variant="outline" onClick={handleCreateNewVersion} size="sm"><CopyPlus className="mr-2 h-4 w-4" /> Create New Version</Button>
           <Button variant="outline" onClick={() => setIsBasicFormOpen(true)} size="sm"><Pencil className="mr-2 h-4 w-4" /> Edit Metadata</Button>
           <Button variant="outline" onClick={exportOdcs} size="sm"><Download className="mr-2 h-4 w-4" /> Export ODCS</Button>
-          <Button variant="default" onClick={openDeploy} className="flex items-center gap-2"><Rocket className="h-4 w-4" /> Deploy</Button>
           <Button variant="destructive" onClick={handleDelete} size="sm"><Trash2 className="mr-2 h-4 w-4" /> Delete</Button>
         </div>
       </div>
@@ -618,7 +570,13 @@ export default function DataContractDetails() {
         <CardContent className="space-y-6">
           <div className="grid md:grid-cols-4 gap-4">
             <div className="space-y-1"><Label>Owner:</Label> <span className="text-sm block">{contract.owner_team_id || 'N/A'}</span></div>
-            <div className="space-y-1"><Label>Status:</Label> <Badge variant="secondary" className="ml-1">{contract.status}</Badge></div>
+            <div className="space-y-1">
+              <Label>Status:</Label> 
+              <Badge variant="secondary" className="ml-1">{contract.status}</Badge>
+              {contract.published && (
+                <Badge variant="default" className="ml-1 bg-green-600">Published</Badge>
+              )}
+            </div>
             <div className="space-y-1"><Label>Version:</Label> <Badge variant="outline" className="ml-1">{contract.version}</Badge></div>
             <div className="space-y-1"><Label>API Version:</Label> <span className="text-sm block">{contract.apiVersion}</span></div>
             <div className="space-y-1">
@@ -1211,46 +1169,15 @@ export default function DataContractDetails() {
       )}
 
       {contract && (
-        <RequestAccessDialog
-          isOpen={isRequestAccessDialogOpen}
-          onOpenChange={setIsRequestAccessDialogOpen}
-          entityType="data_contract"
-          entityId={contractId!}
-          entityName={contract.name}
+        <RequestContractActionDialog
+          isOpen={isRequestDialogOpen}
+          onOpenChange={setIsRequestDialogOpen}
+          contractId={contractId!}
+          contractName={contract.name}
+          contractStatus={contract.status}
+          onSuccess={() => fetchDetails()}
         />
       )}
-
-      {deployError && (
-        <div className="mt-2"><Alert variant="destructive"><AlertDescription>{deployError}</AlertDescription></Alert></div>
-      )}
-      {deploySuccess && (
-        <div className="mt-2"><Alert><AlertDescription>Deployed: {deploySuccess}</AlertDescription></Alert></div>
-      )}
-
-      {/* Simple inline deploy dialog */}
-      <Dialog open={isDeployDialogOpen} onOpenChange={setIsDeployDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Deploy to Unity Catalog</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-3">
-            <div>
-              <Label>Default Catalog</Label>
-              <Input value={deployCatalog} onChange={(e) => setDeployCatalog(e.target.value)} placeholder="e.g. user_jdoe" />
-            </div>
-            <div>
-              <Label>Default Schema</Label>
-              <Input value={deploySchema} onChange={(e) => setDeploySchema(e.target.value)} placeholder="e.g. sandbox" />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsDeployDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleDeploy} disabled={isDeploying || !deployCatalog || !deploySchema}>
-                {isDeploying ? (<span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Deploying…</span>) : 'Deploy'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

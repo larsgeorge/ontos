@@ -24,6 +24,7 @@ class DataContractDb(Base):
     api_version = Column(String, nullable=False, default="v3.0.2")
     version = Column(String, nullable=False, index=True)
     status = Column(String, nullable=False, default="draft", index=True)
+    published = Column(Boolean, nullable=False, default=False, index=True)  # Marketplace publication status
     owner_team_id = Column(String, ForeignKey('teams.id'), nullable=True, index=True)  # Team UUID reference
     tenant = Column(String, nullable=True)
     data_product = Column(String, nullable=True)

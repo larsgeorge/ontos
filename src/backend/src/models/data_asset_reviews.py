@@ -27,6 +27,7 @@ class AssetType(str, Enum):
     MODEL = "model"
     VOLUME = "volume"
     NOTEBOOK = "notebook"
+    DATA_CONTRACT = "data_contract"  # For data contract reviews
     # Add others as needed, e.g., DASHBOARD, JOB
 
 # --- Pydantic Models --- #

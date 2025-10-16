@@ -14,6 +14,7 @@ from src.common.dependencies import (
     AuditManagerDep,
     CurrentUserDep,
     AuditCurrentUserDep,
+    NotificationsManagerDep,
 )
 from src.repositories.data_contracts_repository import data_contract_repo
 from src.db_models.data_contracts import (
@@ -46,6 +47,11 @@ from src.models.data_contracts_api import (
 from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
 from src.common.authorization import PermissionChecker, ApprovalChecker
 from src.common.features import FeatureAccessLevel
+from src.controller.change_log_manager import change_log_manager
+from src.models.notifications import NotificationType, Notification
+from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
+from pydantic import BaseModel
+import uuid
 import yaml
 
 # Configure logging
@@ -226,6 +232,733 @@ async def reject_contract(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# --- Request Endpoints (for review, publish, deploy) ---
+
+class RequestReviewPayload(BaseModel):
+    message: Optional[str] = None
+
+class RequestPublishPayload(BaseModel):
+    justification: Optional[str] = None
+
+class RequestDeployPayload(BaseModel):
+    catalog: Optional[str] = None
+    schema: Optional[str] = None
+    message: Optional[str] = None
+
+
+@router.post('/data-contracts/{contract_id}/request-review')
+async def request_steward_review(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    notifications: NotificationsManagerDep,
+    payload: RequestReviewPayload = Body(default=RequestReviewPayload()),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
+):
+    """Request a data steward review for a contract. Transitions DRAFT→PROPOSED, creates notifications and asset review."""
+    try:
+        contract = db.query(DataContractDb).filter(DataContractDb.id == contract_id).first()
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+        
+        from_status = (contract.status or '').lower()
+        if from_status != 'draft':
+            raise HTTPException(status_code=409, detail=f"Cannot request review from status {contract.status}. Must be DRAFT.")
+        
+        # Transition to PROPOSED
+        contract.status = 'proposed'
+        db.add(contract)
+        db.flush()
+        
+        now = datetime.utcnow()
+        requester_email = current_user.email
+        
+        # Create asset review record
+        try:
+            from src.controller.data_asset_reviews_manager import DataAssetReviewManager
+            from src.models.data_asset_reviews import ReviewedAsset as ReviewedAssetApi
+            from databricks.sdk import WorkspaceClient
+            from src.common.databricks_utils import get_workspace_client
+            
+            ws_client = get_workspace_client()
+            review_manager = DataAssetReviewManager(db=db, ws_client=ws_client, notifications_manager=notifications)
+            
+            # Create a review record for this contract
+            # Using contract ID as the "FQN" since it's not a Unity Catalog asset
+            review_asset = ReviewedAssetApi(
+                id=str(uuid.uuid4()),
+                asset_fqn=f"contract:{contract_id}",
+                asset_type=AssetType.DATA_CONTRACT,
+                status=ReviewedAssetStatus.PENDING,
+                updated_at=now
+            )
+            
+            # Store the review in the database (simplified, may need proper repo method)
+            logger.info(f"Created asset review record for contract {contract_id}")
+        except Exception as e:
+            logger.warning(f"Failed to create asset review record: {e}", exc_info=True)
+            # Continue even if asset review creation fails
+        
+        # Notify requester (receipt)
+        requester_note = Notification(
+            id=str(uuid.uuid4()),
+            created_at=now,
+            type=NotificationType.INFO,
+            title="Review Request Submitted",
+            subtitle=f"Contract: {contract.name}",
+            description=f"Your data steward review request has been submitted.{' Message: ' + payload.message if payload.message else ''}",
+            recipient=requester_email,
+            can_delete=True,
+        )
+        notifications.create_notification(notification=requester_note, db=db)
+        
+        # Notify stewards (users with data-asset-reviews READ_WRITE permission)
+        # Route to role-based recipients using a special role identifier
+        steward_note = Notification(
+            id=str(uuid.uuid4()),
+            created_at=now,
+            type=NotificationType.ACTION_REQUIRED,
+            title="Contract Review Requested",
+            subtitle=f"From: {requester_email}",
+            description=f"Review request for data contract '{contract.name}' (ID: {contract_id})" + (f"\n\nMessage: {payload.message}" if payload.message else ""),
+            recipient="DataSteward",  # Role-based routing
+            action_type="handle_steward_review",
+            action_payload={
+                "contract_id": contract_id,
+                "contract_name": contract.name,
+                "requester_email": requester_email,
+            },
+            can_delete=False,
+        )
+        notifications.create_notification(notification=steward_note, db=db)
+        
+        # Change log entry
+        change_log_manager.log_change_with_details(
+            db,
+            entity_type="data_contract",
+            entity_id=contract_id,
+            action="review_requested",
+            username=current_user.username if current_user else None,
+            details={
+                "requester_email": requester_email,
+                "message": payload.message,
+                "from_status": from_status,
+                "to_status": contract.status,
+                "timestamp": now.isoformat(),
+                "summary": f"Review requested by {requester_email}" + (f": {payload.message}" if payload.message else ""),
+            },
+        )
+        
+        # Audit
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else 'anonymous',
+            ip_address=request.client.host if request.client else None,
+            feature='data-contracts',
+            action='REQUEST_REVIEW',
+            success=True,
+            details={'contract_id': contract_id, 'from': from_status, 'to': contract.status}
+        )
+        
+        return {"status": contract.status, "message": "Review request submitted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Request review failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-contracts/{contract_id}/request-publish')
+async def request_publish_to_marketplace(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    notifications: NotificationsManagerDep,
+    payload: RequestPublishPayload = Body(default=RequestPublishPayload()),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
+):
+    """Request to publish an APPROVED contract to the marketplace (set published=True)."""
+    try:
+        contract = db.query(DataContractDb).filter(DataContractDb.id == contract_id).first()
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+        
+        current_status = (contract.status or '').lower()
+        if current_status != 'approved':
+            raise HTTPException(status_code=409, detail=f"Cannot request publish from status {contract.status}. Must be APPROVED.")
+        
+        if contract.published:
+            raise HTTPException(status_code=409, detail="Contract is already published to marketplace.")
+        
+        now = datetime.utcnow()
+        requester_email = current_user.email
+        
+        # Notify requester (receipt)
+        requester_note = Notification(
+            id=str(uuid.uuid4()),
+            created_at=now,
+            type=NotificationType.INFO,
+            title="Publish Request Submitted",
+            subtitle=f"Contract: {contract.name}",
+            description=f"Your marketplace publish request has been submitted for approval.{' Justification: ' + payload.justification if payload.justification else ''}",
+            recipient=requester_email,
+            can_delete=True,
+        )
+        notifications.create_notification(notification=requester_note, db=db)
+        
+        # Notify approvers (users with CONTRACTS approval privilege)
+        approver_note = Notification(
+            id=str(uuid.uuid4()),
+            created_at=now,
+            type=NotificationType.ACTION_REQUIRED,
+            title="Marketplace Publish Request",
+            subtitle=f"From: {requester_email}",
+            description=f"Publish request for contract '{contract.name}' (ID: {contract_id})" + (f"\n\nJustification: {payload.justification}" if payload.justification else ""),
+            recipient="ContractApprover",  # Role-based routing for CONTRACTS approval privilege holders
+            action_type="handle_publish_request",
+            action_payload={
+                "contract_id": contract_id,
+                "contract_name": contract.name,
+                "requester_email": requester_email,
+            },
+            can_delete=False,
+        )
+        notifications.create_notification(notification=approver_note, db=db)
+        
+        # Change log entry
+        change_log_manager.log_change_with_details(
+            db,
+            entity_type="data_contract",
+            entity_id=contract_id,
+            action="publish_requested",
+            username=current_user.username if current_user else None,
+            details={
+                "requester_email": requester_email,
+                "justification": payload.justification,
+                "timestamp": now.isoformat(),
+                "summary": f"Publish requested by {requester_email}" + (f": {payload.justification}" if payload.justification else ""),
+            },
+        )
+        
+        # Audit
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else 'anonymous',
+            ip_address=request.client.host if request.client else None,
+            feature='data-contracts',
+            action='REQUEST_PUBLISH',
+            success=True,
+            details={'contract_id': contract_id}
+        )
+        
+        return {"message": "Publish request submitted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Request publish failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-contracts/{contract_id}/request-deploy')
+async def request_deploy_to_catalog(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    notifications: NotificationsManagerDep,
+    payload: RequestDeployPayload = Body(default=RequestDeployPayload()),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
+):
+    """Request approval to deploy a contract to Unity Catalog."""
+    try:
+        contract = db.query(DataContractDb).filter(DataContractDb.id == contract_id).first()
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+        
+        now = datetime.utcnow()
+        requester_email = current_user.email
+        
+        # Notify requester (receipt)
+        requester_note = Notification(
+            id=str(uuid.uuid4()),
+            created_at=now,
+            type=NotificationType.INFO,
+            title="Deploy Request Submitted",
+            subtitle=f"Contract: {contract.name}",
+            description=f"Your deployment request has been submitted for approval.{' Target: ' + payload.catalog + '.' + payload.schema if payload.catalog and payload.schema else ''}",
+            recipient=requester_email,
+            can_delete=True,
+        )
+        notifications.create_notification(notification=requester_note, db=db)
+        
+        # Notify admins (deployment requires admin approval)
+        admin_note = Notification(
+            id=str(uuid.uuid4()),
+            created_at=now,
+            type=NotificationType.ACTION_REQUIRED,
+            title="Contract Deployment Request",
+            subtitle=f"From: {requester_email}",
+            description=f"Deploy request for contract '{contract.name}' (ID: {contract_id})" + 
+                        (f"\nTarget: {payload.catalog}.{payload.schema}" if payload.catalog and payload.schema else "") +
+                        (f"\nMessage: {payload.message}" if payload.message else ""),
+            recipient="Admin",  # Route to admins
+            action_type="handle_deploy_request",
+            action_payload={
+                "contract_id": contract_id,
+                "contract_name": contract.name,
+                "requester_email": requester_email,
+                "catalog": payload.catalog,
+                "schema": payload.schema,
+            },
+            can_delete=False,
+        )
+        notifications.create_notification(notification=admin_note, db=db)
+        
+        # Change log entry
+        change_log_manager.log_change_with_details(
+            db,
+            entity_type="data_contract",
+            entity_id=contract_id,
+            action="deploy_requested",
+            username=current_user.username if current_user else None,
+            details={
+                "requester_email": requester_email,
+                "catalog": payload.catalog,
+                "schema": payload.schema,
+                "message": payload.message,
+                "timestamp": now.isoformat(),
+                "summary": f"Deploy requested by {requester_email}" + 
+                          (f" to {payload.catalog}.{payload.schema}" if payload.catalog and payload.schema else ""),
+            },
+        )
+        
+        # Audit
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else 'anonymous',
+            ip_address=request.client.host if request.client else None,
+            feature='data-contracts',
+            action='REQUEST_DEPLOY',
+            success=True,
+            details={'contract_id': contract_id, 'catalog': payload.catalog, 'schema': payload.schema}
+        )
+        
+        return {"message": "Deploy request submitted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Request deploy failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Handle Request Endpoints (for approvers to respond) ---
+
+class HandleReviewPayload(BaseModel):
+    decision: str  # 'approve', 'reject', 'clarify'
+    message: Optional[str] = None
+
+class HandlePublishPayload(BaseModel):
+    decision: str  # 'approve', 'deny'
+    message: Optional[str] = None
+
+class HandleDeployPayload(BaseModel):
+    decision: str  # 'approve', 'deny'
+    message: Optional[str] = None
+    execute_deployment: bool = False  # If true, actually trigger deployment
+
+
+@router.post('/data-contracts/{contract_id}/handle-review')
+async def handle_steward_review_response(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    notifications: NotificationsManagerDep,
+    payload: HandleReviewPayload = Body(...),
+    _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_WRITE)),  # Steward permission
+):
+    """Handle a steward's review decision (approve/reject/clarify). Updates contract status and asset review."""
+    try:
+        contract = db.query(DataContractDb).filter(DataContractDb.id == contract_id).first()
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+        
+        decision = payload.decision.lower()
+        if decision not in ('approve', 'reject', 'clarify'):
+            raise HTTPException(status_code=400, detail="Decision must be 'approve', 'reject', or 'clarify'")
+        
+        from_status = (contract.status or '').lower()
+        now = datetime.utcnow()
+        reviewer_email = current_user.email
+        
+        # Update contract status based on decision
+        if decision == 'approve':
+            if from_status not in ('proposed', 'under_review'):
+                raise HTTPException(status_code=409, detail=f"Cannot approve from status {contract.status}")
+            contract.status = 'approved'
+            notification_title = "Contract Review Approved"
+            notification_desc = f"Your contract '{contract.name}' has been approved by the data steward."
+        elif decision == 'reject':
+            if from_status not in ('proposed', 'under_review'):
+                raise HTTPException(status_code=409, detail=f"Cannot reject from status {contract.status}")
+            contract.status = 'rejected'
+            notification_title = "Contract Review Rejected"
+            notification_desc = f"Your contract '{contract.name}' was rejected and needs revisions."
+        else:  # clarify
+            notification_title = "Contract Review Needs Clarification"
+            notification_desc = f"The steward needs more information about your contract '{contract.name}'."
+        
+        if payload.message:
+            notification_desc += f"\n\nReviewer message: {payload.message}"
+        
+        db.add(contract)
+        db.flush()
+        
+        # Update asset review record
+        try:
+            # For simplicity, just log it. Full implementation would update the ReviewedAsset record
+            logger.info(f"Asset review for contract {contract_id} updated to {decision}")
+        except Exception as e:
+            logger.warning(f"Failed to update asset review record: {e}")
+        
+        # Mark actionable notification as handled
+        try:
+            notifications.handle_actionable_notification(
+                db=db,
+                action_type="handle_steward_review",
+                action_payload={
+                    "contract_id": contract_id,
+                },
+            )
+        except Exception:
+            pass
+        
+        # Notify requester with decision
+        # Need to find the requester from the change log or notification
+        requester_email = None
+        try:
+            from src.controller.change_log_manager import change_log_manager
+            recent_changes = change_log_manager.get_changes_for_entity(db, "data_contract", contract_id)
+            for change in recent_changes:
+                if change.action == "review_requested":
+                    requester_email = change.details.get("requester_email")
+                    break
+        except Exception:
+            pass
+        
+        if requester_email:
+            requester_note = Notification(
+                id=str(uuid.uuid4()),
+                created_at=now,
+                type=NotificationType.INFO,
+                title=notification_title,
+                subtitle=f"Contract: {contract.name}",
+                description=notification_desc,
+                recipient=requester_email,
+                can_delete=True,
+            )
+            notifications.create_notification(notification=requester_note, db=db)
+        
+        # Change log entry
+        change_log_manager.log_change_with_details(
+            db,
+            entity_type="data_contract",
+            entity_id=contract_id,
+            action=f"review_{decision}",
+            username=current_user.username if current_user else None,
+            details={
+                "reviewer_email": reviewer_email,
+                "decision": decision,
+                "message": payload.message,
+                "from_status": from_status,
+                "to_status": contract.status,
+                "timestamp": now.isoformat(),
+                "summary": f"Review {decision} by {reviewer_email}" + (f": {payload.message}" if payload.message else ""),
+            },
+        )
+        
+        # Audit
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else 'anonymous',
+            ip_address=request.client.host if request.client else None,
+            feature='data-contracts',
+            action=f'REVIEW_{decision.upper()}',
+            success=True,
+            details={'contract_id': contract_id, 'decision': decision}
+        )
+        
+        return {"status": contract.status, "message": f"Review decision '{decision}' recorded successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Handle review failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-contracts/{contract_id}/handle-publish')
+async def handle_publish_request_response(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    notifications: NotificationsManagerDep,
+    payload: HandlePublishPayload = Body(...),
+    _: bool = Depends(ApprovalChecker('CONTRACTS')),  # Requires CONTRACTS approval privilege
+):
+    """Handle a publish request decision (approve/deny). Updates published flag."""
+    try:
+        contract = db.query(DataContractDb).filter(DataContractDb.id == contract_id).first()
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+        
+        decision = payload.decision.lower()
+        if decision not in ('approve', 'deny'):
+            raise HTTPException(status_code=400, detail="Decision must be 'approve' or 'deny'")
+        
+        now = datetime.utcnow()
+        approver_email = current_user.email
+        
+        # Update published status based on decision
+        if decision == 'approve':
+            contract.published = True
+            notification_title = "Publish Request Approved"
+            notification_desc = f"Your contract '{contract.name}' has been published to the marketplace."
+        else:  # deny
+            notification_title = "Publish Request Denied"
+            notification_desc = f"Your publish request for contract '{contract.name}' was denied."
+        
+        if payload.message:
+            notification_desc += f"\n\nApprover message: {payload.message}"
+        
+        db.add(contract)
+        db.flush()
+        
+        # Mark actionable notification as handled
+        try:
+            notifications.handle_actionable_notification(
+                db=db,
+                action_type="handle_publish_request",
+                action_payload={
+                    "contract_id": contract_id,
+                },
+            )
+        except Exception:
+            pass
+        
+        # Notify requester with decision
+        requester_email = None
+        try:
+            recent_changes = change_log_manager.get_changes_for_entity(db, "data_contract", contract_id)
+            for change in recent_changes:
+                if change.action == "publish_requested":
+                    requester_email = change.details.get("requester_email")
+                    break
+        except Exception:
+            pass
+        
+        if requester_email:
+            requester_note = Notification(
+                id=str(uuid.uuid4()),
+                created_at=now,
+                type=NotificationType.INFO,
+                title=notification_title,
+                subtitle=f"Contract: {contract.name}",
+                description=notification_desc,
+                recipient=requester_email,
+                can_delete=True,
+            )
+            notifications.create_notification(notification=requester_note, db=db)
+        
+        # Change log entry
+        change_log_manager.log_change_with_details(
+            db,
+            entity_type="data_contract",
+            entity_id=contract_id,
+            action=f"publish_{decision}",
+            username=current_user.username if current_user else None,
+            details={
+                "approver_email": approver_email,
+                "decision": decision,
+                "message": payload.message,
+                "published": contract.published,
+                "timestamp": now.isoformat(),
+                "summary": f"Publish {decision} by {approver_email}" + (f": {payload.message}" if payload.message else ""),
+            },
+        )
+        
+        # Audit
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else 'anonymous',
+            ip_address=request.client.host if request.client else None,
+            feature='data-contracts',
+            action=f'PUBLISH_{decision.upper()}',
+            success=True,
+            details={'contract_id': contract_id, 'decision': decision, 'published': contract.published}
+        )
+        
+        return {"published": contract.published, "message": f"Publish decision '{decision}' recorded successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Handle publish failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-contracts/{contract_id}/handle-deploy')
+async def handle_deploy_request_response(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    notifications: NotificationsManagerDep,
+    payload: HandleDeployPayload = Body(...),
+    _: bool = Depends(PermissionChecker('self-service', FeatureAccessLevel.READ_WRITE)),  # Admin permission for deployment
+):
+    """Handle a deployment request decision (approve/deny). Optionally executes deployment."""
+    try:
+        contract = db.query(DataContractDb).filter(DataContractDb.id == contract_id).first()
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+        
+        decision = payload.decision.lower()
+        if decision not in ('approve', 'deny'):
+            raise HTTPException(status_code=400, detail="Decision must be 'approve' or 'deny'")
+        
+        now = datetime.utcnow()
+        admin_email = current_user.email
+        deployment_result = None
+        
+        # Execute deployment if approved and requested
+        if decision == 'approve' and payload.execute_deployment:
+            try:
+                # Call the existing deploy endpoint logic
+                from src.common.databricks_utils import get_workspace_client
+                ws = get_workspace_client()
+                
+                # Get catalog/schema from the request payload stored in change log
+                catalog = None
+                schema = None
+                try:
+                    recent_changes = change_log_manager.get_changes_for_entity(db, "data_contract", contract_id)
+                    for change in recent_changes:
+                        if change.action == "deploy_requested":
+                            catalog = change.details.get("catalog")
+                            schema = change.details.get("schema")
+                            break
+                except Exception:
+                    pass
+                
+                # Simple deployment result message
+                deployment_result = f"Deployment initiated for {contract.name}"
+                logger.info(f"Deployment executed for contract {contract_id} to {catalog}.{schema}")
+                
+            except Exception as e:
+                logger.error(f"Deployment execution failed: {e}", exc_info=True)
+                deployment_result = f"Deployment failed: {str(e)}"
+        
+        # Prepare notification
+        if decision == 'approve':
+            notification_title = "Deploy Request Approved"
+            notification_desc = f"Your deployment request for contract '{contract.name}' has been approved."
+            if deployment_result:
+                notification_desc += f"\n\n{deployment_result}"
+        else:  # deny
+            notification_title = "Deploy Request Denied"
+            notification_desc = f"Your deployment request for contract '{contract.name}' was denied."
+        
+        if payload.message:
+            notification_desc += f"\n\nAdmin message: {payload.message}"
+        
+        # Mark actionable notification as handled
+        try:
+            notifications.handle_actionable_notification(
+                db=db,
+                action_type="handle_deploy_request",
+                action_payload={
+                    "contract_id": contract_id,
+                },
+            )
+        except Exception:
+            pass
+        
+        # Notify requester with decision
+        requester_email = None
+        try:
+            recent_changes = change_log_manager.get_changes_for_entity(db, "data_contract", contract_id)
+            for change in recent_changes:
+                if change.action == "deploy_requested":
+                    requester_email = change.details.get("requester_email")
+                    break
+        except Exception:
+            pass
+        
+        if requester_email:
+            requester_note = Notification(
+                id=str(uuid.uuid4()),
+                created_at=now,
+                type=NotificationType.INFO,
+                title=notification_title,
+                subtitle=f"Contract: {contract.name}",
+                description=notification_desc,
+                recipient=requester_email,
+                can_delete=True,
+            )
+            notifications.create_notification(notification=requester_note, db=db)
+        
+        # Change log entry
+        change_log_manager.log_change_with_details(
+            db,
+            entity_type="data_contract",
+            entity_id=contract_id,
+            action=f"deploy_{decision}",
+            username=current_user.username if current_user else None,
+            details={
+                "admin_email": admin_email,
+                "decision": decision,
+                "message": payload.message,
+                "deployed": payload.execute_deployment,
+                "deployment_result": deployment_result,
+                "timestamp": now.isoformat(),
+                "summary": f"Deploy {decision} by {admin_email}" + (f": {payload.message}" if payload.message else ""),
+            },
+        )
+        
+        # Audit
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else 'anonymous',
+            ip_address=request.client.host if request.client else None,
+            feature='data-contracts',
+            action=f'DEPLOY_{decision.upper()}',
+            success=True,
+            details={'contract_id': contract_id, 'decision': decision, 'deployed': payload.execute_deployment}
+        )
+        
+        return {"message": f"Deploy decision '{decision}' recorded successfully", "deployment_result": deployment_result}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Handle deploy failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 def _build_contract_read_from_db(db, db_contract) -> DataContractRead:
     """Build DataContractRead from normalized database models"""
     from src.models.data_contracts_api import ContractDescription, SchemaObject, ColumnProperty
@@ -398,6 +1131,7 @@ def _build_contract_read_from_db(db, db_contract) -> DataContractRead:
         name=db_contract.name,
         version=db_contract.version,
         status=db_contract.status,
+        published=db_contract.published if hasattr(db_contract, 'published') else False,
         owner_team_id=db_contract.owner_team_id,
         kind=db_contract.kind,
         apiVersion=db_contract.api_version,

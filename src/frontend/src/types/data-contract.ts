@@ -4,6 +4,7 @@ export type DataContractListItem = {
   name: string
   version: string
   status: string
+  published?: boolean // Marketplace publication status
   owner_team_id?: string // UUID of the owning team
   created?: string
   updated?: string
@@ -170,6 +171,7 @@ export interface DataContract {
   apiVersion: string
   version: string
   status: string
+  published?: boolean // Marketplace publication status
   name: string
   tenant?: string
   domain?: string // Legacy field (domain name)
