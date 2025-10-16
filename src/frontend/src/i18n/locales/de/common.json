@@ -44,5 +44,34 @@
     "english": "Englisch",
     "german": "Deutsch",
     "japanese": "Japanisch"
+  },
+  "header": {
+    "searchPlaceholder": "Funktionen, Assets suchen...",
+    "advanced": "Erweitert",
+    "toggleSidebar": "Seitenleiste umschalten"
+  },
+  "theme": {
+    "light": "Hell",
+    "dark": "Dunkel",
+    "system": "System",
+    "toggle": "Design umschalten"
+  },
+  "userMenu": {
+    "profile": "Profil",
+    "role": "Rolle",
+    "applyRoleOverride": "Rollenüberschreibung anwenden",
+    "featurePreviews": "Funktionsvorschauen",
+    "showBetaFeatures": "Beta-Funktionen anzeigen",
+    "showAlphaFeatures": "Alpha-Funktionen anzeigen",
+    "logOut": "Abmelden"
+  },
+  "projectMenu": {
+    "projectContext": "Projektkontext",
+    "allProjects": "Alle Projekte",
+    "noFilter": "Kein Filter",
+    "noProjectsAvailable": "Keine Projekte verfügbar",
+    "requestAccessTo": "Zugriff anfragen auf",
+    "join": "Beitreten",
+    "manageProjects": "Projekte verwalten"
   }
 }

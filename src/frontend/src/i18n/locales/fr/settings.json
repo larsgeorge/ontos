@@ -1,6 +1,9 @@
 {
   "title": "Paramètres",
   "tabs": {
+    "general": "Général",
+    "databricks": "Databricks",
+    "git": "Git",
     "jobs": "Jobs & Workflows",
     "roles": "Rôles",
     "semanticModels": "Modèles sémantiques",
@@ -51,6 +54,90 @@
       "running": "En cours",
       "pending": "En attente",
       "unknown": "Inconnu"
+    }
+  },
+  "roles": {
+    "title": "Contrôle d'accès basé sur les rôles",
+    "description": "Définir les rôles d'application et attribuer des autorisations aux groupes d'annuaire.",
+    "table": {
+      "nameColumn": "Nom",
+      "descriptionColumn": "Description",
+      "assignedGroupsColumn": "Groupes assignés",
+      "none": "Aucun",
+      "assigned": "Assigné",
+      "request": "Demander",
+      "requestTooltip": "Demander l'accès à ce rôle",
+      "alreadyAssignedTooltip": "Vous avez déjà ce rôle"
+    },
+    "dialog": {
+      "createTitle": "Créer un rôle",
+      "editTitle": "Modifier le rôle : {{name}}",
+      "description": "Définir le nom du rôle, les groupes assignés, les autorisations de fonctionnalité et les privilèges d'approbation."
+    },
+    "tabs": {
+      "general": "Général",
+      "privileges": "Privilèges",
+      "permissions": "Autorisations",
+      "deployment": "Déploiement"
+    },
+    "general": {
+      "roleName": "Nom du rôle",
+      "roleNameRequired": "Le nom du rôle est requis",
+      "description": "Description",
+      "assignedGroups": "Groupes d'annuaire assignés (séparés par des virgules)",
+      "assignedGroupsPlaceholder": "ex. data-stewards, finance-team",
+      "assignedGroupsHelp": "Les utilisateurs appartenant à ces groupes hériteront des autorisations de ce rôle."
+    },
+    "privileges": {
+      "homeSections": {
+        "title": "Sections d'accueil",
+        "description": "Sélectionnez les sections qui apparaissent sur la page d'accueil pour les utilisateurs avec ce rôle."
+      },
+      "approvalPrivileges": {
+        "title": "Privilèges d'approbation",
+        "description": "Accorder à ce rôle la capacité d'approuver des types spécifiques de demandes."
+      }
+    },
+    "permissions": {
+      "featurePermissions": {
+        "title": "Autorisations de fonctionnalités",
+        "description": "Configurer les niveaux d'accès pour chaque fonctionnalité de l'application."
+      }
+    },
+    "deployment": {
+      "title": "Politique de déploiement",
+      "description": "Contrôlez vers quels catalogues/schémas Unity Catalog les utilisateurs avec ce rôle peuvent déployer. Prend en charge les caractères génériques (* pour tous) et les variables de modèle ({username}, {email}).",
+      "allowedCatalogs": {
+        "label": "Catalogues autorisés (séparés par des virgules)",
+        "placeholder": "ex. prod_catalog, {username}_sandbox, *",
+        "help": "Laisser vide pour empêcher les déploiements. Utilisez * pour autoriser tous les catalogues."
+      },
+      "allowedSchemas": {
+        "label": "Schémas autorisés (séparés par des virgules, optionnel)",
+        "placeholder": "ex. dev, {username}_schema, *",
+        "help": "Laisser vide pour autoriser n'importe quel schéma dans les catalogues autorisés."
+      },
+      "defaultCatalog": {
+        "label": "Catalogue par défaut",
+        "placeholder": "ex. {username}_sandbox",
+        "help": "Présélectionné dans l'interface"
+      },
+      "defaultSchema": {
+        "label": "Schéma par défaut",
+        "placeholder": "ex. default",
+        "help": "Présélectionné dans l'interface"
+      },
+      "requireApproval": "Nécessite une approbation pour les déploiements",
+      "canApprove": "Peut approuver les demandes de déploiement"
+    },
+    "actions": {
+      "cancel": "Annuler",
+      "create": "Créer le rôle",
+      "update": "Mettre à jour le rôle",
+      "addRole": "Ajouter un rôle",
+      "actions": "Actions",
+      "editRole": "Modifier le rôle",
+      "deleteRole": "Supprimer le rôle"
     }
   }
 }

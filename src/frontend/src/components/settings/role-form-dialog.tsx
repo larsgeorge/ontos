@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,6 +64,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
 }) => {
     const { post, put } = useApi();
     const { toast } = useToast();
+    const { t } = useTranslation('settings');
     const isEditMode = !!initialRole;
     const [formError, setFormError] = useState<string | null>(null);
 
@@ -202,20 +204,20 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
             <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>
-                        {isEditMode ? `Edit Role: ${initialRole?.name || 'Role'}` : 'Create Role'}
+                        {isEditMode ? t('roles.dialog.editTitle', { name: initialRole?.name || 'Role' }) : t('roles.dialog.createTitle')}
                     </DialogTitle>
                     <DialogDescription>
-                        Define the role name, assigned groups, feature permissions, and approval privileges.
+                        {t('roles.dialog.description')}
                     </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="flex-1 flex flex-col">
                     <Tabs defaultValue="general" className="flex-1 flex flex-col">
                         <TabsList className="w-full justify-start">
-                            <TabsTrigger value="general">General</TabsTrigger>
-                            <TabsTrigger value="privileges">Privileges</TabsTrigger>
-                            <TabsTrigger value="permissions">Permissions</TabsTrigger>
-                            <TabsTrigger value="deployment">Deployment</TabsTrigger>
+                            <TabsTrigger value="general">{t('roles.tabs.general')}</TabsTrigger>
+                            <TabsTrigger value="privileges">{t('roles.tabs.privileges')}</TabsTrigger>
+                            <TabsTrigger value="permissions">{t('roles.tabs.permissions')}</TabsTrigger>
+                            <TabsTrigger value="deployment">{t('roles.tabs.deployment')}</TabsTrigger>
                         </TabsList>
 
                         {/* General Tab */}
@@ -224,10 +226,10 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                 <div className="space-y-4 pr-4">
                                     {/* Basic Role Info */}
                                     <div>
-                                        <Label htmlFor="name">Role Name *</Label>
+                                        <Label htmlFor="name">{t('roles.general.roleName')}</Label>
                                         <Input
                                             id="name"
-                                            {...register("name", { required: "Role name is required" })}
+                                            {...register("name", { required: t('roles.general.roleNameRequired') })}
                                             readOnly={isEditMode && initialRole?.id === 'admin'}
                                             className={(isEditMode && initialRole?.id === 'admin') ? "bg-muted" : ""}
                                         />
@@ -235,19 +237,19 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                     </div>
 
                                     <div>
-                                        <Label htmlFor="description">Description</Label>
+                                        <Label htmlFor="description">{t('roles.general.description')}</Label>
                                         <Textarea id="description" {...register("description")} />
                                     </div>
 
                                     <div>
-                                        <Label htmlFor="assigned_groups">Assigned Directory Groups (comma-separated)</Label>
+                                        <Label htmlFor="assigned_groups">{t('roles.general.assignedGroups')}</Label>
                                         <Controller
                                             name="assigned_groups"
                                             control={control}
                                             render={({ field }) => (
                                                 <Input
                                                     id="assigned_groups"
-                                                    placeholder="e.g., data-stewards, finance-team"
+                                                    placeholder={t('roles.general.assignedGroupsPlaceholder')}
                                                     value={Array.isArray(field.value) ? field.value.join(', ') : ''}
                                                     onChange={(e) => {
                                                         const groups = e.target.value.split(',').map(g => g.trim()).filter(Boolean);
@@ -257,7 +259,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                             )}
                                         />
                                         {errors.assigned_groups && <p className="text-sm text-red-600 mt-1">{errors.assigned_groups.message}</p>}
-                                        <p className="text-xs text-muted-foreground mt-1">Users belonging to these groups will inherit this role's permissions.</p>
+                                        <p className="text-xs text-muted-foreground mt-1">{t('roles.general.assignedGroupsHelp')}</p>
                                     </div>
                                 </div>
                             </ScrollArea>
@@ -269,8 +271,8 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                 <div className="space-y-4 pr-4">
                                     {/* Home Sections Selection */}
                                     <div className="space-y-3">
-                                        <h4 className="font-medium">Home Sections</h4>
-                                        <p className="text-xs text-muted-foreground">Select which sections appear on the home page for users with this role.</p>
+                                        <h4 className="font-medium">{t('roles.privileges.homeSections.title')}</h4>
+                                        <p className="text-xs text-muted-foreground">{t('roles.privileges.homeSections.description')}</p>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                             {Object.values(HomeSection).map(section => (
                                                 <label key={section} className="flex items-center gap-2 text-sm">
@@ -288,8 +290,8 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
 
                                     {/* Approval Privileges */}
                                     <div className="space-y-3 pt-4 border-t">
-                                        <h4 className="font-medium">Approval Privileges</h4>
-                                        <p className="text-xs text-muted-foreground">Grant this role the ability to approve specific types of requests.</p>
+                                        <h4 className="font-medium">{t('roles.privileges.approvalPrivileges.title')}</h4>
+                                        <p className="text-xs text-muted-foreground">{t('roles.privileges.approvalPrivileges.description')}</p>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                             {Object.values(ApprovalEntity).map(entity => (
                                                 <label key={entity} className="flex items-center gap-2 text-sm">
@@ -313,8 +315,8 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                 <div className="space-y-4 pr-4">
                                     {/* Feature Permissions */}
                                     <div className="space-y-3">
-                                        <h4 className="font-medium">Feature Permissions</h4>
-                                        <p className="text-xs text-muted-foreground">Configure access levels for each feature in the application.</p>
+                                        <h4 className="font-medium">{t('roles.permissions.featurePermissions.title')}</h4>
+                                        <p className="text-xs text-muted-foreground">{t('roles.permissions.featurePermissions.description')}</p>
                                         <div className="space-y-1">
                                     {orderedFeatures.map((feature) => {
                                         const featureConf = featuresConfig[feature.id];
@@ -377,23 +379,22 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                             <ScrollArea className="h-[calc(90vh-280px)]">
                                 <div className="space-y-4 pr-4">
                                     <div className="space-y-3">
-                                        <h4 className="font-medium">Deployment Policy</h4>
+                                        <h4 className="font-medium">{t('roles.deployment.title')}</h4>
                                         <p className="text-xs text-muted-foreground">
-                                            Control which Unity Catalog catalogs/schemas users with this role can deploy to. 
-                                            Supports wildcards (* for any) and template variables (&#123;username&#125;, &#123;email&#125;).
+                                            {t('roles.deployment.description')}
                                         </p>
                                         
                                         <div className="space-y-3 pt-2">
                                             {/* Allowed Catalogs */}
                                             <div>
-                                                <Label htmlFor="deployment_policy_catalogs">Allowed Catalogs (comma-separated)</Label>
+                                                <Label htmlFor="deployment_policy_catalogs">{t('roles.deployment.allowedCatalogs.label')}</Label>
                                                 <Controller
                                                     name="deployment_policy.allowed_catalogs"
                                                     control={control}
                                                     render={({ field }) => (
                                                         <Input
                                                             id="deployment_policy_catalogs"
-                                                            placeholder="e.g., prod_catalog, {username}_sandbox, *"
+                                                            placeholder={t('roles.deployment.allowedCatalogs.placeholder')}
                                                             value={Array.isArray(field.value) ? field.value.join(', ') : ''}
                                                             onChange={(e) => {
                                                                 const catalogs = e.target.value.split(',').map(c => c.trim()).filter(Boolean);
@@ -403,20 +404,20 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                     )}
                                                 />
                                                 <p className="text-xs text-muted-foreground mt-1">
-                                                    Leave empty to prevent deployments. Use * to allow all catalogs.
+                                                    {t('roles.deployment.allowedCatalogs.help')}
                                                 </p>
                                             </div>
                                             
                                             {/* Allowed Schemas */}
                                             <div>
-                                                <Label htmlFor="deployment_policy_schemas">Allowed Schemas (comma-separated, optional)</Label>
+                                                <Label htmlFor="deployment_policy_schemas">{t('roles.deployment.allowedSchemas.label')}</Label>
                                                 <Controller
                                                     name="deployment_policy.allowed_schemas"
                                                     control={control}
                                                     render={({ field }) => (
                                                         <Input
                                                             id="deployment_policy_schemas"
-                                                            placeholder="e.g., dev, {username}_schema, *"
+                                                            placeholder={t('roles.deployment.allowedSchemas.placeholder')}
                                                             value={Array.isArray(field.value) ? field.value.join(', ') : ''}
                                                             onChange={(e) => {
                                                                 const schemas = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
@@ -426,29 +427,29 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                     )}
                                                 />
                                                 <p className="text-xs text-muted-foreground mt-1">
-                                                    Leave empty to allow any schema within allowed catalogs.
+                                                    {t('roles.deployment.allowedSchemas.help')}
                                                 </p>
                                             </div>
                                             
                                             {/* Default Catalog/Schema */}
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div>
-                                                    <Label htmlFor="deployment_policy_default_catalog">Default Catalog</Label>
+                                                    <Label htmlFor="deployment_policy_default_catalog">{t('roles.deployment.defaultCatalog.label')}</Label>
                                                     <Input
                                                         id="deployment_policy_default_catalog"
                                                         {...register('deployment_policy.default_catalog')}
-                                                        placeholder="e.g., {username}_sandbox"
+                                                        placeholder={t('roles.deployment.defaultCatalog.placeholder')}
                                                     />
-                                                    <p className="text-xs text-muted-foreground mt-1">Pre-selected in UI</p>
+                                                    <p className="text-xs text-muted-foreground mt-1">{t('roles.deployment.defaultCatalog.help')}</p>
                                                 </div>
                                                 <div>
-                                                    <Label htmlFor="deployment_policy_default_schema">Default Schema</Label>
+                                                    <Label htmlFor="deployment_policy_default_schema">{t('roles.deployment.defaultSchema.label')}</Label>
                                                     <Input
                                                         id="deployment_policy_default_schema"
                                                         {...register('deployment_policy.default_schema')}
-                                                        placeholder="e.g., default"
+                                                        placeholder={t('roles.deployment.defaultSchema.placeholder')}
                                                     />
-                                                    <p className="text-xs text-muted-foreground mt-1">Pre-selected in UI</p>
+                                                    <p className="text-xs text-muted-foreground mt-1">{t('roles.deployment.defaultSchema.help')}</p>
                                                 </div>
                                             </div>
                                             
@@ -460,7 +461,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                         {...register('deployment_policy.require_approval')}
                                                         defaultChecked={Boolean(defaultValues.deployment_policy?.require_approval)}
                                                     />
-                                                    <span>Require approval for deployments</span>
+                                                    <span>{t('roles.deployment.requireApproval')}</span>
                                                 </label>
                                                 <label className="flex items-center gap-2 text-sm">
                                                     <input
@@ -468,7 +469,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                                         {...register('deployment_policy.can_approve_deployments')}
                                                         defaultChecked={Boolean(defaultValues.deployment_policy?.can_approve_deployments)}
                                                     />
-                                                    <span>Can approve deployment requests</span>
+                                                    <span>{t('roles.deployment.canApprove')}</span>
                                                 </label>
                                             </div>
                                         </div>
@@ -487,10 +488,10 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                     )}
 
                     <DialogFooter className="pt-4 border-t mt-4">
-                        <Button type="button" variant="outline" onClick={() => handleCloseDialog(false)} disabled={isSubmitting}>Cancel</Button>
+                        <Button type="button" variant="outline" onClick={() => handleCloseDialog(false)} disabled={isSubmitting}>{t('roles.actions.cancel')}</Button>
                         <Button type="submit" disabled={isSubmitting}>
                             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            {isSubmitting ? 'Saving...' : (isEditMode ? 'Update Role' : 'Create Role')}
+                            {isEditMode ? t('roles.actions.update') : t('roles.actions.create')}
                         </Button>
                     </DialogFooter>
                 </form>

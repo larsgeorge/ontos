@@ -44,5 +44,34 @@
     "english": "English",
     "german": "German",
     "japanese": "Japanese"
+  },
+  "header": {
+    "searchPlaceholder": "Search features, assets...",
+    "advanced": "Advanced",
+    "toggleSidebar": "Toggle sidebar"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "toggle": "Toggle theme"
+  },
+  "userMenu": {
+    "profile": "Profile",
+    "role": "Role",
+    "applyRoleOverride": "Apply Role Override",
+    "featurePreviews": "Feature Previews",
+    "showBetaFeatures": "Show Beta Features",
+    "showAlphaFeatures": "Show Alpha Features",
+    "logOut": "Log out"
+  },
+  "projectMenu": {
+    "projectContext": "Project Context",
+    "allProjects": "All Projects",
+    "noFilter": "No filter",
+    "noProjectsAvailable": "No projects available",
+    "requestAccessTo": "Request Access To",
+    "join": "Join",
+    "manageProjects": "Manage Projects"
   }
 }

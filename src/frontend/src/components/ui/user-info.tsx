@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -63,6 +64,7 @@ const CANONICAL_ROLE_NAMES: Record<string, string | null> = {
 };
 
 export default function UserInfo() {
+  const { t } = useTranslation('common');
   const [userInfo, setUserInfo] = useState<UserInfoData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const hasFetched = useRef(false);
@@ -204,7 +206,7 @@ export default function UserInfo() {
               <p className="text-xs leading-none text-muted-foreground">{userEmail}</p>
             )}
             <p className="text-xs leading-none text-muted-foreground pt-1">
-              Role: {displayRoleName}
+              {t('userMenu.role')}: {displayRoleName}
               {appliedRoleId && ' (Override)'}
             </p>
             {!userInfo && !error && <p className="text-xs text-muted-foreground">Loading info...</p>}
@@ -217,7 +219,7 @@ export default function UserInfo() {
         <DropdownMenuGroup>
             <DropdownMenuItem disabled>
                 <UserIcon className="mr-2 h-4 w-4" />
-                <span>Profile</span>
+                <span>{t('userMenu.profile')}</span>
             </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
@@ -225,7 +227,7 @@ export default function UserInfo() {
             <>
             <DropdownMenuGroup>
                 <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5 flex items-center">
-                    <UsersIcon className="mr-1.5 h-3.5 w-3.5" /> Apply Role Override
+                    <UsersIcon className="mr-1.5 h-3.5 w-3.5" /> {t('userMenu.applyRoleOverride')}
                 </DropdownMenuLabel>
                 <ScrollArea className="max-h-[150px] overflow-y-auto">
                     <DropdownMenuRadioGroup value={radioValue} onValueChange={handleRoleChange}>
@@ -250,14 +252,14 @@ export default function UserInfo() {
             </>
         )}
         <DropdownMenuGroup>
-            <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">Feature Previews</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">{t('userMenu.featurePreviews')}</DropdownMenuLabel>
              <DropdownMenuItem
                 className="flex items-center justify-between"
                 onSelect={(e) => e.preventDefault()}
              >
                 <div className="flex items-center">
                     <FlaskConical className="mr-2 h-4 w-4" />
-                    <span>Show Beta Features</span>
+                    <span>{t('userMenu.showBetaFeatures')}</span>
                 </div>
                 <Switch
                     checked={showBeta}
@@ -271,7 +273,7 @@ export default function UserInfo() {
              >
                  <div className="flex items-center">
                     <Beaker className="mr-2 h-4 w-4" />
-                    <span>Show Alpha Features</span>
+                    <span>{t('userMenu.showAlphaFeatures')}</span>
                 </div>
                 <Switch
                     checked={showAlpha}
@@ -283,7 +285,7 @@ export default function UserInfo() {
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled>
           <LogOut className="mr-2 h-4 w-4" />
-          <span>Log out</span>
+          <span>{t('userMenu.logOut')}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

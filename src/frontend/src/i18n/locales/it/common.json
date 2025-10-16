@@ -47,5 +47,34 @@
     "french": "Francese",
     "italian": "Italiano",
     "spanish": "Spagnolo"
+  },
+  "header": {
+    "searchPlaceholder": "Cerca funzionalità, asset...",
+    "advanced": "Avanzate",
+    "toggleSidebar": "Attiva/disattiva barra laterale"
+  },
+  "theme": {
+    "light": "Chiaro",
+    "dark": "Scuro",
+    "system": "Sistema",
+    "toggle": "Cambia tema"
+  },
+  "userMenu": {
+    "profile": "Profilo",
+    "role": "Ruolo",
+    "applyRoleOverride": "Applica override ruolo",
+    "featurePreviews": "Anteprime funzionalità",
+    "showBetaFeatures": "Mostra funzionalità Beta",
+    "showAlphaFeatures": "Mostra funzionalità Alpha",
+    "logOut": "Esci"
+  },
+  "projectMenu": {
+    "projectContext": "Contesto progetto",
+    "allProjects": "Tutti i progetti",
+    "noFilter": "Nessun filtro",
+    "noProjectsAvailable": "Nessun progetto disponibile",
+    "requestAccessTo": "Richiedi accesso a",
+    "join": "Unisciti",
+    "manageProjects": "Gestisci progetti"
   }
 }

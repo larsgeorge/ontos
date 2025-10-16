@@ -1,6 +1,9 @@
 {
   "title": "Settings",
   "tabs": {
+    "general": "General",
+    "databricks": "Databricks",
+    "git": "Git",
     "jobs": "Jobs & Workflows",
     "roles": "Roles",
     "semanticModels": "Semantic Models",
@@ -51,6 +54,90 @@
       "running": "Running",
       "pending": "Pending",
       "unknown": "Unknown"
+    }
+  },
+  "roles": {
+    "title": "Role Based Access Control",
+    "description": "Define application roles and assign permissions to directory groups.",
+    "table": {
+      "nameColumn": "Name",
+      "descriptionColumn": "Description",
+      "assignedGroupsColumn": "Assigned Groups",
+      "none": "None",
+      "assigned": "Assigned",
+      "request": "Request",
+      "requestTooltip": "Request access to this role",
+      "alreadyAssignedTooltip": "You already have this role"
+    },
+    "dialog": {
+      "createTitle": "Create Role",
+      "editTitle": "Edit Role: {{name}}",
+      "description": "Define the role name, assigned groups, feature permissions, and approval privileges."
+    },
+    "tabs": {
+      "general": "General",
+      "privileges": "Privileges",
+      "permissions": "Permissions",
+      "deployment": "Deployment"
+    },
+    "general": {
+      "roleName": "Role Name",
+      "roleNameRequired": "Role name is required",
+      "description": "Description",
+      "assignedGroups": "Assigned Directory Groups (comma-separated)",
+      "assignedGroupsPlaceholder": "e.g., data-stewards, finance-team",
+      "assignedGroupsHelp": "Users belonging to these groups will inherit this role's permissions."
+    },
+    "privileges": {
+      "homeSections": {
+        "title": "Home Sections",
+        "description": "Select which sections appear on the home page for users with this role."
+      },
+      "approvalPrivileges": {
+        "title": "Approval Privileges",
+        "description": "Grant this role the ability to approve specific types of requests."
+      }
+    },
+    "permissions": {
+      "featurePermissions": {
+        "title": "Feature Permissions",
+        "description": "Configure access levels for each feature in the application."
+      }
+    },
+    "deployment": {
+      "title": "Deployment Policy",
+      "description": "Control which Unity Catalog catalogs/schemas users with this role can deploy to. Supports wildcards (* for any) and template variables ({username}, {email}).",
+      "allowedCatalogs": {
+        "label": "Allowed Catalogs (comma-separated)",
+        "placeholder": "e.g., prod_catalog, {username}_sandbox, *",
+        "help": "Leave empty to prevent deployments. Use * to allow all catalogs."
+      },
+      "allowedSchemas": {
+        "label": "Allowed Schemas (comma-separated, optional)",
+        "placeholder": "e.g., dev, {username}_schema, *",
+        "help": "Leave empty to allow any schema within allowed catalogs."
+      },
+      "defaultCatalog": {
+        "label": "Default Catalog",
+        "placeholder": "e.g., {username}_sandbox",
+        "help": "Pre-selected in UI"
+      },
+      "defaultSchema": {
+        "label": "Default Schema",
+        "placeholder": "e.g., default",
+        "help": "Pre-selected in UI"
+      },
+      "requireApproval": "Require approval for deployments",
+      "canApprove": "Can approve deployment requests"
+    },
+    "actions": {
+      "cancel": "Cancel",
+      "create": "Create Role",
+      "update": "Update Role",
+      "addRole": "Add Role",
+      "actions": "Actions",
+      "editRole": "Edit Role",
+      "deleteRole": "Delete Role"
     }
   }
 }

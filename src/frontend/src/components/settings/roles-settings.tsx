@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { AppRole, FeatureConfig, FeatureAccessLevel } from '@/types/settings'; // Import FeatureAccessLevel
@@ -25,12 +26,12 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-// import { usePermissions } from '@/stores/permissions-store'; // Assuming permissions check needed
 import { usePermissions } from '@/stores/permissions-store'; // Import the permissions hook
 
 export default function RolesSettings() {
     const { get, post, delete: deleteApi } = useApi();
     const { toast } = useToast();
+    const { t } = useTranslation('settings');
     const [roles, setRoles] = useState<AppRole[]>([]);
     const [features, setFeatures] = useState<Record<string, FeatureConfig>>({});
     const [isLoading, setIsLoading] = useState(true);
@@ -158,7 +159,7 @@ export default function RolesSettings() {
             accessorKey: "name",
             header: ({ column }: { column: Column<AppRole, unknown> }) => (
                 <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-                    Name <ChevronDown className="ml-2 h-4 w-4" />
+                    {t('roles.table.nameColumn')} <ChevronDown className="ml-2 h-4 w-4" />
                 </Button>
             ),
             cell: ({ row }) => <div className="font-medium">{row.getValue("name")}</div>,
@@ -168,7 +169,7 @@ export default function RolesSettings() {
             accessorKey: "description",
             header: ({ column }: { column: Column<AppRole, unknown> }) => (
                  <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-                     Description <ChevronDown className="ml-2 h-4 w-4" />
+                     {t('roles.table.descriptionColumn')} <ChevronDown className="ml-2 h-4 w-4" />
                  </Button>
             ),
             cell: ({ row }) => <div>{row.getValue("description") || '-'}</div>,
@@ -176,7 +177,7 @@ export default function RolesSettings() {
         },
         {
             accessorKey: "assigned_groups",
-            header: "Assigned Groups",
+            header: t('roles.table.assignedGroupsColumn'),
             cell: ({ row }) => {
                 const groups = row.getValue("assigned_groups") as string[] || [];
                 return (
@@ -187,7 +188,7 @@ export default function RolesSettings() {
                             ))}
                         </div>
                     ) : (
-                        <span className="text-xs text-muted-foreground">None</span>
+                        <span className="text-xs text-muted-foreground">{t('roles.table.none')}</span>
                     )
                 );
             },
@@ -207,13 +208,13 @@ export default function RolesSettings() {
                         className="h-8 gap-1"
                         onClick={() => handleRequestAccess(role)}
                         disabled={userHasThisRole} // Disable if user has the role
-                        title={userHasThisRole ? "You already have this role" : "Request access to this role"}
+                        title={userHasThisRole ? t('roles.table.alreadyAssignedTooltip') : t('roles.table.requestTooltip')}
                     >
                         {userHasThisRole ? (
-                            <span className="text-muted-foreground italic">Assigned</span>
+                            <span className="text-muted-foreground italic">{t('roles.table.assigned')}</span>
                         ) : (
                             <>
-                                <UserPlus className="h-3.5 w-3.5" /> Request
+                                <UserPlus className="h-3.5 w-3.5" /> {t('roles.table.request')}
                             </>
                         )}
                     </Button>
@@ -237,12 +238,12 @@ export default function RolesSettings() {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuLabel>{t('roles.actions.actions')}</DropdownMenuLabel>
                                 <DropdownMenuItem
                                     onClick={() => handleOpenDialog(role)}
                                     disabled={!canWrite} 
                                 >
-                                    <Pencil className="mr-2 h-4 w-4" /> Edit Role
+                                    <Pencil className="mr-2 h-4 w-4" /> {t('roles.actions.editRole')}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -250,7 +251,7 @@ export default function RolesSettings() {
                                     className="text-destructive focus:text-destructive"
                                     disabled={isAdminRole || !canAdmin} 
                                 >
-                                     <Trash2 className="mr-2 h-4 w-4" /> Delete Role
+                                     <Trash2 className="mr-2 h-4 w-4" /> {t('roles.actions.deleteRole')}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -259,7 +260,7 @@ export default function RolesSettings() {
             },
             enableHiding: false,
         },
-    ], [handleOpenDialog, handleDeleteRole, handleRequestAccess, features, canWrite, canAdmin, userGroups, checkUserHasRole]); // Added userGroups and checkUserHasRole
+    ], [handleOpenDialog, handleDeleteRole, handleRequestAccess, features, canWrite, canAdmin, userGroups, checkUserHasRole, t]); // Added t to dependencies
 
     // --- Render Logic ---
     if (isLoading) {
@@ -279,12 +280,12 @@ export default function RolesSettings() {
         <Card>
             <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                    <CardTitle>Role Based Access Control</CardTitle>
-                    <CardDescription>Define application roles and assign permissions to directory groups.</CardDescription>
+                    <CardTitle>{t('roles.title')}</CardTitle>
+                    <CardDescription>{t('roles.description')}</CardDescription>
                 </div>
                 <Button size="sm" className="gap-1" onClick={() => handleOpenDialog()} disabled={!canWrite}>
                     <Plus className="h-4 w-4" />
-                    Add Role
+                    {t('roles.actions.addRole')}
                 </Button>
             </CardHeader>
             <CardContent>

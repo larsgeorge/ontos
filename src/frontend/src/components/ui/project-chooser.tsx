@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, ChevronDown, FolderOpen, Plus, X, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +17,7 @@ import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 
 export function ProjectChooser() {
+  const { t } = useTranslation('common');
   const {
     currentProject,
     availableProjects,
@@ -152,7 +154,7 @@ export function ProjectChooser() {
         {!hasProjectContext && (
           <DropdownMenuItem className="text-muted-foreground">
             <Check className="mr-2 h-4 w-4" />
-            All Projects (No filter)
+            {t('projectMenu.allProjects')} ({t('projectMenu.noFilter')})
           </DropdownMenuItem>
         )}
 
@@ -189,7 +191,7 @@ export function ProjectChooser() {
 
         {availableProjects.length === 0 && !isLoading && (
           <DropdownMenuItem disabled className="text-muted-foreground">
-            No projects available
+            {t('projectMenu.noProjectsAvailable')}
           </DropdownMenuItem>
         )}
 
@@ -197,7 +199,7 @@ export function ProjectChooser() {
           <>
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Request Access To
+              {t('projectMenu.requestAccessTo')}
             </DropdownMenuLabel>
             {joinableProjects.map((project) => (
               <DropdownMenuItem
@@ -217,7 +219,7 @@ export function ProjectChooser() {
                   </div>
                 </div>
                 <Badge variant="secondary" className="text-xs ml-2">
-                  Join
+                  {t('projectMenu.join')}
                 </Badge>
               </DropdownMenuItem>
             ))}
@@ -230,7 +232,7 @@ export function ProjectChooser() {
             <DropdownMenuItem asChild>
               <a href="/projects" className="flex items-center">
                 <Plus className="mr-2 h-4 w-4" />
-                Manage Projects
+                {t('projectMenu.manageProjects')}
               </a>
             </DropdownMenuItem>
           </>

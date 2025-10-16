@@ -44,5 +44,34 @@
     "english": "English",
     "german": "Deutsch",
     "japanese": "日本語"
+  },
+  "header": {
+    "searchPlaceholder": "機能、アセットを検索...",
+    "advanced": "詳細",
+    "toggleSidebar": "サイドバーを切り替え"
+  },
+  "theme": {
+    "light": "ライト",
+    "dark": "ダーク",
+    "system": "システム",
+    "toggle": "テーマを切り替え"
+  },
+  "userMenu": {
+    "profile": "プロフィール",
+    "role": "ロール",
+    "applyRoleOverride": "ロールオーバーライドを適用",
+    "featurePreviews": "機能プレビュー",
+    "showBetaFeatures": "ベータ機能を表示",
+    "showAlphaFeatures": "アルファ機能を表示",
+    "logOut": "ログアウト"
+  },
+  "projectMenu": {
+    "projectContext": "プロジェクトコンテキスト",
+    "allProjects": "すべてのプロジェクト",
+    "noFilter": "フィルタなし",
+    "noProjectsAvailable": "利用可能なプロジェクトはありません",
+    "requestAccessTo": "アクセスをリクエスト",
+    "join": "参加",
+    "manageProjects": "プロジェクトを管理"
   }
 }

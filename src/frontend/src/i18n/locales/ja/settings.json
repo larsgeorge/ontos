@@ -1,6 +1,9 @@
 {
   "title": "設定",
   "tabs": {
+    "general": "一般",
+    "databricks": "Databricks",
+    "git": "Git",
     "jobs": "ジョブとワークフロー",
     "roles": "ロール",
     "semanticModels": "セマンティックモデル",
@@ -51,6 +54,90 @@
       "running": "実行中",
       "pending": "保留",
       "unknown": "不明"
+    }
+  },
+  "roles": {
+    "title": "ロールベースのアクセス制御",
+    "description": "アプリケーションロールを定義し、ディレクトリグループに権限を割り当てます。",
+    "table": {
+      "nameColumn": "名前",
+      "descriptionColumn": "説明",
+      "assignedGroupsColumn": "割り当てられたグループ",
+      "none": "なし",
+      "assigned": "割り当て済み",
+      "request": "リクエスト",
+      "requestTooltip": "このロールへのアクセスをリクエスト",
+      "alreadyAssignedTooltip": "このロールはすでに割り当てられています"
+    },
+    "dialog": {
+      "createTitle": "ロールを作成",
+      "editTitle": "ロールを編集: {{name}}",
+      "description": "ロール名、割り当てられたグループ、機能の権限、承認権限を定義します。"
+    },
+    "tabs": {
+      "general": "一般",
+      "privileges": "特権",
+      "permissions": "権限",
+      "deployment": "デプロイメント"
+    },
+    "general": {
+      "roleName": "ロール名",
+      "roleNameRequired": "ロール名は必須です",
+      "description": "説明",
+      "assignedGroups": "割り当てられたディレクトリグループ（カンマ区切り）",
+      "assignedGroupsPlaceholder": "例：data-stewards, finance-team",
+      "assignedGroupsHelp": "これらのグループに所属するユーザーは、このロールの権限を継承します。"
+    },
+    "privileges": {
+      "homeSections": {
+        "title": "ホームセクション",
+        "description": "このロールを持つユーザーのホームページに表示されるセクションを選択します。"
+      },
+      "approvalPrivileges": {
+        "title": "承認権限",
+        "description": "このロールに特定の種類のリクエストを承認する権限を付与します。"
+      }
+    },
+    "permissions": {
+      "featurePermissions": {
+        "title": "機能の権限",
+        "description": "アプリケーション内の各機能のアクセスレベルを設定します。"
+      }
+    },
+    "deployment": {
+      "title": "デプロイメントポリシー",
+      "description": "このロールを持つユーザーがデプロイできるUnity Catalogのカタログ/スキーマを制御します。ワイルドカード（* は全て）とテンプレート変数（{username}、{email}）をサポートします。",
+      "allowedCatalogs": {
+        "label": "許可されたカタログ（カンマ区切り）",
+        "placeholder": "例：prod_catalog, {username}_sandbox, *",
+        "help": "デプロイメントを防ぐには空のままにします。すべてのカタログを許可するには * を使用します。"
+      },
+      "allowedSchemas": {
+        "label": "許可されたスキーマ（カンマ区切り、オプション）",
+        "placeholder": "例：dev, {username}_schema, *",
+        "help": "許可されたカタログ内の任意のスキーマを許可するには空のままにします。"
+      },
+      "defaultCatalog": {
+        "label": "デフォルトカタログ",
+        "placeholder": "例：{username}_sandbox",
+        "help": "UIで事前選択"
+      },
+      "defaultSchema": {
+        "label": "デフォルトスキーマ",
+        "placeholder": "例：default",
+        "help": "UIで事前選択"
+      },
+      "requireApproval": "デプロイメントに承認が必要",
+      "canApprove": "デプロイメントリクエストを承認できる"
+    },
+    "actions": {
+      "cancel": "キャンセル",
+      "create": "ロールを作成",
+      "update": "ロールを更新",
+      "addRole": "ロールを追加",
+      "actions": "アクション",
+      "editRole": "ロールを編集",
+      "deleteRole": "ロールを削除"
     }
   }
 }

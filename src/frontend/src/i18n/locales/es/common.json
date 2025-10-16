@@ -47,5 +47,34 @@
     "french": "Francés",
     "italian": "Italiano",
     "spanish": "Español"
+  },
+  "header": {
+    "searchPlaceholder": "Buscar funciones, activos...",
+    "advanced": "Avanzado",
+    "toggleSidebar": "Alternar barra lateral"
+  },
+  "theme": {
+    "light": "Claro",
+    "dark": "Oscuro",
+    "system": "Sistema",
+    "toggle": "Cambiar tema"
+  },
+  "userMenu": {
+    "profile": "Perfil",
+    "role": "Rol",
+    "applyRoleOverride": "Aplicar anulación de rol",
+    "featurePreviews": "Vistas previas de funciones",
+    "showBetaFeatures": "Mostrar funciones Beta",
+    "showAlphaFeatures": "Mostrar funciones Alpha",
+    "logOut": "Cerrar sesión"
+  },
+  "projectMenu": {
+    "projectContext": "Contexto del proyecto",
+    "allProjects": "Todos los proyectos",
+    "noFilter": "Sin filtro",
+    "noProjectsAvailable": "No hay proyectos disponibles",
+    "requestAccessTo": "Solicitar acceso a",
+    "join": "Unirse",
+    "manageProjects": "Gestionar proyectos"
   }
 }

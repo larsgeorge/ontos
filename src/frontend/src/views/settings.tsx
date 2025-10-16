@@ -72,9 +72,9 @@ export default function Settings() {
 
       <Tabs defaultValue="general" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="databricks">Databricks</TabsTrigger>
-          <TabsTrigger value="git">Git</TabsTrigger>
+          <TabsTrigger value="general">{t('settings:tabs.general')}</TabsTrigger>
+          <TabsTrigger value="databricks">{t('settings:tabs.databricks')}</TabsTrigger>
+          <TabsTrigger value="git">{t('settings:tabs.git')}</TabsTrigger>
           <TabsTrigger value="jobs">{t('settings:tabs.jobs')}</TabsTrigger>
           <TabsTrigger value="roles">{t('settings:tabs.roles')}</TabsTrigger>
           <TabsTrigger value="tags">{t('settings:tabs.tags')}</TabsTrigger>

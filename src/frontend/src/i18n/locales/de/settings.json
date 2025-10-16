@@ -1,6 +1,9 @@
 {
   "title": "Einstellungen",
   "tabs": {
+    "general": "Allgemein",
+    "databricks": "Databricks",
+    "git": "Git",
     "jobs": "Jobs & Workflows",
     "roles": "Rollen",
     "semanticModels": "Semantische Modelle",
@@ -51,6 +54,90 @@
       "running": "Läuft",
       "pending": "Ausstehend",
       "unknown": "Unbekannt"
+    }
+  },
+  "roles": {
+    "title": "Rollenbasierte Zugriffskontrolle",
+    "description": "Anwendungsrollen definieren und Berechtigungen an Verzeichnisgruppen zuweisen.",
+    "table": {
+      "nameColumn": "Name",
+      "descriptionColumn": "Beschreibung",
+      "assignedGroupsColumn": "Zugewiesene Gruppen",
+      "none": "Keine",
+      "assigned": "Zugewiesen",
+      "request": "Anfragen",
+      "requestTooltip": "Zugriff auf diese Rolle anfragen",
+      "alreadyAssignedTooltip": "Sie haben bereits diese Rolle"
+    },
+    "dialog": {
+      "createTitle": "Rolle erstellen",
+      "editTitle": "Rolle bearbeiten: {{name}}",
+      "description": "Rollenname, zugewiesene Gruppen, Funktionsberechtigungen und Genehmigungsrechte definieren."
+    },
+    "tabs": {
+      "general": "Allgemein",
+      "privileges": "Privilegien",
+      "permissions": "Berechtigungen",
+      "deployment": "Bereitstellung"
+    },
+    "general": {
+      "roleName": "Rollenname",
+      "roleNameRequired": "Rollenname ist erforderlich",
+      "description": "Beschreibung",
+      "assignedGroups": "Zugewiesene Verzeichnisgruppen (durch Komma getrennt)",
+      "assignedGroupsPlaceholder": "z.B. data-stewards, finance-team",
+      "assignedGroupsHelp": "Benutzer dieser Gruppen erben die Berechtigungen dieser Rolle."
+    },
+    "privileges": {
+      "homeSections": {
+        "title": "Startseiten-Bereiche",
+        "description": "Wählen Sie, welche Bereiche auf der Startseite für Benutzer mit dieser Rolle angezeigt werden."
+      },
+      "approvalPrivileges": {
+        "title": "Genehmigungsrechte",
+        "description": "Dieser Rolle die Berechtigung erteilen, bestimmte Arten von Anfragen zu genehmigen."
+      }
+    },
+    "permissions": {
+      "featurePermissions": {
+        "title": "Funktionsberechtigungen",
+        "description": "Zugriffsebenen für jede Funktion in der Anwendung konfigurieren."
+      }
+    },
+    "deployment": {
+      "title": "Bereitstellungsrichtlinie",
+      "description": "Steuern Sie, in welche Unity Catalog Kataloge/Schemas Benutzer mit dieser Rolle bereitstellen können. Unterstützt Wildcards (* für beliebig) und Template-Variablen ({username}, {email}).",
+      "allowedCatalogs": {
+        "label": "Erlaubte Kataloge (durch Komma getrennt)",
+        "placeholder": "z.B. prod_catalog, {username}_sandbox, *",
+        "help": "Leer lassen um Bereitstellungen zu verhindern. Verwenden Sie * um alle Kataloge zu erlauben."
+      },
+      "allowedSchemas": {
+        "label": "Erlaubte Schemas (durch Komma getrennt, optional)",
+        "placeholder": "z.B. dev, {username}_schema, *",
+        "help": "Leer lassen um beliebige Schemas innerhalb erlaubter Kataloge zuzulassen."
+      },
+      "defaultCatalog": {
+        "label": "Standard-Katalog",
+        "placeholder": "z.B. {username}_sandbox",
+        "help": "In der UI vorausgewählt"
+      },
+      "defaultSchema": {
+        "label": "Standard-Schema",
+        "placeholder": "z.B. default",
+        "help": "In der UI vorausgewählt"
+      },
+      "requireApproval": "Genehmigung für Bereitstellungen erforderlich",
+      "canApprove": "Kann Bereitstellungsanfragen genehmigen"
+    },
+    "actions": {
+      "cancel": "Abbrechen",
+      "create": "Rolle erstellen",
+      "update": "Rolle aktualisieren",
+      "addRole": "Rolle hinzufügen",
+      "actions": "Aktionen",
+      "editRole": "Rolle bearbeiten",
+      "deleteRole": "Rolle löschen"
     }
   }
 }

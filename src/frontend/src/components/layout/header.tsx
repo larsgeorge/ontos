@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import UserInfo from '@/components/ui/user-info';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
@@ -13,6 +14,8 @@ interface HeaderProps {
 }
 
 export function Header({ onToggleSidebar, isSidebarCollapsed }: HeaderProps) {
+  const { t } = useTranslation('common');
+  
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
        {/* Sidebar Toggle Button */}
@@ -23,12 +26,12 @@ export function Header({ onToggleSidebar, isSidebarCollapsed }: HeaderProps) {
             className="shrink-0" 
         >
              {isSidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
-            <span className="sr-only">Toggle sidebar</span>
+            <span className="sr-only">{t('header.toggleSidebar')}</span>
          </Button>
 
       {/* Global Search Bar Container - Centered and Wider */}
       <div className="mx-auto max-w-2xl w-full">
-        <SearchBar placeholder="Search features, assets..." />
+        <SearchBar placeholder={t('header.searchPlaceholder')} />
       </div>
 
       {/* Right-aligned items */}

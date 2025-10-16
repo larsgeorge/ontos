@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Input } from './input';
 import { Button } from './button';
 import { Card } from './card';
@@ -24,6 +25,7 @@ interface SearchBarProps {
 }
 
 export default function SearchBar({ variant = 'default', placeholder = 'Search...' }: SearchBarProps) {
+  const { t } = useTranslation('common');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -142,7 +144,7 @@ export default function SearchBar({ variant = 'default', placeholder = 'Search..
             onClick={() => navigate('/search')}
             title="Open advanced search"
           >
-            Advanced
+            {t('header.advanced')}
           </Button>
         </div>
       </div>
