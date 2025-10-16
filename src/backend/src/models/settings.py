@@ -35,6 +35,39 @@ class ApprovalEntity(str, Enum):
     BUSINESS_TERMS = "BUSINESS_TERMS"
     ASSET_REVIEWS = "ASSET_REVIEWS"
 
+# Deployment policy for catalog/schema restrictions
+class DeploymentPolicy(BaseModel):
+    """Policy defining where users can deploy contracts.
+    
+    Supports template variables: {username}, {email}, {team}, {domain}
+    Supports wildcards: * matches anything
+    Supports regex: ^pattern$ for advanced matching
+    """
+    allowed_catalogs: List[str] = Field(
+        default_factory=list,
+        description="List of allowed catalogs or patterns (e.g., 'user_{username}', 'sandbox', '*')"
+    )
+    allowed_schemas: List[str] = Field(
+        default_factory=list,
+        description="List of allowed schemas or patterns within catalogs (empty = any schema allowed)"
+    )
+    default_catalog: Optional[str] = Field(
+        None,
+        description="Default catalog to pre-fill in UI (supports templates like 'user_{username}')"
+    )
+    default_schema: Optional[str] = Field(
+        None,
+        description="Default schema to pre-fill in UI"
+    )
+    require_approval: bool = Field(
+        default=True,
+        description="Whether deployments require approval (false = deploy directly)"
+    )
+    can_approve_deployments: bool = Field(
+        default=False,
+        description="Whether users with this role can approve deployment requests from others"
+    )
+
 # Base model for common fields
 class AppRoleBase(BaseModel):
     name: str
@@ -43,6 +76,7 @@ class AppRoleBase(BaseModel):
     feature_permissions: Dict[str, FeatureAccessLevel] = Field(default_factory=dict)
     home_sections: List[HomeSection] = Field(default_factory=list, description="Home sections visible for this role")
     approval_privileges: Dict[ApprovalEntity, bool] = Field(default_factory=dict, description="Entity-level approval capabilities")
+    deployment_policy: Optional[DeploymentPolicy] = Field(None, description="Policy for catalog/schema deployment restrictions")
 
 # Model for creating a new role (input)
 class AppRoleCreate(AppRoleBase):
@@ -59,6 +93,7 @@ class AppRoleUpdate(AppRoleBase):
     feature_permissions: Optional[Dict[str, FeatureAccessLevel]] = None
     home_sections: Optional[List[HomeSection]] = None
     approval_privileges: Optional[Dict[ApprovalEntity, bool]] = None
+    deployment_policy: Optional[DeploymentPolicy] = None
 
 # Model representing a role as returned by the API (output)
 class AppRole(AppRoleBase):

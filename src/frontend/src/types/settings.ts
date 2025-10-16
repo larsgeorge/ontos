@@ -1,5 +1,7 @@
 // Single source of truth for settings types
 
+import type { DeploymentPolicy } from './deployment-policy';
+
 export enum FeatureAccessLevel {
     NONE = "None",
     READ_ONLY = "Read-only",
@@ -39,6 +41,7 @@ export interface AppRole {
     feature_permissions: Record<string, FeatureAccessLevel>;
     home_sections?: HomeSection[];
     approval_privileges?: ApprovalPrivileges;
+    deployment_policy?: DeploymentPolicy | null;
 }
 
 export type UserPermissions = Record<string, FeatureAccessLevel>;

@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { useNotificationsStore } from '@/stores/notifications-store';
-import { Loader2, AlertCircle, FileText, Eye, Rocket, Database } from 'lucide-react';
+import { Loader2, AlertCircle, FileText, Eye, Rocket, Database, ShieldCheck, Info } from 'lucide-react';
+import type { DeploymentPolicy } from '@/types/deployment-policy';
 
 type RequestType = 'access' | 'review' | 'publish' | 'deploy';
 
@@ -40,6 +41,11 @@ export default function RequestContractActionDialog({
   const [schema, setSchema] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Deployment policy state
+  const [deploymentPolicy, setDeploymentPolicy] = useState<DeploymentPolicy | null>(null);
+  const [loadingPolicy, setLoadingPolicy] = useState(false);
+  const [policyError, setPolicyError] = useState<string | null>(null);
 
   const getRequestTypeConfig = (type: RequestType) => {
     switch (type) {
@@ -194,6 +200,43 @@ export default function RequestContractActionDialog({
     onOpenChange(false);
   };
 
+  // Fetch deployment policy when deploy option is selected
+  useEffect(() => {
+    const fetchDeploymentPolicy = async () => {
+      if (requestType === 'deploy' && isOpen) {
+        setLoadingPolicy(true);
+        setPolicyError(null);
+        
+        try {
+          const { get } = useApi();
+          const response = await get('/api/user/deployment-policy');
+          
+          if (response.error) {
+            throw new Error(response.error);
+          }
+          
+          const policy = response.data as DeploymentPolicy;
+          setDeploymentPolicy(policy);
+          
+          // Pre-populate with default catalog/schema if available
+          if (policy.default_catalog && !catalog) {
+            setCatalog(policy.default_catalog);
+          }
+          if (policy.default_schema && !schema) {
+            setSchema(policy.default_schema);
+          }
+        } catch (e: any) {
+          setPolicyError(e.message || 'Failed to load deployment policy');
+          console.error('Error fetching deployment policy:', e);
+        } finally {
+          setLoadingPolicy(false);
+        }
+      }
+    };
+    
+    fetchDeploymentPolicy();
+  }, [requestType, isOpen]);
+  
   const currentConfig = getRequestTypeConfig(requestType);
 
   return (
@@ -316,32 +359,114 @@ export default function RequestContractActionDialog({
 
           {requestType === 'deploy' && (
             <div className="space-y-3">
+              {/* Loading Policy Indicator */}
+              {loadingPolicy && (
+                <Alert>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <AlertDescription>Loading deployment policy...</AlertDescription>
+                </Alert>
+              )}
+              
+              {/* Policy Error */}
+              {policyError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{policyError}</AlertDescription>
+                </Alert>
+              )}
+              
+              {/* Policy Info Banner */}
+              {deploymentPolicy && !loadingPolicy && (
+                <Alert className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
+                  <ShieldCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <AlertDescription className="text-sm text-blue-800 dark:text-blue-200">
+                    <strong>Deployment Policy:</strong> You can deploy to{' '}
+                    {deploymentPolicy.allowed_catalogs.length === 0 
+                      ? 'no catalogs (contact admin)'
+                      : deploymentPolicy.allowed_catalogs.length === 1
+                      ? `${deploymentPolicy.allowed_catalogs[0]}`
+                      : `${deploymentPolicy.allowed_catalogs.length} allowed catalogs`}
+                    {deploymentPolicy.require_approval && ' (requires approval)'}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               <div className="grid grid-cols-2 gap-3">
+                {/* Catalog Dropdown */}
                 <div className="space-y-2">
                   <Label htmlFor="deploy-catalog" className="text-sm font-medium">
-                    Target Catalog (Optional)
+                    Target Catalog {deploymentPolicy?.allowed_catalogs.length ? '*' : '(Optional)'}
                   </Label>
-                  <Input
-                    id="deploy-catalog"
-                    value={catalog}
-                    onChange={(e) => setCatalog(e.target.value)}
-                    placeholder="catalog_name"
-                    disabled={submitting}
-                  />
+                  {deploymentPolicy && deploymentPolicy.allowed_catalogs.length > 0 ? (
+                    <Select
+                      value={catalog}
+                      onValueChange={setCatalog}
+                      disabled={submitting || loadingPolicy}
+                    >
+                      <SelectTrigger id="deploy-catalog">
+                        <SelectValue placeholder="Select catalog..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {deploymentPolicy.allowed_catalogs.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Select disabled>
+                      <SelectTrigger>
+                        <SelectValue placeholder="No catalogs available" />
+                      </SelectTrigger>
+                    </Select>
+                  )}
+                  {deploymentPolicy?.default_catalog && catalog === deploymentPolicy.default_catalog && (
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Info className="h-3 w-3" />
+                      Default catalog for your role
+                    </div>
+                  )}
                 </div>
+                
+                {/* Schema Dropdown */}
                 <div className="space-y-2">
                   <Label htmlFor="deploy-schema" className="text-sm font-medium">
                     Target Schema (Optional)
                   </Label>
-                  <Input
-                    id="deploy-schema"
-                    value={schema}
-                    onChange={(e) => setSchema(e.target.value)}
-                    placeholder="schema_name"
-                    disabled={submitting}
-                  />
+                  {deploymentPolicy && deploymentPolicy.allowed_schemas.length > 0 ? (
+                    <Select
+                      value={schema}
+                      onValueChange={setSchema}
+                      disabled={submitting || loadingPolicy}
+                    >
+                      <SelectTrigger id="deploy-schema">
+                        <SelectValue placeholder="Select schema..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {deploymentPolicy.allowed_schemas.map((sch) => (
+                          <SelectItem key={sch} value={sch}>
+                            {sch}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Select disabled>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Any schema allowed" />
+                      </SelectTrigger>
+                    </Select>
+                  )}
+                  {deploymentPolicy?.default_schema && schema === deploymentPolicy.default_schema && (
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Info className="h-3 w-3" />
+                      Default schema for your role
+                    </div>
+                  )}
                 </div>
               </div>
+              
               <div className="space-y-2">
                 <Label htmlFor="deploy-message" className="text-sm font-medium">
                   Message (Optional)

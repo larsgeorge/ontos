@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -73,6 +74,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         feature_permissions: initialRole?.feature_permissions || getDefaultPermissions(featuresConfig),
         home_sections: initialRole?.home_sections || [],
         approval_privileges: initialRole?.approval_privileges || {},
+        deployment_policy: initialRole?.deployment_policy || null,
     };
 
     const {
@@ -94,6 +96,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 feature_permissions: getDefaultPermissions(featuresConfig),
                 home_sections: [],
                 approval_privileges: {},
+                deployment_policy: null,
             };
 
             // Adjust permissions before resetting
@@ -125,6 +128,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                 feature_permissions: getDefaultPermissions(featuresConfig),
                 home_sections: [],
                 approval_privileges: {},
+                deployment_policy: null,
             } as AppRole);
         }
     }, [isOpen, initialRole, reset, featuresConfig]);
@@ -197,92 +201,121 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         <Dialog open={isOpen} onOpenChange={handleCloseDialog}>
             <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle>{isEditMode ? 'Edit Role' : 'Create Role'}</DialogTitle>
+                    <DialogTitle>
+                        {isEditMode ? `Edit Role: ${initialRole?.name || 'Role'}` : 'Create Role'}
+                    </DialogTitle>
                     <DialogDescription>
                         Define the role name, assigned groups, feature permissions, and approval privileges.
                     </DialogDescription>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="flex-grow flex flex-col min-h-0 space-y-4">
-                    <ScrollArea className="flex-grow pr-4 -mr-4">
-                        <div className="space-y-4 pb-4 px-1 pt-1">
-                            {/* Basic Role Info */}
-                            <div>
-                                <Label htmlFor="name">Role Name *</Label>
-                                <Input
-                                    id="name"
-                                    {...register("name", { required: "Role name is required" })}
-                                    readOnly={isEditMode && initialRole?.id === 'admin'}
-                                    className={(isEditMode && initialRole?.id === 'admin') ? "bg-muted" : ""}
-                                />
-                                {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name.message}</p>}
-                            </div>
+                <form onSubmit={handleSubmit(onSubmit)} className="flex-1 flex flex-col">
+                    <Tabs defaultValue="general" className="flex-1 flex flex-col">
+                        <TabsList className="w-full justify-start">
+                            <TabsTrigger value="general">General</TabsTrigger>
+                            <TabsTrigger value="privileges">Privileges</TabsTrigger>
+                            <TabsTrigger value="permissions">Permissions</TabsTrigger>
+                            <TabsTrigger value="deployment">Deployment</TabsTrigger>
+                        </TabsList>
 
-                            <div>
-                                <Label htmlFor="description">Description</Label>
-                                <Textarea id="description" {...register("description")} />
-                            </div>
-
-                            <div>
-                                <Label htmlFor="assigned_groups">Assigned Directory Groups (comma-separated)</Label>
-                                <Controller
-                                    name="assigned_groups"
-                                    control={control}
-                                    render={({ field }) => (
+                        {/* General Tab */}
+                        <TabsContent value="general" className="flex-1 mt-4">
+                            <ScrollArea className="h-[calc(90vh-280px)]">
+                                <div className="space-y-4 pr-4">
+                                    {/* Basic Role Info */}
+                                    <div>
+                                        <Label htmlFor="name">Role Name *</Label>
                                         <Input
-                                            id="assigned_groups"
-                                            placeholder="e.g., data-stewards, finance-team"
-                                            value={Array.isArray(field.value) ? field.value.join(', ') : ''}
-                                            onChange={(e) => {
-                                                const groups = e.target.value.split(',').map(g => g.trim()).filter(Boolean);
-                                                field.onChange(groups);
-                                            }}
+                                            id="name"
+                                            {...register("name", { required: "Role name is required" })}
+                                            readOnly={isEditMode && initialRole?.id === 'admin'}
+                                            className={(isEditMode && initialRole?.id === 'admin') ? "bg-muted" : ""}
                                         />
-                                    )}
-                                />
-                                {errors.assigned_groups && <p className="text-sm text-red-600 mt-1">{errors.assigned_groups.message}</p>}
-                                <p className="text-xs text-muted-foreground mt-1">Users belonging to these groups will inherit this role's permissions.</p>
-                            </div>
+                                        {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name.message}</p>}
+                                    </div>
 
-                            {/* Home Sections Selection */}
-                            <div className="space-y-3 pt-4 border-t">
-                                <h4 className="font-medium">Home Sections</h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    {Object.values(HomeSection).map(section => (
-                                        <label key={section} className="flex items-center gap-2 text-sm">
-                                            <input
-                                                type="checkbox"
-                                                {...register('home_sections')}
-                                                value={section}
-                                                defaultChecked={defaultValues.home_sections?.includes(section)}
-                                            />
-                                            <span>{section.replace('_', ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}</span>
-                                        </label>
-                                    ))}
+                                    <div>
+                                        <Label htmlFor="description">Description</Label>
+                                        <Textarea id="description" {...register("description")} />
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="assigned_groups">Assigned Directory Groups (comma-separated)</Label>
+                                        <Controller
+                                            name="assigned_groups"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Input
+                                                    id="assigned_groups"
+                                                    placeholder="e.g., data-stewards, finance-team"
+                                                    value={Array.isArray(field.value) ? field.value.join(', ') : ''}
+                                                    onChange={(e) => {
+                                                        const groups = e.target.value.split(',').map(g => g.trim()).filter(Boolean);
+                                                        field.onChange(groups);
+                                                    }}
+                                                />
+                                            )}
+                                        />
+                                        {errors.assigned_groups && <p className="text-sm text-red-600 mt-1">{errors.assigned_groups.message}</p>}
+                                        <p className="text-xs text-muted-foreground mt-1">Users belonging to these groups will inherit this role's permissions.</p>
+                                    </div>
                                 </div>
-                            </div>
+                            </ScrollArea>
+                        </TabsContent>
 
-                            {/* Approval Privileges */}
-                            <div className="space-y-3 pt-4 border-t">
-                                <h4 className="font-medium">Approval Privileges</h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    {Object.values(ApprovalEntity).map(entity => (
-                                        <label key={entity} className="flex items-center gap-2 text-sm">
-                                            <input
-                                                type="checkbox"
-                                                {...register(`approval_privileges.${entity}` as const)}
-                                                defaultChecked={Boolean(defaultValues.approval_privileges?.[entity as keyof typeof defaultValues.approval_privileges])}
-                                            />
-                                            <span>{entity.replace('_', ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}</span>
-                                        </label>
-                                    ))}
+                        {/* Privileges Tab */}
+                        <TabsContent value="privileges" className="flex-1 mt-4">
+                            <ScrollArea className="h-[calc(90vh-280px)]">
+                                <div className="space-y-4 pr-4">
+                                    {/* Home Sections Selection */}
+                                    <div className="space-y-3">
+                                        <h4 className="font-medium">Home Sections</h4>
+                                        <p className="text-xs text-muted-foreground">Select which sections appear on the home page for users with this role.</p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {Object.values(HomeSection).map(section => (
+                                                <label key={section} className="flex items-center gap-2 text-sm">
+                                                    <input
+                                                        type="checkbox"
+                                                        {...register('home_sections')}
+                                                        value={section}
+                                                        defaultChecked={defaultValues.home_sections?.includes(section)}
+                                                    />
+                                                    <span>{section.replace('_', ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Approval Privileges */}
+                                    <div className="space-y-3 pt-4 border-t">
+                                        <h4 className="font-medium">Approval Privileges</h4>
+                                        <p className="text-xs text-muted-foreground">Grant this role the ability to approve specific types of requests.</p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {Object.values(ApprovalEntity).map(entity => (
+                                                <label key={entity} className="flex items-center gap-2 text-sm">
+                                                    <input
+                                                        type="checkbox"
+                                                        {...register(`approval_privileges.${entity}` as const)}
+                                                        defaultChecked={Boolean(defaultValues.approval_privileges?.[entity as keyof typeof defaultValues.approval_privileges])}
+                                                    />
+                                                    <span>{entity.replace('_', ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
+                            </ScrollArea>
+                        </TabsContent>
 
-                            {/* Feature Permissions */}
-                            <div className="space-y-3 pt-4 border-t">
-                                <h4 className="font-medium">Feature Permissions</h4>
-                                <div className="max-h-[300px] overflow-y-auto pr-2 space-y-1">
+                        {/* Permissions Tab */}
+                        <TabsContent value="permissions" className="flex-1 mt-4">
+                            <ScrollArea className="h-[calc(90vh-280px)]">
+                                <div className="space-y-4 pr-4">
+                                    {/* Feature Permissions */}
+                                    <div className="space-y-3">
+                                        <h4 className="font-medium">Feature Permissions</h4>
+                                        <p className="text-xs text-muted-foreground">Configure access levels for each feature in the application.</p>
+                                        <div className="space-y-1">
                                     {orderedFeatures.map((feature) => {
                                         const featureConf = featuresConfig[feature.id];
                                         if (!featureConf) {
@@ -333,20 +366,127 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                     {Object.keys(featuresConfig).length === 0 && (
                                         <p className="text-sm text-muted-foreground">No features configuration loaded.</p>
                                     )}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-                    </ScrollArea>
+                            </ScrollArea>
+                        </TabsContent>
+
+                        {/* Deployment Tab */}
+                        <TabsContent value="deployment" className="flex-1 mt-4">
+                            <ScrollArea className="h-[calc(90vh-280px)]">
+                                <div className="space-y-4 pr-4">
+                                    <div className="space-y-3">
+                                        <h4 className="font-medium">Deployment Policy</h4>
+                                        <p className="text-xs text-muted-foreground">
+                                            Control which Unity Catalog catalogs/schemas users with this role can deploy to. 
+                                            Supports wildcards (* for any) and template variables (&#123;username&#125;, &#123;email&#125;).
+                                        </p>
+                                        
+                                        <div className="space-y-3 pt-2">
+                                            {/* Allowed Catalogs */}
+                                            <div>
+                                                <Label htmlFor="deployment_policy_catalogs">Allowed Catalogs (comma-separated)</Label>
+                                                <Controller
+                                                    name="deployment_policy.allowed_catalogs"
+                                                    control={control}
+                                                    render={({ field }) => (
+                                                        <Input
+                                                            id="deployment_policy_catalogs"
+                                                            placeholder="e.g., prod_catalog, {username}_sandbox, *"
+                                                            value={Array.isArray(field.value) ? field.value.join(', ') : ''}
+                                                            onChange={(e) => {
+                                                                const catalogs = e.target.value.split(',').map(c => c.trim()).filter(Boolean);
+                                                                field.onChange(catalogs);
+                                                            }}
+                                                        />
+                                                    )}
+                                                />
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    Leave empty to prevent deployments. Use * to allow all catalogs.
+                                                </p>
+                                            </div>
+                                            
+                                            {/* Allowed Schemas */}
+                                            <div>
+                                                <Label htmlFor="deployment_policy_schemas">Allowed Schemas (comma-separated, optional)</Label>
+                                                <Controller
+                                                    name="deployment_policy.allowed_schemas"
+                                                    control={control}
+                                                    render={({ field }) => (
+                                                        <Input
+                                                            id="deployment_policy_schemas"
+                                                            placeholder="e.g., dev, {username}_schema, *"
+                                                            value={Array.isArray(field.value) ? field.value.join(', ') : ''}
+                                                            onChange={(e) => {
+                                                                const schemas = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                                                                field.onChange(schemas);
+                                                            }}
+                                                        />
+                                                    )}
+                                                />
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    Leave empty to allow any schema within allowed catalogs.
+                                                </p>
+                                            </div>
+                                            
+                                            {/* Default Catalog/Schema */}
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <Label htmlFor="deployment_policy_default_catalog">Default Catalog</Label>
+                                                    <Input
+                                                        id="deployment_policy_default_catalog"
+                                                        {...register('deployment_policy.default_catalog')}
+                                                        placeholder="e.g., {username}_sandbox"
+                                                    />
+                                                    <p className="text-xs text-muted-foreground mt-1">Pre-selected in UI</p>
+                                                </div>
+                                                <div>
+                                                    <Label htmlFor="deployment_policy_default_schema">Default Schema</Label>
+                                                    <Input
+                                                        id="deployment_policy_default_schema"
+                                                        {...register('deployment_policy.default_schema')}
+                                                        placeholder="e.g., default"
+                                                    />
+                                                    <p className="text-xs text-muted-foreground mt-1">Pre-selected in UI</p>
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Approval Settings */}
+                                            <div className="space-y-2 pt-2">
+                                                <label className="flex items-center gap-2 text-sm">
+                                                    <input
+                                                        type="checkbox"
+                                                        {...register('deployment_policy.require_approval')}
+                                                        defaultChecked={Boolean(defaultValues.deployment_policy?.require_approval)}
+                                                    />
+                                                    <span>Require approval for deployments</span>
+                                                </label>
+                                                <label className="flex items-center gap-2 text-sm">
+                                                    <input
+                                                        type="checkbox"
+                                                        {...register('deployment_policy.can_approve_deployments')}
+                                                        defaultChecked={Boolean(defaultValues.deployment_policy?.can_approve_deployments)}
+                                                    />
+                                                    <span>Can approve deployment requests</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </ScrollArea>
+                        </TabsContent>
+                    </Tabs>
 
                     {/* Form Error Display */}
                     {formError && (
-                        <Alert variant="destructive" className="mt-auto">
+                        <Alert variant="destructive" className="mt-4">
                             <AlertCircle className="h-4 w-4" />
                             <AlertDescription>{formError}</AlertDescription>
                         </Alert>
                     )}
 
-                    <DialogFooter className="mt-auto pt-4 border-t">
+                    <DialogFooter className="pt-4 border-t mt-4">
                         <Button type="button" variant="outline" onClick={() => handleCloseDialog(false)} disabled={isSubmitting}>Cancel</Button>
                         <Button type="submit" disabled={isSubmitting}>
                             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

@@ -21,6 +21,9 @@ from src.common.authorization import get_user_details_from_sdk
 from sqlalchemy.orm import Session # Import Session
 
 from src.common.logging import get_logger
+from src.common.deployment_dependencies import get_deployment_policy_manager
+from src.controller.deployment_policy_manager import DeploymentPolicyManager
+
 logger = get_logger(__name__)
 
 # Define router at the module level with /api prefix
@@ -221,6 +224,40 @@ async def request_role_access(
         logger.error(f"Error creating notifications for role request (Role: {role_id}, User: {requester_email}): {e}", exc_info=True)
         db.rollback() # Rollback the transaction on error
         raise HTTPException(status_code=500, detail="Failed to process role access request due to an internal error.")
+
+
+# --- Deployment Policy Endpoint ---
+
+@router.get("/user/deployment-policy")
+async def get_user_deployment_policy(
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    deployment_manager: DeploymentPolicyManager = Depends(get_deployment_policy_manager)
+):
+    """Get current user's deployment policy (allowed catalogs/schemas).
+    
+    Returns the effective deployment policy after:
+    - Resolving role overrides
+    - Merging policies from all user's groups
+    - Resolving template variables ({username}, {email}, etc.)
+    """
+    try:
+        policy = deployment_manager.get_effective_policy(user_details)
+        
+        logger.info(
+            f"Retrieved deployment policy for {user_details.email}: "
+            f"{len(policy.allowed_catalogs)} catalogs, "
+            f"require_approval={policy.require_approval}"
+        )
+        
+        return policy.dict()
+    
+    except Exception as e:
+        logger.error(f"Error retrieving deployment policy for {user_details.email}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve deployment policy"
+        )
+
 
 # Register routes function simply includes the module-level router
 def register_routes(app):

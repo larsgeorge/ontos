@@ -50,6 +50,8 @@ from src.common.features import FeatureAccessLevel
 from src.controller.change_log_manager import change_log_manager
 from src.models.notifications import NotificationType, Notification
 from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
+from src.common.deployment_dependencies import get_deployment_policy_manager
+from src.controller.deployment_policy_manager import DeploymentPolicyManager
 from pydantic import BaseModel
 import uuid
 import yaml
@@ -474,14 +476,41 @@ async def request_deploy_to_catalog(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     notifications: NotificationsManagerDep,
+    deployment_manager: DeploymentPolicyManager = Depends(get_deployment_policy_manager),
     payload: RequestDeployPayload = Body(default=RequestDeployPayload()),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
-    """Request approval to deploy a contract to Unity Catalog."""
+    """Request approval to deploy a contract to Unity Catalog.
+    
+    Validates that the user has permission to deploy to the specified catalog/schema
+    based on their deployment policy (resolved from their role and group memberships).
+    """
     try:
         contract = db.query(DataContractDb).filter(DataContractDb.id == contract_id).first()
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
+        
+        # Validate deployment target against user's policy
+        if payload.catalog:  # Only validate if catalog specified
+            user_policy = deployment_manager.get_effective_policy(current_user)
+            
+            is_valid, error_msg = deployment_manager.validate_deployment_target(
+                policy=user_policy,
+                catalog=payload.catalog,
+                schema=payload.schema
+            )
+            
+            if not is_valid:
+                logger.warning(
+                    f"Deployment request denied for {current_user.email} to {payload.catalog}"
+                    f"{('.' + payload.schema) if payload.schema else ''}: {error_msg}"
+                )
+                raise HTTPException(status_code=403, detail=error_msg)
+            
+            logger.info(
+                f"Deployment target validated for {current_user.email}: "
+                f"{payload.catalog}{('.' + payload.schema) if payload.schema else ''}"
+            )
         
         now = datetime.utcnow()
         requester_email = current_user.email
