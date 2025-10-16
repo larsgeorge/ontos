@@ -27,3 +27,4 @@ openai>=1.79.0
 mlflow==3.3.2
 rdflib>=6.3.2
 jsonschema>=4.22.0
+bleach>=6.0.0
