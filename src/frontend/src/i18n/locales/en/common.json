@@ -48,7 +48,8 @@
   "header": {
     "searchPlaceholder": "Search features, assets...",
     "advanced": "Advanced",
-    "toggleSidebar": "Toggle sidebar"
+    "toggleSidebar": "Toggle sidebar",
+    "userGuide": "User Guide"
   },
   "theme": {
     "light": "Light",

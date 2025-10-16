@@ -48,7 +48,8 @@
   "header": {
     "searchPlaceholder": "Funktionen, Assets suchen...",
     "advanced": "Erweitert",
-    "toggleSidebar": "Seitenleiste umschalten"
+    "toggleSidebar": "Seitenleiste umschalten",
+    "userGuide": "Benutzerhandbuch"
   },
   "theme": {
     "light": "Hell",

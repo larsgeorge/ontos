@@ -51,7 +51,8 @@
   "header": {
     "searchPlaceholder": "Rechercher des fonctionnalités, des actifs...",
     "advanced": "Avancé",
-    "toggleSidebar": "Basculer la barre latérale"
+    "toggleSidebar": "Basculer la barre latérale",
+    "userGuide": "Guide de l'Utilisateur"
   },
   "theme": {
     "light": "Clair",

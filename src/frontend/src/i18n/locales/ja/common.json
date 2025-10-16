@@ -48,7 +48,8 @@
   "header": {
     "searchPlaceholder": "機能、アセットを検索...",
     "advanced": "詳細",
-    "toggleSidebar": "サイドバーを切り替え"
+    "toggleSidebar": "サイドバーを切り替え",
+    "userGuide": "ユーザーガイド"
   },
   "theme": {
     "light": "ライト",

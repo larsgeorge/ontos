@@ -51,7 +51,8 @@
   "header": {
     "searchPlaceholder": "Cerca funzionalità, asset...",
     "advanced": "Avanzate",
-    "toggleSidebar": "Attiva/disattiva barra laterale"
+    "toggleSidebar": "Attiva/disattiva barra laterale",
+    "userGuide": "Guida Utente"
   },
   "theme": {
     "light": "Chiaro",
