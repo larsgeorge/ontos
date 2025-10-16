@@ -421,3 +421,35 @@ async def save_compliance_mapping(
     except Exception as e:
         logger.error(f"Error saving compliance mapping: {e!s}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- User Guide ---
+
+@router.get('/user-guide')
+async def get_user_guide():
+    """Serve the USER-GUIDE.md content"""
+    from pathlib import Path
+    
+    # Path navigates up from routes/settings_routes.py to src/docs
+    # __file__ = src/backend/src/routes/settings_routes.py
+    # .parent.parent.parent.parent = src/
+    guide_path = Path(__file__).parent.parent.parent.parent / "docs" / "USER-GUIDE.md"
+    
+    # Resolve to absolute path for better error reporting
+    resolved_path = guide_path.resolve()
+    
+    logger.debug(f"Looking for user guide at: {resolved_path}")
+    
+    if not guide_path.exists():
+        logger.error(f"User guide not found. Checked path: {resolved_path}")
+        logger.error(f"Current __file__: {Path(__file__).resolve()}")
+        logger.error(f"Parent directories: {[p for p in Path(__file__).parents]}")
+        raise HTTPException(status_code=404, detail="User guide not found")
+    
+    try:
+        content = guide_path.read_text(encoding="utf-8")
+        logger.info(f"Successfully loaded user guide ({len(content)} chars)")
+        return {"content": content}
+    except Exception as e:
+        logger.error(f"Error reading user guide from {resolved_path}: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))

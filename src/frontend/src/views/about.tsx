@@ -1,4 +1,5 @@
 import { Github, BookOpenCheck } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { getLandingPageFeatures, FeatureConfig } from '@/config/features';
@@ -85,10 +86,10 @@ export default function About() {
             <Github className="mr-2 h-5 w-5" /> {t('about:cta.github')}
           </a>
         </Button>
-        <Button variant="outline" asChild size="lg" disabled>
-          <a href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true" onClick={(e) => e.preventDefault()}>
+        <Button variant="outline" asChild size="lg">
+          <Link to="/user-guide">
             <BookOpenCheck className="mr-2 h-5 w-5" /> {t('about:cta.docs')}
-          </a>
+          </Link>
         </Button>
       </div>
     </div>
