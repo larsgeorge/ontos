@@ -6,17 +6,66 @@ import { getLandingPageFeatures, FeatureConfig } from '@/config/features';
 import { useFeatureVisibilityStore } from '@/stores/feature-visibility-store';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
+import { useEffect, useState } from 'react';
+import { format } from 'date-fns';
 
 export default function About() {
   const { t } = useTranslation(['about', 'features']);
   const allowedMaturities = useFeatureVisibilityStore((state) => state.allowedMaturities);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [serverStartTime, setServerStartTime] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchServerInfo = async () => {
+      try {
+        const response = await fetch('/api/version');
+        if (response.ok) {
+          const data = await response.json();
+          setAppVersion(data.version);
+          setServerStartTime(data.startTime * 1000); // Convert to milliseconds
+        }
+      } catch (error) {
+        console.error('Failed to fetch server info:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchServerInfo();
+  }, []);
 
   const features = getLandingPageFeatures(allowedMaturities);
 
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-4xl font-bold mb-6">{t('about:title')}</h1>
-      <p className="text-lg text-muted-foreground mb-10">{t('about:intro')}</p>
+      <p className="text-lg text-muted-foreground mb-6">{t('about:intro')}</p>
+      
+      {/* Version and Runtime Info */}
+      <div className="mb-10 p-4 border rounded-lg bg-card text-card-foreground">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-muted-foreground">{t('about:version')}</p>
+            {loading ? (
+              <p className="font-semibold">{t('about:loading')}</p>
+            ) : appVersion ? (
+              <p className="font-semibold">{appVersion}</p>
+            ) : (
+              <p className="font-semibold text-muted-foreground">{t('about:unavailable')}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">{t('about:runningSince')}</p>
+            {loading ? (
+              <p className="font-semibold">{t('about:loading')}</p>
+            ) : serverStartTime ? (
+              <p className="font-semibold">{format(new Date(serverStartTime), 'PPpp')}</p>
+            ) : (
+              <p className="font-semibold text-muted-foreground">{t('about:unavailable')}</p>
+            )}
+          </div>
+        </div>
+      </div>
 
       <h2 className="text-3xl font-semibold mb-8">{t('about:coreFeatures')}</h2>
 

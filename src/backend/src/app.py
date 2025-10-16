@@ -220,6 +220,16 @@ async def get_cache_version():
     """Get the server cache version for client-side cache invalidation"""
     return {'version': SERVER_STARTUP_TIME, 'timestamp': int(time.time())}
 
+@app.get("/api/version")
+async def get_app_version():
+    """Get the application version and server start time"""
+    from src import __version__
+    return {
+        'version': __version__,
+        'startTime': SERVER_STARTUP_TIME,
+        'timestamp': int(time.time())
+    }
+
 # Define the SPA catch-all route LAST
 @app.get("/{full_path:path}")
 def serve_spa(full_path: str):

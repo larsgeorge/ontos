@@ -1,6 +1,10 @@
 {
   "title": "Über Ontos",
   "intro": "Diese Anwendung läuft als Databricks App und bietet Unity Catalog und verwandte Dienste mit Fokus auf Metadatenmanagement, Governance und Betriebstools.",
+  "version": "Version",
+  "runningSince": "Läuft seit",
+  "loading": "Wird geladen...",
+  "unavailable": "Nicht verfügbar",
   "coreFeatures": "Kernfunktionen",
   "noFeatures": "Keine Funktionen für die ausgewählten Feature-Previews verfügbar.",
   "techStack": "Technologie-Stack",
