@@ -199,12 +199,73 @@ async def search_concepts(
         logger.info(f"Searching concepts with query: '{q}' in taxonomy: {taxonomy}")
         # Use the ontology-aware search that returns ConceptSearchResult items
         results = manager.search_ontology_concepts(q, taxonomy, limit)
-        
+
         return {
             'results': [result.model_dump() for result in results]
         }
     except Exception as e:
         logger.error(f"Error searching concepts: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get('/semantic-models/neighbors')
+async def get_neighbors(
+    iri: str = Query(..., description="Resource IRI to get neighbors for"),
+    limit: int = Query(200, description="Maximum number of neighbors to return"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager)
+) -> List[dict]:
+    """Get all neighboring triples for a resource (for graph navigation).
+
+    Returns a list of neighbors with direction (incoming/outgoing/predicate),
+    predicate IRI, display value, display type, and step information.
+    """
+    try:
+        logger.info(f"Retrieving neighbors for IRI: {iri} (limit: {limit})")
+        neighbors = manager.neighbors(iri, limit)
+        return neighbors
+    except Exception as e:
+        logger.error(f"Error retrieving neighbors for {iri}: {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get('/semantic-models/prefix')
+async def prefix_search(
+    q: str = Query(..., description="IRI prefix substring to search for"),
+    limit: int = Query(25, description="Maximum number of results"),
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager)
+) -> List[dict]:
+    """Search for resources and properties by IRI prefix/substring.
+
+    Returns a list of items with value (IRI) and type (resource/property).
+    """
+    try:
+        logger.info(f"Searching by prefix: '{q}' (limit: {limit})")
+        results = manager.prefix_search(q, limit)
+        return results
+    except Exception as e:
+        logger.error(f"Error in prefix search for '{q}': {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post('/semantic-models/query')
+async def sparql_query(
+    request: dict,
+    manager: SemanticModelsManager = Depends(get_semantic_models_manager)
+) -> List[dict]:
+    """Execute a SPARQL query against the loaded semantic graph.
+
+    Request body should contain a 'sparql' field with the SPARQL query string.
+    Returns a list of result bindings as dictionaries.
+    """
+    try:
+        sparql = request.get('sparql', '')
+        if not sparql:
+            raise HTTPException(status_code=400, detail="Missing 'sparql' field in request body")
+
+        logger.info(f"Executing SPARQL query (length: {len(sparql)} chars)")
+        results = manager.query(sparql)
+        return results
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error executing SPARQL query: {e!s}")
         raise HTTPException(status_code=500, detail=str(e))
 
 """Legacy Business Glossary endpoints removed during rename to Semantic Models."""
