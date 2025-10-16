@@ -152,22 +152,22 @@ export default function UserGuide() {
               <div className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-3">
                 Table of Contents
               </div>
-              <nav className="space-y-1">
+              <nav className="space-y-0.5">
                 {toc.map((heading, idx) => (
                   <button
                     key={idx}
                     onClick={() => scrollToSection(heading.id)}
                     className={`
                       text-left w-full text-sm hover:text-primary transition-colors py-1.5 px-2 rounded
-                      ${activeSection === heading.id ? 'text-primary font-medium bg-primary/10' : 'text-muted-foreground hover:bg-muted/50'}
-                      ${heading.level === 2 ? 'pl-2' : heading.level === 3 ? 'pl-6' : 'pl-10'}
+                      ${activeSection === heading.id ? 'text-primary font-semibold bg-primary/10' : 'text-muted-foreground hover:bg-muted/50'}
+                      ${heading.level === 1 ? 'pl-2 font-medium' : heading.level === 2 ? 'pl-6' : heading.level === 3 ? 'pl-10' : 'pl-14'}
                     `}
                   >
                     <div className="flex items-center gap-2">
                       {activeSection === heading.id && (
                         <ChevronRight className="w-3.5 h-3.5 shrink-0" />
                       )}
-                      <span className={activeSection !== heading.id && heading.level === 2 ? 'ml-[1.125rem]' : ''}>
+                      <span className={activeSection !== heading.id && heading.level === 1 ? 'ml-[1.125rem]' : ''}>
                         {heading.text}
                       </span>
                     </div>
