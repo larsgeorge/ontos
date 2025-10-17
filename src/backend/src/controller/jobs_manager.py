@@ -139,7 +139,15 @@ class JobsManager:
             job_settings_kwargs['continuous'] = jobs.Continuous(pause_status=jobs.PauseStatus.UNPAUSED)
 
         if 'parameters' in wf_def:
-            job_settings_kwargs['parameters'] = wf_def['parameters']
+            params = wf_def['parameters']
+            if isinstance(params, dict):
+                # Convert dict to list of JobParameter objects with default values
+                job_settings_kwargs['parameters'] = [
+                    jobs.JobParameter(name=key, default=str(value))
+                    for key, value in params.items()
+                ]
+            else:
+                job_settings_kwargs['parameters'] = params
 
         if 'tags' in wf_def:
             job_settings_kwargs['tags'] = wf_def['tags']
@@ -236,7 +244,15 @@ class JobsManager:
             job_settings.continuous = jobs.Continuous(pause_status=jobs.PauseStatus.UNPAUSED)
         
         if 'parameters' in wf_def:
-            job_settings.parameters = wf_def['parameters']
+            params = wf_def['parameters']
+            if isinstance(params, dict):
+                # Convert dict to list of JobParameter objects with default values
+                job_settings.parameters = [
+                    jobs.JobParameter(name=key, default=str(value))
+                    for key, value in params.items()
+                ]
+            else:
+                job_settings.parameters = params
         
         if 'tags' in wf_def:
             job_settings.tags = wf_def['tags']

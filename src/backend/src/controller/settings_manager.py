@@ -629,7 +629,7 @@ class SettingsManager:
                 except Exception as e:
                     error_msg = f"Failed to install workflow '{job_id}': {str(e)}"
                     errors.append(error_msg)
-                    logger.error(error_msg)
+                    logger.error(error_msg, exc_info=True)
             else:
                 error_msg = f"Workflow '{job_id}' not found in available workflows"
                 errors.append(error_msg)
@@ -776,6 +776,18 @@ class SettingsManager:
             logger.warning(f"Could not parse or convert approval_privileges JSON for role ID {role_db.id}: {getattr(role_db, 'approval_privileges', None)}. Error: {e}")
             approval_privileges = {}
 
+        # Parse deployment policy
+        deployment_policy = None
+        try:
+            deployment_policy_raw = getattr(role_db, 'deployment_policy', None)
+            if deployment_policy_raw:
+                deployment_policy_dict = json.loads(deployment_policy_raw) if isinstance(deployment_policy_raw, str) else deployment_policy_raw
+                from src.models.settings import DeploymentPolicy
+                deployment_policy = DeploymentPolicy(**deployment_policy_dict)
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            logger.warning(f"Could not parse or convert deployment_policy JSON for role ID {role_db.id}: {getattr(role_db, 'deployment_policy', None)}. Error: {e}")
+            deployment_policy = None
+
         return AppRole(
             id=role_db.id, # Keep UUID
             name=role_db.name,
@@ -784,6 +796,7 @@ class SettingsManager:
             feature_permissions=feature_permissions,
             home_sections=home_sections,
             approval_privileges=approval_privileges,
+            deployment_policy=deployment_policy,
             # created_at=role_db.created_at, # Uncomment if needed
             # updated_at=role_db.updated_at  # Uncomment if needed
         )
