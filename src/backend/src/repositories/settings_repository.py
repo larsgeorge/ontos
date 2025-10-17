@@ -39,6 +39,16 @@ class AppRoleRepository(CRUDBase[AppRoleDb, AppRoleCreate, AppRoleUpdate]):
         # Keys are enums or strings; normalize to strings
         approval_privs_str = { (k.value if hasattr(k, 'value') else str(k)): bool(v) for k, v in approval_privs.items() }
         db_obj_data['approval_privileges'] = json.dumps(approval_privs_str)
+        # Deployment policy stored as JSON
+        deployment_policy = getattr(obj_in, 'deployment_policy', None)
+        if deployment_policy:
+            # If it's a Pydantic model, convert to dict; otherwise assume it's already a dict
+            if hasattr(deployment_policy, 'model_dump'):
+                db_obj_data['deployment_policy'] = json.dumps(deployment_policy.model_dump())
+            else:
+                db_obj_data['deployment_policy'] = json.dumps(deployment_policy)
+        else:
+            db_obj_data['deployment_policy'] = None
         db_obj = self.model(**db_obj_data)
         db.add(db_obj)
         db.flush() # Use flush instead of commit within repository method
@@ -67,6 +77,16 @@ class AppRoleRepository(CRUDBase[AppRoleDb, AppRoleCreate, AppRoleUpdate]):
             ap = update_data['approval_privileges'] or {}
             ap_norm = { (k.value if hasattr(k, 'value') else str(k)): bool(v) for k, v in ap.items() }
             update_data['approval_privileges'] = json.dumps(ap_norm)
+        if 'deployment_policy' in update_data:
+            dp = update_data['deployment_policy']
+            if dp is not None:
+                # If it's a Pydantic model, convert to dict; otherwise assume it's already a dict
+                if hasattr(dp, 'model_dump'):
+                    update_data['deployment_policy'] = json.dumps(dp.model_dump())
+                else:
+                    update_data['deployment_policy'] = json.dumps(dp)
+            else:
+                update_data['deployment_policy'] = None
 
         logger.debug(f"Updating AppRoleDb {db_obj.id} with data: {update_data}")
         # Use the base class update method which handles attribute setting

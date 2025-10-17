@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -217,7 +218,7 @@ export default function RequestContractActionDialog({
           const policy = response.data as DeploymentPolicy;
           setDeploymentPolicy(policy);
           
-          // Pre-populate with default catalog/schema if available
+          // Pre-populate with default catalog/schema if available and fields are empty
           if (policy.default_catalog && !catalog) {
             setCatalog(policy.default_catalog);
           }
@@ -391,12 +392,22 @@ export default function RequestContractActionDialog({
               )}
               
               <div className="grid grid-cols-2 gap-3">
-                {/* Catalog Dropdown */}
+                {/* Catalog Dropdown or Input */}
                 <div className="space-y-2">
                   <Label htmlFor="deploy-catalog" className="text-sm font-medium">
-                    Target Catalog {deploymentPolicy?.allowed_catalogs.length ? '*' : '(Optional)'}
+                    Target Catalog (Optional)
                   </Label>
-                  {deploymentPolicy && deploymentPolicy.allowed_catalogs.length > 0 ? (
+                  {deploymentPolicy && deploymentPolicy.allowed_catalogs.length > 0 && deploymentPolicy.allowed_catalogs.includes('*') ? (
+                    // Wildcard - allow any catalog via text input
+                    <Input
+                      id="deploy-catalog"
+                      value={catalog}
+                      onChange={(e) => setCatalog(e.target.value)}
+                      placeholder={deploymentPolicy.default_catalog || "Enter catalog name..."}
+                      disabled={submitting || loadingPolicy}
+                    />
+                  ) : deploymentPolicy && deploymentPolicy.allowed_catalogs.length > 0 ? (
+                    // Specific catalogs - show dropdown
                     <Select
                       value={catalog}
                       onValueChange={setCatalog}
@@ -414,6 +425,7 @@ export default function RequestContractActionDialog({
                       </SelectContent>
                     </Select>
                   ) : (
+                    // No catalogs available
                     <Select disabled>
                       <SelectTrigger>
                         <SelectValue placeholder="No catalogs available" />
@@ -426,14 +438,30 @@ export default function RequestContractActionDialog({
                       Default catalog for your role
                     </div>
                   )}
+                  {deploymentPolicy?.allowed_catalogs.includes('*') && (
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Info className="h-3 w-3" />
+                      You can deploy to any catalog
+                    </div>
+                  )}
                 </div>
                 
-                {/* Schema Dropdown */}
+                {/* Schema Dropdown or Input */}
                 <div className="space-y-2">
                   <Label htmlFor="deploy-schema" className="text-sm font-medium">
                     Target Schema (Optional)
                   </Label>
-                  {deploymentPolicy && deploymentPolicy.allowed_schemas.length > 0 ? (
+                  {deploymentPolicy && deploymentPolicy.allowed_schemas.length > 0 && deploymentPolicy.allowed_schemas.includes('*') ? (
+                    // Wildcard - allow any schema via text input
+                    <Input
+                      id="deploy-schema"
+                      value={schema}
+                      onChange={(e) => setSchema(e.target.value)}
+                      placeholder={deploymentPolicy.default_schema || "Enter schema name..."}
+                      disabled={submitting || loadingPolicy}
+                    />
+                  ) : deploymentPolicy && deploymentPolicy.allowed_schemas.length > 0 ? (
+                    // Specific schemas - show dropdown
                     <Select
                       value={schema}
                       onValueChange={setSchema}
@@ -451,16 +479,25 @@ export default function RequestContractActionDialog({
                       </SelectContent>
                     </Select>
                   ) : (
-                    <Select disabled>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Any schema allowed" />
-                      </SelectTrigger>
-                    </Select>
+                    // No specific schemas - allow text input for any schema
+                    <Input
+                      id="deploy-schema"
+                      value={schema}
+                      onChange={(e) => setSchema(e.target.value)}
+                      placeholder={deploymentPolicy?.default_schema || "Enter schema name..."}
+                      disabled={submitting || loadingPolicy}
+                    />
                   )}
                   {deploymentPolicy?.default_schema && schema === deploymentPolicy.default_schema && (
                     <div className="text-xs text-muted-foreground flex items-center gap-1">
                       <Info className="h-3 w-3" />
                       Default schema for your role
+                    </div>
+                  )}
+                  {deploymentPolicy && (deploymentPolicy.allowed_schemas.length === 0 || deploymentPolicy.allowed_schemas.includes('*')) && (
+                    <div className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Info className="h-3 w-3" />
+                      You can deploy to any schema
                     </div>
                   )}
                 </div>

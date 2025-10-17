@@ -13,6 +13,14 @@ roles:
       PRODUCTS: true
       BUSINESS_TERMS: true
       ASSET_REVIEWS: true
+    deployment_policy:
+      allowed_catalogs:
+        - "*"  # Admin can deploy to any catalog
+      allowed_schemas: []  # Empty = any schema allowed
+      default_catalog: "main"
+      default_schema: "default"
+      require_approval: false  # Admin doesn't need approval
+      can_approve_deployments: true  # Admin can approve others' deployments
 
   - name: Data Governance Officer
     description: "Default role: Data Governance Officer"
@@ -41,6 +49,14 @@ roles:
       PRODUCTS: true
       BUSINESS_TERMS: true
       ASSET_REVIEWS: true
+    deployment_policy:
+      allowed_catalogs:
+        - "*"  # Can deploy to any catalog
+      allowed_schemas: []
+      default_catalog: "main"
+      default_schema: "default"
+      require_approval: false
+      can_approve_deployments: true
 
   - name: Data Steward
     description: "Default role: Data Steward"
@@ -61,6 +77,16 @@ roles:
       CONTRACTS: true
       PRODUCTS: true
       ASSET_REVIEWS: true
+    deployment_policy:
+      allowed_catalogs:
+        - "main"
+        - "sandbox"
+        - "dev"
+      allowed_schemas: []
+      default_catalog: "main"
+      default_schema: "default"
+      require_approval: true  # Requires approval for production deployments
+      can_approve_deployments: false  # Cannot approve own requests
 
   - name: Data Consumer
     description: "Default role: Data Consumer"
@@ -88,6 +114,16 @@ roles:
     home_sections:
       - DATA_CURATION
       - DISCOVERY
+    deployment_policy:
+      allowed_catalogs:
+        - "sandbox"
+        - "dev"
+        - "staging"
+      allowed_schemas: []
+      default_catalog: "sandbox"
+      default_schema: "default"
+      require_approval: true  # Requires approval
+      can_approve_deployments: false
 
   - name: Security Officer
     description: "Default role: Security Officer"
