@@ -26,8 +26,8 @@ max_concurrent_runs: 1
 
 tags:
   environment: "production"
-  team: "data-governance"
-  workflow-type: "sync"
+  team: "data_governance"
+  workflow_type: "sync"
   owner: "ontos"
 
 
