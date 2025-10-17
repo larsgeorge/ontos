@@ -453,3 +453,68 @@ async def get_user_guide():
     except Exception as e:
         logger.error(f"Error reading user guide from {resolved_path}: {e!s}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Database Schema ERD ---
+
+@router.get('/database-schema')
+async def get_database_schema():
+    """Extract database schema from SQLAlchemy models for ERD visualization"""
+    try:
+        from src.common.database import Base
+        
+        tables = []
+        relationships = []
+        
+        logger.info(f"Introspecting database schema. Found {len(Base.metadata.tables)} tables.")
+        
+        # Iterate through all tables in metadata
+        for table_name, table in Base.metadata.tables.items():
+            columns = []
+            
+            # Extract column information
+            for column in table.columns:
+                # Check if column has foreign keys
+                fk_info = None
+                if column.foreign_keys:
+                    fk = list(column.foreign_keys)[0]  # Get first FK if multiple
+                    fk_info = {
+                        'target_table': fk.column.table.name,
+                        'target_column': fk.column.name
+                    }
+                
+                columns.append({
+                    'name': column.name,
+                    'type': str(column.type),
+                    'primary_key': column.primary_key,
+                    'nullable': column.nullable,
+                    'foreign_key': fk_info
+                })
+            
+            tables.append({
+                'id': table_name,
+                'name': table_name,
+                'columns': columns
+            })
+            
+            # Extract foreign key relationships for edges
+            for fk_constraint in table.foreign_key_constraints:
+                # Get the referred table
+                referred_table = fk_constraint.referred_table.name
+                
+                relationships.append({
+                    'id': f"{table_name}_{referred_table}_{len(relationships)}",
+                    'source': table_name,
+                    'target': referred_table,
+                    'columns': list(fk_constraint.column_keys)
+                })
+        
+        logger.info(f"Schema introspection complete. Tables: {len(tables)}, Relationships: {len(relationships)}")
+        
+        return {
+            'tables': tables,
+            'relationships': relationships
+        }
+    except Exception as e:
+        logger.error(f"Error extracting database schema: {e!s}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

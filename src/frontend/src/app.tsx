@@ -33,6 +33,7 @@ import CatalogCommander from './views/catalog-commander';
 import Settings from './views/settings';
 import About from './views/about';
 import UserGuide from './views/user-guide';
+import DatabaseSchema from './views/database-schema';
 import NotFound from './views/not-found';
 import DataDomainDetailsView from "@/views/data-domain-details";
 import SearchView from './views/search';
@@ -92,6 +93,7 @@ export default function App() {
               <Route path="/search" element={<SearchView />} />
               <Route path="/about" element={<About />} />
               <Route path="/user-guide" element={<UserGuide />} />
+              <Route path="/database-schema" element={<DatabaseSchema />} />
               <Route path="/estate-manager" element={<EstateManager />} />
               <Route path="/estates/:estateId" element={<EstateDetailsView />} />
               <Route path="/data-asset-reviews" element={<DataAssetReviews />} />
