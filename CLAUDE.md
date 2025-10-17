@@ -229,7 +229,7 @@ The project implements a web application designed to run as a **Databricks App**
 - Backend server logs are in `/tmp/backend.log`, frontend server logs in `/tmp/frontend.log`
 - **Development Ports**: Backend API runs on port 8000, Frontend UI runs on port 3000.
 - Always use `hatch -e dev run ...` to run Python snippets
-- IMPORTANT: There is no access to the server logs, if you need something from the logs, ask for it.
+- IMPORTANT: The backend server (Python) logs are in `/tmp/backend.log` and the frontend (Vite) in `/tmp/frontend.log. Read them as needed.
 
 ## Package Management
 
