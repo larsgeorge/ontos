@@ -30,7 +30,7 @@ export default function RequestContractActionDialog({
   contractStatus,
   onSuccess
 }: RequestContractActionDialogProps) {
-  const { post } = useApi();
+  const { post, get } = useApi();
   const { toast } = useToast();
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
   
@@ -208,7 +208,6 @@ export default function RequestContractActionDialog({
         setPolicyError(null);
         
         try {
-          const { get } = useApi();
           const response = await get('/api/user/deployment-policy');
           
           if (response.error) {
@@ -235,7 +234,7 @@ export default function RequestContractActionDialog({
     };
     
     fetchDeploymentPolicy();
-  }, [requestType, isOpen]);
+  }, [requestType, isOpen, get]);
   
   const currentConfig = getRequestTypeConfig(requestType);
 
