@@ -52,15 +52,27 @@ interface SchemaData {
 
 // Custom Table Node Component
 function TableNode({ data }: { data: Table }) {
+  const handleWheel = (e: React.WheelEvent) => {
+    // Stop propagation to prevent React Flow from capturing the wheel event for zooming
+    e.stopPropagation();
+    // Don't prevent default - we want normal scrolling to work
+  };
+
   return (
     <>
       <Handle type="target" position={Position.Left} style={{ visibility: 'hidden' }} />
-      <Card className="min-w-[250px] shadow-lg">
-        <CardHeader className="bg-primary text-primary-foreground py-2 px-3">
+      <Card className="min-w-[250px] max-w-[300px] shadow-lg">
+        {/* Only the header is draggable via drag-handle class */}
+        <CardHeader className="drag-handle bg-primary text-primary-foreground py-2 px-3 cursor-move">
           <CardTitle className="text-sm font-bold">{data.name}</CardTitle>
+          <div className="text-[10px] opacity-75 mt-0.5">{data.columns.length} columns</div>
         </CardHeader>
+        {/* Content is scrollable but not draggable */}
         <CardContent className="p-0">
-          <div className="max-h-[400px] overflow-y-auto">
+          <div
+            className="max-h-[500px] overflow-y-auto overflow-x-hidden nodrag cursor-default"
+            onWheel={handleWheel}
+          >
             <table className="w-full text-xs">
               <tbody>
                 {data.columns.map((col, idx) => (
@@ -86,9 +98,9 @@ function TableNode({ data }: { data: Table }) {
                             🔗
                           </span>
                         )}
-                        <span className="font-semibold">{col.name}</span>
+                        <span className="font-semibold truncate">{col.name}</span>
                       </div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                      <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
                         {col.type}
                         {!col.nullable && (
                           <span className="text-red-500 ml-1" title="NOT NULL">
@@ -136,8 +148,8 @@ const getLayoutedElements = (
     };
     
     // Estimate node dimensions based on content
-    const width = 250;
-    const height = Math.min(60 + table.columns.length * 35, 460);
+    const width = 280;
+    const height = Math.min(80 + table.columns.length * 35, 560);
     dagreGraph.setNode(table.id, { width, height });
     
     return node;
@@ -344,6 +356,7 @@ export default function DatabaseSchema() {
           minZoom={0.1}
           maxZoom={1.5}
           defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
+          noWheelClassName="nodrag"
           defaultEdgeOptions={{
             markerEnd: { type: MarkerType.ArrowClosed },
           }}
