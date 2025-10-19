@@ -174,6 +174,93 @@ class ProjectRepository(CRUDBase[ProjectDb, ProjectCreate, ProjectUpdate]):
             db.rollback()
             raise
 
+    def get_projects_by_domain_relationship(
+        self, db: Session, user_identifier: str, user_groups: List[str]
+    ) -> List[ProjectDb]:
+        """Gets projects visible to user based on domain relationships.
+        
+        Returns projects where:
+        - User's teams share a domain with the project's owner team
+        - Projects with no domain association (considered public)
+        - Projects user is already a member of
+        """
+        logger.debug(f"Fetching domain-related projects for user: {user_identifier}")
+        try:
+            from src.db_models.teams import TeamMemberDb
+            from src.db_models.data_domains import DataDomain
+            
+            # Get user's team IDs
+            member_filters = [TeamMemberDb.member_identifier == user_identifier]
+            for group in user_groups:
+                member_filters.append(TeamMemberDb.member_identifier == group)
+            
+            user_team_ids_query = (
+                db.query(TeamDb.id)
+                .join(TeamMemberDb)
+                .filter(or_(*member_filters))
+                .distinct()
+            )
+            user_team_ids = [tid[0] for tid in user_team_ids_query.all()]
+            
+            if not user_team_ids:
+                # User not in any team, only show projects with no domain
+                return (
+                    db.query(self.model)
+                    .options(selectinload(self.model.teams))
+                    .options(selectinload(self.model.owner_team))
+                    .join(TeamDb, self.model.owner_team_id == TeamDb.id, isouter=True)
+                    .filter(
+                        or_(
+                            TeamDb.domain_id.is_(None),
+                            self.model.owner_team_id.is_(None)
+                        )
+                    )
+                    .distinct()
+                    .order_by(self.model.name)
+                    .all()
+                )
+            
+            # Get domains of user's teams
+            user_domain_ids_query = (
+                db.query(TeamDb.domain_id)
+                .filter(TeamDb.id.in_(user_team_ids))
+                .filter(TeamDb.domain_id.isnot(None))
+                .distinct()
+            )
+            user_domain_ids = [did[0] for did in user_domain_ids_query.all()]
+            
+            # Build filter conditions
+            visibility_filters = [
+                # Projects with no domain (public)
+                TeamDb.domain_id.is_(None),
+                # Projects user is already a member of
+                project_team_association.c.team_id.in_(user_team_ids),
+            ]
+            
+            # Projects in same domains as user's teams
+            if user_domain_ids:
+                visibility_filters.append(TeamDb.domain_id.in_(user_domain_ids))
+            
+            return (
+                db.query(self.model)
+                .options(selectinload(self.model.teams))
+                .options(selectinload(self.model.owner_team))
+                .outerjoin(TeamDb, self.model.owner_team_id == TeamDb.id)
+                .outerjoin(
+                    project_team_association,
+                    project_team_association.c.project_id == self.model.id
+                )
+                .filter(or_(*visibility_filters))
+                .distinct()
+                .order_by(self.model.name)
+                .all()
+            )
+            
+        except SQLAlchemyError as e:
+            logger.error(f"Database error fetching domain-related projects: {e}", exc_info=True)
+            db.rollback()
+            raise
+
 
 # Singleton instance
 project_repo = ProjectRepository()

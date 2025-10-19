@@ -78,7 +78,7 @@ export function ProjectChooser() {
     }
   };
 
-  const handleRequestProjectAccess = async (projectId: string, projectName: string) => {
+  const handleRequestProjectAccess = async (projectId: string) => {
     try {
       const response = await requestProjectAccess({ project_id: projectId });
       setIsOpen(false);
@@ -173,7 +173,14 @@ export function ProjectChooser() {
                     <div className="mr-6" />
                   )}
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium truncate">{project.name}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium truncate">{project.name}</span>
+                      {project.name === 'Admin Project' && (
+                        <Badge variant="secondary" className="text-xs">
+                          Default
+                        </Badge>
+                      )}
+                    </div>
                     {project.title && (
                       <div className="text-xs text-muted-foreground truncate">
                         {project.title}
@@ -204,7 +211,7 @@ export function ProjectChooser() {
             {joinableProjects.map((project) => (
               <DropdownMenuItem
                 key={project.id}
-                onClick={() => handleRequestProjectAccess(project.id, project.name)}
+                onClick={() => handleRequestProjectAccess(project.id)}
                 className="flex items-center justify-between"
               >
                 <div className="flex items-center min-w-0 flex-1">

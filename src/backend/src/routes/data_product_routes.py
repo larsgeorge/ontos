@@ -553,6 +553,35 @@ async def update_data_product(
     try:
         logger.info(f"Received request to update data product ID: {product_id}")
         
+        # Get existing product to check project membership
+        from src.repositories.data_products_repository import data_product_repo
+        existing_product = data_product_repo.get(db, id=product_id)
+        if not existing_product:
+            response_status_code = 404
+            exc = HTTPException(status_code=response_status_code, detail="Data product not found")
+            details_for_audit["exception"] = {"type": "HTTPException", "status_code": exc.status_code, "detail": exc.detail}
+            logger.warning(f"Update failed: Data product not found with ID: {product_id}")
+            raise exc
+        
+        # Check project membership if product belongs to a project
+        if existing_product.project_id:
+            from src.controller.projects_manager import projects_manager
+            user_groups = current_user.groups or []
+            is_member = projects_manager.is_user_project_member(
+                db=db,
+                user_identifier=current_user.email,
+                user_groups=user_groups,
+                project_id=existing_product.project_id
+            )
+            if not is_member:
+                response_status_code = 403
+                exc = HTTPException(
+                    status_code=response_status_code,
+                    detail="You must be a member of the project to edit this data product"
+                )
+                details_for_audit["exception"] = {"type": "HTTPException", "status_code": exc.status_code, "detail": exc.detail}
+                raise exc
+        
         # Use the manually validated model 
         product_dict = product_update.model_dump(by_alias=True)
         

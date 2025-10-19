@@ -23,6 +23,10 @@ from src.common.logging import get_logger
 from src.repositories.settings_repository import app_role_repo
 from src.repositories.workflow_installations_repository import workflow_installation_repo
 from src.db_models.settings import AppRoleDb
+from src.repositories.teams_repository import team_repo
+from src.repositories.projects_repository import project_repo
+from src.db_models.teams import TeamDb, TeamMemberDb
+from src.db_models.projects import ProjectDb
 
 logger = get_logger(__name__)
 
@@ -503,6 +507,108 @@ class SettingsManager:
         except Exception as e:
             logger.error(f"Unexpected error during default role check/creation: {e}", exc_info=True)
             raise # Re-raise other unexpected errors
+
+    def ensure_default_team_and_project(self):
+        """Ensures default 'Admin Team' and 'Admin Project' exist for admin users."""
+        try:
+            # Check if Admin Team already exists
+            admin_team = team_repo.get_by_name(self._db, name="Admin Team")
+            
+            if not admin_team:
+                logger.info("No 'Admin Team' found. Creating default admin team...")
+                
+                # Parse admin groups from environment
+                admin_groups = []
+                try:
+                    groups_json = self._settings.APP_ADMIN_DEFAULT_GROUPS
+                    if groups_json:
+                        admin_groups = json.loads(groups_json)
+                        if not isinstance(admin_groups, list):
+                            logger.warning(f"APP_ADMIN_DEFAULT_GROUPS is not a valid JSON list. Creating team without members.")
+                            admin_groups = []
+                except (json.JSONDecodeError, AttributeError):
+                    logger.info("Could not parse APP_ADMIN_DEFAULT_GROUPS. Creating team without initial members.")
+                    admin_groups = []
+                
+                # Create Admin Team directly as DB object (tags managed separately)
+                admin_team = TeamDb(
+                    name='Admin Team',
+                    title='Default Administrator Team',
+                    description='Auto-created team for system administrators',
+                    domain_id=None,
+                    extra_metadata='{}',
+                    created_by='system@startup.ucapp',
+                    updated_by='system@startup.ucapp'
+                )
+                self._db.add(admin_team)
+                self._db.flush()
+                logger.info(f"Created Admin Team with id: {admin_team.id}")
+                
+                # Add admin groups as team members
+                for group_name in admin_groups:
+                    try:
+                        member = TeamMemberDb(
+                            team_id=admin_team.id,
+                            member_type='group',
+                            member_identifier=group_name,
+                            app_role_override='Admin',
+                            added_by='system@startup.ucapp'
+                        )
+                        self._db.add(member)
+                        logger.info(f"Added admin group '{group_name}' to Admin Team")
+                    except Exception as e:
+                        logger.warning(f"Failed to add group '{group_name}' to Admin Team: {e}")
+                
+                self._db.flush()
+            else:
+                logger.info(f"Admin Team already exists with id: {admin_team.id}")
+            
+            # Check if Admin Project already exists
+            admin_project = project_repo.get_by_name(self._db, name="Admin Project")
+            
+            if not admin_project:
+                logger.info("No 'Admin Project' found. Creating default admin project...")
+                
+                # Create Admin Project directly as DB object (tags managed separately)
+                admin_project = ProjectDb(
+                    name='Admin Project',
+                    title='Default Administrator Project',
+                    description='Auto-created project for system administrators',
+                    owner_team_id=admin_team.id,
+                    project_type='TEAM',
+                    extra_metadata='{}',
+                    created_by='system@startup.ucapp',
+                    updated_by='system@startup.ucapp'
+                )
+                self._db.add(admin_project)
+                self._db.flush()
+                logger.info(f"Created Admin Project with id: {admin_project.id}")
+                
+                # Assign Admin Team to Admin Project
+                try:
+                    project_repo.assign_team(
+                        db=self._db,
+                        project_id=admin_project.id,
+                        team_id=admin_team.id,
+                        assigned_by='system@startup.ucapp'
+                    )
+                    logger.info(f"Assigned Admin Team to Admin Project")
+                except Exception as e:
+                    logger.warning(f"Failed to assign Admin Team to Admin Project: {e}")
+                
+                self._db.flush()
+            else:
+                logger.info(f"Admin Project already exists with id: {admin_project.id}")
+            
+            logger.info("Default team and project setup completed successfully")
+            
+        except SQLAlchemyError as e:
+            logger.error(f"Database error during default team/project setup: {e}", exc_info=True)
+            self._db.rollback()
+            raise RuntimeError("Failed during default team/project creation due to database error.")
+        except Exception as e:
+            logger.error(f"Unexpected error during default team/project setup: {e}", exc_info=True)
+            raise
 
     def get_job_clusters(self) -> List[JobCluster]:
         """Deprecated: listing clusters is slow; return empty list."""

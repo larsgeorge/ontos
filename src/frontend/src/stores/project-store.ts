@@ -63,7 +63,7 @@ export const useProjectStore = create<ProjectState>()(
       },
 
       fetchUserProjects: async () => {
-        const { setLoading, setError, setAvailableProjects, setCurrentProject } = get();
+        const { setLoading, setError, setAvailableProjects, setCurrentProject, currentProject } = get();
 
         try {
           setLoading(true);
@@ -78,6 +78,12 @@ export const useProjectStore = create<ProjectState>()(
             const currentProj = data.projects?.find(p => p.id === data.current_project_id);
             if (currentProj) {
               setCurrentProject(currentProj);
+            }
+          } else if (!currentProject && data.projects && data.projects.length > 0) {
+            // If no current project is set, try to find and set "Admin Project" as default
+            const adminProject = data.projects.find(p => p.name === 'Admin Project');
+            if (adminProject) {
+              setCurrentProject(adminProject);
             }
           }
         } catch (error) {

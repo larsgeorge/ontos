@@ -92,15 +92,26 @@ class TeamRepository(CRUDBase[TeamDb, TeamCreate, TeamUpdate]):
             db.rollback()
             raise
 
-    def get_teams_for_user(self, db: Session, user_identifier: str) -> List[TeamDb]:
+    def get_teams_for_user(
+        self, db: Session, user_identifier: str, user_groups: Optional[List[str]] = None
+    ) -> List[TeamDb]:
         """Gets all teams where a user is a member (either directly or via group)."""
-        logger.debug(f"Fetching teams for user: {user_identifier}")
+        logger.debug(f"Fetching teams for user: {user_identifier}, groups: {user_groups}")
         try:
+            from sqlalchemy import or_
+            
+            # Build filters for user identifier and groups
+            member_filters = [TeamMemberDb.member_identifier == user_identifier]
+            if user_groups:
+                for group in user_groups:
+                    member_filters.append(TeamMemberDb.member_identifier == group)
+            
             return (
                 db.query(self.model)
                 .options(selectinload(self.model.members))
                 .join(TeamMemberDb)
-                .filter(TeamMemberDb.member_identifier == user_identifier)
+                .filter(or_(*member_filters))
+                .distinct()
                 .order_by(self.model.name)
                 .all()
             )

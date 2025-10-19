@@ -101,14 +101,26 @@ def create_project(
 )
 def get_all_projects(
     db: DBSessionDep,
+    current_user: CurrentUserDep,
     manager = Depends(get_projects_manager),
     skip: int = 0,
     limit: int = 100
 ):
-    """Lists all projects."""
-    logger.debug(f"Fetching projects (skip={skip}, limit={limit})")
+    """Lists projects visible to the user based on domain relationships."""
+    logger.debug(f"Fetching projects (skip={skip}, limit={limit}) for user: {current_user.email}")
     try:
-        return manager.get_all_projects(db=db, skip=skip, limit=limit)
+        # Check if user is admin
+        user_groups = current_user.groups or []
+        is_admin = "admin" in [group.lower() for group in user_groups]
+        
+        return manager.get_all_projects(
+            db=db, 
+            skip=skip, 
+            limit=limit,
+            user_identifier=current_user.email,
+            user_groups=user_groups,
+            is_admin=is_admin
+        )
     except Exception as e:
         logger.exception(f"Failed to fetch projects: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch projects")

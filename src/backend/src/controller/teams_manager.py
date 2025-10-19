@@ -179,9 +179,11 @@ class TeamsManager:
         db_teams = self.team_repo.get_standalone_teams(db)
         return [self._convert_db_to_read_model(team, db) for team in db_teams]
 
-    def get_teams_for_user(self, db: Session, user_identifier: str) -> List[TeamRead]:
-        """Gets all teams where a user is a member."""
-        db_teams = self.team_repo.get_teams_for_user(db, user_identifier)
+    def get_teams_for_user(
+        self, db: Session, user_identifier: str, user_groups: Optional[List[str]] = None
+    ) -> List[TeamRead]:
+        """Gets all teams where a user is a member (either directly or via group)."""
+        db_teams = self.team_repo.get_teams_for_user(db, user_identifier, user_groups)
         return [self._convert_db_to_read_model(team, db) for team in db_teams]
 
     def update_team(self, db: Session, team_id: str, team_in: TeamUpdate, current_user_id: str) -> Optional[TeamRead]:

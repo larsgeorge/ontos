@@ -226,6 +226,9 @@ def initialize_managers(app: FastAPI):
         
         # --- Ensure default roles exist using the manager method --- 
         app.state.settings_manager.ensure_default_roles_exist()
+        
+        # --- Ensure default team and project exist for admins ---
+        app.state.settings_manager.ensure_default_team_and_project()
 
         # --- Preload Compliance demo data so home dashboard has data on first load ---
         try:

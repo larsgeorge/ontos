@@ -144,10 +144,36 @@ class ProjectsManager:
             return None
         return self._convert_db_to_read_model(db_project)
 
-    def get_all_projects(self, db: Session, skip: int = 0, limit: int = 100) -> List[ProjectRead]:
-        """Gets a list of all projects."""
-        logger.debug(f"Fetching projects with skip={skip}, limit={limit}")
-        db_projects = self.project_repo.get_multi_with_teams(db, skip=skip, limit=limit)
+    def get_all_projects(
+        self, 
+        db: Session, 
+        skip: int = 0, 
+        limit: int = 100,
+        user_identifier: Optional[str] = None,
+        user_groups: Optional[List[str]] = None,
+        is_admin: bool = False
+    ) -> List[ProjectRead]:
+        """Gets a list of projects visible to the user.
+        
+        - Admins see all projects
+        - Non-admins see projects based on domain relationships
+        """
+        logger.debug(f"Fetching projects with skip={skip}, limit={limit}, is_admin={is_admin}")
+        
+        if is_admin:
+            # Admins see all projects
+            db_projects = self.project_repo.get_multi_with_teams(db, skip=skip, limit=limit)
+        elif user_identifier and user_groups is not None:
+            # Non-admins see domain-related projects
+            db_projects = self.project_repo.get_projects_by_domain_relationship(
+                db, user_identifier, user_groups
+            )
+            # Apply pagination to domain-filtered results
+            db_projects = db_projects[skip:skip+limit] if limit > 0 else db_projects[skip:]
+        else:
+            # No user context, return empty list
+            db_projects = []
+        
         return [self._convert_db_to_read_model(project) for project in db_projects]
 
     def get_projects_summary(self, db: Session) -> List[ProjectSummary]:
@@ -182,6 +208,71 @@ class ProjectsManager:
         except Exception as e:
             logger.exception(f"Error fetching user projects: {e}")
             return UserProjectAccess(projects=[], current_project_id=None)
+
+    def is_user_project_member(
+        self, 
+        db: Session, 
+        user_identifier: str, 
+        user_groups: List[str], 
+        project_id: str
+    ) -> bool:
+        """Check if user is a member of any team assigned to the project.
+        
+        Args:
+            db: Database session
+            user_identifier: User email/identifier
+            user_groups: List of user's groups
+            project_id: Project ID to check membership for
+            
+        Returns:
+            True if user is a member or is admin, False otherwise
+        """
+        logger.debug(f"Checking if user {user_identifier} is member of project {project_id}")
+        
+        try:
+            # Check if user is admin
+            is_admin = "admin" in [group.lower() for group in user_groups] if user_groups else False
+            if is_admin:
+                logger.debug(f"User {user_identifier} is admin, granting access")
+                return True
+            
+            # Get project
+            project = self.project_repo.get_with_teams(db, project_id)
+            if not project:
+                logger.warning(f"Project {project_id} not found")
+                return False
+            
+            # Check if user is member of any team in the project
+            from src.db_models.teams import TeamMemberDb
+            
+            # Get project team IDs
+            project_team_ids = [team.id for team in project.teams] if project.teams else []
+            
+            if not project_team_ids:
+                logger.debug(f"Project {project_id} has no teams assigned")
+                return False
+            
+            # Build member filters
+            member_filters = [TeamMemberDb.member_identifier == user_identifier]
+            for group in user_groups:
+                member_filters.append(TeamMemberDb.member_identifier == group)
+            
+            # Check if user is member of any project team
+            from sqlalchemy import and_, or_
+            membership_exists = db.query(TeamMemberDb).filter(
+                and_(
+                    TeamMemberDb.team_id.in_(project_team_ids),
+                    or_(*member_filters)
+                )
+            ).first()
+            
+            is_member = membership_exists is not None
+            logger.debug(f"User {user_identifier} project membership: {is_member}")
+            return is_member
+            
+        except Exception as e:
+            logger.exception(f"Error checking project membership: {e}")
+            return False
 
     def update_project(self, db: Session, project_id: str, project_in: ProjectUpdate, current_user_id: str) -> Optional[ProjectRead]:
         """Updates an existing project."""

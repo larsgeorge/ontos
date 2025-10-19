@@ -1454,6 +1454,22 @@ async def update_contract(
         if not db_obj:
             raise HTTPException(status_code=404, detail="Contract not found")
 
+        # Check project membership if contract belongs to a project
+        if db_obj.project_id:
+            from src.controller.projects_manager import projects_manager
+            user_groups = current_user.groups or []
+            is_member = projects_manager.is_user_project_member(
+                db=db,
+                user_identifier=current_user.email,
+                user_groups=user_groups,
+                project_id=db_obj.project_id
+            )
+            if not is_member:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="You must be a member of the project to edit this contract"
+                )
+
         # Validate required fields
         if contract_data.name is not None and (not contract_data.name or not contract_data.name.strip()):
             raise HTTPException(status_code=400, detail="Contract name cannot be empty")

@@ -149,6 +149,29 @@ def get_team(
     return team
 
 
+@router.get(
+    "/user/teams",
+    response_model=List[TeamRead]
+)
+def get_user_teams(
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    manager = Depends(get_teams_manager)
+):
+    """Gets all teams that the current user is a member of."""
+    logger.debug(f"Fetching teams for user: {current_user.email}")
+    try:
+        user_groups = current_user.groups or []
+        return manager.get_teams_for_user(
+            db=db, 
+            user_identifier=current_user.email,
+            user_groups=user_groups
+        )
+    except Exception as e:
+        logger.exception(f"Failed to fetch user teams: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch user teams")
+
+
 @router.put(
     "/teams/{team_id}",
     response_model=TeamRead,
