@@ -87,7 +87,7 @@ class Port(BaseModel):
     location: Optional[str] = Field(None, description="Location details (e.g., topic name, table name)")
     links: Optional[Dict[str, str]] = Field(default_factory=dict, description="Links to external resources like schemas or catalogs")
     custom: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Custom fields")
-    tags: Optional[List[AssignedTagCreate]] = Field(default_factory=list, description="Rich tags with metadata")
+    tags: Optional[List[AssignedTag]] = Field(default_factory=list, description="Rich tags with metadata")
 
     # Validator for fields stored as JSON string in DB Port models
     _parse_port_json_fields = field_validator('links', 'custom', 'tags', mode='before')(parse_json_if_string)
@@ -153,7 +153,7 @@ class DataProduct(BaseModel):
     links: Optional[Dict[str, str]] = Field(default_factory=dict)
     custom: Optional[Dict[str, Any]] = Field(default_factory=dict)
     # Rich tags with metadata
-    tags: Optional[List[AssignedTagCreate]] = Field(default_factory=list, description="Rich tags with metadata")
+    tags: Optional[List[AssignedTag]] = Field(default_factory=list, description="Rich tags with metadata")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

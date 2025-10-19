@@ -38,6 +38,7 @@ from src.controller.notifications_manager import NotificationsManager
 # Import TagsManager and entity tag repository for tag integration
 from src.controller.tags_manager import TagsManager
 from src.repositories.tags_repository import entity_tag_repo
+from src.models.tags import AssignedTagCreate
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -211,24 +212,8 @@ class DataProductsManager(SearchableAsset):
             # Handle tag updates if tags are provided and tags_manager is available
             if tags_data is not None and self._tags_manager:  # Check explicitly for None since empty list is valid
                 try:
-                    # First, remove all existing tags for this product
-                    existing_tags = self._entity_tag_repo.get_assigned_tags_for_entity(
-                        db=self._db,
-                        entity_id=product_id,
-                        entity_type="data_product"
-                    )
-                    for existing_tag in existing_tags:
-                        self._entity_tag_repo.remove_tag_from_entity(
-                            db=self._db,
-                            tag_id=existing_tag.tag_id,
-                            entity_id=product_id,
-                            entity_type="data_product"
-                        )
-
-                    # Then assign the new tags
-                    if tags_data:  # Only assign if there are tags to assign
-                        self._assign_tags_to_product(product_id, tags_data)
-
+                    # set_tags_for_entity automatically handles removing old tags and setting new ones
+                    self._assign_tags_to_product(product_id, tags_data)
                 except Exception as e:
                     logger.error(f"Failed to update tags for product {product_id}: {e}")
                     # Note: We don't rollback the product update, just log the error
@@ -670,51 +655,50 @@ class DataProductsManager(SearchableAsset):
     # --- Tag Integration Methods ---
 
     def _assign_tags_to_product(self, product_id: str, tags_data: List[Dict[str, Any]]) -> None:
-        """Helper method to assign tags to a data product."""
+        """Helper method to assign tags to a data product.
+        
+        Uses the repository's set_tags_for_entity method which automatically creates
+        tags if they don't exist (via find_or_create_tag).
+        """
         if not self._tags_manager:
             logger.warning("TagsManager not available, cannot assign tags")
             return
 
-        for tag_data in tags_data:
-            try:
-                # Handle both tag_id and tag_fqn formats
+        try:
+            # Convert tags_data to List[AssignedTagCreate]
+            assigned_tags = []
+            for tag_data in tags_data:
                 if isinstance(tag_data, dict):
-                    tag_id = tag_data.get('tag_id')
-                    tag_fqn = tag_data.get('tag_fqn')
-                    assigned_value = tag_data.get('assigned_value')
+                    # Already in dict format with tag_id, tag_fqn, and/or assigned_value
+                    try:
+                        assigned_tag = AssignedTagCreate(**tag_data)
+                        assigned_tags.append(assigned_tag)
+                    except Exception as e:
+                        logger.warning(f"Failed to parse tag data {tag_data}: {e}")
                 else:
                     # Legacy format - assume it's a tag name/fqn string
-                    tag_fqn = str(tag_data)
-                    tag_id = None
-                    assigned_value = None
+                    try:
+                        assigned_tag = AssignedTagCreate(tag_fqn=str(tag_data), assigned_value=None)
+                        assigned_tags.append(assigned_tag)
+                    except Exception as e:
+                        logger.warning(f"Failed to create AssignedTagCreate from string {tag_data}: {e}")
 
-                # Use the tags manager to assign the tag
-                if tag_id:
-                    self._entity_tag_repo.add_tag_to_entity(
-                        db=self._db,
-                        tag_id=tag_id,
-                        entity_id=product_id,
-                        entity_type="data_product",
-                        assigned_value=assigned_value,
-                        assigned_by="system"  # Could be passed from user context
-                    )
-                elif tag_fqn:
-                    # Resolve FQN to tag_id first
-                    tag = self._tags_manager.get_tag_by_fqn(self._db, fqn=tag_fqn)
-                    if tag:
-                        self._entity_tag_repo.add_tag_to_entity(
-                            db=self._db,
-                            tag_id=tag.id,
-                            entity_id=product_id,
-                            entity_type="data_product",
-                            assigned_value=assigned_value,
-                            assigned_by="system"
-                        )
-                    else:
-                        logger.warning(f"Tag with FQN '{tag_fqn}' not found, cannot assign to product {product_id}")
+            if not assigned_tags:
+                logger.debug(f"No valid tags to assign to product {product_id}")
+                return
 
-            except Exception as e:
-                logger.error(f"Failed to assign tag {tag_data} to product {product_id}: {e}")
+            # Use the tags manager's set_tags_for_entity which auto-creates missing tags and commits
+            self._tags_manager.set_tags_for_entity(
+                db=self._db,
+                entity_id=product_id,
+                entity_type="data_product",
+                tags=assigned_tags,
+                user_email="system"
+            )
+            logger.debug(f"Successfully assigned {len(assigned_tags)} tags to product {product_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to assign tags to product {product_id}: {e}", exc_info=True)
 
     def _load_product_with_tags(self, db_obj) -> DataProductApi:
         """Helper method to load a data product with its associated tags."""

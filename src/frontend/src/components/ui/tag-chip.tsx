@@ -4,7 +4,6 @@ import { X, Info } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -34,13 +33,13 @@ export interface TagChipProps {
   /** Size variant */
   size?: 'sm' | 'md' | 'lg';
   /** Color variant based on tag status or custom */
-  variant?: 'default' | 'secondary' | 'destructive' | 'outline';
+  variant?: 'default' | 'secondary' | 'destructive' | 'outline' | 'info';
 }
 
-const getVariantFromStatus = (status?: string): 'default' | 'secondary' | 'destructive' | 'outline' => {
+const getVariantFromStatus = (status?: string): 'default' | 'secondary' | 'destructive' | 'outline' | 'info' => {
   switch (status) {
     case 'active':
-      return 'default';
+      return 'info'; // Light blue for active tags
     case 'deprecated':
     case 'retired':
     case 'inactive':
@@ -49,7 +48,7 @@ const getVariantFromStatus = (status?: string): 'default' | 'secondary' | 'destr
     case 'candidate':
       return 'secondary';
     default:
-      return 'default';
+      return 'info'; // Default to light blue for tags
   }
 };
 
@@ -117,27 +116,25 @@ const TagChip: React.FC<TagChipProps> = ({
   // If it's a rich tag, wrap with tooltip to show metadata
   if (isRichTag) {
     return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {chipContent}
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-xs">
-            <div className="space-y-1 text-sm">
-              <div className="font-semibold">{tag.fully_qualified_name}</div>
-              {tag.assigned_value && (
-                <div><span className="font-medium">Value:</span> {tag.assigned_value}</div>
-              )}
-              <div><span className="font-medium">Status:</span> {tag.status}</div>
-              <div><span className="font-medium">Namespace:</span> {tag.namespace_name}</div>
-              {tag.assigned_by && (
-                <div><span className="font-medium">Assigned by:</span> {tag.assigned_by}</div>
-              )}
-              <div><span className="font-medium">Assigned:</span> {new Date(tag.assigned_at).toLocaleDateString()}</div>
-            </div>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>
+          {chipContent}
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs">
+          <div className="space-y-0.5">
+            <div className="font-semibold text-xs mb-1">{tag.fully_qualified_name}</div>
+            {tag.assigned_value && (
+              <div className="text-xs"><span className="text-muted-foreground">Value:</span> {tag.assigned_value}</div>
+            )}
+            <div className="text-xs"><span className="text-muted-foreground">Status:</span> <span className="capitalize">{tag.status}</span></div>
+            <div className="text-xs"><span className="text-muted-foreground">Namespace:</span> {tag.namespace_name}</div>
+            {tag.assigned_by && (
+              <div className="text-xs"><span className="text-muted-foreground">By:</span> {tag.assigned_by}</div>
+            )}
+            <div className="text-xs text-muted-foreground">{new Date(tag.assigned_at).toLocaleDateString()}</div>
+          </div>
+        </TooltipContent>
+      </Tooltip>
     );
   }
 

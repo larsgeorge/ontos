@@ -26,6 +26,7 @@ import QualityRuleFormDialog from '@/components/data-contracts/quality-rule-form
 import TeamMemberFormDialog from '@/components/data-contracts/team-member-form-dialog'
 import ServerConfigFormDialog from '@/components/data-contracts/server-config-form-dialog'
 import SLAFormDialog from '@/components/data-contracts/sla-form-dialog'
+import DatasetLookupDialog from '@/components/data-contracts/dataset-lookup-dialog'
 
 // Define column structure for schema properties
 type SchemaProperty = {
@@ -140,6 +141,7 @@ export default function DataContractDetails() {
   const [propertyLinks, setPropertyLinks] = useState<Record<string, EntitySemanticLink[]>>({})
 
   // Dialog states for CRUD operations
+  const [isDatasetLookupOpen, setIsDatasetLookupOpen] = useState(false)
   const [isBasicFormOpen, setIsBasicFormOpen] = useState(false)
   const [isSchemaFormOpen, setIsSchemaFormOpen] = useState(false)
   const [isQualityRuleFormOpen, setIsQualityRuleFormOpen] = useState(false)
@@ -472,6 +474,58 @@ export default function DataContractDetails() {
     }
   }
 
+  // Handler for inferring schema from Unity Catalog dataset
+  const handleInferFromDataset = async (table: { full_name: string }) => {
+    const datasetPath = table.full_name
+    const logicalName = datasetPath.split('.').pop() || datasetPath
+
+    try {
+      // Fetch columns from Unity Catalog
+      const res = await fetch(`/api/catalogs/dataset/${encodeURIComponent(datasetPath)}`)
+      if (!res.ok) throw new Error('Failed to load dataset schema')
+      const data = await res.json()
+
+      // Map Unity Catalog columns to ODCS schema properties
+      const properties = Array.isArray(data?.schema)
+        ? data.schema.map((c: any) => ({
+            name: String(c.name || ''),
+            physicalType: String(c.physicalType || c.type || ''),
+            logicalType: String(c.logicalType || c.logical_type || 'string'),
+            required: c.nullable === undefined ? undefined : !Boolean(c.nullable),
+            description: String(c.comment || ''),
+            partitioned: Boolean(c.partitioned),
+            partitionKeyPosition: c.partitionKeyPosition || undefined,
+          }))
+        : []
+
+      // Create new schema object with Unity Catalog metadata
+      const newSchema: SchemaObject = {
+        name: logicalName,
+        physicalName: datasetPath, // Use Unity Catalog three-part name (catalog.schema.table)
+        properties: properties,
+        description: data.table_info?.comment || undefined,
+        physicalType: data.table_info?.table_type || 'table',
+      }
+
+      // Add schema to contract
+      await handleAddSchema(newSchema)
+      
+      const columnCount = properties.length
+      toast({ 
+        title: 'Schema inferred successfully', 
+        description: `Added ${logicalName} with ${columnCount} columns from Unity Catalog` 
+      })
+      
+      setIsDatasetLookupOpen(false)
+    } catch (e) {
+      toast({ 
+        title: 'Failed to infer schema', 
+        description: e instanceof Error ? e.message : 'Could not fetch dataset metadata', 
+        variant: 'destructive' 
+      })
+    }
+  }
+
   const handleSubmitForReview = async () => {
     if (!contractId) return;
     try {
@@ -642,22 +696,42 @@ export default function DataContractDetails() {
       </Card>
 
       {/* Schemas Section */}
-      {contract.schema && contract.schema.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-xl">Schemas ({contract.schema?.length || 0})</CardTitle>
-                <CardDescription>Database schema definitions</CardDescription>
-              </div>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-xl">Schemas ({contract.schema?.length || 0})</CardTitle>
+              <CardDescription>Database schema definitions</CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setIsDatasetLookupOpen(true)}>
+                <Database className="h-4 w-4 mr-1.5" />
+                Infer from Unity Catalog
+              </Button>
               <Button size="sm" onClick={() => { setEditingSchemaIndex(null); setIsSchemaFormOpen(true); }}>
                 <Plus className="h-4 w-4 mr-1.5" />
                 Add Schema
               </Button>
             </div>
-          </CardHeader>
-          <CardContent>
-            {contract.schema.length === 1 ? (
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!contract.schema || contract.schema.length === 0 ? (
+            <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
+              <div className="text-muted-foreground mb-2">No schemas defined yet</div>
+              <div className="text-sm text-muted-foreground mb-4">Define the structure of your data by adding schemas</div>
+              <div className="flex gap-3 justify-center">
+                <Button variant="outline" onClick={() => setIsDatasetLookupOpen(true)}>
+                  <Database className="h-4 w-4 mr-2" />
+                  Infer from Unity Catalog
+                </Button>
+                <Button onClick={() => { setEditingSchemaIndex(null); setIsSchemaFormOpen(true); }}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Schema Manually
+                </Button>
+              </div>
+            </div>
+          ) : contract.schema.length === 1 ? (
               // Single schema - simple view
               <div className="space-y-4">
                 <div className="flex items-center gap-4 justify-between">
@@ -852,10 +926,10 @@ export default function DataContractDetails() {
                   )}
                 </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+            )
+          }
+        </CardContent>
+      </Card>
 
       {/* Quality Rules Section */}
       <Card>
@@ -1178,6 +1252,12 @@ export default function DataContractDetails() {
           onSuccess={() => fetchDetails()}
         />
       )}
+
+      <DatasetLookupDialog
+        isOpen={isDatasetLookupOpen}
+        onOpenChange={setIsDatasetLookupOpen}
+        onSelect={handleInferFromDataset}
+      />
     </div>
   )
 }

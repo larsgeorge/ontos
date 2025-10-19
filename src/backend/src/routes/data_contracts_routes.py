@@ -1598,8 +1598,6 @@ async def update_contract(
 
         # Handle quality rules (ODCS multi-level support)
         if contract_data.qualityRules is not None:
-            from src.db_models.data_contracts import DataQualityCheckDb, SchemaObjectDb
-
             # Get all schema objects for this contract
             schema_objects = db.query(SchemaObjectDb).filter(
                 SchemaObjectDb.contract_id == contract_id
