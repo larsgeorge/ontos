@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Shapes, Columns2, Database } from 'lucide-react'
+import { AlertCircle, Download, Pencil, Trash2, Loader2, ArrowLeft, FileText, KeyRound, CopyPlus, Plus, Shapes, Columns2, Database, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -28,7 +28,10 @@ import ServerConfigFormDialog from '@/components/data-contracts/server-config-fo
 import SLAFormDialog from '@/components/data-contracts/sla-form-dialog'
 import DatasetLookupDialog from '@/components/data-contracts/dataset-lookup-dialog'
 import CreateFromContractDialog from '@/components/data-products/create-from-contract-dialog'
+import DqxSchemaSelectDialog from '@/components/data-contracts/dqx-schema-select-dialog'
+import DqxSuggestionsDialog from '@/components/data-contracts/dqx-suggestions-dialog'
 import type { DataProduct } from '@/types/data-product'
+import type { DataProfilingRun } from '@/types/data-contract'
 
 // Define column structure for schema properties
 type SchemaProperty = {
@@ -156,6 +159,13 @@ export default function DataContractDetails() {
   const [isServerConfigFormOpen, setIsServerConfigFormOpen] = useState(false)
   const [isSLAFormOpen, setIsSLAFormOpen] = useState(false)
 
+  // DQX Profiling states
+  const [isDqxSchemaSelectOpen, setIsDqxSchemaSelectOpen] = useState(false)
+  const [isDqxSuggestionsOpen, setIsDqxSuggestionsOpen] = useState(false)
+  const [selectedProfileRunId, setSelectedProfileRunId] = useState<string | null>(null)
+  const [latestProfileRun, setLatestProfileRun] = useState<DataProfilingRun | null>(null)
+  const [pendingSuggestionsCount, setPendingSuggestionsCount] = useState(0)
+
   // Editing states
   const [editingSchemaIndex, setEditingSchemaIndex] = useState<number | null>(null)
   const [editingQualityRuleIndex, setEditingQualityRuleIndex] = useState<number | null>(null)
@@ -255,6 +265,7 @@ export default function DataContractDetails() {
     setStaticSegments([{ label: 'Data Contracts', path: '/data-contracts' }])
     fetchDetails()
     fetchLinkedProducts()
+    fetchProfileRuns()
 
     return () => {
       setStaticSegments([])
@@ -589,6 +600,66 @@ export default function DataContractDetails() {
     }
   };
 
+  // DQX Profiling handlers
+  const fetchProfileRuns = async () => {
+    if (!contractId) return
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/profile-runs`)
+      if (res.ok) {
+        const runs: DataProfilingRun[] = await res.json()
+        if (runs.length > 0) {
+          const latest = runs[0]
+          setLatestProfileRun(latest)
+          setPendingSuggestionsCount(latest.suggestion_counts?.pending || 0)
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch profile runs:', e)
+    }
+  }
+
+  const handleStartProfiling = async (selectedSchemaNames: string[]) => {
+    if (!contractId) return
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schema_names: selectedSchemaNames })
+      })
+      if (!res.ok) {
+        const errorText = await res.text()
+        throw new Error(errorText || 'Failed to start profiling')
+      }
+      await res.json()
+      toast({ 
+        title: 'DQX Profiling Started', 
+        description: 'The profiler is analyzing your data. You will be notified when complete.' 
+      })
+      setIsDqxSchemaSelectOpen(false)
+      // Poll for updates after a delay
+      setTimeout(fetchProfileRuns, 5000)
+    } catch (e) {
+      toast({ 
+        title: 'Failed to start profiling', 
+        description: e instanceof Error ? e.message : 'Could not start DQX profiling', 
+        variant: 'destructive' 
+      })
+    }
+  }
+
+  const handleOpenSuggestions = (runId?: string) => {
+    const profileId = runId || latestProfileRun?.id
+    if (profileId) {
+      setSelectedProfileRunId(profileId)
+      setIsDqxSuggestionsOpen(true)
+    }
+  }
+
+  const handleSuggestionsSuccess = () => {
+    fetchDetails()
+    fetchProfileRuns()
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -811,6 +882,15 @@ export default function DataContractDetails() {
               <CardDescription>Database schema definitions</CardDescription>
             </div>
             <div className="flex gap-2">
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={() => setIsDqxSchemaSelectOpen(true)}
+                disabled={!contract.schema || contract.schema.length === 0}
+              >
+                <Sparkles className="h-4 w-4 mr-1.5" />
+                Profile with DQX
+              </Button>
               <Button size="sm" variant="outline" onClick={() => setIsDatasetLookupOpen(true)}>
                 <Database className="h-4 w-4 mr-1.5" />
                 Infer from Unity Catalog
@@ -823,6 +903,23 @@ export default function DataContractDetails() {
           </div>
         </CardHeader>
         <CardContent>
+          {pendingSuggestionsCount > 0 && (
+            <Alert className="mb-4">
+              <Sparkles className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between">
+                <span>
+                  {pendingSuggestionsCount} quality check {pendingSuggestionsCount === 1 ? 'suggestion' : 'suggestions'} available from DQX profiling
+                </span>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => handleOpenSuggestions()}
+                >
+                  Review Suggestions
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           {!contract.schema || contract.schema.length === 0 ? (
             <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
               <div className="text-muted-foreground mb-2">No schemas defined yet</div>
@@ -1376,6 +1473,25 @@ export default function DataContractDetails() {
             fetchLinkedProducts()
             navigate(`/data-products/${productId}`)
           }}
+        />
+      )}
+
+      {/* DQX Profiling Dialogs */}
+      <DqxSchemaSelectDialog
+        isOpen={isDqxSchemaSelectOpen}
+        onOpenChange={setIsDqxSchemaSelectOpen}
+        contract={contract}
+        onConfirm={handleStartProfiling}
+      />
+
+      {selectedProfileRunId && (
+        <DqxSuggestionsDialog
+          isOpen={isDqxSuggestionsOpen}
+          onOpenChange={setIsDqxSuggestionsOpen}
+          contractId={contractId!}
+          contract={contract}
+          profileRunId={selectedProfileRunId}
+          onSuccess={handleSuggestionsSuccess}
         />
       )}
     </div>

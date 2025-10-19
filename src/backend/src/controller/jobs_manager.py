@@ -10,7 +10,7 @@ import os
 
 import yaml
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service import jobs
+from databricks.sdk.service import jobs, compute
 from databricks.sdk.service.jobs import RunLifeCycleState, RunResultState
 from sqlalchemy.orm import Session
 
@@ -88,16 +88,23 @@ class JobsManager:
                     continue
                 env_key = env.get('environment_key')
                 spec_dict = env.get('spec') or {}
-                spec_obj = None
-                try:
-                    # Prefer jobs.Environment where available (SDK may expose in jobs or compute)
-                    spec_obj = jobs.Environment(**spec_dict)  # type: ignore[attr-defined]
-                except Exception:
+                
+                # Convert dependencies list to proper format
+                if 'dependencies' in spec_dict and isinstance(spec_dict['dependencies'], list):
+                    # Dependencies should be a list of strings like ["pkg==1.0.0", ...]
+                    # Create Environment with proper client version
+                    spec_obj = compute.Environment(
+                        client='1',  # Use default Databricks runtime
+                        dependencies=spec_dict['dependencies']
+                    )
+                else:
+                    # Try to create Environment from spec_dict as-is
                     try:
-                        from databricks.sdk.service import compute
                         spec_obj = compute.Environment(**spec_dict)
                     except Exception:
+                        # If it fails, pass as dict and let SDK handle it
                         spec_obj = spec_dict
+                        
                 env_objs.append(jobs.JobEnvironment(environment_key=env_key, spec=spec_obj))
             if env_objs:
                 job_settings_kwargs['environments'] = env_objs
@@ -109,8 +116,6 @@ class JobsManager:
             for task in tasks
         )
         if has_serverless_tasks and 'environments' not in wf_def:
-            from databricks.sdk.service import compute
-
             # Add default serverless environment
             job_settings_kwargs['environments'] = [
                 jobs.JobEnvironment(
@@ -216,15 +221,23 @@ class JobsManager:
                     continue
                 env_key = env.get('environment_key')
                 spec_dict = env.get('spec') or {}
-                spec_obj = None
-                try:
-                    spec_obj = jobs.Environment(**spec_dict)  # type: ignore[attr-defined]
-                except Exception:
+                
+                # Convert dependencies list to proper format
+                if 'dependencies' in spec_dict and isinstance(spec_dict['dependencies'], list):
+                    # Dependencies should be a list of strings like ["pkg==1.0.0", ...]
+                    # Create Environment with proper client version
+                    spec_obj = compute.Environment(
+                        client='1',  # Use default Databricks runtime
+                        dependencies=spec_dict['dependencies']
+                    )
+                else:
+                    # Try to create Environment from spec_dict as-is
                     try:
-                        from databricks.sdk.service import compute
                         spec_obj = compute.Environment(**spec_dict)
                     except Exception:
+                        # If it fails, pass as dict and let SDK handle it
                         spec_obj = spec_dict
+                        
                 env_objs.append(jobs.JobEnvironment(environment_key=env_key, spec=spec_obj))
             if env_objs:
                 job_settings.environments = env_objs
@@ -289,9 +302,27 @@ class JobsManager:
             logger.error(f"Failed to remove installation record for job_id {job_id}: {e}")
             self._db.rollback()
 
-    def run_job(self, job_id: int, job_name: Optional[str] = None) -> int:
-        """Run a job and create a progress notification."""
-        run = self._client.jobs.run_now(job_id=job_id)
+    def run_job(self, job_id: int, job_name: Optional[str] = None, job_parameters: Optional[Dict[str, str]] = None) -> int:
+        """Run a job and create a progress notification.
+        
+        Args:
+            job_id: Databricks job ID to run
+            job_name: Optional job name for notifications
+            job_parameters: Optional dict of parameter name->value for the job
+        
+        Returns:
+            run_id: Databricks run ID
+        """
+        # Prepare run_now arguments
+        run_now_kwargs = {"job_id": job_id}
+        
+        # Add parameters if provided
+        if job_parameters:
+            # Convert parameters to list of JobParameter for the SDK
+            from databricks.sdk.service.jobs import RunParameters
+            run_now_kwargs["job_parameters"] = job_parameters
+        
+        run = self._client.jobs.run_now(**run_now_kwargs)
         run_id = int(run.run_id)
         
         if self._notifications_manager:
@@ -462,6 +493,29 @@ class JobsManager:
                 kwargs['spark_python_task'] = jobs.SparkPythonTask(**spt)
             if 'python_wheel_task' in t and isinstance(t['python_wheel_task'], dict):
                 kwargs['python_wheel_task'] = jobs.PythonWheelTask(**t['python_wheel_task'])
+            
+            # Handle libraries if specified  
+            if 'libraries' in t and isinstance(t['libraries'], list):
+                lib_objs: List[Any] = []
+                for lib in t['libraries']:
+                    if not isinstance(lib, dict):
+                        continue
+                    # Support pypi, maven, jar, egg, whl formats
+                    # Use compute.Library which is the proper SDK dataclass
+                    if 'pypi' in lib and isinstance(lib['pypi'], dict):
+                        pypi_spec = compute.PythonPyPiLibrary(**lib['pypi'])
+                        lib_objs.append(compute.Library(pypi=pypi_spec))
+                    elif 'maven' in lib and isinstance(lib['maven'], dict):
+                        maven_spec = compute.MavenLibrary(**lib['maven'])
+                        lib_objs.append(compute.Library(maven=maven_spec))
+                    elif 'jar' in lib:
+                        lib_objs.append(compute.Library(jar=lib['jar']))
+                    elif 'egg' in lib:
+                        lib_objs.append(compute.Library(egg=lib['egg']))
+                    elif 'whl' in lib:
+                        lib_objs.append(compute.Library(whl=lib['whl']))
+                if lib_objs:
+                    kwargs['libraries'] = lib_objs
 
             # If task is serverless (no cluster) and no explicit environment_key, default to first env
             if 'existing_cluster_id' not in kwargs and 'environment_key' not in kwargs and default_env_key:

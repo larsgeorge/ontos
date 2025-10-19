@@ -191,6 +191,64 @@ export interface DataContract {
   updated?: string
 }
 
+// DQX Profiling types
+export type DataProfilingRun = {
+  id: string
+  contract_id: string
+  source: 'dqx' | 'llm' | 'manual'
+  schema_names: string[]
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  summary_stats?: string
+  run_id?: string
+  started_at: string
+  completed_at?: string
+  error_message?: string
+  triggered_by?: string
+  suggestion_counts?: {
+    pending: number
+    accepted: number
+    rejected: number
+  }
+}
+
+export type SuggestedQualityCheck = {
+  id: string
+  profile_run_id: string
+  contract_id: string
+  source: 'dqx' | 'llm' | 'manual'
+  schema_name: string
+  property_name?: string
+  status: 'pending' | 'accepted' | 'rejected'
+  confidence_score?: number
+  rationale?: string
+  // Quality rule fields
+  name?: string
+  description?: string
+  level?: string
+  dimension?: string
+  business_impact?: string
+  severity?: string
+  type: string
+  method?: string
+  schedule?: string
+  scheduler?: string
+  unit?: string
+  tags?: string
+  rule?: string
+  query?: string
+  engine?: string
+  implementation?: string
+  must_be?: string
+  must_not_be?: string
+  must_be_gt?: string
+  must_be_ge?: string
+  must_be_lt?: string
+  must_be_le?: string
+  must_be_between_min?: string
+  must_be_between_max?: string
+  created_at?: string
+}
+
 // For creating new contracts
 export type DataContractCreate = {
   name: string

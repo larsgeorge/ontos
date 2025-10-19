@@ -1,0 +1,35 @@
+name: "DQX Profile Datasets"
+description: "Profile Unity Catalog datasets and generate quality check suggestions using DQX"
+format: "MULTI_TASK"
+environments:
+  - environment_key: "dqx-env"
+    spec:
+      dependencies:
+        - "databricks-labs-dqx==0.8.0"
+        - "sqlalchemy"
+        - "psycopg2-binary"
+tasks:
+  - task_key: "dqx_profile"
+    spark_python_task:
+      python_file: "dqx_profile_datasets.py"
+      parameters:
+        - "--contract_id"
+        - "{{job.parameters.contract_id}}"
+        - "--schema_names"
+        - "{{job.parameters.schema_names}}"
+        - "--profile_run_id"
+        - "{{job.parameters.profile_run_id}}"
+    environment_key: "dqx-env"
+
+parameters:
+  contract_id: ""
+  schema_names: "[]"
+  profile_run_id: ""
+
+timeout_seconds: 3600
+max_concurrent_runs: 1
+
+tags:
+  environment: "production"
+  owner: "ontos"
+

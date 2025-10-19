@@ -60,6 +60,8 @@ class DataContractDb(Base):
     sla_properties = relationship("DataContractSlaPropertyDb", back_populates="contract", cascade="all, delete-orphan")
     schema_objects = relationship("SchemaObjectDb", back_populates="contract", cascade="all, delete-orphan")
     comments = relationship("DataContractCommentDb", back_populates="contract", cascade="all, delete-orphan")
+    profiling_runs = relationship("DataProfilingRunDb", back_populates="contract", cascade="all, delete-orphan")
+    suggested_quality_checks = relationship("SuggestedQualityCheckDb", back_populates="contract", cascade="all, delete-orphan")
 
 
 class DataContractTagDb(Base):
@@ -268,6 +270,78 @@ class DataQualityCheckDb(Base):
     must_not_between_max = Column(String, nullable=True)
 
     schema_object = relationship("SchemaObjectDb", back_populates="quality_checks")
+
+
+class DataProfilingRunDb(Base):
+    """Track data profiling/quality analysis runs on contracts (DQX, LLM, manual)"""
+    __tablename__ = "data_profiling_runs"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    contract_id = Column(String, ForeignKey("data_contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+    source = Column(String, nullable=False, index=True)  # 'dqx', 'llm', 'manual', etc.
+    schema_names = Column(Text, nullable=True)  # JSON array of schema names profiled
+    status = Column(String, nullable=False, default="pending", index=True)  # pending, running, completed, failed
+    summary_stats = Column(Text, nullable=True)  # JSON profiling summary/metadata
+    run_id = Column(String, nullable=True)  # Databricks job run_id if applicable
+    started_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    error_message = Column(Text, nullable=True)
+    triggered_by = Column(String, nullable=True)  # Username
+    
+    contract = relationship("DataContractDb", back_populates="profiling_runs")
+    suggestions = relationship("SuggestedQualityCheckDb", back_populates="profile_run", cascade="all, delete-orphan")
+
+
+class SuggestedQualityCheckDb(Base):
+    """Quality check suggestions from profiling runs (DQX, LLM, etc.)"""
+    __tablename__ = "suggested_quality_checks"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    profile_run_id = Column(String, ForeignKey("data_profiling_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    contract_id = Column(String, ForeignKey("data_contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+    source = Column(String, nullable=False, index=True)  # 'dqx', 'llm', 'manual', etc.
+    schema_name = Column(String, nullable=False, index=True)  # Which schema/table
+    property_name = Column(String, nullable=True, index=True)  # For property-level checks
+    status = Column(String, nullable=False, default="pending", index=True)  # pending, accepted, rejected
+    
+    # Quality check definition fields (matching DataQualityCheckDb structure)
+    name = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    level = Column(String, nullable=True)  # object/property
+    dimension = Column(String, nullable=True)  # accuracy, completeness, conformity, etc.
+    business_impact = Column(String, nullable=True)  # operational, regulatory
+    severity = Column(String, nullable=True)  # info, warning, error
+    type = Column(String, nullable=False, default="library")  # text, library, sql, custom
+    method = Column(String, nullable=True)
+    schedule = Column(String, nullable=True)
+    scheduler = Column(String, nullable=True)
+    unit = Column(String, nullable=True)
+    tags = Column(Text, nullable=True)
+    
+    # Type-specific fields
+    rule = Column(String, nullable=True)  # library
+    query = Column(Text, nullable=True)  # sql
+    engine = Column(String, nullable=True)  # custom
+    implementation = Column(Text, nullable=True)  # custom impl
+    
+    # Comparators
+    must_be = Column(String, nullable=True)
+    must_not_be = Column(String, nullable=True)
+    must_be_gt = Column(String, nullable=True)
+    must_be_ge = Column(String, nullable=True)
+    must_be_lt = Column(String, nullable=True)
+    must_be_le = Column(String, nullable=True)
+    must_be_between_min = Column(String, nullable=True)
+    must_be_between_max = Column(String, nullable=True)
+    
+    # AI/confidence fields
+    confidence_score = Column(String, nullable=True)  # For AI-generated suggestions
+    rationale = Column(Text, nullable=True)  # Explanation for the suggestion
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    profile_run = relationship("DataProfilingRunDb", back_populates="suggestions")
+    contract = relationship("DataContractDb", back_populates="suggested_quality_checks")
 
 
 class DataContractCommentDb(Base):
