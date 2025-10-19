@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep
 from src.common.features import FeatureAccessLevel
-from src.common.authorization import PermissionChecker, get_user_groups
+from src.common.authorization import PermissionChecker, get_user_groups, is_user_admin
 from src.common.logging import get_logger
+from src.common.config import get_settings, Settings
 from src.controller.comments_manager import CommentsManager
 from src.controller.change_log_manager import change_log_manager
 from src.common.manager_dependencies import get_comments_manager
@@ -65,7 +66,7 @@ async def list_comments(
         # Only admins can see deleted comments
         if include_deleted:
             # Check if user is admin (simplified - in production you'd check permissions properly)
-            is_admin = "admin" in [group.lower() for group in user_groups] if user_groups else False
+            is_admin = is_user_admin(user_groups, get_settings())
             if not is_admin:
                 include_deleted = False
         
@@ -100,7 +101,7 @@ async def get_entity_timeline_count(
 
         # Get user's groups for audience filtering
         user_groups = await get_user_groups(current_user.email)
-        is_admin = "admin" in [group.lower() for group in user_groups] if user_groups else False
+        is_admin = is_user_admin(user_groups, get_settings())
 
         if filter_type in ("all", "comments"):
             # Get comments count
@@ -156,7 +157,7 @@ async def get_entity_timeline(
         
         # Get user's groups for audience filtering
         user_groups = await get_user_groups(current_user.email)
-        is_admin = "admin" in [group.lower() for group in user_groups] if user_groups else False
+        is_admin = is_user_admin(user_groups, get_settings())
         
         if filter_type in ("all", "comments"):
             # Get comments
@@ -268,7 +269,7 @@ async def update_comment(
     try:
         # Get user's groups to check for admin status
         user_groups = await get_user_groups(current_user.email)
-        is_admin = "admin" in [group.lower() for group in user_groups] if user_groups else False
+        is_admin = is_user_admin(user_groups, get_settings())
         
         updated = manager.update_comment(
             db,
@@ -305,7 +306,7 @@ async def delete_comment(
     try:
         # Get user's groups to check for admin status
         user_groups = await get_user_groups(current_user.email)
-        is_admin = "admin" in [group.lower() for group in user_groups] if user_groups else False
+        is_admin = is_user_admin(user_groups, get_settings())
         
         # Only admins can hard delete
         if hard_delete and not is_admin:
@@ -345,7 +346,7 @@ async def check_comment_permissions(
     try:
         # Get user's groups to check for admin status
         user_groups = await get_user_groups(current_user.email)
-        is_admin = "admin" in [group.lower() for group in user_groups] if user_groups else False
+        is_admin = is_user_admin(user_groups, get_settings())
         
         can_modify = manager.can_user_modify_comment(
             db,

@@ -20,6 +20,37 @@ from src.models.settings import ApprovalEntity
 
 logger = get_logger(__name__)
 
+
+def is_user_admin(user_groups: Optional[List[str]], settings: Settings) -> bool:
+    """
+    Check if user is an admin based on APP_ADMIN_DEFAULT_GROUPS configuration.
+    
+    Args:
+        user_groups: List of user's groups
+        settings: Application settings containing APP_ADMIN_DEFAULT_GROUPS
+        
+    Returns:
+        True if user belongs to any admin group, False otherwise
+    """
+    if not user_groups:
+        return False
+    
+    try:
+        import json
+        admin_groups_str = settings.APP_ADMIN_DEFAULT_GROUPS or '["admins"]'
+        admin_groups = json.loads(admin_groups_str)
+        
+        # Check if any user group matches any admin group (case-insensitive)
+        user_groups_lower = [g.lower() for g in user_groups]
+        admin_groups_lower = [g.lower() for g in admin_groups]
+        
+        return any(ug in admin_groups_lower for ug in user_groups_lower)
+    except (json.JSONDecodeError, Exception) as e:
+        logger.error(f"Error parsing APP_ADMIN_DEFAULT_GROUPS: {e}")
+        # Fallback to simple check
+        return "admins" in [g.lower() for g in user_groups]
+
+
 # Local Dev Mock User (keep here for the dependency function)
 LOCAL_DEV_USER = UserInfo(
     email="unknown@dev.local",

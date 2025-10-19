@@ -22,6 +22,8 @@ from src.models.tags import AssignedTag, AssignedTagCreate
 from src.db_models.projects import ProjectDb
 from src.common.errors import ConflictError, NotFoundError
 from src.models.notifications import NotificationType
+from src.common.authorization import is_user_admin
+from src.common.config import Settings
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -188,7 +190,7 @@ class ProjectsManager:
 
         try:
             # Check if user is admin
-            is_admin = "admin" in [group.lower() for group in user_groups] if user_groups else False
+            is_admin = any("admin" in group.lower() for group in user_groups) if user_groups else False
             logger.debug(f"User {user_identifier} admin status: {is_admin}")
 
             if is_admin:
@@ -214,7 +216,8 @@ class ProjectsManager:
         db: Session, 
         user_identifier: str, 
         user_groups: List[str], 
-        project_id: str
+        project_id: str,
+        settings: Settings
     ) -> bool:
         """Check if user is a member of any team assigned to the project.
         
@@ -223,6 +226,7 @@ class ProjectsManager:
             user_identifier: User email/identifier
             user_groups: List of user's groups
             project_id: Project ID to check membership for
+            settings: Application settings for admin group check
             
         Returns:
             True if user is a member or is admin, False otherwise
@@ -230,9 +234,8 @@ class ProjectsManager:
         logger.debug(f"Checking if user {user_identifier} is member of project {project_id}")
         
         try:
-            # Check if user is admin
-            is_admin = "admin" in [group.lower() for group in user_groups] if user_groups else False
-            if is_admin:
+            # Check if user is admin using configured admin groups
+            if is_user_admin(user_groups, settings):
                 logger.debug(f"User {user_identifier} is admin, granting access")
                 return True
             
@@ -497,17 +500,22 @@ class ProjectsManager:
         )
 
     def load_initial_data(self, db: Session) -> bool:
-        """Load projects from YAML file if projects table is empty."""
-        logger.debug("ProjectsManager: Checking if projects table is empty...")
+        """Load projects from YAML file if demo projects don't exist yet.
+        
+        Note: We exclude the default 'Admin Project' from the existence check,
+        as it's created automatically during startup.
+        """
+        logger.debug("ProjectsManager: Checking if demo projects exist...")
 
         try:
-            # Check if projects already exist
-            existing_projects = self.project_repo.get_multi(db, limit=1)
-            if existing_projects:
-                logger.info("Projects table is not empty. Skipping initial data loading.")
+            # Check if any projects exist OTHER than the default "Admin Project"
+            existing_projects = self.project_repo.get_multi(db, limit=10)
+            non_admin_projects = [p for p in existing_projects if p.name != 'Admin Project']
+            if non_admin_projects:
+                logger.info(f"Found {len(non_admin_projects)} non-admin projects. Skipping initial data loading.")
                 return False
         except Exception as e:
-            logger.error(f"Error checking if projects table is empty: {e}", exc_info=True)
+            logger.error(f"Error checking existing projects: {e}", exc_info=True)
             return False
 
         # Load projects from YAML

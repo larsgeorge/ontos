@@ -1457,12 +1457,15 @@ async def update_contract(
         # Check project membership if contract belongs to a project
         if db_obj.project_id:
             from src.controller.projects_manager import projects_manager
+            from src.common.config import get_settings
             user_groups = current_user.groups or []
+            settings = get_settings()
             is_member = projects_manager.is_user_project_member(
                 db=db,
                 user_identifier=current_user.email,
                 user_groups=user_groups,
-                project_id=db_obj.project_id
+                project_id=db_obj.project_id,
+                settings=settings
             )
             if not is_member:
                 raise HTTPException(

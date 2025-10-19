@@ -339,17 +339,22 @@ class TeamsManager:
         return [TeamMemberRead.model_validate(member) for member in db_members]
 
     def load_initial_data(self, db: Session) -> bool:
-        """Load teams from YAML file if teams table is empty."""
-        logger.debug("TeamsManager: Checking if teams table is empty...")
+        """Load teams from YAML file if demo teams don't exist yet.
+        
+        Note: We exclude the default 'Admin Team' from the existence check,
+        as it's created automatically during startup.
+        """
+        logger.debug("TeamsManager: Checking if demo teams exist...")
 
         try:
-            # Check if teams already exist
-            existing_teams = self.team_repo.get_multi(db, limit=1)
-            if existing_teams:
-                logger.info("Teams table is not empty. Skipping initial data loading.")
+            # Check if any teams exist OTHER than the default "Admin Team"
+            existing_teams = self.team_repo.get_multi(db, limit=10)
+            non_admin_teams = [t for t in existing_teams if t.name != 'Admin Team']
+            if non_admin_teams:
+                logger.info(f"Found {len(non_admin_teams)} non-admin teams. Skipping initial data loading.")
                 return False
         except Exception as e:
-            logger.error(f"Error checking if teams table is empty: {e}", exc_info=True)
+            logger.error(f"Error checking existing teams: {e}", exc_info=True)
             return False
 
         # Load teams from YAML

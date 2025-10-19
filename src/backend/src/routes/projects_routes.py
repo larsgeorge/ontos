@@ -16,8 +16,9 @@ from src.models.projects import (
 from src.controller.projects_manager import projects_manager
 from src.common.database import get_db
 from sqlalchemy.orm import Session
-from src.common.authorization import PermissionChecker
+from src.common.authorization import PermissionChecker, is_user_admin
 from src.common.features import FeatureAccessLevel
+from src.common.config import get_settings, Settings
 from src.common.dependencies import (
     DBSessionDep,
     CurrentUserDep,
@@ -102,6 +103,7 @@ def create_project(
 def get_all_projects(
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    settings: Settings = Depends(get_settings),
     manager = Depends(get_projects_manager),
     skip: int = 0,
     limit: int = 100
@@ -109,9 +111,9 @@ def get_all_projects(
     """Lists projects visible to the user based on domain relationships."""
     logger.debug(f"Fetching projects (skip={skip}, limit={limit}) for user: {current_user.email}")
     try:
-        # Check if user is admin
+        # Check if user is admin using configured admin groups
         user_groups = current_user.groups or []
-        is_admin = "admin" in [group.lower() for group in user_groups]
+        is_admin = is_user_admin(user_groups, settings)
         
         return manager.get_all_projects(
             db=db, 
