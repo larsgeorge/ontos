@@ -27,6 +27,8 @@ import TeamMemberFormDialog from '@/components/data-contracts/team-member-form-d
 import ServerConfigFormDialog from '@/components/data-contracts/server-config-form-dialog'
 import SLAFormDialog from '@/components/data-contracts/sla-form-dialog'
 import DatasetLookupDialog from '@/components/data-contracts/dataset-lookup-dialog'
+import CreateFromContractDialog from '@/components/data-products/create-from-contract-dialog'
+import type { DataProduct } from '@/types/data-product'
 
 // Define column structure for schema properties
 type SchemaProperty = {
@@ -140,6 +142,11 @@ export default function DataContractDetails() {
   const [schemaLinks, setSchemaLinks] = useState<Record<string, EntitySemanticLink[]>>({})
   const [propertyLinks, setPropertyLinks] = useState<Record<string, EntitySemanticLink[]>>({})
 
+  // Linked products state
+  const [linkedProducts, setLinkedProducts] = useState<DataProduct[]>([])
+  const [loadingProducts, setLoadingProducts] = useState(false)
+  const [isCreateProductDialogOpen, setIsCreateProductDialogOpen] = useState(false)
+
   // Dialog states for CRUD operations
   const [isDatasetLookupOpen, setIsDatasetLookupOpen] = useState(false)
   const [isBasicFormOpen, setIsBasicFormOpen] = useState(false)
@@ -154,6 +161,25 @@ export default function DataContractDetails() {
   const [editingQualityRuleIndex, setEditingQualityRuleIndex] = useState<number | null>(null)
   const [editingTeamMemberIndex, setEditingTeamMemberIndex] = useState<number | null>(null)
   const [editingServerIndex, setEditingServerIndex] = useState<number | null>(null)
+
+  const fetchLinkedProducts = async () => {
+    if (!contractId) return
+    setLoadingProducts(true)
+    try {
+      const response = await fetch(`/api/data-products/by-contract/${contractId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setLinkedProducts(Array.isArray(data) ? data : [])
+      } else {
+        setLinkedProducts([])
+      }
+    } catch (e) {
+      console.warn('Failed to fetch linked products:', e)
+      setLinkedProducts([])
+    } finally {
+      setLoadingProducts(false)
+    }
+  }
 
   const fetchDetails = async () => {
     if (!contractId) return
@@ -228,6 +254,7 @@ export default function DataContractDetails() {
   useEffect(() => {
     setStaticSegments([{ label: 'Data Contracts', path: '/data-contracts' }])
     fetchDetails()
+    fetchLinkedProducts()
 
     return () => {
       setStaticSegments([])
@@ -692,6 +719,86 @@ export default function DataContractDetails() {
               trailing={<Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add Concept</Button>}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Linked Data Products Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <Shapes className="h-5 w-5 text-primary" />
+                Linked Data Products ({linkedProducts.length})
+              </CardTitle>
+              <CardDescription>Data Products using this contract for output ports</CardDescription>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setIsCreateProductDialogOpen(true)}
+              disabled={!contract || !['active', 'approved', 'certified'].includes((contract.status || '').toLowerCase())}
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              Create Data Product
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loadingProducts ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : linkedProducts.length === 0 ? (
+            <div className="text-center py-12 border-2 border-dashed border-muted-foreground/25 rounded-lg">
+              <Shapes className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+              <div className="text-muted-foreground mb-2">No linked data products yet</div>
+              <div className="text-sm text-muted-foreground mb-4">
+                Create a data product that uses this contract to govern an output port
+              </div>
+              {contract && ['active', 'approved', 'certified'].includes((contract.status || '').toLowerCase()) ? (
+                <Button onClick={() => setIsCreateProductDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Data Product
+                </Button>
+              ) : (
+                <div className="text-sm text-muted-foreground italic">
+                  Contract must be in 'active', 'approved', or 'certified' status
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {linkedProducts.map((product) => (
+                <div
+                  key={product.id}
+                  className="p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                  onClick={() => navigate(`/data-products/${product.id}`)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="font-medium text-base">{product.info?.title || 'Untitled Product'}</div>
+                      {product.info?.description && (
+                        <p className="text-sm text-muted-foreground mt-1">{product.info.description}</p>
+                      )}
+                      <div className="flex items-center gap-3 mt-2">
+                        <Badge variant="secondary" className="text-xs">
+                          {product.productType || 'N/A'}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {product.version}
+                        </Badge>
+                        {product.info?.status && (
+                          <Badge variant="secondary" className="text-xs">
+                            {product.info.status}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1258,6 +1365,19 @@ export default function DataContractDetails() {
         onOpenChange={setIsDatasetLookupOpen}
         onSelect={handleInferFromDataset}
       />
+
+      {contract && (
+        <CreateFromContractDialog
+          isOpen={isCreateProductDialogOpen}
+          onOpenChange={setIsCreateProductDialogOpen}
+          contractId={contractId!}
+          contractName={contract.name}
+          onSuccess={(productId) => {
+            fetchLinkedProducts()
+            navigate(`/data-products/${productId}`)
+          }}
+        />
+      )}
     </div>
   )
 }

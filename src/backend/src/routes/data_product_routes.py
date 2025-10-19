@@ -159,6 +159,122 @@ async def reject_product_certification(
         logger.exception("Reject product certification failed")
         raise HTTPException(status_code=500, detail=str(e))
 
+# --- Contract-Product Integration Endpoints ---
+
+@router.post('/data-products/from-contract', response_model=DataProduct, status_code=201)
+async def create_product_from_contract(
+    contract_id: str = Body(..., embed=True),
+    product_name: str = Body(..., embed=True),
+    product_type: str = Body(..., embed=True),
+    version: str = Body(..., embed=True),
+    output_port_name: Optional[str] = Body(None, embed=True),
+    request: Request = None,
+    db: DBSessionDep = None,
+    audit_manager: AuditManagerDep = None,
+    current_user: AuditCurrentUserDep = None,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
+):
+    """
+    Create a new Data Product from an existing Data Contract.
+
+    The contract governs one output port of the product. Inherits domain_id,
+    owner_team_id, and project_id from the contract.
+    """
+    try:
+        from src.models.data_products import DataProductType
+
+        # Convert product_type string to enum
+        try:
+            product_type_enum = DataProductType(product_type)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid product_type: {product_type}. Must be one of: {[t.value for t in DataProductType]}"
+            )
+
+        # Create product via manager
+        created_product = manager.create_from_contract(
+            contract_id=contract_id,
+            product_name=product_name,
+            product_type=product_type_enum,
+            version=version,
+            output_port_name=output_port_name
+        )
+
+        # Log audit event
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action='CREATE_FROM_CONTRACT',
+            success=True,
+            details={
+                'product_id': created_product.id,
+                'contract_id': contract_id,
+                'product_name': product_name,
+                'product_type': product_type
+            }
+        )
+
+        logger.info(f"Created Data Product {created_product.id} from contract {contract_id}")
+        return created_product
+
+    except ValueError as e:
+        logger.error(f"Validation error creating product from contract: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error creating product from contract {contract_id}")
+        raise HTTPException(status_code=500, detail=f"Failed to create product from contract: {str(e)}")
+
+
+@router.get('/data-products/by-contract/{contract_id}', response_model=List[DataProduct])
+async def get_products_by_contract(
+    contract_id: str,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
+):
+    """
+    Get all Data Products that use a specific Data Contract.
+
+    Returns products that have output ports linked to the specified contract.
+    """
+    try:
+        products = manager.get_products_by_contract(contract_id)
+        logger.info(f"Found {len(products)} products for contract {contract_id}")
+        return products
+    except Exception as e:
+        logger.exception(f"Error getting products for contract {contract_id}")
+        raise HTTPException(status_code=500, detail=f"Failed to get products for contract: {str(e)}")
+
+
+@router.get('/data-products/{product_id}/contracts', response_model=List[str])
+async def get_contracts_for_product(
+    product_id: str,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
+):
+    """
+    Get all Data Contract IDs associated with a Data Product's output ports.
+
+    Returns a list of contract IDs (may be empty if no contracts are linked).
+    """
+    try:
+        contract_ids = manager.get_contracts_for_product(product_id)
+        logger.info(f"Found {len(contract_ids)} contracts for product {product_id}")
+        return contract_ids
+    except ValueError as e:
+        logger.error(f"Product not found: {e}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Error getting contracts for product {product_id}")
+        raise HTTPException(status_code=500, detail=f"Failed to get contracts for product: {str(e)}")
+
+# --- Utility Endpoints ---
+
 @router.get('/data-products/statuses', response_model=List[str])
 async def get_data_product_statuses(
     manager: DataProductsManager = Depends(get_data_products_manager),

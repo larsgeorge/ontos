@@ -831,3 +831,150 @@ class DataProductsManager(SearchableAsset):
         # Process the main product dictionary
         process_tags_in_dict(product_dict)
 
+    # --- Contract-Product Integration Methods ---
+
+    def create_from_contract(
+        self,
+        contract_id: str,
+        product_name: str,
+        product_type: DataProductType,
+        version: str,
+        output_port_name: Optional[str] = None
+    ) -> DataProductApi:
+        """
+        Creates a new Data Product from an existing Data Contract.
+
+        The contract governs one output port of the product. Inherits domain_id,
+        owner_team_id, and project_id from the contract.
+
+        Args:
+            contract_id: ID of the contract to create product from
+            product_name: Name for the new data product
+            product_type: Type of the data product (source, source-aligned, etc.)
+            version: Version string for the product
+            output_port_name: Optional name for the output port (defaults to contract name)
+
+        Returns:
+            Created DataProduct API model
+
+        Raises:
+            ValueError: If contract doesn't exist or is not in valid status
+        """
+        logger.info(f"Creating Data Product '{product_name}' from contract {contract_id}")
+
+        # Import here to avoid circular dependency
+        from src.repositories.data_contracts_repository import data_contract_repo
+
+        # Validate contract exists and get it
+        contract_db = data_contract_repo.get(db=self._db, id=contract_id)
+        if not contract_db:
+            raise ValueError(f"Data Contract with ID {contract_id} not found")
+
+        # Validate contract status (should be active or approved)
+        valid_statuses = ['active', 'approved', 'certified']
+        if contract_db.status and contract_db.status.lower() not in valid_statuses:
+            raise ValueError(
+                f"Cannot create product from contract in status '{contract_db.status}'. "
+                f"Contract must be in one of: {', '.join(valid_statuses)}"
+            )
+
+        # Create product data, inheriting from contract
+        now = datetime.utcnow()
+        product_id = str(uuid.uuid4())
+
+        product_data = {
+            'id': product_id,
+            'version': version,
+            'productType': product_type.value,
+            'created_at': now,
+            'updated_at': now,
+            'info': {
+                'title': product_name,
+                'description': f"Data Product created from contract: {contract_db.name}",
+                'status': DataProductStatus.DRAFT.value,
+                'owner_team_id': contract_db.owner_team_id,  # Inherit from contract
+                'domain_id': contract_db.domain_id,  # Inherit from contract
+                'project_id': contract_db.project_id,  # Inherit from contract
+            },
+            'inputPorts': [],
+            'outputPorts': [
+                {
+                    'id': str(uuid.uuid4()),
+                    'name': output_port_name or contract_db.name,
+                    'description': f"Output governed by contract: {contract_db.name}",
+                    'dataContractId': contract_id,  # Link to contract
+                    'asset_type': None,
+                    'asset_identifier': None,
+                }
+            ]
+        }
+
+        # Create the product using standard create method
+        created_product = self.create_product(product_data)
+
+        logger.info(f"Successfully created Data Product {product_id} from contract {contract_id}")
+        return created_product
+
+    def get_products_by_contract(self, contract_id: str) -> List[DataProductApi]:
+        """
+        Get all Data Products that use a specific Data Contract.
+
+        Args:
+            contract_id: ID of the contract to search for
+
+        Returns:
+            List of DataProduct API models that have output ports linked to this contract
+        """
+        logger.debug(f"Fetching products linked to contract {contract_id}")
+
+        try:
+            # Get all products
+            all_products = self.list_products(limit=10000)
+
+            # Filter products that have output ports with this contract
+            linked_products = []
+            for product in all_products:
+                if product.outputPorts:
+                    for port in product.outputPorts:
+                        if port.dataContractId == contract_id:
+                            linked_products.append(product)
+                            break  # Found link, no need to check other ports
+
+            logger.info(f"Found {len(linked_products)} products linked to contract {contract_id}")
+            return linked_products
+
+        except Exception as e:
+            logger.error(f"Error fetching products by contract {contract_id}: {e}")
+            raise
+
+    def get_contracts_for_product(self, product_id: str) -> List[str]:
+        """
+        Get all Data Contract IDs associated with a Data Product's output ports.
+
+        Args:
+            product_id: ID of the product
+
+        Returns:
+            List of contract IDs (may be empty if no contracts are linked)
+        """
+        logger.debug(f"Fetching contracts for product {product_id}")
+
+        try:
+            product = self.get_product(product_id)
+            if not product:
+                raise ValueError(f"Product with ID {product_id} not found")
+
+            # Extract unique contract IDs from output ports
+            contract_ids = []
+            if product.outputPorts:
+                for port in product.outputPorts:
+                    if port.dataContractId and port.dataContractId not in contract_ids:
+                        contract_ids.append(port.dataContractId)
+
+            logger.info(f"Found {len(contract_ids)} contracts for product {product_id}")
+            return contract_ids
+
+        except Exception as e:
+            logger.error(f"Error fetching contracts for product {product_id}: {e}")
+            raise
+
