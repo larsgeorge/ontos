@@ -93,6 +93,8 @@ class JobsManager:
                 if 'dependencies' in spec_dict and isinstance(spec_dict['dependencies'], list):
                     # Dependencies should be a list of strings like ["pkg==1.0.0", ...]
                     # Create Environment with proper client version
+                    # Note: compute.Environment doesn't support env_vars directly
+                    # Environment variables need to be passed via spark_conf or job run parameters
                     spec_obj = compute.Environment(
                         client='1',  # Use default Databricks runtime
                         dependencies=spec_dict['dependencies']
@@ -226,6 +228,8 @@ class JobsManager:
                 if 'dependencies' in spec_dict and isinstance(spec_dict['dependencies'], list):
                     # Dependencies should be a list of strings like ["pkg==1.0.0", ...]
                     # Create Environment with proper client version
+                    # Note: compute.Environment doesn't support env_vars directly
+                    # Environment variables need to be passed via spark_conf or job run parameters
                     spec_obj = compute.Environment(
                         client='1',  # Use default Databricks runtime
                         dependencies=spec_dict['dependencies']
@@ -490,6 +494,7 @@ class JobsManager:
                                 p = str(val) if val is not None else p
                         resolved.append(p)
                     spt['parameters'] = resolved
+                
                 kwargs['spark_python_task'] = jobs.SparkPythonTask(**spt)
             if 'python_wheel_task' in t and isinstance(t['python_wheel_task'], dict):
                 kwargs['python_wheel_task'] = jobs.PythonWheelTask(**t['python_wheel_task'])

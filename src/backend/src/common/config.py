@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: Optional[str] = None
     POSTGRES_PASSWORD: Optional[str] = None
+    POSTGRES_PASSWORD_SECRET: Optional[str] = None  # Databricks secret name (e.g., "ontos/postgres_password")
     POSTGRES_DB: Optional[str] = None
     POSTGRES_DB_SCHEMA: Optional[str] = "public" # Default schema for Postgres
 

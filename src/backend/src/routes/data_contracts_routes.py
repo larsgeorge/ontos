@@ -2621,11 +2621,20 @@ async def start_profiling(
         if not installation:
             raise HTTPException(status_code=404, detail=f"Workflow '{workflow_id}' not installed. Please install it via Settings > Jobs & Workflows.")
         
-        # Trigger workflow with parameters
+        # Trigger workflow with parameters (including database connection info)
+        from src.common.config import get_settings
+        settings = get_settings()
+        
         job_params = {
             "contract_id": contract_id,
             "schema_names": json.dumps(schema_names),
-            "profile_run_id": profile_run_id
+            "profile_run_id": profile_run_id,
+            "postgres_host": settings.POSTGRES_HOST or "",
+            "postgres_user": settings.POSTGRES_USER or "",
+            "postgres_db": settings.POSTGRES_DB or "",
+            "postgres_port": str(settings.POSTGRES_PORT) if settings.POSTGRES_PORT else "5432",
+            "postgres_schema": settings.POSTGRES_DB_SCHEMA or "public",
+            "postgres_password_secret": settings.POSTGRES_PASSWORD_SECRET or ""
         }
         
         run_id = jobs_manager.run_job(
