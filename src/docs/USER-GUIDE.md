@@ -932,74 +932,126 @@ Links:
 
 ### Product Lifecycle
 
-#### 1. Development
+Data Products follow a structured lifecycle with state transitions and governance checkpoints.
 
-- **Who**: Data Engineers
-- **Actions**: Build pipelines, implement transformations
+#### Complete Lifecycle Flow
+
+```
+DRAFT → SANDBOX → PENDING_CERTIFICATION → CERTIFIED → ACTIVE → DEPRECATED
+```
+
+#### 1. Draft
+
+- **Who**: Data Product Owner, Data Engineers
+- **Actions**: Initial product creation and design
 - **Visibility**: Private to team
 
 **Activities**:
-- Create data pipelines
-- Implement contract specifications
-- Write tests
-- Document usage
+- Define product structure
+- Link to data contracts (optional at this stage)
+- Add input/output ports
+- Set basic metadata
+
+**How to Create**:
+1. Navigate to **Products** → **Create Product**
+2. Or click **Create Data Product** from a contract details page
 
 #### 2. Sandbox
 
-- **Who**: Data Engineer
-- **Actions**: Deploy to sandbox environment for testing
+- **Who**: Data Engineers
+- **Actions**: Build and test product implementation
 - **Visibility**: Team + selected testers
 
-**How to Move to Sandbox**:
-1. Open product details
-2. Click **Deploy to Sandbox**
-3. Verify sandbox catalog/schema permissions
-4. Click **Deploy**
+**Activities**:
+- Build data pipelines
+- Implement contract specifications
+- Link contracts to output ports
+- Write tests
+- Document usage
+- Deploy to sandbox environment
+
+**Key Requirement**: Each output port should have a data contract assigned via the `dataContractId` field.
 
 #### 3. Pending Certification
 
 - **Who**: Data Product Owner
-- **Actions**: Request formal certification from Data Steward
-- **Visibility**: Visible to Data Stewards
+- **Actions**: Submit for formal certification review
+- **Visibility**: Visible to Data Stewards and approvers
 
-**How to Request Certification**:
+**How to Submit**:
 1. Open product details
-2. Click **Request Certification**
-3. Select reviewer
-4. Add notes and documentation links
-5. Submit
+2. Click **Submit for Certification**
+3. System validates product is in SANDBOX status
+4. Status changes to PENDING_CERTIFICATION
+
+**What Happens**:
+- Product becomes visible to Data Stewards
+- Approval workflow is triggered
+- Team waits for certification decision
 
 #### 4. Certification Review
 
-- **Who**: Data Steward
-- **Actions**: Verify product meets standards
+- **Who**: Data Steward (with approval authority)
+- **Actions**: Review and verify product meets standards
 
 **Certification Criteria**:
-- ✓ Implements approved contracts
+- ✓ All output ports have approved contracts linked
+- ✓ Implements contract specifications correctly
 - ✓ Passes data quality checks
 - ✓ Has complete documentation
-- ✓ Security requirements met
+- ✓ Security requirements met (PII handling, encryption)
 - ✓ Lineage is documented
 - ✓ Monitoring is in place
 - ✓ SLOs are achievable
 
+**Review Actions**:
+1. Open product details
+2. Review implementation and documentation
+3. Choose action:
+   - **Certify**: Approve the product → status becomes CERTIFIED
+   - **Reject**: Send back to SANDBOX for fixes
+
 #### 5. Certified
 
-- **Who**: Data Steward
-- **Actions**: Certify product for production use
-- **Visibility**: Organization-wide
+- **Who**: Data Product Owner
+- **Actions**: Prepare for production publication
+- **Visibility**: Organization-wide (metadata visible)
 
-#### 6. Active
+**Ready for Publication**:
+- Product has been approved by governance
+- All quality gates have passed
+- Documentation is complete
+- Ready to be made available to consumers
+
+**Next Step**: Publish to make active
+
+#### 6. Active (Published)
 
 - **Who**: Data Product Owner
-- **Actions**: Deploy to production, monitor SLOs
-- **Visibility**: Public in catalog
+- **Actions**: Publish to marketplace, monitor operations
+- **Visibility**: Public in catalog and marketplace
+
+**How to Publish**:
+1. Open product details
+2. Click **Publish to Marketplace**
+3. System validates:
+   - Status is CERTIFIED
+   - All output ports have `dataContractId` set
+4. Status changes to ACTIVE
+
+**What Happens**:
+- Product appears in Discovery/Marketplace section
+- Available for consumers to find and request access
+- SLO monitoring begins
+- Compliance tracking is enabled
 
 **Production Operations**:
 - Monitor data quality metrics
 - Track SLO compliance
-- Handle consumer support
+- Handle consumer support requests
+- Respond to access requests
 - Plan iterations and improvements
+- Maintain linked contracts
 
 #### 7. Deprecated
 
@@ -1007,12 +1059,18 @@ Links:
 - **Actions**: Mark as deprecated, communicate sunset
 - **Visibility**: Public with deprecation warning
 
+**How to Deprecate**:
+1. Open product details
+2. Click **Deprecate**
+3. Confirm deprecation
+4. Status changes to DEPRECATED
+
 **Deprecation Process**:
-1. Announce deprecation with timeline
+1. Announce deprecation with timeline (90 days recommended)
 2. Communicate replacement product
 3. Support consumer migration
 4. Monitor usage decline
-5. Archive after sunset date
+5. Eventually retire and archive
 
 ### Tagging Products
 
