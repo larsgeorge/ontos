@@ -37,7 +37,8 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
     const loadProducts = async () => {
       try {
         setProductsLoading(true);
-        const resp = await fetch('/api/data-products');
+        // Fetch only published (ACTIVE) products for marketplace discovery
+        const resp = await fetch('/api/data-products/published');
         if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
         const data = await resp.json();
         setAllProducts(Array.isArray(data) ? data : []);

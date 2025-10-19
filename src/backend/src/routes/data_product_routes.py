@@ -425,6 +425,36 @@ async def get_data_product_owners(
         logger.error(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
 
+@router.get('/data-products/published', response_model=List[DataProduct])
+async def get_published_products(
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
+):
+    """
+    Get all published (ACTIVE status) data products for marketplace/discovery.
+
+    Returns only products that are in ACTIVE status, meaning they have been:
+    - Certified
+    - Published (all output ports have contracts)
+    - Made available for consumption
+    """
+    try:
+        # Get all products
+        all_products = manager.list_products(limit=10000)
+
+        # Filter to only ACTIVE products
+        published_products = [
+            product for product in all_products
+            if product.info and product.info.status and product.info.status.upper() == 'ACTIVE'
+        ]
+
+        logger.info(f"Retrieved {len(published_products)} published data products (ACTIVE status)")
+        return published_products
+    except Exception as e:
+        error_msg = f"Error retrieving published data products: {e!s}"
+        logger.error(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+
 @router.post("/data-products/upload", response_model=List[DataProduct], status_code=201)
 async def upload_data_products(
     request: Request, 
