@@ -20,6 +20,9 @@ class DataProductType(str, Enum):
 
 class DataProductStatus(str, Enum):
     DRAFT = "draft"
+    SANDBOX = "sandbox"
+    PENDING_CERTIFICATION = "pending_certification"
+    CERTIFIED = "certified"
     CANDIDATE = "candidate"
     IN_DEVELOPMENT = "in-development"
     ACTIVE = "active"

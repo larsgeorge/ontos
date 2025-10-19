@@ -159,6 +159,114 @@ async def reject_product_certification(
         logger.exception("Reject product certification failed")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post('/data-products/{product_id}/publish')
+async def publish_product(
+    product_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
+):
+    """
+    Publish a certified product to make it active and available in the marketplace.
+
+    Validates that all output ports have dataContractId set before allowing publication.
+    """
+    try:
+        from src.db_models.data_products import DataProductDb
+        product = db.query(DataProductDb).filter(DataProductDb.id == product_id).first()
+        if not product or not product.info:
+            raise HTTPException(status_code=404, detail="Data product not found")
+
+        cur = (product.info.status or '').upper()
+        if cur != 'CERTIFIED':
+            raise HTTPException(
+                status_code=409,
+                detail=f"Invalid transition from {product.info.status} to ACTIVE. Product must be CERTIFIED first."
+            )
+
+        # Validate that all output ports have contracts
+        if product.outputPorts:
+            ports_without_contracts = [
+                port.name for port in product.outputPorts
+                if not port.dataContractId
+            ]
+            if ports_without_contracts:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot publish product: Output ports {', '.join(ports_without_contracts)} must have data contracts assigned"
+                )
+
+        product.info.status = 'ACTIVE'
+        db.add(product.info)
+        db.flush()
+
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action='PUBLISH',
+            success=True,
+            details={'product_id': product_id, 'from': cur, 'to': product.info.status}
+        )
+
+        return {'status': product.info.status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Publish product failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-products/{product_id}/deprecate')
+async def deprecate_product(
+    product_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
+):
+    """
+    Deprecate an active product to signal it will be retired soon.
+    """
+    try:
+        from src.db_models.data_products import DataProductDb
+        product = db.query(DataProductDb).filter(DataProductDb.id == product_id).first()
+        if not product or not product.info:
+            raise HTTPException(status_code=404, detail="Data product not found")
+
+        cur = (product.info.status or '').upper()
+        if cur != 'ACTIVE':
+            raise HTTPException(
+                status_code=409,
+                detail=f"Invalid transition from {product.info.status} to DEPRECATED. Only ACTIVE products can be deprecated."
+            )
+
+        product.info.status = 'DEPRECATED'
+        db.add(product.info)
+        db.flush()
+
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action='DEPRECATE',
+            success=True,
+            details={'product_id': product_id, 'from': cur, 'to': product.info.status}
+        )
+
+        return {'status': product.info.status}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Deprecate product failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # --- Contract-Product Integration Endpoints ---
 
 @router.post('/data-products/from-contract', response_model=DataProduct, status_code=201)

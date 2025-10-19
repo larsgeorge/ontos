@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataProduct, Link as DataProductLink, OutputPort as OutputPortType } from '@/types/data-product'; // Import OutputPort type
+import type { DataContract } from '@/types/data-contract';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, Trash2 } from 'lucide-react'; // Removed unused X icon
@@ -187,6 +188,8 @@ export default function DataProductWizardDialog({
 }: DataProductWizardDialogProps) {
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [contracts, setContracts] = useState<DataContract[]>([]);
+  const [loadingContracts, setLoadingContracts] = useState(false);
   const { toast } = useToast();
   const { post, put } = api;
 
@@ -325,6 +328,35 @@ export default function DataProductWizardDialog({
     form.reset(defaultValues);
     setStep(1); // Always start at step 1
   }, [initialProduct, form.reset]);
+
+  // Fetch contracts when dialog opens
+  useEffect(() => {
+    const fetchContracts = async () => {
+      if (!isOpen) return;
+
+      setLoadingContracts(true);
+      try {
+        const response = await fetch('/api/data-contracts');
+        if (response.ok) {
+          const data = await response.json();
+          // Filter to only active/approved/certified contracts
+          const validContracts = Array.isArray(data)
+            ? data.filter((c: DataContract) =>
+                ['active', 'approved', 'certified'].includes((c.status || '').toLowerCase())
+              )
+            : [];
+          setContracts(validContracts);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch contracts:', e);
+        setContracts([]);
+      } finally {
+        setLoadingContracts(false);
+      }
+    };
+
+    fetchContracts();
+  }, [isOpen]);
 
 
   const watchedProductType = form.watch('productType');
@@ -746,9 +778,45 @@ export default function DataProductWizardDialog({
                             <Input {...form.register(`outputPorts.${index}.name`)} />
                             {form.formState.errors.outputPorts?.[index]?.name && <p className="text-sm text-destructive mt-1">{form.formState.errors.outputPorts[index]?.name?.message}</p>}
                         </div>
-                        <div>
+                        <div className="md:col-span-2">
                             <Label htmlFor={`outputPorts.${index}.description`}>Description</Label>
                             <Input {...form.register(`outputPorts.${index}.description`)} />
+                        </div>
+                        <div className="md:col-span-2">
+                            <Label htmlFor={`outputPorts.${index}.dataContractId`}>
+                              Data Contract (Optional)
+                              <span className="text-xs text-muted-foreground ml-2">
+                                Link a contract to govern this output port
+                              </span>
+                            </Label>
+                            <Controller
+                              name={`outputPorts.${index}.dataContractId`}
+                              control={form.control}
+                              render={({ field }) => (
+                                <Select
+                                  value={field.value || ''}
+                                  onValueChange={field.onChange}
+                                  disabled={loadingContracts}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={loadingContracts ? "Loading contracts..." : "Select a contract (optional)"} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="">None (no contract)</SelectItem>
+                                    {contracts.map((contract) => (
+                                      <SelectItem key={contract.id} value={contract.id}>
+                                        {contract.name} (v{contract.version}) - {contract.status}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            />
+                            {contracts.length === 0 && !loadingContracts && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                No active/approved/certified contracts available
+                              </p>
+                            )}
                         </div>
                         {/* Add other output port fields: status, server, containsPii, etc. */}
                         </div>

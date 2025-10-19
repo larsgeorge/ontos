@@ -202,6 +202,40 @@ export default function DataProductDetails() {
     }
   };
 
+  const handlePublish = async () => {
+    if (!productId) return;
+    setIsTransitioning(true);
+    try {
+      const res = await fetch(`/api/data-products/${productId}/publish`, { method: 'POST' });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Publish failed (${res.status})`);
+      }
+      await fetchDetailsAndDropdowns();
+      toast({ title: 'Published', description: 'Product is now active and available in the marketplace.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Publish failed', variant: 'destructive' });
+    } finally {
+      setIsTransitioning(false);
+    }
+  };
+
+  const handleDeprecate = async () => {
+    if (!productId) return;
+    if (!confirm('Are you sure you want to deprecate this product? It will signal to consumers that it will be retired soon.')) return;
+    setIsTransitioning(true);
+    try {
+      const res = await fetch(`/api/data-products/${productId}/deprecate`, { method: 'POST' });
+      if (!res.ok) throw new Error(`Deprecate failed (${res.status})`);
+      await fetchDetailsAndDropdowns();
+      toast({ title: 'Deprecated', description: 'Product marked as deprecated.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Deprecate failed', variant: 'destructive' });
+    } finally {
+      setIsTransitioning(false);
+    }
+  };
+
   // Initial fetch and cleanup
   useEffect(() => {
     fetchDetailsAndDropdowns();
@@ -433,13 +467,29 @@ export default function DataProductDetails() {
           {/* Lifecycle actions */}
           <div className="flex items-center gap-2">
             {product.info?.status?.toUpperCase() === 'SANDBOX' && (
-              <Button size="sm" onClick={handleSubmitCertification} disabled={isTransitioning}>Submit for Certification</Button>
+              <Button size="sm" onClick={handleSubmitCertification} disabled={isTransitioning}>
+                Submit for Certification
+              </Button>
             )}
             {product.info?.status?.toUpperCase() === 'PENDING_CERTIFICATION' && (
               <>
-                <Button size="sm" variant="outline" onClick={handleCertify} disabled={isTransitioning}>Certify</Button>
-                <Button size="sm" variant="destructive" onClick={handleRejectCertification} disabled={isTransitioning}>Reject</Button>
+                <Button size="sm" variant="outline" onClick={handleCertify} disabled={isTransitioning}>
+                  Certify
+                </Button>
+                <Button size="sm" variant="destructive" onClick={handleRejectCertification} disabled={isTransitioning}>
+                  Reject
+                </Button>
               </>
+            )}
+            {product.info?.status?.toUpperCase() === 'CERTIFIED' && (
+              <Button size="sm" onClick={handlePublish} disabled={isTransitioning}>
+                Publish to Marketplace
+              </Button>
+            )}
+            {product.info?.status?.toUpperCase() === 'ACTIVE' && (
+              <Button size="sm" variant="outline" onClick={handleDeprecate} disabled={isTransitioning}>
+                Deprecate
+              </Button>
             )}
           </div>
           <div className="grid md:grid-cols-4 gap-4">
