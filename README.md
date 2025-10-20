@@ -173,7 +173,7 @@ If you want to use a local PostgreSQL instance for development, here are the ste
 
 2. Setup the path and start the CLI as superuser
 
-    ```
+    ```sh
     > export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
     > psql -U $(whoami) -d postgres
     psql (16.9 (Homebrew))
@@ -183,30 +183,37 @@ If you want to use a local PostgreSQL instance for development, here are the ste
 3. Run the necessary commands to create resources
 
     ```sql
-    postgres=# CREATE ROLE ontos_app_user WITH LOGIN PASSWORD '<my_password>';
-    postgres=# CREATE DATABASE app_ontos;
-    postgres=# GRANT ALL PRIVILEGES ON DATABASE app_ontos TO ontos_app_user;
-    postgres=# GRANT USAGE ON SCHEMA public TO ontos_app_user;
-    postgres=# GRANT CREATE ON SCHEMA public TO ontos_app_user;
+    CREATE ROLE ontos_app_user WITH LOGIN PASSWORD '<my_password>';
+    GRANT ontos_app_user TO "<your_user_id>";
 
-    postgres=#
+    CREATE DATABASE app_ontos;
+    GRANT ALL PRIVILEGES ON DATABASE app_ontos TO ontos_app_user;
+    GRANT USAGE ON SCHEMA public TO ontos_app_user;
+    GRANT CREATE ON SCHEMA public TO ontos_app_user;
     \q
     ```
 
-    Note: Replace `<my_password>` with your password of choice.
+    Reconnect to switch the database:
 
-4. Log in as the app user role and create remaining resources
-
-    ```sql
-    ➜  ucapp git:(main) ✗ psql -U ontos_app_user -d app_ontos
+    ```sh
+    ucapp git:(main) ✗ psql -U $(whoami) -d app_ontos
     psql (16.9 (Homebrew))
     Type "help" for help.
-    app_ontos=> CREATE SCHEMA app_ontos;
-    app_ontos=> GRANT USAGE ON SCHEMA app_ontos TO ontos_app_user;
-    app_ontos=> GRANT ALL ON SCHEMA app_ontos TO ontos_app_user;
     ```
 
-5. Configure app to use local database 
+    Run the remaining commands:
+
+    ```sql
+    CREATE SCHEMA app_ontos;
+    ALTER SCHEMA app_ontos OWNER TO ontos_app_user;
+    GRANT USAGE ON SCHEMA app_ontos TO ontos_app_user;
+    GRANT ALL ON SCHEMA app_ontos TO ontos_app_user;
+    \q
+    ```
+
+    Note: Replace `<my_password>` with your password of choice, and `<your_user_id>` with the Postgres user ID you logged into the server.
+
+4. Configure app to use local database 
 
     ```env
     POSTGRES_HOST=localhost
@@ -219,6 +226,81 @@ If you want to use a local PostgreSQL instance for development, here are the ste
 
     Note: Use the above `<my_password>` here
     
+When using Lakebase, follow these steps:
+
+1. Set up a new [server instance](https://docs.databricks.com/aws/en/oltp/instances/instance) (Note: Wait for it to start!)
+
+2. Generate an [OAuth token](https://docs.databricks.com/aws/en/oltp/instances/authentication?language=UI#obtain-an-oauth-token-in-a-user-to-machine-flow) for your user ID, and copy it to the clipboard
+
+3. Use the UI-provided `psql` command to connect to the database and paste the OAuth token as the password
+
+    ```sh
+    psql "host=instance-12345678-...64761fa328.database.cloud.databricks.com user=<your_user_id> dbname=databricks_postgres port=5432 sslmode=require"
+    Password for user <your_user_id>: 
+    psql (16.10 (Homebrew), server 16.9 (165f042))
+    SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off)
+    Type "help" for help.
+    ```
+
+4. Run the necessary commands to create resources
+
+    ```sql
+    CREATE ROLE ontos_app_user WITH LOGIN PASSWORD '<my_password>';
+    GRANT ontos_app_user TO "<your_user_id>";
+
+    CREATE DATABASE app_ontos;
+    GRANT ALL PRIVILEGES ON DATABASE app_ontos TO ontos_app_user;
+    GRANT USAGE ON SCHEMA public TO ontos_app_user;
+    GRANT CREATE ON SCHEMA public TO ontos_app_user;
+    \q
+    ```
+
+    Reconnect to switch the database:
+
+    ```sh
+    psql "host=instance-12345678-...64761fa328.database.cloud.databricks.com user=<your_user_id> dbname=app_ontos port=5432 sslmode=require"
+    Password for user <your_user_id>: 
+    psql (16.10 (Homebrew), server 16.9 (165f042))
+    SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off)
+    Type "help" for help.
+    ```
+
+    Run the remaining commands:
+
+    ```sql
+    CREATE SCHEMA app_ontos;
+    ALTER SCHEMA app_ontos OWNER TO ontos_app_user;
+    GRANT USAGE ON SCHEMA app_ontos TO ontos_app_user;
+    GRANT ALL ON SCHEMA app_ontos TO ontos_app_user;
+    \q
+    ```
+
+    Note: Replace `<my_password>` with your password of choice, and `<your_user_id>` with the Postgres user ID you logged into the server.
+
+5. Configure the database settings in your `app.yaml`
+
+    ```yaml
+    - name: "POSTGRES_HOST"
+        value: "instance-12345678-...64761fa328.database.cloud.databricks.com"
+    - name: "POSTGRES_PORT"
+        value: "5432"
+    - name: "POSTGRES_USER"
+        value: "ontos_app_user"
+    - name: "POSTGRES_PASSWORD"
+        valueFrom: "db_password"
+    - name: "POSTGRES_PASSWORD_SECRET"
+        value: "ontos/db_password"
+    - name: "POSTGRES_DB"
+        value: "app_ontos"
+    - name: "POSTGRES_DB_SCHEMA"
+        value: "app_ontos"
+    ```
+
+Note: Databricks Apps uses [resources](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/resources) to inject the secret value into the apps environment (by using `valueFrom`).
+We also want to set the actual secret name (with scope) so that the app can pass that to the background jobs in due course.
+The jobs will then, in turn, retrieve the secret value using the Databricks API, avoiding the exposure of the database password as a job parameter.
+Since jobs are run using the apps service principal, it is given that the job can access the secret, just like the app itself. 
+
 ## Installation
 
 1. Install Hatch (if you haven't already):
