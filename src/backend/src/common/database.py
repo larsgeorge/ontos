@@ -1,4 +1,7 @@
 import os
+import uuid
+import time
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -66,6 +69,13 @@ _engine = None
 _SessionLocal = None
 # Public engine instance (will be assigned after creation)
 engine = None
+
+# OAuth token state for Lakebase connections
+_oauth_token: Optional[str] = None
+_token_last_refresh: float = 0
+_token_refresh_lock = threading.Lock()
+_token_refresh_thread: Optional[threading.Thread] = None
+_token_refresh_stop_event = threading.Event()
 
 
 @dataclass
@@ -233,22 +243,90 @@ class DatabaseManager:
 db_manager: Optional[DatabaseManager] = None
 
 
-def get_db_url(settings: Settings) -> str:
-    """Construct the PostgreSQL SQLAlchemy URL."""
-    if not all([settings.POSTGRES_HOST, settings.POSTGRES_USER, settings.POSTGRES_PASSWORD, settings.POSTGRES_DB]):
-        raise ValueError("PostgreSQL connection details (Host, User, Password, DB) are missing in settings.")
+def refresh_oauth_token(settings: Settings) -> str:
+    """Generate fresh OAuth token from Databricks for Lakebase connection."""
+    global _oauth_token, _token_last_refresh
+    
+    with _token_refresh_lock:
+        ws_client = get_workspace_client(settings)
+        instance_name = settings.LAKEBASE_INSTANCE_NAME
+        
+        if not instance_name:
+            raise ValueError("LAKEBASE_INSTANCE_NAME required for OAuth mode")
+        
+        logger.info(f"Generating OAuth token for Lakebase instance: {instance_name}")
+        cred = ws_client.database.generate_database_credential(
+            request_id=str(uuid.uuid4()),
+            instance_names=[instance_name],
+        )
+        
+        _oauth_token = cred.token
+        _token_last_refresh = time.time()
+        logger.info("OAuth token refreshed successfully")
+        
+        return _oauth_token
 
+
+def start_token_refresh_background(settings: Settings):
+    """Start background thread to refresh OAuth tokens every 50 minutes."""
+    global _token_refresh_thread, _token_refresh_stop_event
+    
+    def refresh_loop():
+        while not _token_refresh_stop_event.is_set():
+            _token_refresh_stop_event.wait(50 * 60)  # 50 minutes
+            if not _token_refresh_stop_event.is_set():
+                try:
+                    refresh_oauth_token(settings)
+                except Exception as e:
+                    logger.error(f"Background token refresh failed: {e}", exc_info=True)
+    
+    _token_refresh_stop_event.clear()
+    _token_refresh_thread = threading.Thread(target=refresh_loop, daemon=True)
+    _token_refresh_thread.start()
+    logger.info("OAuth token refresh background thread started")
+
+
+def stop_token_refresh_background():
+    """Stop the background token refresh thread."""
+    global _token_refresh_stop_event, _token_refresh_thread
+    if _token_refresh_thread and _token_refresh_thread.is_alive():
+        _token_refresh_stop_event.set()
+        _token_refresh_thread.join(timeout=2)
+        logger.info("OAuth token refresh background thread stopped")
+
+
+def get_db_url(settings: Settings) -> str:
+    """Construct the PostgreSQL SQLAlchemy URL with appropriate auth method."""
+    
+    # Validate required settings
+    if not all([settings.POSTGRES_HOST, settings.POSTGRES_USER, settings.POSTGRES_DB]):
+        raise ValueError("PostgreSQL connection details (Host, User, DB) are missing in settings.")
+    
+    # Determine authentication mode based on ENV
+    use_password_auth = settings.ENV.upper().startswith("LOCAL")
+    
+    if use_password_auth:
+        logger.info("Database: Using password authentication (LOCAL mode)")
+        if not settings.POSTGRES_PASSWORD:
+            raise ValueError("POSTGRES_PASSWORD required for LOCAL mode")
+        password = settings.POSTGRES_PASSWORD
+    else:
+        logger.info("Database: Using OAuth authentication (Lakebase mode)")
+        # Initial token will be set via connection event handler
+        password = ""
+    
+    # Build URL with schema options
     query_params = {}
     if settings.POSTGRES_DB_SCHEMA:
         query_params["options"] = f"-csearch_path={settings.POSTGRES_DB_SCHEMA}"
         logger.info(f"PostgreSQL schema will be set via options: {settings.POSTGRES_DB_SCHEMA}")
     else:
         logger.info("No specific PostgreSQL schema configured, using default (public).")
-
+    
     db_url_obj = URL.create(
         drivername="postgresql+psycopg2",
         username=settings.POSTGRES_USER,
-        password=settings.POSTGRES_PASSWORD,
+        password=password,
         host=settings.POSTGRES_HOST,
         port=settings.POSTGRES_PORT,
         database=settings.POSTGRES_DB,
@@ -352,15 +430,41 @@ def init_db() -> None:
         logger.info("Connecting to database...")
         logger.info(f"> Database URL: {db_url}")
         logger.info(f"> Connect args: {connect_args}")
+        logger.info(f"> Pool settings: size={settings.DB_POOL_SIZE}, max_overflow={settings.DB_MAX_OVERFLOW}, "
+                   f"timeout={settings.DB_POOL_TIMEOUT}s, recycle={settings.DB_POOL_RECYCLE}s")
+        
         _engine = create_engine(db_url,
                                 connect_args=connect_args, 
                                 echo=settings.DB_ECHO, 
                                 poolclass=pool.QueuePool, 
-                                pool_size=5, 
-                                max_overflow=10,
-                                pool_recycle=840,
+                                pool_size=settings.DB_POOL_SIZE, 
+                                max_overflow=settings.DB_MAX_OVERFLOW,
+                                pool_timeout=settings.DB_POOL_TIMEOUT,
+                                pool_recycle=settings.DB_POOL_RECYCLE,
                                 pool_pre_ping=True)
         engine = _engine # Assign to public variable
+
+        # Add OAuth token injection if not in LOCAL mode
+        if not settings.ENV.upper().startswith("LOCAL"):
+            logger.info("Setting up OAuth token injection for Lakebase...")
+            
+            # Generate initial token
+            refresh_oauth_token(settings)
+            
+            # Register event handler to inject tokens for new connections
+            # Use 'do_connect' event to inject password at connection creation time
+            @event.listens_for(_engine, "do_connect")
+            def inject_token_on_connect(dialect, conn_rec, cargs, cparams):
+                global _oauth_token
+                if _oauth_token:
+                    cparams["password"] = _oauth_token
+                    logger.debug("Injected OAuth token into new database connection")
+            
+            # Start background refresh thread
+            start_token_refresh_background(settings)
+            logger.info("OAuth authentication configured successfully")
+        else:
+            logger.info("Password authentication configured for LOCAL mode")
 
         # Explicitly enforce search_path at connection time to ensure correct schema usage in environments
         # where connection options may be ignored.
@@ -528,3 +632,19 @@ def get_session_factory():
     if _SessionLocal is None:
         raise RuntimeError("Database session factory not initialized.")
     return _SessionLocal
+
+def cleanup_db():
+    """Cleanup database resources including OAuth token refresh."""
+    global _engine, _SessionLocal, engine
+    
+    # Stop token refresh if running
+    stop_token_refresh_background()
+    
+    # Dispose engine
+    if _engine:
+        _engine.dispose()
+        logger.info("Database engine disposed")
+    
+    _engine = None
+    _SessionLocal = None
+    engine = None

@@ -77,22 +77,29 @@ The application requires a `.env` file in the root directory for configuration. 
 | Variable                   | Description                                                                                                   | Example Value                                | Required |
 |----------------------------|---------------------------------------------------------------------------------------------------------------|----------------------------------------------|----------|
 | `DATABRICKS_HOST`          | Your Databricks workspace URL                                                                                 | `https://your-workspace.cloud.databricks.com`| Yes      |
-| `DATABRICKS_WAREHOUSE_ID`  | The ID of the Databricks SQL Warehouse to use (used by features, not DB)                   | `1234567890abcdef`                           | No    |
-| `DATABRICKS_CATALOG`       | Default Unity Catalog catalog (used by features, not DB)                            | `main`                                       | No    |
-| `DATABRICKS_SCHEMA`        | Default Unity Catalog schema (used by features, not DB)                             | `default`                                    | No    |
+| `DATABRICKS_WAREHOUSE_ID`  | The ID of the Databricks SQL Warehouse to use (used by features, not DB)                                      | `1234567890abcdef`                           | No    |
+| `DATABRICKS_CATALOG`       | Default Unity Catalog catalog (used by features, not DB)                                                      | `main`                                       | No    |
+| `DATABRICKS_SCHEMA`        | Default Unity Catalog schema (used by features, not DB)                                                       | `default`                                    | No    |
 | `DATABRICKS_VOLUME`        | Default Unity Catalog volume for storing app-related files (e.g., data contract outputs)                      | `app_volume`                                 | Yes      |
 | `APP_AUDIT_LOG_DIR`        | Directory path within the `DATABRICKS_VOLUME` for storing audit logs                                          | `audit_logs`                                 | Yes      |
 | `DATABRICKS_TOKEN`         | Personal access token for Databricks authentication (Optional - SDK can use other methods)                    | `dapi1234567890abcdef`                       | No       |
-| `DATABASE_TYPE`            | [Removed] App now uses PostgreSQL for metadata storage.              | `postgres`                                   | -      |
-| `POSTGRES_HOST`            | Hostname or IP address of the PostgreSQL server (required if `DATABASE_TYPE` is `postgres`)                   | `localhost` or `your.pg.server.com`          | Cond.    |
-| `POSTGRES_PORT`            | Port number for the PostgreSQL server (required if `DATABASE_TYPE` is `postgres`)                             | `5432`                                       | Cond.    |
-| `POSTGRES_USER`            | Username for connecting to PostgreSQL (required if `DATABASE_TYPE` is `postgres`)                             | `app_user`                                   | Cond.    |
-| `POSTGRES_PASSWORD`        | Password for the PostgreSQL user (required if `DATABASE_TYPE` is `postgres`)                                  | `your_secure_password`                     | Cond.    |
-| `POSTGRES_DB`              | Name of the PostgreSQL database to use (required if `DATABASE_TYPE` is `postgres`)                            | `app_ontos_db`                               | Cond.    |
-| `DB_SCHEMA`                | Database schema to use for application tables (Optional, defaults to `public` for PostgreSQL)                 | `myapp_schema`                               | No       |
+| `DATABASE_TYPE`            | [Removed] App now uses PostgreSQL for metadata storage.                                                       | `postgres`                                   | -      |
+| `POSTGRES_HOST`            | Hostname or IP address of the PostgreSQL server                                                               | `localhost` or `your.pg.server.com`          | Cond.    |
+| `POSTGRES_PORT`            | Port number for the PostgreSQL server                                                                         | `5432`                                       | Cond.    |
+| `POSTGRES_USER`            | Username for connecting to PostgreSQL                                                                         | `app_user`                                   | Cond.    |
+| `POSTGRES_PASSWORD`        | Password for the PostgreSQL user (required for `ENV=LOCAL`, not needed for Lakebase OAuth)                    | `your_secure_password`                     | Cond.    |
+| `POSTGRES_DB`              | Name of the PostgreSQL database to use                                                                        | `app_ontos_db`                               | Cond.    |
+| `POSTGRES_DB_SCHEMA`       | Database schema to use for application tables (Optional, defaults to `public` for PostgreSQL)                 | `app_ontos`                                  | No       |
+| `LAKEBASE_INSTANCE_NAME`   | Lakebase instance name for OAuth authentication (required for production Lakebase deployments)                | `my-lakebase-instance`                       | Cond.    |
+| `LAKEBASE_DATABASE_NAME`   | Optional Lakebase database name (defaults to `POSTGRES_DB` if not set)                                        | `app_ontos`                                  | No       |
+| `DB_POOL_SIZE`             | Base database connection pool size                                                                            | `5`                                          | No       |
+| `DB_MAX_OVERFLOW`          | Additional database connections under load                                                                    | `10`                                         | No       |
+| `DB_POOL_TIMEOUT`          | Max seconds to wait for a database connection from the pool                                                   | `10`                                         | No       |
+| `DB_POOL_RECYCLE`          | Recycle database connections after this many seconds (prevents stale connections)                             | `3600`                                       | No       |
+| `DB_COMMAND_TIMEOUT`       | Query timeout in seconds                                                                                      | `30`                                         | No       |
 | `ENV`                      | Deployment environment (`LOCAL`, `DEV`, `PROD`)                                                               | `LOCAL`                                      | No       |
 | `DEBUG`                    | Enable debug mode for FastAPI                                                                                 | `True`                                       | No       |
-| `LOG_LEVEL`                | Log level for the application (`DEBUG`, `INFO`, `WARNING`, `ERROR`)                                         | `INFO`                                       | No       |
+| `LOG_LEVEL`                | Log level for the application (`DEBUG`, `INFO`, `WARNING`, `ERROR`)                                           | `INFO`                                       | No       |
 | `LOG_FILE`                 | Path to a log file (if logging to file is desired)                                                            | `/path/to/app.log`                           | No       |
 | `APP_ADMIN_DEFAULT_GROUPS` | JSON string array of Databricks group names to assign the default 'Admin' role upon first startup.            | `["admins", "superusers"]`                   | No       |
 | `GIT_REPO_URL`             | URL of the Git repository for optional YAML configuration backup/sync                                         | `https://github.com/user/repo.git`         | No       |
@@ -109,14 +116,53 @@ The application requires a `.env` file in the root directory for configuration. 
 
 The application stores its metadata (settings, roles, reviews, etc.) in PostgreSQL only.
 
-Required PostgreSQL variables:
+**Authentication Modes:**
+- **Local Development (`ENV=LOCAL`)**: Uses password authentication with `POSTGRES_PASSWORD`
+- **Production (`ENV=DEV` or `ENV=PROD`)**: Uses OAuth token authentication for Lakebase with `LAKEBASE_INSTANCE_NAME`
+
+**Required PostgreSQL variables:**
 
 - `POSTGRES_HOST`: Hostname of your PostgreSQL server.
 - `POSTGRES_PORT`: Port of your PostgreSQL server (default `5432`).
 - `POSTGRES_USER`: Username for PostgreSQL connection.
-- `POSTGRES_PASSWORD`: Password for the PostgreSQL user.
+- `POSTGRES_PASSWORD`: Password for the PostgreSQL user (required for `ENV=LOCAL` only).
 - `POSTGRES_DB`: Database name on the PostgreSQL server.
 - `POSTGRES_DB_SCHEMA`: Optional schema in the PostgreSQL database (defaults to `public`).
+
+**Lakebase-specific variables (for production):**
+
+- `LAKEBASE_INSTANCE_NAME`: The name of your Lakebase database instance (required when not using password auth).
+- `LAKEBASE_DATABASE_NAME`: Optional database name override (defaults to `POSTGRES_DB`).
+
+#### Connection Pool Settings
+
+The application uses SQLAlchemy connection pooling for efficient database resource management. These settings can be tuned based on your deployment needs:
+
+| Parameter           | Default | Description                                      | Recommended Values       |
+|---------------------|---------|--------------------------------------------------|--------------------------|
+| `DB_POOL_SIZE`      | 5       | Base number of connections maintained in pool   | 5-10 for most apps       |
+| `DB_MAX_OVERFLOW`   | 10      | Additional connections allowed under load        | 2x `DB_POOL_SIZE`        |
+| `DB_POOL_TIMEOUT`   | 10      | Max seconds to wait for available connection     | 10-30 seconds            |
+| `DB_POOL_RECYCLE`   | 3600    | Recycle connections after this many seconds      | 3600 (1 hour)            |
+| `DB_COMMAND_TIMEOUT`| 30      | Query execution timeout in seconds               | 30-60 seconds            |
+
+**Performance Tuning Examples:**
+
+For high-traffic production environments:
+```bash
+DB_POOL_SIZE=10
+DB_MAX_OVERFLOW=20
+DB_POOL_TIMEOUT=30
+```
+
+For local development:
+```bash
+DB_POOL_SIZE=2
+DB_MAX_OVERFLOW=5
+DB_POOL_TIMEOUT=10
+```
+
+**Note:** The `DB_POOL_RECYCLE=3600` (1 hour) default is especially important for Lakebase deployments, as it ensures connections are refreshed before OAuth tokens expire.
 
 ## Prerequisites
 
@@ -226,80 +272,73 @@ If you want to use a local PostgreSQL instance for development, here are the ste
 
     Note: Use the above `<my_password>` here
     
-When using Lakebase, follow these steps:
+### Setting up Lakebase (Production)
 
-1. Set up a new [server instance](https://docs.databricks.com/aws/en/oltp/instances/instance) (Note: Wait for it to start!)
+When deploying to production with Lakebase, the application uses **OAuth token authentication** instead of passwords. The application automatically generates and refreshes OAuth tokens every 50 minutes.
 
-2. Generate an [OAuth token](https://docs.databricks.com/aws/en/oltp/instances/authentication?language=UI#obtain-an-oauth-token-in-a-user-to-machine-flow) for your user ID, and copy it to the clipboard
+1. Set up a new [Lakebase instance](https://docs.databricks.com/aws/en/oltp/instances/instance) (Note: Wait for it to start!)
+
+2. Generate a temporary [OAuth token](https://docs.databricks.com/aws/en/oltp/instances/authentication?language=UI#obtain-an-oauth-token-in-a-user-to-machine-flow) for your user ID to set up the database schema
 
 3. Use the UI-provided `psql` command to connect to the database and paste the OAuth token as the password
 
     ```sh
     psql "host=instance-12345678-...64761fa328.database.cloud.databricks.com user=<your_user_id> dbname=databricks_postgres port=5432 sslmode=require"
-    Password for user <your_user_id>: 
+    Password for user <your_user_id>: <paste OAuth token>
     psql (16.10 (Homebrew), server 16.9 (165f042))
     SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off)
     Type "help" for help.
     ```
 
-4. Run the necessary commands to create resources
+4. Create the database and schema (note: no password needed for the app user in OAuth mode)
 
     ```sql
-    CREATE ROLE ontos_app_user WITH LOGIN PASSWORD '<my_password>';
-    GRANT ontos_app_user TO "<your_user_id>";
-
     CREATE DATABASE app_ontos;
-    GRANT ALL PRIVILEGES ON DATABASE app_ontos TO ontos_app_user;
-    GRANT USAGE ON SCHEMA public TO ontos_app_user;
-    GRANT CREATE ON SCHEMA public TO ontos_app_user;
-    \q
-    ```
-
-    Reconnect to switch the database:
-
-    ```sh
-    psql "host=instance-12345678-...64761fa328.database.cloud.databricks.com user=<your_user_id> dbname=app_ontos port=5432 sslmode=require"
-    Password for user <your_user_id>: 
-    psql (16.10 (Homebrew), server 16.9 (165f042))
-    SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off)
-    Type "help" for help.
-    ```
-
-    Run the remaining commands:
-
-    ```sql
     CREATE SCHEMA app_ontos;
-    ALTER SCHEMA app_ontos OWNER TO ontos_app_user;
-    GRANT USAGE ON SCHEMA app_ontos TO ontos_app_user;
-    GRANT ALL ON SCHEMA app_ontos TO ontos_app_user;
+    
+    -- Grant permissions to the service principal that will run the app
+    -- Replace <service_principal_name> with your app's service principal
+    GRANT ALL PRIVILEGES ON DATABASE app_ontos TO <service_principal_name>;
+    GRANT ALL ON SCHEMA app_ontos TO <service_principal_name>;
     \q
     ```
 
-    Note: Replace `<my_password>` with your password of choice, and `<your_user_id>` with the Postgres user ID you logged into the server.
-
-5. Configure the database settings in your `app.yaml`
+5. Configure the database settings in your `app.yaml` for OAuth authentication
 
     ```yaml
     - name: "POSTGRES_HOST"
-        value: "instance-12345678-...64761fa328.database.cloud.databricks.com"
+        valueFrom: "database_host"  # Use Databricks resource reference
     - name: "POSTGRES_PORT"
         value: "5432"
     - name: "POSTGRES_USER"
-        value: "ontos_app_user"
-    - name: "POSTGRES_PASSWORD"
-        valueFrom: "db_password"
-    - name: "POSTGRES_PASSWORD_SECRET"
-        value: "ontos/db_password"
+        value: "<service_principal_name>"  # Your app's service principal
+    # POSTGRES_PASSWORD not needed - using OAuth authentication
     - name: "POSTGRES_DB"
         value: "app_ontos"
     - name: "POSTGRES_DB_SCHEMA"
         value: "app_ontos"
+    - name: "LAKEBASE_INSTANCE_NAME"
+        valueFrom: "database_instance"  # Reference to your Lakebase instance
+    - name: "ENV"
+        value: "PROD"  # Triggers OAuth mode (not LOCAL)
     ```
 
-Note: Databricks Apps uses [resources](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/resources) to inject the secret value into the apps environment (by using `valueFrom`).
-We also want to set the actual secret name (with scope) so that the app can pass that to the background jobs in due course.
-The jobs will then, in turn, retrieve the secret value using the Databricks API, avoiding the exposure of the database password as a job parameter.
-Since jobs are run using the apps service principal, it is given that the job can access the secret, just like the app itself. 
+**How OAuth Authentication Works:**
+
+- The application uses the Databricks SDK to automatically generate OAuth tokens at startup
+- Tokens are refreshed every 50 minutes in the background (before the 60-minute expiry)
+- Database connections automatically receive fresh tokens via SQLAlchemy event handlers
+- No password storage or management required
+- All authentication uses the app's service principal credentials
+
+**Note:** For background jobs, use `POSTGRES_PASSWORD_SECRET` to pass the secret reference:
+
+```yaml
+- name: "POSTGRES_PASSWORD_SECRET"
+    value: "ontos/db_password"  # Only needed for job workflows
+```
+
+This allows jobs to retrieve database credentials securely using the Databricks Secrets API. 
 
 ## Installation
 

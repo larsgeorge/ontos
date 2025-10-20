@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from src.common.config import get_settings, Settings
 from src.common.logging import get_logger
-from src.common.database import init_db, get_session_factory, Base, engine
+from src.common.database import init_db, get_session_factory, Base, engine, cleanup_db
 from src.common.workspace_client import get_workspace_client
 from src.common.features import FeatureAccessLevel, APP_FEATURES, get_feature_config
 from src.models.settings import AppRoleCreate, AppRole as AppRoleApi
@@ -497,5 +497,13 @@ async def startup_event_handler(app: FastAPI):
 async def shutdown_event_handler(app: FastAPI):
     # Implement shutdown logic here
     logger.info("Executing application shutdown event handler...")
-    # Add any necessary cleanup or resource release logic here
+    
+    # Cleanup database resources (including OAuth token refresh thread)
+    try:
+        cleanup_db()
+        logger.info("Database cleanup completed successfully")
+    except Exception as e:
+        logger.error(f"Error during database cleanup: {e}", exc_info=True)
+    
+    # Add any other necessary cleanup or resource release logic here
     logger.info("Application shutdown event handler finished successfully.") 

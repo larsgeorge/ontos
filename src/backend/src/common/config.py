@@ -40,6 +40,17 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD_SECRET: Optional[str] = None  # Databricks secret name (e.g., "ontos/postgres_password")
     POSTGRES_DB: Optional[str] = None
     POSTGRES_DB_SCHEMA: Optional[str] = "public" # Default schema for Postgres
+    
+    # Lakebase connection settings (for OAuth-based authentication in production)
+    LAKEBASE_INSTANCE_NAME: Optional[str] = None  # Lakebase instance name for OAuth
+    LAKEBASE_DATABASE_NAME: Optional[str] = None  # Optional, defaults to POSTGRES_DB
+    
+    # Database connection pool settings
+    DB_POOL_SIZE: int = Field(5, env='DB_POOL_SIZE')  # Base connection pool size
+    DB_MAX_OVERFLOW: int = Field(10, env='DB_MAX_OVERFLOW')  # Additional connections under load
+    DB_POOL_TIMEOUT: int = Field(10, env='DB_POOL_TIMEOUT')  # Max seconds to wait for connection
+    DB_POOL_RECYCLE: int = Field(3600, env='DB_POOL_RECYCLE')  # Recycle connections (seconds)
+    DB_COMMAND_TIMEOUT: int = Field(30, env='DB_COMMAND_TIMEOUT')  # Query timeout in seconds
 
     # Databricks connection settings
     DATABRICKS_HOST: str
