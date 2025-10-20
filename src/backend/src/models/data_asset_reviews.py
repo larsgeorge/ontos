@@ -88,8 +88,11 @@ class AssetAnalysisResponse(BaseModel):
     request_id: str = Field(..., description="The ID of the review request.")
     asset_id: str = Field(..., description="The ID of the reviewed asset.")
     analysis_summary: str = Field(..., description="The LLM-generated summary of the asset review.")
-    model_used: Optional[str] = Field(None, description="The name of the LLM model used for analysis.")
+    llm_model_used: Optional[str] = Field(None, alias="model_used", description="The name of the LLM model used for analysis.")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of when the analysis was performed.")
     # Security metadata for two-phased verification
     phase1_passed: bool = Field(True, description="Whether the security check (phase 1) passed.")
     render_as_markdown: bool = Field(True, description="Whether the content is safe to render as markdown (phase 1 passed).")
+    
+    class Config:
+        populate_by_name = True

@@ -365,7 +365,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                     request_id=request_id,
                     asset_id=asset_id,
                     analysis_summary=sanitize_markdown_input(result.content),  # Sanitize security warning
-                    model_used=result.model_used,
+                    llm_model_used=result.llm_model_used,
                     timestamp=result.timestamp,
                     phase1_passed=False,
                     render_as_markdown=False  # Must display as plain text
@@ -382,7 +382,7 @@ class DataAssetReviewManager(SearchableAsset): # Inherit from SearchableAsset
                 request_id=request_id,
                 asset_id=asset_id,
                 analysis_summary=sanitize_markdown_input(result.content),  # Sanitize LLM output
-                model_used=result.model_used,
+                llm_model_used=result.llm_model_used,
                 timestamp=result.timestamp,
                 phase1_passed=True,
                 render_as_markdown=True  # Safe to render as markdown

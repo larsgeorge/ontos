@@ -26,7 +26,7 @@ class LLMAnalysisResult:
     content: str
     phase1_passed: bool  # True if security check passed
     render_as_markdown: bool  # True if safe to render as markdown (phase1 passed)
-    model_used: Optional[str] = None
+    llm_model_used: Optional[str] = None
     error_message: Optional[str] = None
     timestamp: datetime = None
 
@@ -265,7 +265,7 @@ class LLMService:
                 content=warning_message,
                 phase1_passed=False,
                 render_as_markdown=False,  # Must display as plain text
-                model_used=endpoint,
+                llm_model_used=endpoint,
                 error_message=security_reason
             )
 
@@ -278,7 +278,7 @@ class LLMService:
                 content="",
                 phase1_passed=True,
                 render_as_markdown=False,
-                model_used=endpoint,
+                llm_model_used=endpoint,
                 error_message="Content analysis failed after security check"
             )
 
@@ -288,7 +288,7 @@ class LLMService:
             content=analysis,
             phase1_passed=True,
             render_as_markdown=True,  # Safe to render as markdown
-            model_used=endpoint
+            llm_model_used=endpoint
         )
 
 
