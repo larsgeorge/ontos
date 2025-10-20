@@ -299,21 +299,31 @@ def get_db_url(settings: Settings) -> str:
     """Construct the PostgreSQL SQLAlchemy URL with appropriate auth method."""
     
     # Validate required settings
-    if not all([settings.POSTGRES_HOST, settings.POSTGRES_USER, settings.POSTGRES_DB]):
-        raise ValueError("PostgreSQL connection details (Host, User, DB) are missing in settings.")
+    if not all([settings.POSTGRES_HOST, settings.POSTGRES_DB]):
+        raise ValueError("PostgreSQL connection details (Host, DB) are missing in settings.")
     
     # Determine authentication mode based on ENV
     use_password_auth = settings.ENV.upper().startswith("LOCAL")
     
     if use_password_auth:
         logger.info("Database: Using password authentication (LOCAL mode)")
-        if not settings.POSTGRES_PASSWORD:
-            raise ValueError("POSTGRES_PASSWORD required for LOCAL mode")
+        if not settings.POSTGRES_PASSWORD or not settings.POSTGRES_USER:
+            raise ValueError("POSTGRES_PASSWORD and POSTGRES_USER required for LOCAL mode")
+        username = settings.POSTGRES_USER
         password = settings.POSTGRES_PASSWORD
     else:
         logger.info("Database: Using OAuth authentication (Lakebase mode)")
-        # Initial token will be set via connection event handler
-        password = ""
+        # Dynamically determine username from authenticated principal
+        ws_client = get_workspace_client(settings)
+        username = (
+            os.getenv("DATABRICKS_CLIENT_ID")
+            or ws_client.current_user.me().user_name
+        )
+        if not username:
+            raise ValueError("Could not determine database username from authenticated principal")
+        
+        logger.info(f"🔑 Detected service principal username: {username}")
+        password = ""  # Will be set via event handler
     
     # Build URL with schema options
     query_params = {}
@@ -338,6 +348,63 @@ def get_db_url(settings: Settings) -> str:
         f"{db_url_obj.render_as_string(hide_password=True)}"
     )
     return url_str
+
+
+def log_database_setup_info(settings: Settings):
+    """Log complete database setup information for Lakebase configuration."""
+    if not settings.ENV.upper().startswith("LOCAL"):
+        try:
+            ws_client = get_workspace_client(settings)
+            username = (
+                os.getenv("DATABRICKS_CLIENT_ID")
+                or ws_client.current_user.me().user_name
+            )
+            if not username:
+                logger.warning("Could not determine service principal username for setup info")
+                return
+            
+            db_name = settings.POSTGRES_DB
+            schema_name = settings.POSTGRES_DB_SCHEMA or "public"
+            
+            logger.info("")
+            logger.info("=" * 80)
+            logger.info("LAKEBASE DATABASE SETUP INSTRUCTIONS")
+            logger.info("=" * 80)
+            logger.info(f"Service Principal: {username}")
+            logger.info(f"Database: {db_name}")
+            logger.info(f"Schema: {schema_name}")
+            logger.info("")
+            logger.info("Connect to Lakebase with your OAuth token, then run these commands:")
+            logger.info("")
+            logger.info(f"-- 1. Create the database")
+            logger.info(f"CREATE DATABASE {db_name};")
+            logger.info("")
+            logger.info(f"-- 2. Connect to the new database")
+            logger.info(f"\\c {db_name}")
+            logger.info("")
+            logger.info(f"-- 3. Create the schema")
+            logger.info(f"CREATE SCHEMA {schema_name};")
+            logger.info("")
+            logger.info(f"-- 4. Create the role for service principal (forces it to exist)")
+            logger.info(f'CREATE ROLE "{username}" WITH LOGIN;')
+            logger.info("")
+            logger.info(f"-- 5. Grant all permissions")
+            logger.info(f'GRANT ALL PRIVILEGES ON DATABASE {db_name} TO "{username}";')
+            logger.info(f'GRANT ALL PRIVILEGES ON SCHEMA {schema_name} TO "{username}";')
+            logger.info(f'GRANT ALL ON ALL TABLES IN SCHEMA {schema_name} TO "{username}";')
+            logger.info("")
+            logger.info(f"-- 6. Make service principal the owner")
+            logger.info(f'ALTER DATABASE {db_name} OWNER TO "{username}";')
+            logger.info(f'ALTER SCHEMA {schema_name} OWNER TO "{username}";')
+            logger.info("")
+            logger.info(f"-- 7. Set default privileges for future objects")
+            logger.info(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {schema_name} GRANT ALL ON TABLES TO "{username}";')
+            logger.info(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {schema_name} GRANT ALL ON SEQUENCES TO "{username}";')
+            logger.info("")
+            logger.info("=" * 80)
+            logger.info("")
+        except Exception as e:
+            logger.warning(f"Could not generate database setup info: {e}", exc_info=True)
 
 
 def ensure_catalog_schema_exists(settings: Settings):
@@ -420,6 +487,9 @@ def init_db() -> None:
         return
 
     logger.info("Initializing database engine and session factory...")
+    
+    # Log database setup information for OAuth mode
+    log_database_setup_info(settings)
 
     try:
         db_url = get_db_url(settings)
