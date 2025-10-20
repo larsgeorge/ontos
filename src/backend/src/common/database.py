@@ -415,11 +415,23 @@ def ensure_database_and_schema_exist(settings: Settings):
             db_exists = result.scalar() is not None
             
             if not db_exists:
-                logger.info(f"Creating database: {target_db}")
-                conn.execute(text(f'CREATE DATABASE "{target_db}"'))
-                logger.info(f"✓ Database created: {target_db} (owner: {username})")
+                logger.info(f"Database does not exist, attempting to create: {target_db}")
+                try:
+                    conn.execute(text(f'CREATE DATABASE "{target_db}"'))
+                    logger.info(f"✓ Database created: {target_db} (owner: {username})")
+                except Exception as e:
+                    if "permission denied" in str(e).lower():
+                        logger.warning(f"Cannot create database (insufficient privileges). "
+                                     f"Database '{target_db}' must be created manually.")
+                        logger.warning(f"Run this as a Lakebase admin: CREATE DATABASE \"{target_db}\";")
+                        raise RuntimeError(
+                            f"Database '{target_db}' does not exist and service principal lacks CREATEDB privilege. "
+                            f"Please create the database manually first."
+                        ) from e
+                    else:
+                        raise
             else:
-                logger.info(f"Database already exists: {target_db}")
+                logger.info(f"✓ Database already exists: {target_db}")
         
         # Now connect to target database to create schema
         target_db_url = URL.create(
@@ -439,32 +451,56 @@ def ensure_database_and_schema_exist(settings: Settings):
             if _oauth_token:
                 cparams["password"] = _oauth_token
         
-        with target_engine.connect() as conn:
-            if target_schema and target_schema != "public":
-                # Check if schema exists
-                result = conn.execute(text(
-                    f"SELECT 1 FROM information_schema.schemata WHERE schema_name = '{target_schema}'"
-                ))
-                schema_exists = result.scalar() is not None
-                
-                if not schema_exists:
-                    logger.info(f"Creating schema: {target_schema}")
-                    conn.execute(text(f'CREATE SCHEMA "{target_schema}"'))
-                    logger.info(f"✓ Schema created: {target_schema} (owner: {username})")
+        try:
+            with target_engine.connect() as conn:
+                if target_schema and target_schema != "public":
+                    # Check if schema exists
+                    result = conn.execute(text(
+                        f"SELECT 1 FROM information_schema.schemata WHERE schema_name = '{target_schema}'"
+                    ))
+                    schema_exists = result.scalar() is not None
                     
-                    # Set default privileges for future objects
-                    logger.info(f"Setting default privileges in schema: {target_schema}")
-                    conn.execute(text(
-                        f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{target_schema}" '
-                        f'GRANT ALL ON TABLES TO "{username}"'
-                    ))
-                    conn.execute(text(
-                        f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{target_schema}" '
-                        f'GRANT ALL ON SEQUENCES TO "{username}"'
-                    ))
-                    logger.info(f"✓ Default privileges configured")
-                else:
-                    logger.info(f"Schema already exists: {target_schema}")
+                    if not schema_exists:
+                        logger.info(f"Creating schema: {target_schema}")
+                        conn.execute(text(f'CREATE SCHEMA "{target_schema}"'))
+                        logger.info(f"✓ Schema created: {target_schema} (owner: {username})")
+                        
+                        # Set default privileges for future objects
+                        logger.info(f"Setting default privileges in schema: {target_schema}")
+                        conn.execute(text(
+                            f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{target_schema}" '
+                            f'GRANT ALL ON TABLES TO "{username}"'
+                        ))
+                        conn.execute(text(
+                            f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{target_schema}" '
+                            f'GRANT ALL ON SEQUENCES TO "{username}"'
+                        ))
+                        logger.info(f"✓ Default privileges configured")
+                    else:
+                        logger.info(f"Schema already exists: {target_schema}")
+        except Exception as e:
+            if "permission denied for database" in str(e).lower():
+                logger.error(
+                    f"❌ Cannot create schema in database '{target_db}' - service principal lacks permissions."
+                )
+                logger.error(
+                    f"The database exists but was not created with the service principal as owner."
+                )
+                logger.error(
+                    f"To fix this, run as a Lakebase admin:"
+                )
+                logger.error(
+                    f'  DROP DATABASE IF EXISTS "{target_db}";'
+                )
+                logger.error(
+                    f'  CREATE DATABASE "{target_db}" OWNER "{username}";'
+                )
+                raise RuntimeError(
+                    f"Database '{target_db}' exists but service principal '{username}' lacks CREATE privilege. "
+                    f"Please recreate the database with the service principal as owner."
+                ) from e
+            else:
+                raise
             
             conn.commit()
         

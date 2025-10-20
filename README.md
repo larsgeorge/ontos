@@ -276,7 +276,7 @@ If you want to use a local PostgreSQL instance for development, here are the ste
 
 When deploying to production with Lakebase, the application uses **OAuth token authentication** instead of passwords. The application automatically generates and refreshes OAuth tokens every 50 minutes.
 
-**The setup is fully automated!** The app creates its own database and schema on first startup.
+**Setup is mostly automated** - you only need to create the database once with the correct owner, then the app handles schema creation and table setup automatically.
 
 #### Setup Steps
 
@@ -300,20 +300,46 @@ When deploying to production with Lakebase, the application uses **OAuth token a
         value: "PROD"  # Triggers OAuth mode (not LOCAL)
     ```
 
-3. **Deploy your app** - That's it!
+3. **Deploy your app for the first time** (this will fail, but that's expected):
 
-   On first startup, the app will:
+    ```sh
+    databricks apps deploy <app-name>
+    ```
+    
+    The deployment will fail with a "database does not exist" error. **This is normal!** 
+    Check the error logs - they will show the **service principal ID** (a UUID like `150d07c5-159c-4656-ab3a-8db778804b6b`). Copy this ID.
+
+4. **Create the database with the service principal as owner** (one-time setup):
+
+    ```sh
+    # Connect with your OAuth token
+    psql "host=instance-xxx.database.cloud.databricks.com user=<your_email> dbname=postgres port=5432 sslmode=require"
+    Password: <paste OAuth token>
+    
+    # Create the database with the service principal as owner (replace UUID with your service principal ID from logs)
+    CREATE DATABASE "app_ontos" OWNER "150d07c5-159c-4656-ab3a-8db778804b6b";
+    \q
+    ```
+    
+    **Important:** Make sure to use the exact service principal UUID from the error logs, including quotes.
+
+5. **Restart your app** - That's it!
+
+   ```sh
+   databricks apps restart <app-name>
+   ```
+
+   On startup, the app will now:
    - Authenticate as its service principal using OAuth
-   - Connect to the default `postgres` database (this auto-creates the service principal role)
-   - Create the `app_ontos` database (becomes owner automatically)
-   - Create the `app_ontos` schema (becomes owner automatically)
+   - Verify the `app_ontos` database exists (with SP as owner)
+   - Create the `app_ontos` schema (inherits full privileges as database owner)
    - Set default privileges for future tables/sequences
    - Create all application tables
 
 #### How It Works
 
-- **Automatic setup:** No manual database creation required
-- **Zero manual grants:** The app owns what it creates (full privileges automatically)
+- **One-time manual setup:** Only the database needs to be created once with the service principal as owner (Lakebase limitation: service principals can't create databases, and auto-deployed service principals don't exist until first deployment)
+- **Zero manual grants:** The app creates and owns the schema as the database owner (full privileges automatically)
 - **Username detection:** Service principal username is auto-detected at runtime
 - **Token generation:** OAuth tokens are automatically generated using the Databricks SDK
 - **Token refresh:** Tokens refresh every 50 minutes in the background (before 60-minute expiry)
