@@ -8,7 +8,7 @@ env:
   - name: "FRONTEND_STATIC_DIR"
     value: "./static"
   - name: "POSTGRES_HOST"
-    valueFrom: "database_host"
+    valueFrom: "database_instance"
   - name: "POSTGRES_PORT"
     value: "5432"
   - name: "POSTGRES_USER"
