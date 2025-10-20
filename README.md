@@ -276,60 +276,49 @@ If you want to use a local PostgreSQL instance for development, here are the ste
 
 When deploying to production with Lakebase, the application uses **OAuth token authentication** instead of passwords. The application automatically generates and refreshes OAuth tokens every 50 minutes.
 
-1. Set up a new [Lakebase instance](https://docs.databricks.com/aws/en/oltp/instances/instance) (Note: Wait for it to start!)
+**The setup is fully automated!** The app creates its own database and schema on first startup.
 
-2. Generate a temporary [OAuth token](https://docs.databricks.com/aws/en/oltp/instances/authentication?language=UI#obtain-an-oauth-token-in-a-user-to-machine-flow) for your user ID to set up the database schema
+#### Setup Steps
 
-3. Use the UI-provided `psql` command to connect to the database and paste the OAuth token as the password
+1. **Set up a new [Lakebase instance](https://docs.databricks.com/aws/en/oltp/instances/instance)** (Note: Wait for it to start!)
 
-    ```sh
-    psql "host=instance-12345678-...64761fa328.database.cloud.databricks.com user=<your_user_id> dbname=databricks_postgres port=5432 sslmode=require"
-    Password for user <your_user_id>: <paste OAuth token>
-    psql (16.10 (Homebrew), server 16.9 (165f042))
-    SSL connection (protocol: TLSv1.3, cipher: TLS_AES_256_GCM_SHA384, compression: off)
-    Type "help" for help.
-    ```
-
-4. Create the database and schema (note: no password needed for the app user in OAuth mode)
-
-    ```sql
-    CREATE DATABASE app_ontos;
-    CREATE SCHEMA app_ontos;
-    
-    -- Grant permissions to the service principal that will run the app
-    -- Replace <service_principal_name> with your app's service principal
-    GRANT ALL PRIVILEGES ON DATABASE app_ontos TO <service_principal_name>;
-    GRANT ALL ON SCHEMA app_ontos TO <service_principal_name>;
-    \q
-    ```
-
-5. Configure the database settings in your `app.yaml` for OAuth authentication
+2. **Configure your `app.yaml`** with the Lakebase instance details:
 
     ```yaml
     - name: "POSTGRES_HOST"
-        valueFrom: "database_host"  # Use Databricks resource reference
+        valueFrom: "database_host"  # References your Lakebase instance
     - name: "POSTGRES_PORT"
         value: "5432"
-    - name: "POSTGRES_USER"
-        value: "<service_principal_name>"  # Your app's service principal
-    # POSTGRES_PASSWORD not needed - using OAuth authentication
+    # POSTGRES_USER is auto-detected from service principal - do not set
     - name: "POSTGRES_DB"
         value: "app_ontos"
     - name: "POSTGRES_DB_SCHEMA"
         value: "app_ontos"
     - name: "LAKEBASE_INSTANCE_NAME"
-        valueFrom: "database_instance"  # Reference to your Lakebase instance
+        valueFrom: "database_instance"  # The readable instance name
     - name: "ENV"
         value: "PROD"  # Triggers OAuth mode (not LOCAL)
     ```
 
-**How OAuth Authentication Works:**
+3. **Deploy your app** - That's it!
 
-- The application uses the Databricks SDK to automatically generate OAuth tokens at startup
-- Tokens are refreshed every 50 minutes in the background (before the 60-minute expiry)
-- Database connections automatically receive fresh tokens via SQLAlchemy event handlers
-- No password storage or management required
-- All authentication uses the app's service principal credentials
+   On first startup, the app will:
+   - Authenticate as its service principal using OAuth
+   - Connect to the default `postgres` database (this auto-creates the service principal role)
+   - Create the `app_ontos` database (becomes owner automatically)
+   - Create the `app_ontos` schema (becomes owner automatically)
+   - Set default privileges for future tables/sequences
+   - Create all application tables
+
+#### How It Works
+
+- **Automatic setup:** No manual database creation required
+- **Zero manual grants:** The app owns what it creates (full privileges automatically)
+- **Username detection:** Service principal username is auto-detected at runtime
+- **Token generation:** OAuth tokens are automatically generated using the Databricks SDK
+- **Token refresh:** Tokens refresh every 50 minutes in the background (before 60-minute expiry)
+- **Connection pooling:** Fresh tokens are automatically injected into database connections
+- **No hardcoding:** Service principal names are never hardcoded in configuration files
 
 **Note:** For background jobs, use `POSTGRES_PASSWORD_SECRET` to pass the secret reference:
 

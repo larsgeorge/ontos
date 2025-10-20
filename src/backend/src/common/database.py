@@ -350,61 +350,133 @@ def get_db_url(settings: Settings) -> str:
     return url_str
 
 
-def log_database_setup_info(settings: Settings):
-    """Log complete database setup information for Lakebase configuration."""
-    if not settings.ENV.upper().startswith("LOCAL"):
-        try:
-            ws_client = get_workspace_client(settings)
-            username = (
-                os.getenv("DATABRICKS_CLIENT_ID")
-                or ws_client.current_user.me().user_name
-            )
-            if not username:
-                logger.warning("Could not determine service principal username for setup info")
-                return
+def ensure_database_and_schema_exist(settings: Settings):
+    """
+    Ensure the target database and schema exist. If not, create them.
+    Only runs in OAuth mode (non-LOCAL). Connects to default postgres database
+    to create target database, then creates schema within it.
+    
+    The app (as service principal) becomes the owner of what it creates,
+    eliminating permission issues.
+    """
+    if settings.ENV.upper().startswith("LOCAL"):
+        logger.debug("LOCAL mode: Skipping database auto-creation (assuming pre-existing)")
+        return
+    
+    target_db = settings.POSTGRES_DB
+    target_schema = settings.POSTGRES_DB_SCHEMA
+    
+    logger.info("Checking if database and schema need to be created...")
+    
+    # Get service principal username
+    ws_client = get_workspace_client(settings)
+    username = (
+        os.getenv("DATABRICKS_CLIENT_ID")
+        or ws_client.current_user.me().user_name
+    )
+    
+    if not username:
+        raise ValueError("Could not determine service principal username")
+    
+    logger.info(f"Service Principal: {username}")
+    
+    # Generate initial OAuth token
+    refresh_oauth_token(settings)
+    
+    # Build URL for default postgres database
+    default_db_url = URL.create(
+        drivername="postgresql+psycopg2",
+        username=username,
+        password="",
+        host=settings.POSTGRES_HOST,
+        port=settings.POSTGRES_PORT,
+        database="postgres",  # Connect to default database first
+    )
+    
+    # Create temporary engine for postgres database
+    temp_engine = create_engine(
+        default_db_url.render_as_string(hide_password=False),
+        isolation_level="AUTOCOMMIT"  # Needed for CREATE DATABASE
+    )
+    
+    # Inject OAuth token for connections
+    @event.listens_for(temp_engine, "do_connect")
+    def inject_token_temp(dialect, conn_rec, cargs, cparams):
+        global _oauth_token
+        if _oauth_token:
+            cparams["password"] = _oauth_token
+    
+    try:
+        with temp_engine.connect() as conn:
+            # Check if target database exists
+            result = conn.execute(text(
+                f"SELECT 1 FROM pg_database WHERE datname = '{target_db}'"
+            ))
+            db_exists = result.scalar() is not None
             
-            db_name = settings.POSTGRES_DB
-            schema_name = settings.POSTGRES_DB_SCHEMA or "public"
+            if not db_exists:
+                logger.info(f"Creating database: {target_db}")
+                conn.execute(text(f'CREATE DATABASE "{target_db}"'))
+                logger.info(f"✓ Database created: {target_db} (owner: {username})")
+            else:
+                logger.info(f"Database already exists: {target_db}")
+        
+        # Now connect to target database to create schema
+        target_db_url = URL.create(
+            drivername="postgresql+psycopg2",
+            username=username,
+            password="",
+            host=settings.POSTGRES_HOST,
+            port=settings.POSTGRES_PORT,
+            database=target_db,
+        )
+        
+        target_engine = create_engine(target_db_url.render_as_string(hide_password=False))
+        
+        @event.listens_for(target_engine, "do_connect")
+        def inject_token_target(dialect, conn_rec, cargs, cparams):
+            global _oauth_token
+            if _oauth_token:
+                cparams["password"] = _oauth_token
+        
+        with target_engine.connect() as conn:
+            if target_schema and target_schema != "public":
+                # Check if schema exists
+                result = conn.execute(text(
+                    f"SELECT 1 FROM information_schema.schemata WHERE schema_name = '{target_schema}'"
+                ))
+                schema_exists = result.scalar() is not None
+                
+                if not schema_exists:
+                    logger.info(f"Creating schema: {target_schema}")
+                    conn.execute(text(f'CREATE SCHEMA "{target_schema}"'))
+                    logger.info(f"✓ Schema created: {target_schema} (owner: {username})")
+                    
+                    # Set default privileges for future objects
+                    logger.info(f"Setting default privileges in schema: {target_schema}")
+                    conn.execute(text(
+                        f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{target_schema}" '
+                        f'GRANT ALL ON TABLES TO "{username}"'
+                    ))
+                    conn.execute(text(
+                        f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{target_schema}" '
+                        f'GRANT ALL ON SEQUENCES TO "{username}"'
+                    ))
+                    logger.info(f"✓ Default privileges configured")
+                else:
+                    logger.info(f"Schema already exists: {target_schema}")
             
-            logger.info("")
-            logger.info("=" * 80)
-            logger.info("LAKEBASE DATABASE SETUP INSTRUCTIONS")
-            logger.info("=" * 80)
-            logger.info(f"Service Principal: {username}")
-            logger.info(f"Database: {db_name}")
-            logger.info(f"Schema: {schema_name}")
-            logger.info("")
-            logger.info("Connect to Lakebase with your OAuth token, then run these commands:")
-            logger.info("")
-            logger.info(f"-- 1. Create the database")
-            logger.info(f"CREATE DATABASE {db_name};")
-            logger.info("")
-            logger.info(f"-- 2. Connect to the new database")
-            logger.info(f"\\c {db_name}")
-            logger.info("")
-            logger.info(f"-- 3. Create the schema")
-            logger.info(f"CREATE SCHEMA {schema_name};")
-            logger.info("")
-            logger.info(f"-- 4. Create the role for service principal (forces it to exist)")
-            logger.info(f'CREATE ROLE "{username}" WITH LOGIN;')
-            logger.info("")
-            logger.info(f"-- 5. Grant all permissions")
-            logger.info(f'GRANT ALL PRIVILEGES ON DATABASE {db_name} TO "{username}";')
-            logger.info(f'GRANT ALL PRIVILEGES ON SCHEMA {schema_name} TO "{username}";')
-            logger.info(f'GRANT ALL ON ALL TABLES IN SCHEMA {schema_name} TO "{username}";')
-            logger.info("")
-            logger.info(f"-- 6. Make service principal the owner")
-            logger.info(f'ALTER DATABASE {db_name} OWNER TO "{username}";')
-            logger.info(f'ALTER SCHEMA {schema_name} OWNER TO "{username}";')
-            logger.info("")
-            logger.info(f"-- 7. Set default privileges for future objects")
-            logger.info(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {schema_name} GRANT ALL ON TABLES TO "{username}";')
-            logger.info(f'ALTER DEFAULT PRIVILEGES IN SCHEMA {schema_name} GRANT ALL ON SEQUENCES TO "{username}";')
-            logger.info("")
-            logger.info("=" * 80)
-            logger.info("")
-        except Exception as e:
-            logger.warning(f"Could not generate database setup info: {e}", exc_info=True)
+            conn.commit()
+        
+        target_engine.dispose()
+        
+    except Exception as e:
+        logger.error(f"Error ensuring database/schema exist: {e}", exc_info=True)
+        raise
+    finally:
+        temp_engine.dispose()
+    
+    logger.info("✓ Database and schema are ready")
 
 
 def ensure_catalog_schema_exists(settings: Settings):
@@ -488,8 +560,8 @@ def init_db() -> None:
 
     logger.info("Initializing database engine and session factory...")
     
-    # Log database setup information for OAuth mode
-    log_database_setup_info(settings)
+    # Ensure database and schema exist (creates them if needed in OAuth mode)
+    ensure_database_and_schema_exist(settings)
 
     try:
         db_url = get_db_url(settings)

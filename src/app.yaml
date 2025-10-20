@@ -20,6 +20,9 @@ env:
     value: "app_ontos"
   - name: "LAKEBASE_INSTANCE_NAME"
     value: "ontos"
+  
+  - name: "ENV"
+    value: "PROD"
 
   - name: "DATABRICKS_WAREHOUSE_ID"
     valueFrom: "sql_warehouse"
