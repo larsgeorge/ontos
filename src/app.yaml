@@ -8,7 +8,7 @@ env:
   - name: "FRONTEND_STATIC_DIR"
     value: "./static"
   - name: "POSTGRES_HOST"
-    value: "instance-33607cf0-86c1-4306-a5c3-2464761fa328.database.cloud.databricks.com"
+    value: "instance-4e8da72e-cd0e-4553-8888-d10d709ac735.database.cloud.databricks.com"
   - name: "POSTGRES_PORT"
     value: "5432"
   - name: "POSTGRES_USER"
