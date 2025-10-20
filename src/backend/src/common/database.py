@@ -335,7 +335,7 @@ def get_db_url(settings: Settings) -> str:
     
     db_url_obj = URL.create(
         drivername="postgresql+psycopg2",
-        username=settings.POSTGRES_USER,
+        username=username,
         password=password,
         host=settings.POSTGRES_HOST,
         port=settings.POSTGRES_PORT,
