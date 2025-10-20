@@ -484,7 +484,7 @@ def ensure_database_and_schema_exist(settings: Settings):
                     f"❌ Cannot create schema in database '{target_db}' - service principal lacks permissions."
                 )
                 logger.error(
-                    f"The database exists but was not created with the service principal as owner."
+                    f"The database exists but CREATE privilege was not granted to the service principal."
                 )
                 logger.error(
                     f"To fix this, run as a Lakebase admin:"
@@ -493,11 +493,14 @@ def ensure_database_and_schema_exist(settings: Settings):
                     f'  DROP DATABASE IF EXISTS "{target_db}";'
                 )
                 logger.error(
-                    f'  CREATE DATABASE "{target_db}" OWNER "{username}";'
+                    f'  CREATE DATABASE "{target_db}";'
+                )
+                logger.error(
+                    f'  GRANT CREATE ON DATABASE "{target_db}" TO "{username}";'
                 )
                 raise RuntimeError(
                     f"Database '{target_db}' exists but service principal '{username}' lacks CREATE privilege. "
-                    f"Please recreate the database with the service principal as owner."
+                    f"Please grant CREATE privilege to the service principal."
                 ) from e
             else:
                 raise

@@ -309,15 +309,17 @@ When deploying to production with Lakebase, the application uses **OAuth token a
     The deployment will fail with a "database does not exist" error. **This is normal!** 
     Check the error logs - they will show the **service principal ID** (a UUID like `150d07c5-159c-4656-ab3a-8db778804b6b`). Copy this ID.
 
-4. **Create the database with the service principal as owner** (one-time setup):
+4. **Create the database and grant CREATE privilege to the service principal** (one-time setup):
 
     ```sh
     # Connect with your OAuth token
     psql "host=instance-xxx.database.cloud.databricks.com user=<your_email> dbname=postgres port=5432 sslmode=require"
     Password: <paste OAuth token>
     
-    # Create the database with the service principal as owner (replace UUID with your service principal ID from logs)
-    CREATE DATABASE "app_ontos" OWNER "150d07c5-159c-4656-ab3a-8db778804b6b";
+    # Create the database and grant CREATE privilege (replace UUID with your service principal ID from logs)
+    DROP DATABASE IF EXISTS "app_ontos";
+    CREATE DATABASE "app_ontos";
+    GRANT CREATE ON DATABASE "app_ontos" TO "150d07c5-159c-4656-ab3a-8db778804b6b";
     \q
     ```
     
@@ -331,15 +333,15 @@ When deploying to production with Lakebase, the application uses **OAuth token a
 
    On startup, the app will now:
    - Authenticate as its service principal using OAuth
-   - Verify the `app_ontos` database exists (with SP as owner)
-   - Create the `app_ontos` schema (inherits full privileges as database owner)
+   - Verify the `app_ontos` database exists (with CREATE privilege granted)
+   - Create the `app_ontos` schema (becomes schema owner automatically)
    - Set default privileges for future tables/sequences
    - Create all application tables
 
 #### How It Works
 
-- **One-time manual setup:** Only the database needs to be created once with the service principal as owner (Lakebase limitation: service principals can't create databases, and auto-deployed service principals don't exist until first deployment)
-- **Zero manual grants:** The app creates and owns the schema as the database owner (full privileges automatically)
+- **One-time manual setup:** Only the database needs to be created once with CREATE privilege granted to the service principal (Lakebase limitation: service principals can't create databases, and auto-deployed service principals don't exist until first deployment)
+- **Zero manual grants after setup:** The app creates and owns its schema (full privileges automatically as schema owner)
 - **Username detection:** Service principal username is auto-detected at runtime
 - **Token generation:** OAuth tokens are automatically generated using the Databricks SDK
 - **Token refresh:** Tokens refresh every 50 minutes in the background (before 60-minute expiry)
