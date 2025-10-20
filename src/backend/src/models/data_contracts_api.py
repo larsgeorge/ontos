@@ -232,7 +232,7 @@ class ServerConfig(BaseModel):
     host: Optional[str] = None
     port: Optional[int] = None
     database: Optional[str] = None
-    schema: Optional[str] = None
+    database_schema: Optional[str] = Field(None, alias="schema")
     catalog: Optional[str] = None
     project: Optional[str] = None
     account: Optional[str] = None
@@ -268,7 +268,7 @@ class ODCSContract(BaseModel):
     contractCreatedTs: Optional[str] = None  # ISO datetime string
 
     # Schema section
-    schema: List[SchemaObject] = Field(default_factory=list)
+    contract_schema: List[SchemaObject] = Field(default_factory=list, alias="schema")
 
     # SLA section (ODCS v3.0.2 structure)
     slaDefaultElement: Optional[str] = None
@@ -321,7 +321,7 @@ class DataContractCreate(DataContractBase):
     tenant: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None
-    schema: Optional[List[SchemaObject]] = Field(None)
+    contract_schema: Optional[List[SchemaObject]] = Field(None, alias="schema")
 
     # ODCS v3.0.2 top-level fields
     tags: Optional[List[AssignedTagCreate]] = Field(default_factory=list)
@@ -366,7 +366,7 @@ class DataContractCreate(DataContractBase):
             tenant=self.tenant,
             dataProduct=self.dataProduct,
             description=self.description,
-            schema=self.schema or [],
+            contract_schema=self.contract_schema or [],
         )
 
 
@@ -385,7 +385,7 @@ class DataContractUpdate(BaseModel):
     descriptionPurpose: Optional[str] = Field(None, alias='description_purpose')
     descriptionLimitations: Optional[str] = Field(None, alias='description_limitations')
     # Add schema and semantic links support for updates from wizard
-    schema: Optional[List[SchemaObject]] = Field(None)
+    contract_schema: Optional[List[SchemaObject]] = Field(None, alias="schema")
     authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None)
     qualityRules: Optional[List[QualityRule]] = Field(None)
     serverConfigs: Optional[List[ServerConfig]] = Field(None)
@@ -413,7 +413,7 @@ class DataContractRead(BaseModel):
     contractCreatedTs: Optional[str] = None
 
     # Schema section
-    schema: List[SchemaObject] = Field(default_factory=list)
+    contract_schema: List[SchemaObject] = Field(default_factory=list, alias="schema")
 
     # SLA section (ODCS v3.0.2 structure)
     slaDefaultElement: Optional[str] = None
@@ -460,6 +460,27 @@ class DataContractCommentRead(BaseModel):
     author: str
     message: str
     created_at: Optional[str] = None
+
+
+# ===== Data Contract Tag Models (ODCS Top-Level Tags) =====
+class ContractTagCreate(BaseModel):
+    """Create a simple tag for a data contract (ODCS top-level tags)"""
+    name: str = Field(..., min_length=1, max_length=255, description="Tag name")
+
+
+class ContractTagUpdate(BaseModel):
+    """Update a contract tag"""
+    name: Optional[str] = Field(None, min_length=1, max_length=255, description="New tag name")
+
+
+class ContractTagRead(BaseModel):
+    """Response model for contract tag"""
+    id: str
+    contract_id: str
+    name: str
+
+    class Config:
+        from_attributes = True
 
 
 # Rebuild models to resolve forward references

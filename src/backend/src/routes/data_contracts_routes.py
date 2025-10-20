@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, Depends, Request, Body
@@ -54,7 +54,7 @@ from src.models.notifications import NotificationType, Notification
 from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
 from src.common.deployment_dependencies import get_deployment_policy_manager
 from src.controller.deployment_policy_manager import DeploymentPolicyManager
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import uuid
 import yaml
 
@@ -247,8 +247,11 @@ class RequestPublishPayload(BaseModel):
 
 class RequestDeployPayload(BaseModel):
     catalog: Optional[str] = None
-    schema: Optional[str] = None
+    database_schema: Optional[str] = Field(None, alias="schema")
     message: Optional[str] = None
+    
+    class Config:
+        populate_by_name = True
 
 
 @router.post('/data-contracts/{contract_id}/request-review')
@@ -499,19 +502,19 @@ async def request_deploy_to_catalog(
             is_valid, error_msg = deployment_manager.validate_deployment_target(
                 policy=user_policy,
                 catalog=payload.catalog,
-                schema=payload.schema
+                schema=payload.database_schema
             )
             
             if not is_valid:
                 logger.warning(
                     f"Deployment request denied for {current_user.email} to {payload.catalog}"
-                    f"{('.' + payload.schema) if payload.schema else ''}: {error_msg}"
+                    f"{('.' + payload.database_schema) if payload.database_schema else ''}: {error_msg}"
                 )
                 raise HTTPException(status_code=403, detail=error_msg)
             
             logger.info(
                 f"Deployment target validated for {current_user.email}: "
-                f"{payload.catalog}{('.' + payload.schema) if payload.schema else ''}"
+                f"{payload.catalog}{('.' + payload.database_schema) if payload.database_schema else ''}"
             )
         
         now = datetime.utcnow()
@@ -524,7 +527,7 @@ async def request_deploy_to_catalog(
             type=NotificationType.INFO,
             title="Deploy Request Submitted",
             subtitle=f"Contract: {contract.name}",
-            description=f"Your deployment request has been submitted for approval.{' Target: ' + payload.catalog + '.' + payload.schema if payload.catalog and payload.schema else ''}",
+            description=f"Your deployment request has been submitted for approval.{' Target: ' + payload.catalog + '.' + payload.database_schema if payload.catalog and payload.database_schema else ''}",
             recipient=requester_email,
             can_delete=True,
         )
@@ -538,7 +541,7 @@ async def request_deploy_to_catalog(
             title="Contract Deployment Request",
             subtitle=f"From: {requester_email}",
             description=f"Deploy request for contract '{contract.name}' (ID: {contract_id})" + 
-                        (f"\nTarget: {payload.catalog}.{payload.schema}" if payload.catalog and payload.schema else "") +
+                        (f"\nTarget: {payload.catalog}.{payload.database_schema}" if payload.catalog and payload.database_schema else "") +
                         (f"\nMessage: {payload.message}" if payload.message else ""),
             recipient="Admin",  # Route to admins
             action_type="handle_deploy_request",
@@ -547,7 +550,7 @@ async def request_deploy_to_catalog(
                 "contract_name": contract.name,
                 "requester_email": requester_email,
                 "catalog": payload.catalog,
-                "schema": payload.schema,
+                "schema": payload.database_schema,
             },
             can_delete=False,
         )
@@ -563,11 +566,11 @@ async def request_deploy_to_catalog(
             details={
                 "requester_email": requester_email,
                 "catalog": payload.catalog,
-                "schema": payload.schema,
+                "schema": payload.database_schema,
                 "message": payload.message,
                 "timestamp": now.isoformat(),
                 "summary": f"Deploy requested by {requester_email}" + 
-                          (f" to {payload.catalog}.{payload.schema}" if payload.catalog and payload.schema else ""),
+                          (f" to {payload.catalog}.{payload.database_schema}" if payload.catalog and payload.database_schema else ""),
             },
         )
         
@@ -579,7 +582,7 @@ async def request_deploy_to_catalog(
             feature='data-contracts',
             action='REQUEST_DEPLOY',
             success=True,
-            details={'contract_id': contract_id, 'catalog': payload.catalog, 'schema': payload.schema}
+            details={'contract_id': contract_id, 'catalog': payload.catalog, 'schema': payload.database_schema}
         )
         
         return {"message": "Deploy request submitted successfully"}
@@ -1247,9 +1250,9 @@ async def create_contract(
         created = data_contract_repo.create(db=db, obj_in=db_obj)
         
         # Create schema objects and properties if provided
-        if contract_data.schema:
+        if contract_data.contract_schema:
             # SchemaObjectDb and SchemaPropertyDb already imported at top level
-            for schema_obj_data in contract_data.schema:
+            for schema_obj_data in contract_data.contract_schema:
                 schema_obj = SchemaObjectDb(
                     contract_id=created.id,
                     name=schema_obj_data.name,
@@ -1371,8 +1374,8 @@ async def create_contract(
 
         # Process schema-level and property-level semantic assignments
         schema_objects = db.query(SchemaObjectDb).filter(SchemaObjectDb.contract_id == created.id).all()
-        if contract_data.schema:
-            for i, schema_obj_data in enumerate(contract_data.schema):
+        if contract_data.contract_schema:
+            for i, schema_obj_data in enumerate(contract_data.contract_schema):
                 if i >= len(schema_objects):
                     continue
 
@@ -1512,12 +1515,12 @@ async def update_contract(
         updated = data_contract_repo.update(db=db, db_obj=db_obj, obj_in=update_payload)
 
         # Handle schema objects and semantic links if provided
-        if contract_data.schema is not None:
+        if contract_data.contract_schema is not None:
             # Remove existing schema objects for this contract
             db.query(SchemaObjectDb).filter(SchemaObjectDb.contract_id == contract_id).delete()
 
             # Create new schema objects
-            for schema_obj_data in contract_data.schema:
+            for schema_obj_data in contract_data.contract_schema:
                 schema_obj = SchemaObjectDb(
                     contract_id=contract_id,
                     name=schema_obj_data.name,
@@ -3017,6 +3020,195 @@ async def reject_suggestions(
         
     except Exception as e:
         logger.error(f"Failed to reject suggestions: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Contract Tags CRUD Endpoints =====
+
+@router.get('/data-contracts/{contract_id}/tags', response_model=List[dict])
+async def get_contract_tags(
+    contract_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    """Get all tags for a specific contract."""
+    from src.repositories.data_contracts_repository import contract_tag_repo
+    from src.models.data_contracts_api import ContractTagRead
+
+    # Verify contract exists
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        tags = contract_tag_repo.get_by_contract(db=db, contract_id=contract_id)
+        return [ContractTagRead.model_validate(tag).model_dump() for tag in tags]
+    except Exception as e:
+        logger.error(f"Error fetching tags for contract {contract_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-contracts/{contract_id}/tags', response_model=dict, status_code=201)
+async def create_contract_tag(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    tag_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Create a new tag for a contract."""
+    from src.repositories.data_contracts_repository import contract_tag_repo
+    from src.models.data_contracts_api import ContractTagCreate, ContractTagRead
+
+    # Verify contract exists
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        # Validate input
+        tag_create = ContractTagCreate(**tag_data)
+
+        # Create tag
+        new_tag = contract_tag_repo.create_tag(db=db, contract_id=contract_id, name=tag_create.name)
+        db.commit()
+
+        # Audit log
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="data-contracts",
+            action="CREATE_TAG",
+            success=True,
+            details={"contract_id": contract_id, "tag_name": tag_create.name}
+        )
+
+        return ContractTagRead.model_validate(new_tag).model_dump()
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating tag for contract {contract_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put('/data-contracts/{contract_id}/tags/{tag_id}', response_model=dict)
+async def update_contract_tag(
+    contract_id: str,
+    tag_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    tag_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Update a contract tag."""
+    from src.repositories.data_contracts_repository import contract_tag_repo
+    from src.models.data_contracts_api import ContractTagUpdate, ContractTagRead
+
+    # Verify contract exists
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        # Validate input
+        tag_update = ContractTagUpdate(**tag_data)
+
+        if tag_update.name is None:
+            raise HTTPException(status_code=400, detail="Tag name is required for update")
+
+        # Update tag
+        updated_tag = contract_tag_repo.update_tag(db=db, tag_id=tag_id, name=tag_update.name)
+        if not updated_tag:
+            raise HTTPException(status_code=404, detail="Tag not found")
+
+        # Verify tag belongs to the contract
+        if updated_tag.contract_id != contract_id:
+            raise HTTPException(status_code=400, detail="Tag does not belong to this contract")
+
+        db.commit()
+
+        # Audit log
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="data-contracts",
+            action="UPDATE_TAG",
+            success=True,
+            details={"contract_id": contract_id, "tag_id": tag_id, "new_name": tag_update.name}
+        )
+
+        return ContractTagRead.model_validate(updated_tag).model_dump()
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating tag {tag_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete('/data-contracts/{contract_id}/tags/{tag_id}', status_code=204)
+async def delete_contract_tag(
+    contract_id: str,
+    tag_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Delete a contract tag."""
+    from src.repositories.data_contracts_repository import contract_tag_repo
+
+    # Verify contract exists
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        # Get tag first to verify it belongs to this contract
+        tag = db.query(DataContractTagDb).filter(DataContractTagDb.id == tag_id).first()
+        if not tag:
+            raise HTTPException(status_code=404, detail="Tag not found")
+
+        if tag.contract_id != contract_id:
+            raise HTTPException(status_code=400, detail="Tag does not belong to this contract")
+
+        # Delete tag
+        success = contract_tag_repo.delete_tag(db=db, tag_id=tag_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Tag not found")
+
+        db.commit()
+
+        # Audit log
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="data-contracts",
+            action="DELETE_TAG",
+            success=True,
+            details={"contract_id": contract_id, "tag_id": tag_id}
+        )
+
+        return None
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting tag {tag_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
