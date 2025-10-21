@@ -172,11 +172,20 @@ def insert_suggestion(
     suggestion_id = str(uuid4())
     
     # Map DQX profile to our schema
-    # DQProfile has: name, column, description, parameters
-    rule_name = dq_profile.name
-    column_name = dq_profile.column
-    description = dq_profile.description or ""
-    params = dq_profile.parameters or {}
+    # DQX can return either objects or dicts depending on version
+    # Handle both dict and object access patterns
+    if isinstance(dq_profile, dict):
+        rule_name = dq_profile.get("name", "")
+        column_name = dq_profile.get("column", "")
+        description = dq_profile.get("description", "") or ""
+        params = dq_profile.get("parameters") or {}
+        print(f"    Processing dict check: {rule_name} for column {column_name}")
+    else:
+        rule_name = getattr(dq_profile, "name", "")
+        column_name = getattr(dq_profile, "column", "")
+        description = getattr(dq_profile, "description", "") or ""
+        params = getattr(dq_profile, "parameters", None) or {}
+        print(f"    Processing object check: {rule_name} for column {column_name}")
     
     # Determine level
     level = "property" if property_name else "object"
@@ -317,7 +326,12 @@ def profile_and_generate_suggestions(
             # Insert suggestions into database
             print(f"  Inserting {len(checks)} suggestions into database...")
             for check_idx, check in enumerate(checks, 1):
-                property_name = check.column if hasattr(check, 'column') else None
+                # Extract property name - handle both dict and object
+                if isinstance(check, dict):
+                    property_name = check.get("column")
+                else:
+                    property_name = getattr(check, "column", None)
+                
                 insert_suggestion(
                     engine=engine,
                     profile_run_id=profile_run_id,

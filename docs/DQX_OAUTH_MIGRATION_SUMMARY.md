@@ -162,6 +162,17 @@ To deploy these changes:
 
 **Impact:** OAuth authentication now works correctly with Lakebase Postgres instances.
 
+### 3. DQX Return Type Compatibility
+**Problem:** The DQX library returns quality check suggestions as dictionaries, but the code was trying to access them as objects with attributes (e.g., `check.name`). This caused `AttributeError: 'dict' object has no attribute 'name'`.
+
+**Solution:** Updated `insert_suggestion()` and property extraction to handle both dict and object formats:
+- Check if the DQX profile is a dict or object using `isinstance()`
+- Use dict access (`dq_profile.get("name")`) for dicts
+- Use attribute access (`getattr(dq_profile, "name")`) for objects
+- Added debug logging to track which format is being processed
+
+**Impact:** Quality check suggestions are now properly inserted into the database regardless of DQX version or return format.
+
 ## Benefits
 
 ✅ **No secrets management** - OAuth tokens generated dynamically
