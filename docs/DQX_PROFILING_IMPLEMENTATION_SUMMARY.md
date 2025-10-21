@@ -25,6 +25,7 @@ Successfully integrated Databricks Labs DQX profiler into the data contracts fea
 #### 3. Background Workflow (`src/backend/src/workflows/dqx_profile_datasets/`)
 - **dqx_profile_datasets.yaml**: Workflow definition with DQX environment
 - **dqx_profile_datasets.py**: Profiling script that:
+  - Uses OAuth authentication for Lakebase Postgres
   - Connects to Postgres to load contract schemas
   - Initializes Spark and DQX profiler
   - Profiles selected Unity Catalog tables
@@ -131,6 +132,12 @@ Five new endpoints:
 - Proper dimension mapping (completeness, conformity, etc.)
 - Rule type translation (is_not_null, min_max, etc.)
 
+### OAuth Authentication
+- OAuth token generation using Databricks SDK for Lakebase Postgres
+- Automatic credential generation per workflow run
+- Secure authentication without stored secrets
+- Service principal-based access control
+
 ## Installation & Setup
 
 1. **Install workflow via Settings > Jobs & Workflows UI**
@@ -141,9 +148,10 @@ Five new endpoints:
    - `data_profiling_runs`
    - `suggested_quality_checks`
 
-3. **Ensure Postgres connection** from Databricks workflow environment
-   - Environment variables for connection string
-   - Uses shared/db.py helpers
+3. **Postgres authentication** from Databricks workflow environment
+   - Uses OAuth authentication for Lakebase Postgres
+   - Automatically generates credentials via Databricks SDK
+   - No manual secret configuration required
 
 ## Testing Recommendations
 

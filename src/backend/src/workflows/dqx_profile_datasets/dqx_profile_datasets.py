@@ -22,83 +22,93 @@ except ImportError as e:
 
 
 # ============================================================================
+# OAuth Token Generation (for Lakebase Postgres)
+# ============================================================================
+
+def extract_instance_name(postgres_host: str) -> str:
+    """Extract the instance name from the postgres host."""
+    # Format: instance-<UUID>.database.cloud.databricks.com
+    if ".database.cloud.databricks.com" in postgres_host:
+        return postgres_host.split(".database.cloud.databricks.com")[0]
+    else:
+        # If not in expected format, return as-is
+        return postgres_host
+
+
+def get_oauth_token(ws_client: WorkspaceClient, instance_name: str) -> Tuple[str, str]:
+    """Generate OAuth token for the service principal to access Lakebase Postgres."""
+    print(f"  Generating OAuth token for instance: {instance_name}")
+    
+    # Get current service principal
+    current_user = ws_client.current_user.me().user_name
+    print(f"  Service Principal: {current_user}")
+    
+    # Generate token
+    cred = ws_client.database.generate_database_credential(
+        request_id=str(uuid4()),
+        instance_names=[instance_name],
+    )
+    
+    print(f"  ✓ Successfully generated OAuth token")
+    return current_user, cred.token
+
+
+# ============================================================================
 # Database Connection Utilities (inlined to avoid import issues in Databricks)
 # ============================================================================
 
-def _parse_secret_ref(secret_ref: str) -> Tuple[str, str]:
-    """Parse a secret reference in the form "scope:key" or "scope/key"."""
-    if ":" in secret_ref:
-        scope, key = secret_ref.split(":", 1)
-    elif "/" in secret_ref:
-        scope, key = secret_ref.split("/", 1)
-    else:
-        raise ValueError("Secret reference must be in the form 'scope:key' or 'scope/key'")
+def build_db_url(
+    host: str,
+    db: str, 
+    port: str, 
+    schema: str, 
+    ws_client: WorkspaceClient
+) -> Tuple[str, str]:
+    """Build PostgreSQL connection URL using OAuth authentication.
     
-    scope = scope.strip()
-    key = key.strip()
-    if not scope or not key:
-        raise ValueError("Secret scope and key must be non-empty")
-    return scope, key
-
-
-def get_secret_value(secret_ref: str) -> str:
-    """Resolve a Databricks secret value using the Databricks runtime API."""
-    scope, key = _parse_secret_ref(secret_ref)
-    
-    try:
-        from databricks.sdk.runtime import dbutils  # type: ignore
-    except Exception as e:
-        raise RuntimeError("Databricks runtime is not available to resolve secrets.") from e
-    
-    try:
-        value = dbutils.secrets.get(scope=scope, key=key)
-    except Exception as e:
-        raise RuntimeError(f"Failed to resolve Databricks secret for scope='{scope}' and key='{key}'") from e
-    
-    if value is None:
-        raise RuntimeError(f"Databricks secret returned no value for scope='{scope}' and key='{key}'")
-    
-    return str(value)
-
-
-def build_db_url(host: str, user: str, db: str, port: str, schema: str, password_secret: str) -> str:
-    """Build PostgreSQL connection URL from provided parameters."""
+    Returns: (connection_url, auth_user)
+    """
     
     print(f"  POSTGRES_HOST: {host}")
-    print(f"  POSTGRES_USER: {user}")
     print(f"  POSTGRES_DB: {db}")
     print(f"  POSTGRES_PORT: {port}")
     print(f"  POSTGRES_DB_SCHEMA: {schema}")
-    print(f"  POSTGRES_PASSWORD_SECRET: {password_secret}")
+    print(f"  Authentication: OAuth (Lakebase Postgres)")
     
-    # Fetch password from Databricks secret
-    print(f"  Fetching password from Databricks secret: {password_secret}")
-    try:
-        password = get_secret_value(password_secret)
-        print(f"  ✓ Successfully retrieved password from secret")
-    except Exception as e:
-        print(f"  ✗ Failed to retrieve password from secret: {e}")
-        raise
+    # Extract instance name from host
+    instance_name = extract_instance_name(host)
+    print(f"  Instance name: {instance_name}")
     
-    if not all([host, user, password, db]):
+    # Generate OAuth token
+    oauth_user, oauth_token = get_oauth_token(ws_client, instance_name)
+    print(f"  Using OAuth user: {oauth_user}")
+    
+    if not all([host, oauth_user, oauth_token, db]):
         missing = []
         if not host: missing.append("host")
-        if not user: missing.append("user")
-        if not password: missing.append("password from secret")
+        if not oauth_user: missing.append("oauth_user")
+        if not oauth_token: missing.append("oauth_token")
         if not db: missing.append("db")
         raise RuntimeError(f"Missing required Postgres parameters: {', '.join(missing)}")
     
     query = f"?options=-csearch_path%3D{schema}" if schema else ""
-    connection_url = f"postgresql+psycopg2://{user}:****@{host}:{port}/{db}{query}"
-    print(f"  Connection URL (password redacted): {connection_url}")
+    connection_url = f"postgresql+psycopg2://{oauth_user}:****@{host}:{port}/{db}{query}"
+    print(f"  Connection URL (token redacted): {connection_url}")
     
-    return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}{query}"
+    actual_url = f"postgresql+psycopg2://{oauth_user}:{oauth_token}@{host}:{port}/{db}{query}"
+    return actual_url, oauth_user
 
 
-def create_engine(host: str, user: str, db: str, port: str, schema: str, password_secret: str) -> Engine:
-    """Create SQLAlchemy engine from parameters."""
+def create_engine_from_params(
+    host: str,
+    db: str, 
+    port: str, 
+    schema: str,
+    ws_client: WorkspaceClient
+) -> Engine:
+    """Create SQLAlchemy engine using OAuth authentication."""
     from sqlalchemy import create_engine as create_sa_engine
-    url = build_db_url(host, user, db, port, schema, password_secret)
+    url, auth_user = build_db_url(host, db, port, schema, ws_client)
     return create_sa_engine(url, pool_pre_ping=True)
 
 
@@ -354,11 +364,9 @@ def main():
     parser.add_argument("--schema_names", type=str, required=True)  # JSON array
     parser.add_argument("--profile_run_id", type=str, required=True)
     parser.add_argument("--postgres_host", type=str, required=True)
-    parser.add_argument("--postgres_user", type=str, required=True)
     parser.add_argument("--postgres_db", type=str, required=True)
     parser.add_argument("--postgres_port", type=str, default="5432")
     parser.add_argument("--postgres_schema", type=str, default="public")
-    parser.add_argument("--postgres_password_secret", type=str, required=True)
     args, _ = parser.parse_known_args()
     
     contract_id = args.contract_id
@@ -373,16 +381,25 @@ def main():
     print(f"\nEnvironment Info:")
     print(f"  Python version: {sys.version}")
     
-    # Connect to database
+    # Initialize Workspace Client (needed for OAuth authentication)
+    print("\nInitializing Databricks Workspace Client...")
+    try:
+        ws = WorkspaceClient()
+        print("✓ Workspace client initialized")
+    except Exception as e:
+        print(f"✗ Failed to initialize workspace client: {e}")
+        traceback.print_exc()
+        return
+    
+    # Connect to database using OAuth
     print("\nConnecting to database...")
     try:
-        engine = create_engine(
+        engine = create_engine_from_params(
             host=args.postgres_host,
-            user=args.postgres_user,
             db=args.postgres_db,
             port=args.postgres_port,
             schema=args.postgres_schema,
-            password_secret=args.postgres_password_secret
+            ws_client=ws
         )
         print("✓ Database connection established successfully")
     except Exception as e:
@@ -410,14 +427,12 @@ def main():
         for schema in schemas:
             print(f"  - {schema['schema_name']} ({schema['physical_name']})")
         
-        # Initialize Spark and Databricks client
+        # Initialize Spark
         print("\n" + "=" * 80)
-        print("Phase 2: Initializing Spark and Databricks Client")
+        print("Phase 2: Initializing Spark Session")
         print("=" * 80)
         spark = SparkSession.builder.appName("DQX-Profile-Datasets").getOrCreate()
         print("✓ Spark session initialized")
-        ws = WorkspaceClient()
-        print("✓ Workspace client initialized")
         
         # Profile and generate suggestions
         print("\n" + "=" * 80)

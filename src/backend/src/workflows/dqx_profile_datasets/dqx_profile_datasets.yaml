@@ -21,16 +21,12 @@ tasks:
         - "{{job.parameters.profile_run_id}}"
         - "--postgres_host"
         - "{{job.parameters.postgres_host}}"
-        - "--postgres_user"
-        - "{{job.parameters.postgres_user}}"
         - "--postgres_db"
         - "{{job.parameters.postgres_db}}"
         - "--postgres_port"
         - "{{job.parameters.postgres_port}}"
         - "--postgres_schema"
         - "{{job.parameters.postgres_schema}}"
-        - "--postgres_password_secret"
-        - "{{job.parameters.postgres_password_secret}}"
     environment_key: "dqx-env"
 
 parameters:
@@ -38,11 +34,9 @@ parameters:
   schema_names: "[]"
   profile_run_id: ""
   postgres_host: ""
-  postgres_user: ""
   postgres_db: ""
   postgres_port: "5432"
   postgres_schema: "public"
-  postgres_password_secret: ""
 
 timeout_seconds: 3600
 max_concurrent_runs: 1
