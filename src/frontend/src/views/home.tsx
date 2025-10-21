@@ -348,7 +348,7 @@ export default function Home() {
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-2xl mx-auto text-center mb-8">
         <div className="flex items-center justify-center mb-4">
-          <UnityCatalogLogo />
+          <UnityCatalogLogo className="h-16 w-16" />
           <h1 className="text-4xl font-bold ml-2">
             {t('home:title')}
           </h1>
