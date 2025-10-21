@@ -284,6 +284,7 @@ def profile_and_generate_suggestions(
     
     summary_data = {"tables": {}}
     total_suggestions = 0
+    errors = []  # Track errors that occur
     
     print(f"Starting profiling for {len(schemas)} schemas...")
     
@@ -326,6 +327,17 @@ def profile_and_generate_suggestions(
             # Insert suggestions into database
             print(f"  Inserting {len(checks)} suggestions into database...")
             for check_idx, check in enumerate(checks, 1):
+                # Debug: print the raw check data
+                if check_idx == 1:
+                    print(f"    DEBUG: Sample check structure:")
+                    if isinstance(check, dict):
+                        print(f"      Type: dict")
+                        print(f"      Keys: {list(check.keys())}")
+                        print(f"      Content: {check}")
+                    else:
+                        print(f"      Type: {type(check)}")
+                        print(f"      Dir: {[attr for attr in dir(check) if not attr.startswith('_')]}")
+                
                 # Extract property name - handle both dict and object
                 if isinstance(check, dict):
                     property_name = check.get("column")
@@ -345,14 +357,31 @@ def profile_and_generate_suggestions(
             print(f"  Successfully inserted {len(checks)} suggestions")
             
         except Exception as e:
-            print(f"  ERROR profiling {physical_name}: {e}")
+            error_msg = str(e)
+            print(f"  ERROR profiling {physical_name}: {error_msg}")
             traceback.print_exc()
             summary_data["tables"][schema_name] = {
                 "physical_name": physical_name,
-                "error": str(e)
+                "error": error_msg
             }
+            errors.append({
+                "schema": schema_name,
+                "table": physical_name,
+                "error": error_msg
+            })
     
     print(f"\nProfiling complete. Total suggestions generated: {total_suggestions}")
+    
+    # If there were errors, raise an exception to fail the job
+    if errors:
+        error_summary = f"Failed to profile {len(errors)} out of {len(schemas)} schema(s)"
+        summary_data["total_suggestions"] = total_suggestions
+        summary_data["errors"] = errors
+        print(f"\n✗ {error_summary}")
+        for err in errors:
+            print(f"  - {err['schema']} ({err['table']}): {err['error'][:100]}")
+        raise RuntimeError(error_summary)
+    
     summary_data["total_suggestions"] = total_suggestions
     return json.dumps(summary_data)
 

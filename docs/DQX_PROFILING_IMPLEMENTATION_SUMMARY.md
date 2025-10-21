@@ -88,16 +88,20 @@ Five new endpoints:
    - Triggers Databricks workflow with parameters
    - Returns success message
    - User receives toast notification
+   - UI shows "DQX profiling in progress..." with spinning loader
 
 4. **DQX profiling runs in background**
    - Workflow profiles selected Unity Catalog tables
    - Generates quality rule suggestions
    - Stores suggestions in database
    - Updates run status to 'completed'
+   - **UI automatically polls** every 5 seconds to check status
 
-5. **User receives notification** (when complete)
-   - System shows alert banner with suggestion count
+5. **User receives automatic notification** (when complete)
+   - Toast notification appears: "DQX Profiling Complete - X suggestions available"
+   - Progress indicator changes to alert banner with suggestion count
    - User clicks "Review Suggestions"
+   - **No page refresh needed** - everything updates automatically
 
 6. **DqxSuggestionsDialog opens**
    - Displays suggestions grouped by schema
@@ -122,9 +126,12 @@ Five new endpoints:
 - Only required for non-draft contracts
 
 ### User Experience
+- **Real-time updates**: Auto-polls every 5 seconds while profiling is running
+- **Live progress indicator**: Shows spinning loader and status message during profiling
+- **Automatic notifications**: Toast notifications when profiling completes or fails
+- **No page refresh needed**: Suggestions appear automatically when ready
 - Single vs multiple schema display optimization
 - Bulk operations for efficiency
-- Real-time pending count display
 - Clear status indicators
 
 ### Data Mapping
