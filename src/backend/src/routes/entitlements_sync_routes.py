@@ -24,9 +24,9 @@ def get_entitlements_sync_manager(workspace_client = Depends(get_workspace_clien
     if os.path.exists(yaml_path):
         try:
             manager.load_from_yaml(str(yaml_path))
-            logging.info(f"Successfully loaded entitlements sync configurations from {yaml_path}")
+            logger.info(f"Successfully loaded entitlements sync configurations from {yaml_path}")
         except Exception as e:
-            logging.exception(f"Error loading entitlements sync configurations from YAML: {e!s}")
+            logger.exception(f"Error loading entitlements sync configurations from YAML: {e!s}")
 
     return manager
 
