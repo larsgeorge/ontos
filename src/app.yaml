@@ -46,3 +46,5 @@ env:
   
   - name: "LLM_ENDPOINT"
     valueFrom: "serving_endpoint"
+  - name: "WORKSPACE_DEPLOYMENT_PATH"
+    value: "/Workspace/Users/lars.george@databricks.com/ontos-jobs"
