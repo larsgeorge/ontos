@@ -25,16 +25,6 @@ except ImportError as e:
 # OAuth Token Generation (for Lakebase Postgres)
 # ============================================================================
 
-def extract_instance_name(postgres_host: str) -> str:
-    """Extract the instance name from the postgres host."""
-    # Format: instance-<UUID>.database.cloud.databricks.com
-    if ".database.cloud.databricks.com" in postgres_host:
-        return postgres_host.split(".database.cloud.databricks.com")[0]
-    else:
-        # If not in expected format, return as-is
-        return postgres_host
-
-
 def get_oauth_token(ws_client: WorkspaceClient, instance_name: str) -> Tuple[str, str]:
     """Generate OAuth token for the service principal to access Lakebase Postgres."""
     print(f"  Generating OAuth token for instance: {instance_name}")
@@ -61,7 +51,8 @@ def build_db_url(
     host: str,
     db: str, 
     port: str, 
-    schema: str, 
+    schema: str,
+    instance_name: str,
     ws_client: WorkspaceClient
 ) -> Tuple[str, str]:
     """Build PostgreSQL connection URL using OAuth authentication.
@@ -73,11 +64,8 @@ def build_db_url(
     print(f"  POSTGRES_DB: {db}")
     print(f"  POSTGRES_PORT: {port}")
     print(f"  POSTGRES_DB_SCHEMA: {schema}")
+    print(f"  LAKEBASE_INSTANCE_NAME: {instance_name}")
     print(f"  Authentication: OAuth (Lakebase Postgres)")
-    
-    # Extract instance name from host
-    instance_name = extract_instance_name(host)
-    print(f"  Instance name: {instance_name}")
     
     # Generate OAuth token
     oauth_user, oauth_token = get_oauth_token(ws_client, instance_name)
@@ -104,11 +92,12 @@ def create_engine_from_params(
     db: str, 
     port: str, 
     schema: str,
+    instance_name: str,
     ws_client: WorkspaceClient
 ) -> Engine:
     """Create SQLAlchemy engine using OAuth authentication."""
     from sqlalchemy import create_engine as create_sa_engine
-    url, auth_user = build_db_url(host, db, port, schema, ws_client)
+    url, auth_user = build_db_url(host, db, port, schema, instance_name, ws_client)
     return create_sa_engine(url, pool_pre_ping=True)
 
 
@@ -363,6 +352,7 @@ def main():
     parser.add_argument("--contract_id", type=str, required=True)
     parser.add_argument("--schema_names", type=str, required=True)  # JSON array
     parser.add_argument("--profile_run_id", type=str, required=True)
+    parser.add_argument("--lakebase_instance_name", type=str, required=True)
     parser.add_argument("--postgres_host", type=str, required=True)
     parser.add_argument("--postgres_db", type=str, required=True)
     parser.add_argument("--postgres_port", type=str, default="5432")
@@ -372,11 +362,13 @@ def main():
     contract_id = args.contract_id
     schema_names = json.loads(args.schema_names)
     profile_run_id = args.profile_run_id
+    lakebase_instance_name = args.lakebase_instance_name
     
     print(f"\nJob Parameters:")
     print(f"  Contract ID: {contract_id}")
     print(f"  Schema names: {schema_names}")
     print(f"  Profile run ID: {profile_run_id}")
+    print(f"  Lakebase instance name: {lakebase_instance_name}")
     
     print(f"\nEnvironment Info:")
     print(f"  Python version: {sys.version}")
@@ -389,7 +381,7 @@ def main():
     except Exception as e:
         print(f"✗ Failed to initialize workspace client: {e}")
         traceback.print_exc()
-        return
+        sys.exit(1)
     
     # Connect to database using OAuth
     print("\nConnecting to database...")
@@ -399,13 +391,14 @@ def main():
             db=args.postgres_db,
             port=args.postgres_port,
             schema=args.postgres_schema,
+            instance_name=lakebase_instance_name,
             ws_client=ws
         )
         print("✓ Database connection established successfully")
     except Exception as e:
         print(f"✗ Failed to connect to database: {e}")
         traceback.print_exc()
-        return
+        sys.exit(1)
     
     # Update run status to 'running'
     try:
@@ -478,6 +471,8 @@ def main():
             )
         except Exception as update_error:
             print(f"Warning: Failed to update run status to 'failed': {update_error}")
+        
+        sys.exit(1)
 
 
 if __name__ == "__main__":
