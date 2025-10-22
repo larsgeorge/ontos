@@ -391,6 +391,11 @@ class DataContractUpdate(BaseModel):
     serverConfigs: Optional[List[ServerConfig]] = Field(None)
     sla: Optional[SLARequirements] = None
 
+    # Semantic versioning fields
+    parent_contract_id: Optional[str] = Field(None, alias='parentContractId')
+    base_name: Optional[str] = Field(None, alias='baseName')
+    change_summary: Optional[str] = Field(None, alias='changeSummary')
+
 
 class DataContractRead(BaseModel):
     id: str  # Required by ODCS
@@ -447,6 +452,11 @@ class DataContractRead(BaseModel):
     created: Optional[str] = None
     updated: Optional[str] = None
 
+    # Semantic versioning fields
+    parentContractId: Optional[str] = Field(None, alias='parent_contract_id')
+    baseName: Optional[str] = Field(None, alias='base_name')
+    changeSummary: Optional[str] = Field(None, alias='change_summary')
+
     class Config:
         populate_by_name = True
 
@@ -478,6 +488,166 @@ class ContractTagRead(BaseModel):
     id: str
     contract_id: str
     name: str
+
+    class Config:
+        from_attributes = True
+
+
+# ===== Custom Properties Models (ODCS customProperties) =====
+class CustomPropertyCreate(BaseModel):
+    """Create a custom property for a data contract"""
+    property: str = Field(..., min_length=1, max_length=255, description="Property key")
+    value: Optional[str] = Field(None, description="Property value")
+
+
+class CustomPropertyUpdate(BaseModel):
+    """Update a custom property"""
+    property: Optional[str] = Field(None, min_length=1, max_length=255, description="Property key")
+    value: Optional[str] = Field(None, description="Property value")
+
+
+class CustomPropertyRead(BaseModel):
+    """Response model for custom property"""
+    id: str
+    contract_id: str
+    property: str
+    value: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ===== Support Channel Models (ODCS support[]) =====
+class SupportChannelCreate(BaseModel):
+    """Create a support channel for a data contract"""
+    channel: str = Field(..., min_length=1, max_length=255, description="Support channel type (e.g., email, slack, teams)")
+    url: str = Field(..., min_length=1, description="Support channel URL")
+    description: Optional[str] = Field(None, description="Channel description")
+    tool: Optional[str] = Field(None, max_length=255, description="Tool name (e.g., Slack, JIRA)")
+    scope: Optional[str] = Field(None, max_length=255, description="Support scope (e.g., technical, business)")
+    invitation_url: Optional[str] = Field(None, description="Invitation or join URL")
+
+
+class SupportChannelUpdate(BaseModel):
+    """Update a support channel"""
+    channel: Optional[str] = Field(None, min_length=1, max_length=255, description="Support channel type")
+    url: Optional[str] = Field(None, min_length=1, description="Support channel URL")
+    description: Optional[str] = Field(None, description="Channel description")
+    tool: Optional[str] = Field(None, max_length=255, description="Tool name")
+    scope: Optional[str] = Field(None, max_length=255, description="Support scope")
+    invitation_url: Optional[str] = Field(None, description="Invitation or join URL")
+
+
+class SupportChannelRead(BaseModel):
+    """Response model for support channel"""
+    id: str
+    contract_id: str
+    channel: str
+    url: str
+    description: Optional[str] = None
+    tool: Optional[str] = None
+    scope: Optional[str] = None
+    invitation_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ===== Pricing Models (ODCS price) - Singleton Pattern =====
+class PricingUpdate(BaseModel):
+    """Update pricing for a data contract (singleton - one per contract)"""
+    price_amount: Optional[str] = Field(None, description="Price amount")
+    price_currency: Optional[str] = Field(None, max_length=10, description="Currency code (e.g., USD, EUR)")
+    price_unit: Optional[str] = Field(None, max_length=50, description="Price unit (e.g., per GB, per query)")
+
+
+class PricingRead(BaseModel):
+    """Response model for pricing"""
+    id: str
+    contract_id: str
+    price_amount: Optional[str] = None
+    price_currency: Optional[str] = None
+    price_unit: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ===== Role Models (ODCS roles[]) - With Nested Properties =====
+class RolePropertyCreate(BaseModel):
+    """Create a custom property for a role"""
+    property: str = Field(..., min_length=1, max_length=255, description="Property key")
+    value: Optional[str] = Field(None, description="Property value")
+
+
+class RolePropertyRead(BaseModel):
+    """Response model for role property"""
+    id: str
+    role_id: str
+    property: str
+    value: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class RoleCreate(BaseModel):
+    """Create a role for a data contract (with optional nested properties)"""
+    role: str = Field(..., min_length=1, max_length=255, description="Role name (e.g., Data Steward, Consumer)")
+    description: Optional[str] = Field(None, description="Role description")
+    access: Optional[str] = Field(None, max_length=255, description="Access level or permissions")
+    first_level_approvers: Optional[str] = Field(None, description="Comma-separated list of first-level approvers")
+    second_level_approvers: Optional[str] = Field(None, description="Comma-separated list of second-level approvers")
+    custom_properties: Optional[List[RolePropertyCreate]] = Field(default_factory=list, description="Custom properties for the role")
+
+
+class RoleUpdate(BaseModel):
+    """Update a role"""
+    role: Optional[str] = Field(None, min_length=1, max_length=255, description="Role name")
+    description: Optional[str] = Field(None, description="Role description")
+    access: Optional[str] = Field(None, max_length=255, description="Access level or permissions")
+    first_level_approvers: Optional[str] = Field(None, description="First-level approvers")
+    second_level_approvers: Optional[str] = Field(None, description="Second-level approvers")
+    custom_properties: Optional[List[RolePropertyCreate]] = Field(None, description="Custom properties (replaces existing)")
+
+
+class RoleRead(BaseModel):
+    """Response model for role (with nested properties)"""
+    id: str
+    contract_id: str
+    role: str
+    description: Optional[str] = None
+    access: Optional[str] = None
+    first_level_approvers: Optional[str] = None
+    second_level_approvers: Optional[str] = None
+    custom_properties: List[RolePropertyRead] = []
+
+    class Config:
+        from_attributes = True
+
+
+# ===== Authoritative Definition Models (ODCS authoritativeDefinitions[]) - 3 Levels =====
+class AuthoritativeDefinitionCreate(BaseModel):
+    """Create an authoritative definition (works for all 3 levels: contract, schema, property)"""
+    url: str = Field(..., min_length=1, description="URL to the authoritative source")
+    type: str = Field(..., min_length=1, max_length=255, description="Type of authority (e.g., glossary, standard, documentation)")
+
+
+class AuthoritativeDefinitionUpdate(BaseModel):
+    """Update an authoritative definition"""
+    url: Optional[str] = Field(None, min_length=1, description="URL to the authoritative source")
+    type: Optional[str] = Field(None, min_length=1, max_length=255, description="Type of authority")
+
+
+class AuthoritativeDefinitionRead(BaseModel):
+    """Response model for authoritative definition (universal for all 3 levels)"""
+    id: str
+    url: str
+    type: str
+    # Context fields (only one will be populated depending on level)
+    contract_id: Optional[str] = None  # For contract-level
+    schema_object_id: Optional[str] = None  # For schema-level
+    property_id: Optional[str] = None  # For property-level
 
     class Config:
         from_attributes = True

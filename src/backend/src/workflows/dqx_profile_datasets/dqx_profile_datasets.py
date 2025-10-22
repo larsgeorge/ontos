@@ -172,19 +172,33 @@ def insert_suggestion(
     suggestion_id = str(uuid4())
     
     # Map DQX profile to our schema
-    # DQX can return either objects or dicts depending on version
-    # Handle both dict and object access patterns
-    if isinstance(dq_profile, dict):
+    # DQX returns a nested structure: {'check': {'function': '...', 'arguments': {...}}, 'name': '...', 'criticality': '...'}
+    if isinstance(dq_profile, dict) and 'check' in dq_profile:
+        # New nested format
+        check_info = dq_profile.get('check', {})
+        rule_name = check_info.get('function', '')
+        arguments = check_info.get('arguments', {})
+        column_name = arguments.get('column', '')
+        params = arguments  # Use arguments as params
+        description = dq_profile.get('name', '')  # Use the human-readable name as description
+        severity_map = {'error': 'error', 'warn': 'warning', 'info': 'info'}
+        severity = severity_map.get(dq_profile.get('criticality', 'error'), 'error')
+        print(f"    Processing check: {rule_name} for column '{column_name}'")
+    elif isinstance(dq_profile, dict):
+        # Old flat format (fallback)
         rule_name = dq_profile.get("name", "")
         column_name = dq_profile.get("column", "")
         description = dq_profile.get("description", "") or ""
         params = dq_profile.get("parameters") or {}
+        severity = "error"
         print(f"    Processing dict check: {rule_name} for column {column_name}")
     else:
+        # Object format (fallback)
         rule_name = getattr(dq_profile, "name", "")
         column_name = getattr(dq_profile, "column", "")
         description = getattr(dq_profile, "description", "") or ""
         params = getattr(dq_profile, "parameters", None) or {}
+        severity = "error"
         print(f"    Processing object check: {rule_name} for column {column_name}")
     
     # Determine level
@@ -194,6 +208,7 @@ def insert_suggestion(
     dimension_map = {
         "is_not_null": "completeness",
         "is_not_null_or_empty": "completeness",
+        "is_null": "completeness",  # Add this mapping
         "min_max": "conformity",
         "is_in": "conformity",
         "pattern": "conformity",
@@ -201,7 +216,6 @@ def insert_suggestion(
     }
     
     dimension = dimension_map.get(rule_name, "accuracy")
-    severity = "error"  # DQX generates error-level rules by default
     
     # Build the rule string based on DQX rule type
     rule_str = None
@@ -338,10 +352,16 @@ def profile_and_generate_suggestions(
                         print(f"      Type: {type(check)}")
                         print(f"      Dir: {[attr for attr in dir(check) if not attr.startswith('_')]}")
                 
-                # Extract property name - handle both dict and object
-                if isinstance(check, dict):
+                # Extract property name from nested structure
+                if isinstance(check, dict) and 'check' in check:
+                    # New nested format
+                    arguments = check.get('check', {}).get('arguments', {})
+                    property_name = arguments.get('column')
+                elif isinstance(check, dict):
+                    # Old flat format
                     property_name = check.get("column")
                 else:
+                    # Object format
                     property_name = getattr(check, "column", None)
                 
                 insert_suggestion(
@@ -505,6 +525,7 @@ def main():
         traceback.print_exc()
         
         # Update run status to 'failed'
+        # Try with existing engine first, if that fails, create a new one
         try:
             update_profiling_run_status(
                 engine,
@@ -513,7 +534,29 @@ def main():
                 error_message=str(e)
             )
         except Exception as update_error:
-            print(f"Warning: Failed to update run status to 'failed': {update_error}")
+            print(f"Warning: Failed to update run status with existing engine: {update_error}")
+            print("Attempting to create new database connection to update status...")
+            try:
+                # Create fresh engine for status update
+                new_engine = create_engine_from_params(
+                    host=args.postgres_host,
+                    db=args.postgres_db,
+                    port=args.postgres_port,
+                    schema=args.postgres_schema,
+                    instance_name=lakebase_instance_name,
+                    ws_client=ws
+                )
+                update_profiling_run_status(
+                    new_engine,
+                    profile_run_id,
+                    "failed",
+                    error_message=str(e)
+                )
+                print("✓ Successfully updated status to 'failed' with new connection")
+                new_engine.dispose()
+            except Exception as final_error:
+                print(f"✗ Failed to update run status even with new connection: {final_error}")
+                print("Status will remain as 'running' - manual intervention may be required")
         
         sys.exit(1)
 

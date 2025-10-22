@@ -42,6 +42,11 @@ class DataContractDb(Base):
     sla_default_element = Column(String, nullable=True)  # ODCS slaDefaultElement field
     contract_created_ts = Column(DateTime(timezone=True), nullable=True)  # ODCS contractCreatedTs field
 
+    # Semantic versioning fields
+    parent_contract_id = Column(String, ForeignKey("data_contracts.id", ondelete="SET NULL"), nullable=True, index=True)  # Parent version reference
+    base_name = Column(String, nullable=True, index=True)  # Base name without version (e.g., "customer_data" for "customer_data_v1.0.0")
+    change_summary = Column(Text, nullable=True)  # Summary of changes in this version
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     created_by = Column(String, nullable=True)
@@ -49,13 +54,14 @@ class DataContractDb(Base):
 
     # Relationships
     owner_team = relationship("TeamDb", foreign_keys=[owner_team_id])
+    parent_contract = relationship("DataContractDb", remote_side=[id], foreign_keys=[parent_contract_id])  # Self-referential for versioning
     tags = relationship("DataContractTagDb", back_populates="contract", cascade="all, delete-orphan")
     servers = relationship("DataContractServerDb", back_populates="contract", cascade="all, delete-orphan")
     roles = relationship("DataContractRoleDb", back_populates="contract", cascade="all, delete-orphan")
     team = relationship("DataContractTeamDb", back_populates="contract", cascade="all, delete-orphan")
     support = relationship("DataContractSupportDb", back_populates="contract", cascade="all, delete-orphan")
     pricing = relationship("DataContractPricingDb", back_populates="contract", uselist=False, cascade="all, delete-orphan")
-    authoritative_defs = relationship("DataContractAuthorityDb", back_populates="contract", cascade="all, delete-orphan")
+    authoritative_defs = relationship("DataContractAuthoritativeDefinitionDb", back_populates="contract", cascade="all, delete-orphan")
     custom_properties = relationship("DataContractCustomPropertyDb", back_populates="contract", cascade="all, delete-orphan")
     sla_properties = relationship("DataContractSlaPropertyDb", back_populates="contract", cascade="all, delete-orphan")
     schema_objects = relationship("SchemaObjectDb", back_populates="contract", cascade="all, delete-orphan")
@@ -152,8 +158,9 @@ class DataContractPricingDb(Base):
     contract = relationship("DataContractDb", back_populates="pricing")
 
 
-class DataContractAuthorityDb(Base):
-    __tablename__ = "data_contract_authorities"
+class DataContractAuthoritativeDefinitionDb(Base):
+    """ODCS v3.0.2 contract-level authoritative definitions"""
+    __tablename__ = "data_contract_authoritative_definitions"
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     contract_id = Column(String, ForeignKey("data_contracts.id", ondelete="CASCADE"), nullable=False, index=True)
     url = Column(String, nullable=False)
@@ -201,7 +208,7 @@ class SchemaObjectDb(Base):
     contract = relationship("DataContractDb", back_populates="schema_objects")
     properties = relationship("SchemaPropertyDb", back_populates="schema_object", cascade="all, delete-orphan")
     quality_checks = relationship("DataQualityCheckDb", back_populates="schema_object", cascade="all, delete-orphan")
-    authoritative_definitions = relationship("SchemaObjectAuthorityDb", back_populates="schema_object", cascade="all, delete-orphan")
+    authoritative_definitions = relationship("SchemaObjectAuthoritativeDefinitionDb", back_populates="schema_object", cascade="all, delete-orphan")
     custom_properties = relationship("SchemaObjectCustomPropertyDb", back_populates="schema_object", cascade="all, delete-orphan")
 
 
@@ -231,7 +238,7 @@ class SchemaPropertyDb(Base):
     business_name = Column(String, nullable=True)  # ODCS businessName field at property level
     schema_object = relationship("SchemaObjectDb", back_populates="properties")
     parent_property = relationship("SchemaPropertyDb", remote_side=[id])
-    authoritative_definitions = relationship("SchemaPropertyAuthorityDb", back_populates="property", cascade="all, delete-orphan")
+    authoritative_definitions = relationship("SchemaPropertyAuthoritativeDefinitionDb", back_populates="property", cascade="all, delete-orphan")
 
 
 class DataQualityCheckDb(Base):
@@ -354,9 +361,9 @@ class DataContractCommentDb(Base):
     contract = relationship("DataContractDb", back_populates="comments")
 
 
-class SchemaObjectAuthorityDb(Base):
+class SchemaObjectAuthoritativeDefinitionDb(Base):
     """ODCS v3.0.2 schema-level authoritative definitions"""
-    __tablename__ = "data_contract_schema_object_authorities"
+    __tablename__ = "data_contract_schema_object_authoritative_definitions"
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     schema_object_id = Column(String, ForeignKey("data_contract_schema_objects.id", ondelete="CASCADE"), nullable=False, index=True)
     url = Column(String, nullable=False)
@@ -374,9 +381,9 @@ class SchemaObjectCustomPropertyDb(Base):
     schema_object = relationship("SchemaObjectDb", back_populates="custom_properties")
 
 
-class SchemaPropertyAuthorityDb(Base):
+class SchemaPropertyAuthoritativeDefinitionDb(Base):
     """ODCS v3.0.2 property-level authoritative definitions"""
-    __tablename__ = "data_contract_schema_property_authorities"
+    __tablename__ = "data_contract_schema_property_authoritative_definitions"
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     property_id = Column(String, ForeignKey("data_contract_schema_properties.id", ondelete="CASCADE"), nullable=False, index=True)
     url = Column(String, nullable=False)

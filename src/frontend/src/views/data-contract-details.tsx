@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -30,6 +30,7 @@ import DatasetLookupDialog from '@/components/data-contracts/dataset-lookup-dial
 import CreateFromContractDialog from '@/components/data-products/create-from-contract-dialog'
 import DqxSchemaSelectDialog from '@/components/data-contracts/dqx-schema-select-dialog'
 import DqxSuggestionsDialog from '@/components/data-contracts/dqx-suggestions-dialog'
+import AuthoritativeDefinitionFormDialog from '@/components/data-contracts/authoritative-definition-form-dialog'
 import type { DataProduct } from '@/types/data-product'
 import type { DataProfilingRun } from '@/types/data-contract'
 
@@ -47,7 +48,9 @@ type SchemaProperty = {
 const createSchemaPropertyColumns = (
   contract: DataContract | null,
   selectedSchemaIndex: number,
-  propertyLinks: Record<string, EntitySemanticLink[]>
+  propertyLinks: Record<string, EntitySemanticLink[]>,
+  propertyAuthDefs: Record<string, any[]>,
+  onManagePropertyAuthDefs: (schemaId: string, propertyId: string, propertyName: string) => void
 ): ColumnDef<SchemaProperty>[] => [
   {
     accessorKey: 'name',
@@ -122,6 +125,26 @@ const createSchemaPropertyColumns = (
       </span>
     ),
   },
+  {
+    id: 'authoritative_definitions',
+    header: 'Auth. Defs',
+    cell: ({ row }) => {
+      const property = row.original
+      const propertyId = (property as any).id || property.name
+      const schemaId = (contract?.schema?.[selectedSchemaIndex] as any)?.id || contract?.schema?.[selectedSchemaIndex]?.name || ''
+      const defs = propertyAuthDefs[propertyId] || []
+      return (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => onManagePropertyAuthDefs(schemaId, propertyId, property.name)}
+          className="h-7 px-2 text-xs"
+        >
+          Defs ({defs.length})
+        </Button>
+      )
+    },
+  },
 ]
 
 export default function DataContractDetails() {
@@ -150,6 +173,23 @@ export default function DataContractDetails() {
   const [loadingProducts, setLoadingProducts] = useState(false)
   const [isCreateProductDialogOpen, setIsCreateProductDialogOpen] = useState(false)
 
+  // Authoritative Definitions state (contract-level)
+  type AuthoritativeDefinition = { id: string; url: string; type: string }
+  const [contractAuthDefs, setContractAuthDefs] = useState<AuthoritativeDefinition[]>([])
+  const [editingContractAuthDefIndex, setEditingContractAuthDefIndex] = useState<number | null>(null)
+
+  // Authoritative Definitions state (schema-level) - keyed by schema ID
+  const [schemaAuthDefs, setSchemaAuthDefs] = useState<Record<string, AuthoritativeDefinition[]>>({})
+  const [editingSchemaAuthDef, setEditingSchemaAuthDef] = useState<{ schemaId: string; index: number } | null>(null)
+  const [isSchemaAuthDefFormOpen, setIsSchemaAuthDefFormOpen] = useState(false)
+  const [activeSchemaIdForAuthDef, setActiveSchemaIdForAuthDef] = useState<string | null>(null)
+
+  // Authoritative Definitions state (property-level) - keyed by propertyId
+  const [propertyAuthDefs, setPropertyAuthDefs] = useState<Record<string, AuthoritativeDefinition[]>>({})
+  const [editingPropertyAuthDef, setEditingPropertyAuthDef] = useState<{ schemaId: string; propertyId: string; index: number } | null>(null)
+  const [isPropertyAuthDefFormOpen, setIsPropertyAuthDefFormOpen] = useState(false)
+  const [activePropertyForAuthDef, setActivePropertyForAuthDef] = useState<{ schemaId: string; propertyId: string } | null>(null)
+
   // Dialog states for CRUD operations
   const [isDatasetLookupOpen, setIsDatasetLookupOpen] = useState(false)
   const [isBasicFormOpen, setIsBasicFormOpen] = useState(false)
@@ -158,6 +198,7 @@ export default function DataContractDetails() {
   const [isTeamMemberFormOpen, setIsTeamMemberFormOpen] = useState(false)
   const [isServerConfigFormOpen, setIsServerConfigFormOpen] = useState(false)
   const [isSLAFormOpen, setIsSLAFormOpen] = useState(false)
+  const [isContractAuthDefFormOpen, setIsContractAuthDefFormOpen] = useState(false)
 
   // DQX Profiling states
   const [isDqxSchemaSelectOpen, setIsDqxSchemaSelectOpen] = useState(false)
@@ -165,6 +206,7 @@ export default function DataContractDetails() {
   const [selectedProfileRunId, setSelectedProfileRunId] = useState<string | null>(null)
   const [latestProfileRun, setLatestProfileRun] = useState<DataProfilingRun | null>(null)
   const [pendingSuggestionsCount, setPendingSuggestionsCount] = useState(0)
+  const [isProfilingRunning, setIsProfilingRunning] = useState(false)
 
   // Editing states
   const [editingSchemaIndex, setEditingSchemaIndex] = useState<number | null>(null)
@@ -188,6 +230,48 @@ export default function DataContractDetails() {
       setLinkedProducts([])
     } finally {
       setLoadingProducts(false)
+    }
+  }
+
+  const fetchContractAuthDefs = async () => {
+    if (!contractId) return
+    try {
+      const response = await fetch(`/api/data-contracts/${contractId}/authoritative-definitions`)
+      if (response.ok) {
+        const data = await response.json()
+        setContractAuthDefs(Array.isArray(data) ? data : [])
+      } else {
+        setContractAuthDefs([])
+      }
+    } catch (e) {
+      console.warn('Failed to fetch contract authoritative definitions:', e)
+      setContractAuthDefs([])
+    }
+  }
+
+  const fetchSchemaAuthDefs = async (schemaId: string) => {
+    if (!contractId) return
+    try {
+      const response = await fetch(`/api/data-contracts/${contractId}/schemas/${encodeURIComponent(schemaId)}/authoritative-definitions`)
+      if (response.ok) {
+        const data = await response.json()
+        setSchemaAuthDefs(prev => ({ ...prev, [schemaId]: Array.isArray(data) ? data : [] }))
+      } else {
+        setSchemaAuthDefs(prev => ({ ...prev, [schemaId]: [] }))
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch schema authoritative definitions for ${schemaId}:`, e)
+      setSchemaAuthDefs(prev => ({ ...prev, [schemaId]: [] }))
+    }
+  }
+
+  const fetchAllSchemaAuthDefs = async () => {
+    if (!contract?.schema) return
+    for (const schema of contract.schema) {
+      const schemaId = (schema as any).id || schema.name  // Use id if available, fallback to name
+      if (schemaId) {
+        await fetchSchemaAuthDefs(schemaId)
+      }
     }
   }
 
@@ -261,17 +345,90 @@ export default function DataContractDetails() {
     }
   }
 
+  // DQX Profiling handlers - defined early to be used in initial useEffect
+  const fetchProfileRuns = useCallback(async () => {
+    if (!contractId) return
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/profile-runs`)
+      if (res.ok) {
+        const runs: DataProfilingRun[] = await res.json()
+        if (runs.length > 0) {
+          const latest = runs[0]
+          const wasRunning = isProfilingRunning
+          
+          setLatestProfileRun(latest)
+          setPendingSuggestionsCount(latest.suggestion_counts?.pending || 0)
+          
+          // Check if profiling is still running
+          const isRunning = latest.status === 'running' || latest.status === 'pending'
+          setIsProfilingRunning(isRunning)
+          
+          // Notify when profiling completes
+          if (wasRunning && !isRunning && latest.status === 'completed') {
+            const suggestionsCount = latest.suggestion_counts?.pending || 0
+            if (suggestionsCount > 0) {
+              toast({
+                title: 'DQX Profiling Complete',
+                description: `${suggestionsCount} quality check ${suggestionsCount === 1 ? 'suggestion' : 'suggestions'} available for review.`
+              })
+            } else {
+              toast({
+                title: 'DQX Profiling Complete',
+                description: 'Profiling completed but no suggestions were generated.'
+              })
+            }
+          } else if (wasRunning && !isRunning && latest.status === 'failed') {
+            toast({
+              title: 'DQX Profiling Failed',
+              description: latest.error_message || 'Profiling failed. Check the job logs for details.',
+              variant: 'destructive'
+            })
+          }
+        } else {
+          setIsProfilingRunning(false)
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch profile runs:', e)
+      setIsProfilingRunning(false)
+    }
+  }, [contractId, isProfilingRunning, toast])
+
   useEffect(() => {
     setStaticSegments([{ label: 'Data Contracts', path: '/data-contracts' }])
     fetchDetails()
     fetchLinkedProducts()
+    fetchContractAuthDefs()
     fetchProfileRuns()
 
     return () => {
       setStaticSegments([])
       setDynamicTitle(null)
     }
-  }, [contractId, setStaticSegments, setDynamicTitle])
+  }, [contractId, setStaticSegments, setDynamicTitle, fetchProfileRuns])
+
+  // Fetch schema-level authoritative definitions when contract is loaded
+  useEffect(() => {
+    if (contract?.schema) {
+      fetchAllSchemaAuthDefs()
+    }
+  }, [contract?.schema])
+
+  // Poll for profiling updates while profiling is running
+  useEffect(() => {
+    if (!isProfilingRunning || !contractId) return
+
+    console.log('Starting profiling poll interval...')
+    const pollInterval = setInterval(() => {
+      console.log('Polling for profiling updates...')
+      fetchProfileRuns()
+    }, 5000) // Poll every 5 seconds
+
+    return () => {
+      console.log('Stopping profiling poll interval')
+      clearInterval(pollInterval)
+    }
+  }, [isProfilingRunning, contractId, fetchProfileRuns])
 
   const handleDelete = async () => {
     if (!contractId) return
@@ -495,6 +652,204 @@ export default function DataContractDetails() {
     await updateContract({ sla })
   }
 
+  // Contract-level Authoritative Definition handlers
+  const handleAddContractAuthDef = async (definition: { url: string; type: string }) => {
+    if (!contractId) return
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/authoritative-definitions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(definition)
+      })
+      if (!res.ok) throw new Error('Failed to create authoritative definition')
+      await fetchContractAuthDefs()
+      toast({ title: 'Added', description: 'Authoritative definition added successfully.' })
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to add', variant: 'destructive' })
+      throw e
+    }
+  }
+
+  const handleUpdateContractAuthDef = async (definition: { url: string; type: string }) => {
+    if (!contractId || editingContractAuthDefIndex === null) return
+    const defId = contractAuthDefs[editingContractAuthDefIndex]?.id
+    if (!defId) return
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/authoritative-definitions/${defId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(definition)
+      })
+      if (!res.ok) throw new Error('Failed to update authoritative definition')
+      await fetchContractAuthDefs()
+      setEditingContractAuthDefIndex(null)
+      toast({ title: 'Updated', description: 'Authoritative definition updated successfully.' })
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
+      throw e
+    }
+  }
+
+  const handleDeleteContractAuthDef = async (index: number) => {
+    if (!contractId) return
+    if (!confirm('Delete this authoritative definition?')) return
+    const defId = contractAuthDefs[index]?.id
+    if (!defId) return
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/authoritative-definitions/${defId}`, {
+        method: 'DELETE'
+      })
+      if (!res.ok) throw new Error('Failed to delete authoritative definition')
+      await fetchContractAuthDefs()
+      toast({ title: 'Deleted', description: 'Authoritative definition deleted successfully.' })
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to delete', variant: 'destructive' })
+    }
+  }
+
+  // Schema-level Authoritative Definition handlers
+  const handleAddSchemaAuthDef = async (definition: { url: string; type: string }) => {
+    if (!contractId || !activeSchemaIdForAuthDef) return
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/schemas/${encodeURIComponent(activeSchemaIdForAuthDef)}/authoritative-definitions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(definition)
+      })
+      if (!res.ok) throw new Error('Failed to create schema authoritative definition')
+      await fetchSchemaAuthDefs(activeSchemaIdForAuthDef)
+      toast({ title: 'Added', description: 'Schema authoritative definition added successfully.' })
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to add', variant: 'destructive' })
+      throw e
+    }
+  }
+
+  const handleUpdateSchemaAuthDef = async (definition: { url: string; type: string }) => {
+    if (!contractId || !editingSchemaAuthDef) return
+    const { schemaId, index } = editingSchemaAuthDef
+    const defs = schemaAuthDefs[schemaId] || []
+    const defId = defs[index]?.id
+    if (!defId) return
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/schemas/${encodeURIComponent(schemaId)}/authoritative-definitions/${defId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(definition)
+      })
+      if (!res.ok) throw new Error('Failed to update schema authoritative definition')
+      await fetchSchemaAuthDefs(schemaId)
+      setEditingSchemaAuthDef(null)
+      toast({ title: 'Updated', description: 'Schema authoritative definition updated successfully.' })
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
+      throw e
+    }
+  }
+
+  const handleDeleteSchemaAuthDef = async (schemaId: string, index: number) => {
+    if (!contractId) return
+    if (!confirm('Delete this schema authoritative definition?')) return
+    const defs = schemaAuthDefs[schemaId] || []
+    const defId = defs[index]?.id
+    if (!defId) return
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/schemas/${encodeURIComponent(schemaId)}/authoritative-definitions/${defId}`, {
+        method: 'DELETE'
+      })
+      if (!res.ok) throw new Error('Failed to delete schema authoritative definition')
+      await fetchSchemaAuthDefs(schemaId)
+      toast({ title: 'Deleted', description: 'Schema authoritative definition deleted successfully.' })
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to delete', variant: 'destructive' })
+    }
+  }
+
+  // Property-level Authoritative Definition fetch and handlers
+  const fetchPropertyAuthDefs = async (schemaId: string, propertyId: string) => {
+    if (!contractId) return
+    try {
+      const response = await fetch(`/api/data-contracts/${contractId}/schemas/${encodeURIComponent(schemaId)}/properties/${encodeURIComponent(propertyId)}/authoritative-definitions`)
+      if (response.ok) {
+        const data = await response.json()
+        setPropertyAuthDefs(prev => ({ ...prev, [propertyId]: Array.isArray(data) ? data : [] }))
+      } else {
+        setPropertyAuthDefs(prev => ({ ...prev, [propertyId]: [] }))
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch property authoritative definitions for ${propertyId}:`, e)
+      setPropertyAuthDefs(prev => ({ ...prev, [propertyId]: [] }))
+    }
+  }
+
+  const handleAddPropertyAuthDef = async (definition: { url: string; type: string }) => {
+    if (!contractId || !activePropertyForAuthDef) return
+    const { schemaId, propertyId } = activePropertyForAuthDef
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/schemas/${encodeURIComponent(schemaId)}/properties/${encodeURIComponent(propertyId)}/authoritative-definitions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(definition)
+      })
+      if (!res.ok) throw new Error('Failed to create property authoritative definition')
+      await fetchPropertyAuthDefs(schemaId, propertyId)
+      toast({ title: 'Added', description: 'Property authoritative definition added successfully.' })
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to add', variant: 'destructive' })
+      throw e
+    }
+  }
+
+  const handleUpdatePropertyAuthDef = async (definition: { url: string; type: string }) => {
+    if (!contractId || !editingPropertyAuthDef) return
+    const { schemaId, propertyId, index } = editingPropertyAuthDef
+    const defs = propertyAuthDefs[propertyId] || []
+    const defId = defs[index]?.id
+    if (!defId) return
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/schemas/${encodeURIComponent(schemaId)}/properties/${encodeURIComponent(propertyId)}/authoritative-definitions/${defId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(definition)
+      })
+      if (!res.ok) throw new Error('Failed to update property authoritative definition')
+      await fetchPropertyAuthDefs(schemaId, propertyId)
+      setEditingPropertyAuthDef(null)
+      toast({ title: 'Updated', description: 'Property authoritative definition updated successfully.' })
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
+      throw e
+    }
+  }
+
+  const handleDeletePropertyAuthDef = async (schemaId: string, propertyId: string, index: number) => {
+    if (!contractId) return
+    if (!confirm('Delete this property authoritative definition?')) return
+    const defs = propertyAuthDefs[propertyId] || []
+    const defId = defs[index]?.id
+    if (!defId) return
+    try {
+      const res = await fetch(`/api/data-contracts/${contractId}/schemas/${encodeURIComponent(schemaId)}/properties/${encodeURIComponent(propertyId)}/authoritative-definitions/${defId}`, {
+        method: 'DELETE'
+      })
+      if (!res.ok) throw new Error('Failed to delete property authoritative definition')
+      await fetchPropertyAuthDefs(schemaId, propertyId)
+      toast({ title: 'Deleted', description: 'Property authoritative definition deleted successfully.' })
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to delete', variant: 'destructive' })
+    }
+  }
+
+  const handleManagePropertyAuthDefs = (schemaId: string, propertyId: string, propertyName: string) => {
+    // Fetch property auth defs if not already loaded
+    if (!propertyAuthDefs[propertyId]) {
+      fetchPropertyAuthDefs(schemaId, propertyId)
+    }
+    setActivePropertyForAuthDef({ schemaId, propertyId })
+    setEditingPropertyAuthDef(null)
+    setIsPropertyAuthDefFormOpen(true)
+  }
+
   // Helper to update contract (read-modify-write pattern)
   const updateContract = async (updates: Partial<any>) => {
     try {
@@ -600,24 +955,6 @@ export default function DataContractDetails() {
     }
   };
 
-  // DQX Profiling handlers
-  const fetchProfileRuns = async () => {
-    if (!contractId) return
-    try {
-      const res = await fetch(`/api/data-contracts/${contractId}/profile-runs`)
-      if (res.ok) {
-        const runs: DataProfilingRun[] = await res.json()
-        if (runs.length > 0) {
-          const latest = runs[0]
-          setLatestProfileRun(latest)
-          setPendingSuggestionsCount(latest.suggestion_counts?.pending || 0)
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to fetch profile runs:', e)
-    }
-  }
-
   const handleStartProfiling = async (selectedSchemaNames: string[]) => {
     if (!contractId) return
     try {
@@ -636,8 +973,10 @@ export default function DataContractDetails() {
         description: 'The profiler is analyzing your data. You will be notified when complete.' 
       })
       setIsDqxSchemaSelectOpen(false)
-      // Poll for updates after a delay
-      setTimeout(fetchProfileRuns, 5000)
+      
+      // Immediately mark as running and fetch status
+      setIsProfilingRunning(true)
+      fetchProfileRuns()
     } catch (e) {
       toast({ 
         title: 'Failed to start profiling', 
@@ -903,7 +1242,17 @@ export default function DataContractDetails() {
           </div>
         </CardHeader>
         <CardContent>
-          {pendingSuggestionsCount > 0 && (
+          {isProfilingRunning && (
+            <Alert className="mb-4">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <AlertDescription className="flex items-center justify-between">
+                <span>
+                  DQX profiling in progress... Results will appear here when complete.
+                </span>
+              </AlertDescription>
+            </Alert>
+          )}
+          {!isProfilingRunning && pendingSuggestionsCount > 0 && (
             <Alert className="mb-4">
               <Sparkles className="h-4 w-4" />
               <AlertDescription className="flex items-center justify-between">
@@ -981,11 +1330,73 @@ export default function DataContractDetails() {
                 </div>
                 {contract.schema[0].properties && contract.schema[0].properties.length > 0 && (
                   <DataTable
-                    columns={createSchemaPropertyColumns(contract, 0, propertyLinks)}
+                    columns={createSchemaPropertyColumns(contract, 0, propertyLinks, propertyAuthDefs, handleManagePropertyAuthDefs)}
                     data={contract.schema[0].properties as SchemaProperty[]}
                     searchColumn="name"
                   />
                 )}
+
+                {/* Schema Authoritative Definitions */}
+                {(() => {
+                  const schemaId = (contract.schema[0] as any).id || contract.schema[0].name
+                  const defs = schemaAuthDefs[schemaId] || []
+                  return (
+                    <div className="mt-4 pt-4 border-t">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-semibold">Authoritative Definitions ({defs.length})</h4>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setActiveSchemaIdForAuthDef(schemaId)
+                            setEditingSchemaAuthDef(null)
+                            setIsSchemaAuthDefFormOpen(true)
+                          }}
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Add
+                        </Button>
+                      </div>
+                      {defs.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No authoritative definitions for this schema.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {defs.map((def, idx) => (
+                            <div key={def.id} className="flex items-start justify-between p-2 border rounded text-xs">
+                              <div className="space-y-1 flex-1">
+                                <Badge variant="secondary" className="text-xs">{def.type}</Badge>
+                                <a href={def.url} target="_blank" rel="noreferrer" className="text-primary hover:underline block break-all">
+                                  {def.url}
+                                </a>
+                              </div>
+                              <div className="flex gap-1 ml-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setEditingSchemaAuthDef({ schemaId, index: idx })
+                                    setIsSchemaAuthDefFormOpen(true)
+                                  }}
+                                  className="h-6 w-6 p-0"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleDeleteSchemaAuthDef(schemaId, idx)}
+                                  className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             ) : contract.schema.length > 6 ? (
               // Many schemas - use dropdown selector
@@ -1049,11 +1460,73 @@ export default function DataContractDetails() {
                   </div>
                   {contract.schema[selectedSchemaIndex]?.properties && contract.schema[selectedSchemaIndex].properties.length > 0 && (
                     <DataTable
-                      columns={createSchemaPropertyColumns(contract, selectedSchemaIndex, propertyLinks)}
+                      columns={createSchemaPropertyColumns(contract, selectedSchemaIndex, propertyLinks, propertyAuthDefs, handleManagePropertyAuthDefs)}
                       data={contract.schema[selectedSchemaIndex].properties as SchemaProperty[]}
                       searchColumn="name"
                     />
                   )}
+
+                  {/* Schema Authoritative Definitions */}
+                  {(() => {
+                    const schemaId = (contract.schema[selectedSchemaIndex] as any).id || contract.schema[selectedSchemaIndex].name
+                    const defs = schemaAuthDefs[schemaId] || []
+                    return (
+                      <div className="mt-4 pt-4 border-t">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-sm font-semibold">Authoritative Definitions ({defs.length})</h4>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setActiveSchemaIdForAuthDef(schemaId)
+                              setEditingSchemaAuthDef(null)
+                              setIsSchemaAuthDefFormOpen(true)
+                            }}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Add
+                          </Button>
+                        </div>
+                        {defs.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No authoritative definitions for this schema.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {defs.map((def, idx) => (
+                              <div key={def.id} className="flex items-start justify-between p-2 border rounded text-xs">
+                                <div className="space-y-1 flex-1">
+                                  <Badge variant="secondary" className="text-xs">{def.type}</Badge>
+                                  <a href={def.url} target="_blank" rel="noreferrer" className="text-primary hover:underline block break-all">
+                                    {def.url}
+                                  </a>
+                                </div>
+                                <div className="flex gap-1 ml-2">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setEditingSchemaAuthDef({ schemaId, index: idx })
+                                      setIsSchemaAuthDefFormOpen(true)
+                                    }}
+                                    className="h-6 w-6 p-0"
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleDeleteSchemaAuthDef(schemaId, idx)}
+                                    className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
             ) : (
@@ -1123,11 +1596,73 @@ export default function DataContractDetails() {
                   </div>
                   {contract.schema[selectedSchemaIndex]?.properties && contract.schema[selectedSchemaIndex].properties.length > 0 && (
                     <DataTable
-                      columns={createSchemaPropertyColumns(contract, selectedSchemaIndex, propertyLinks)}
+                      columns={createSchemaPropertyColumns(contract, selectedSchemaIndex, propertyLinks, propertyAuthDefs, handleManagePropertyAuthDefs)}
                       data={contract.schema[selectedSchemaIndex].properties as SchemaProperty[]}
                       searchColumn="name"
                     />
                   )}
+
+                  {/* Schema Authoritative Definitions */}
+                  {(() => {
+                    const schemaId = (contract.schema[selectedSchemaIndex] as any).id || contract.schema[selectedSchemaIndex].name
+                    const defs = schemaAuthDefs[schemaId] || []
+                    return (
+                      <div className="mt-4 pt-4 border-t">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-sm font-semibold">Authoritative Definitions ({defs.length})</h4>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setActiveSchemaIdForAuthDef(schemaId)
+                              setEditingSchemaAuthDef(null)
+                              setIsSchemaAuthDefFormOpen(true)
+                            }}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Add
+                          </Button>
+                        </div>
+                        {defs.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No authoritative definitions for this schema.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {defs.map((def, idx) => (
+                              <div key={def.id} className="flex items-start justify-between p-2 border rounded text-xs">
+                                <div className="space-y-1 flex-1">
+                                  <Badge variant="secondary" className="text-xs">{def.type}</Badge>
+                                  <a href={def.url} target="_blank" rel="noreferrer" className="text-primary hover:underline block break-all">
+                                    {def.url}
+                                  </a>
+                                </div>
+                                <div className="flex gap-1 ml-2">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setEditingSchemaAuthDef({ schemaId, index: idx })
+                                      setIsSchemaAuthDefFormOpen(true)
+                                    }}
+                                    className="h-6 w-6 p-0"
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleDeleteSchemaAuthDef(schemaId, idx)}
+                                    className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
             )
@@ -1371,6 +1906,73 @@ export default function DataContractDetails() {
         </Card>
       )}
 
+      {/* Authoritative Definitions - Contract Level (ODCS) */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-xl">Authoritative Definitions</CardTitle>
+              <CardDescription>ODCS authoritative sources for this contract ({contractAuthDefs.length})</CardDescription>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditingContractAuthDefIndex(null)
+                setIsContractAuthDefFormOpen(true)
+              }}
+            >
+              <Plus className="h-4 w-4 mr-1.5" />
+              Add Definition
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {contractAuthDefs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No authoritative definitions defined yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {contractAuthDefs.map((def, idx) => (
+                <div key={def.id} className="flex items-start justify-between p-3 border rounded-md">
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="text-xs">{def.type}</Badge>
+                    </div>
+                    <a
+                      href={def.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm text-primary hover:underline break-all block"
+                    >
+                      {def.url}
+                    </a>
+                  </div>
+                  <div className="flex gap-1 ml-3">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setEditingContractAuthDefIndex(idx)
+                        setIsContractAuthDefFormOpen(true)
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDeleteContractAuthDef(idx)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Metadata Panel */}
       {contract.id && (
         <EntityMetadataPanel entityId={contract.id} entityType="data_contract" />
@@ -1494,6 +2096,30 @@ export default function DataContractDetails() {
           onSuccess={handleSuggestionsSuccess}
         />
       )}
+
+      <AuthoritativeDefinitionFormDialog
+        isOpen={isContractAuthDefFormOpen}
+        onOpenChange={setIsContractAuthDefFormOpen}
+        initial={editingContractAuthDefIndex !== null ? contractAuthDefs[editingContractAuthDefIndex] : undefined}
+        onSubmit={editingContractAuthDefIndex !== null ? handleUpdateContractAuthDef : handleAddContractAuthDef}
+        level="contract"
+      />
+
+      <AuthoritativeDefinitionFormDialog
+        isOpen={isSchemaAuthDefFormOpen}
+        onOpenChange={setIsSchemaAuthDefFormOpen}
+        initial={editingSchemaAuthDef !== null && activeSchemaIdForAuthDef ? schemaAuthDefs[editingSchemaAuthDef.schemaId]?.[editingSchemaAuthDef.index] : undefined}
+        onSubmit={editingSchemaAuthDef !== null ? handleUpdateSchemaAuthDef : handleAddSchemaAuthDef}
+        level="schema"
+      />
+
+      <AuthoritativeDefinitionFormDialog
+        isOpen={isPropertyAuthDefFormOpen}
+        onOpenChange={setIsPropertyAuthDefFormOpen}
+        initial={editingPropertyAuthDef !== null && activePropertyForAuthDef ? propertyAuthDefs[editingPropertyAuthDef.propertyId]?.[editingPropertyAuthDef.index] : undefined}
+        onSubmit={editingPropertyAuthDef !== null ? handleUpdatePropertyAuthDef : handleAddPropertyAuthDef}
+        level="property"
+      />
     </div>
   )
 }

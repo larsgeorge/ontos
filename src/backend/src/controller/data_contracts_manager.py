@@ -34,7 +34,6 @@ from src.db_models.data_contracts import (
     DataContractServerDb,
     SchemaObjectDb,
     SchemaPropertyDb,
-    SchemaPropertyAuthorityDb,
 )
 from src.repositories.data_contracts_repository import data_contract_repo
 
@@ -1362,10 +1361,10 @@ class DataContractsManager(SearchableAsset):
                 # Process contract-level authoritativeDefinitions
                 contract_auth_defs = c.get('authoritativeDefinitions') or []
                 if isinstance(contract_auth_defs, list):
-                    from src.db_models.data_contracts import DataContractAuthorityDb
+                    from src.db_models.data_contracts import DataContractAuthoritativeDefinitionDb
                     for auth_def in contract_auth_defs:
                         if isinstance(auth_def, dict) and auth_def.get('url') and auth_def.get('type'):
-                            db.add(DataContractAuthorityDb(
+                            db.add(DataContractAuthoritativeDefinitionDb(
                                 contract_id=created.id,
                                 url=auth_def['url'],
                                 type=auth_def['type']
@@ -1389,10 +1388,10 @@ class DataContractsManager(SearchableAsset):
                         # Process schema-level authoritativeDefinitions
                         schema_auth_defs = obj.get('authoritativeDefinitions') or []
                         if isinstance(schema_auth_defs, list):
-                            from src.db_models.data_contracts import SchemaObjectAuthorityDb
+                            from src.db_models.data_contracts import SchemaObjectAuthoritativeDefinitionDb
                             for auth_def in schema_auth_defs:
                                 if isinstance(auth_def, dict) and auth_def.get('url') and auth_def.get('type'):
-                                    db.add(SchemaObjectAuthorityDb(
+                                    db.add(SchemaObjectAuthoritativeDefinitionDb(
                                         schema_object_id=so.id,
                                         url=auth_def['url'],
                                         type=auth_def['type']
@@ -1418,9 +1417,10 @@ class DataContractsManager(SearchableAsset):
                                 # Process property-level authoritativeDefinitions
                                 prop_auth_defs = p.get('authoritativeDefinitions') or []
                                 if isinstance(prop_auth_defs, list):
+                                    from src.db_models.data_contracts import SchemaPropertyAuthoritativeDefinitionDb
                                     for auth_def in prop_auth_defs:
                                         if isinstance(auth_def, dict) and auth_def.get('url') and auth_def.get('type'):
-                                            db.add(SchemaPropertyAuthorityDb(
+                                            db.add(SchemaPropertyAuthoritativeDefinitionDb(
                                                 property_id=prop_obj.id,
                                                 url=auth_def['url'],
                                                 type=auth_def['type']
@@ -1489,3 +1489,453 @@ class DataContractsManager(SearchableAsset):
 
         except Exception as e:
             logger.error(f"Failed to process semantic links for demo contracts: {e}", exc_info=True)
+
+    # --- DQX Profiling Methods ---
+    
+    def start_profiling(self, db, contract_id: str, schema_names: List[str], 
+                       triggered_by: str, jobs_manager) -> Dict[str, Any]:
+        """Start DQX profiling for contract schemas.
+        
+        Args:
+            db: Database session
+            contract_id: Contract ID to profile
+            schema_names: List of schema names to profile
+            triggered_by: Username of user who triggered profiling
+            jobs_manager: JobsManager instance for running workflows
+            
+        Returns:
+            Dict with profile_run_id, run_id, and message
+            
+        Raises:
+            ValueError: If schema_names is empty or workflow not installed
+        """
+        from src.repositories.data_profiling_runs_repository import data_profiling_runs_repo
+        from src.db_models.data_contracts import DataProfilingRunDb
+        from src.repositories.workflow_installations_repository import workflow_installation_repo
+        from src.common.config import get_settings
+        from datetime import datetime
+        from uuid import uuid4
+        import json
+        
+        if not schema_names:
+            raise ValueError("schema_names is required")
+        
+        # Verify contract exists
+        contract = data_contract_repo.get(db, id=contract_id)
+        if not contract:
+            raise ValueError("Contract not found")
+        
+        # Create profiling run record
+        profile_run_id = str(uuid4())
+        run = DataProfilingRunDb(
+            id=profile_run_id,
+            contract_id=contract_id,
+            source='dqx',
+            schema_names=json.dumps(schema_names),
+            status='pending',
+            started_at=datetime.utcnow(),
+            triggered_by=triggered_by
+        )
+        db.add(run)
+        db.commit()
+        db.refresh(run)
+        
+        # Get jobs manager and workflow installation
+        if not jobs_manager:
+            raise ValueError("Jobs manager not available")
+        
+        workflow_id = "dqx_profile_datasets"
+        installation = workflow_installation_repo.get_by_workflow_id(db=db, workflow_id=workflow_id)
+        if not installation:
+            raise ValueError(f"Workflow '{workflow_id}' not installed. Please install it via Settings > Jobs & Workflows.")
+        
+        # Trigger workflow with parameters
+        settings = get_settings()
+        job_params = {
+            "contract_id": contract_id,
+            "schema_names": json.dumps(schema_names),
+            "profile_run_id": profile_run_id,
+            "lakebase_instance_name": settings.LAKEBASE_INSTANCE_NAME or "",
+            "postgres_host": settings.POSTGRES_HOST or "",
+            "postgres_db": settings.POSTGRES_DB or "",
+            "postgres_port": str(settings.POSTGRES_PORT) if settings.POSTGRES_PORT else "5432",
+            "postgres_schema": settings.POSTGRES_DB_SCHEMA or "public"
+        }
+        
+        run_id = jobs_manager.run_job(
+            job_id=int(installation.job_id),
+            job_name=workflow_id,
+            job_parameters=job_params
+        )
+        
+        # Update run record with Databricks run_id
+        run.run_id = str(run_id)
+        run.status = 'running'
+        db.commit()
+        
+        return {
+            "profile_run_id": profile_run_id,
+            "run_id": run_id,
+            "message": "DQX profiling started successfully"
+        }
+    
+    def get_profile_runs(self, db, contract_id: str, jobs_manager=None) -> List[Dict[str, Any]]:
+        """Get profiling runs with accurate status from JobsManager.
+        
+        Args:
+            db: Database session
+            contract_id: Contract ID to get runs for
+            jobs_manager: Optional JobsManager instance for real-time status updates
+            
+        Returns:
+            List of profiling runs with suggestion counts
+        """
+        from src.repositories.data_profiling_runs_repository import data_profiling_runs_repo
+        from sqlalchemy import func
+        from src.db_models.data_contracts import SuggestedQualityCheckDb
+        from datetime import datetime, timezone
+        import json
+        
+        # Verify contract exists
+        contract = data_contract_repo.get(db, id=contract_id)
+        if not contract:
+            raise ValueError("Contract not found")
+        
+        runs = data_profiling_runs_repo.get_by_contract_id(db, contract_id)
+        
+        result = []
+        for run in runs:
+            # Update status from JobsManager if available and run is still in progress
+            if run.run_id and jobs_manager and run.status == 'running':
+                try:
+                    job_status = jobs_manager.get_job_status(int(run.run_id))
+                    
+                    # Update to actual final status if job has terminated
+                    if job_status and job_status['life_cycle_state'] == 'TERMINATED':
+                        if job_status['result_state'] == 'SUCCESS':
+                            run.status = 'completed'
+                        else:
+                            run.status = 'failed'
+                            run.error_message = f"Job failed: {job_status.get('result_state')}"
+                        run.completed_at = datetime.now(timezone.utc)
+                        db.commit()
+                except Exception as e:
+                    logger.warning(f"Failed to get job status for run {run.run_id}: {e}")
+            
+            # Get suggestion counts
+            counts = (
+                db.query(
+                    SuggestedQualityCheckDb.status,
+                    func.count(SuggestedQualityCheckDb.id).label('count')
+                )
+                .filter(SuggestedQualityCheckDb.profile_run_id == run.id)
+                .group_by(SuggestedQualityCheckDb.status)
+                .all()
+            )
+            
+            count_map = {status: count for status, count in counts}
+            
+            result.append({
+                "id": run.id,
+                "contract_id": run.contract_id,
+                "source": run.source,
+                "schema_names": json.loads(run.schema_names) if run.schema_names else [],
+                "status": run.status,
+                "summary_stats": run.summary_stats,
+                "run_id": run.run_id,
+                "started_at": run.started_at.isoformat() if run.started_at else None,
+                "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+                "error_message": run.error_message,
+                "triggered_by": run.triggered_by,
+                "suggestion_counts": {
+                    "pending": count_map.get('pending', 0),
+                    "accepted": count_map.get('accepted', 0),
+                    "rejected": count_map.get('rejected', 0)
+                }
+            })
+        
+        return result
+    
+    def get_profile_suggestions(self, db, contract_id: str, run_id: str) -> List[Dict[str, Any]]:
+        """Get quality check suggestions for a profiling run.
+        
+        Args:
+            db: Database session
+            contract_id: Contract ID
+            run_id: Profiling run ID
+            
+        Returns:
+            List of quality check suggestions
+        """
+        from src.repositories.suggested_quality_checks_repository import suggested_quality_checks_repo
+        
+        # Verify contract exists
+        contract = data_contract_repo.get(db, id=contract_id)
+        if not contract:
+            raise ValueError("Contract not found")
+        
+        suggestions = suggested_quality_checks_repo.get_by_profile_run_id(db, run_id)
+        
+        result = []
+        for s in suggestions:
+            result.append({
+                "id": s.id,
+                "profile_run_id": s.profile_run_id,
+                "contract_id": s.contract_id,
+                "source": s.source,
+                "schema_name": s.schema_name,
+                "property_name": s.property_name,
+                "status": s.status,
+                "name": s.name,
+                "description": s.description,
+                "level": s.level,
+                "dimension": s.dimension,
+                "business_impact": s.business_impact,
+                "severity": s.severity,
+                "type": s.type,
+                "method": s.method,
+                "schedule": s.schedule,
+                "scheduler": s.scheduler,
+                "unit": s.unit,
+                "tags": s.tags,
+                "rule": s.rule,
+                "query": s.query,
+                "engine": s.engine,
+                "implementation": s.implementation,
+                "must_be": s.must_be,
+                "must_not_be": s.must_not_be,
+                "must_be_gt": s.must_be_gt,
+                "must_be_ge": s.must_be_ge,
+                "must_be_lt": s.must_be_lt,
+                "must_be_le": s.must_be_le,
+                "must_be_between_min": s.must_be_between_min,
+                "must_be_between_max": s.must_be_between_max,
+                "confidence_score": s.confidence_score,
+                "rationale": s.rationale,
+                "created_at": s.created_at.isoformat() if s.created_at else None
+            })
+        
+        return result
+    
+    def accept_suggestions(self, db, contract_id: str, suggestion_ids: List[str],
+                          bump_version: Optional[Dict[str, str]], current_user: str, 
+                          audit_manager) -> Dict[str, Any]:
+        """Accept and convert suggestions to quality rules.
+        
+        Args:
+            db: Database session
+            contract_id: Contract ID
+            suggestion_ids: List of suggestion IDs to accept
+            bump_version: Optional dict with new_version if version bump requested
+            current_user: Username of current user
+            audit_manager: AuditManager instance
+            
+        Returns:
+            Dict with accepted_count and quality_rules_added
+        """
+        from src.db_models.data_contracts import SuggestedQualityCheckDb, DataQualityCheckDb
+        
+        if not suggestion_ids:
+            raise ValueError("suggestion_ids is required")
+        
+        # Verify contract exists
+        contract = data_contract_repo.get(db, id=contract_id)
+        if not contract:
+            raise ValueError("Contract not found")
+        
+        # Get suggestions
+        suggestions = (
+            db.query(SuggestedQualityCheckDb)
+            .filter(
+                SuggestedQualityCheckDb.id.in_(suggestion_ids),
+                SuggestedQualityCheckDb.contract_id == contract_id,
+                SuggestedQualityCheckDb.status == 'pending'
+            )
+            .all()
+        )
+        
+        if not suggestions:
+            raise ValueError("No pending suggestions found")
+        
+        # Update version if requested
+        if bump_version and bump_version.get('new_version'):
+            contract.version = bump_version['new_version']
+        
+        # Create quality checks from suggestions
+        schema_objects_map = {obj.name: obj for obj in contract.schema_objects}
+        added_count = 0
+        
+        for suggestion in suggestions:
+            # Find the schema object for this suggestion
+            schema_obj = schema_objects_map.get(suggestion.schema_name)
+            if not schema_obj:
+                logger.warning(f"Schema object '{suggestion.schema_name}' not found for suggestion {suggestion.id}")
+                continue
+            
+            # Create quality check
+            quality_check = DataQualityCheckDb(
+                object_id=schema_obj.id,
+                level=suggestion.level,
+                name=suggestion.name,
+                description=suggestion.description,
+                dimension=suggestion.dimension,
+                business_impact=suggestion.business_impact,
+                severity=suggestion.severity,
+                type=suggestion.type,
+                method=suggestion.method,
+                schedule=suggestion.schedule,
+                scheduler=suggestion.scheduler,
+                unit=suggestion.unit,
+                tags=suggestion.tags,
+                rule=suggestion.rule,
+                query=suggestion.query,
+                engine=suggestion.engine,
+                implementation=suggestion.implementation,
+                must_be=suggestion.must_be,
+                must_not_be=suggestion.must_not_be,
+                must_be_gt=suggestion.must_be_gt,
+                must_be_ge=suggestion.must_be_ge,
+                must_be_lt=suggestion.must_be_lt,
+                must_be_le=suggestion.must_be_le,
+                must_be_between_min=suggestion.must_be_between_min,
+                must_be_between_max=suggestion.must_be_between_max
+            )
+            db.add(quality_check)
+            
+            # Mark suggestion as accepted
+            suggestion.status = 'accepted'
+            added_count += 1
+        
+        db.commit()
+        
+        # Audit log
+        if audit_manager:
+            audit_manager.log_action(
+                db=db,
+                username=current_user,
+                ip_address=None,  # Will be set by route if available
+                feature="data-contracts",
+                action="ACCEPT_SUGGESTIONS",
+                success=True,
+                details={
+                    "contract_id": contract_id,
+                    "suggestion_ids": suggestion_ids,
+                    "accepted_count": added_count,
+                    "version_updated": bump_version is not None
+                }
+            )
+        
+        return {
+            "accepted_count": added_count,
+            "quality_rules_added": added_count
+        }
+    
+    def reject_suggestions(self, db, contract_id: str, suggestion_ids: List[str],
+                          current_user: str, audit_manager) -> Dict[str, Any]:
+        """Reject quality check suggestions.
+        
+        Args:
+            db: Database session
+            contract_id: Contract ID
+            suggestion_ids: List of suggestion IDs to reject
+            current_user: Username of current user
+            audit_manager: AuditManager instance
+            
+        Returns:
+            Dict with rejected_count
+        """
+        from src.db_models.data_contracts import SuggestedQualityCheckDb
+        
+        if not suggestion_ids:
+            raise ValueError("suggestion_ids is required")
+        
+        # Verify contract exists
+        contract = data_contract_repo.get(db, id=contract_id)
+        if not contract:
+            raise ValueError("Contract not found")
+        
+        # Update suggestions to rejected status
+        rejected_count = (
+            db.query(SuggestedQualityCheckDb)
+            .filter(
+                SuggestedQualityCheckDb.id.in_(suggestion_ids),
+                SuggestedQualityCheckDb.contract_id == contract_id,
+                SuggestedQualityCheckDb.status == 'pending'
+            )
+            .update({"status": "rejected"}, synchronize_session=False)
+        )
+        
+        db.commit()
+        
+        # Audit log
+        if audit_manager:
+            audit_manager.log_action(
+                db=db,
+                username=current_user,
+                ip_address=None,  # Will be set by route if available
+                feature="data-contracts",
+                action="REJECT_SUGGESTIONS",
+                success=True,
+                details={
+                    "contract_id": contract_id,
+                    "suggestion_ids": suggestion_ids,
+                    "rejected_count": rejected_count
+                }
+            )
+        
+        return {
+            "rejected_count": rejected_count
+        }
+    
+    def update_suggestion(self, db, contract_id: str, suggestion_id: str,
+                         updates: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a quality check suggestion.
+        
+        Args:
+            db: Database session
+            contract_id: Contract ID
+            suggestion_id: Suggestion ID to update
+            updates: Dict of fields to update
+            
+        Returns:
+            Dict with id and message
+        """
+        from src.db_models.data_contracts import SuggestedQualityCheckDb
+        
+        # Verify contract exists
+        contract = data_contract_repo.get(db, id=contract_id)
+        if not contract:
+            raise ValueError("Contract not found")
+        
+        suggestion = (
+            db.query(SuggestedQualityCheckDb)
+            .filter(
+                SuggestedQualityCheckDb.id == suggestion_id,
+                SuggestedQualityCheckDb.contract_id == contract_id
+            )
+            .first()
+        )
+        
+        if not suggestion:
+            raise ValueError("Suggestion not found")
+        
+        # Update allowed fields
+        updatable_fields = [
+            'name', 'description', 'dimension', 'business_impact', 'severity',
+            'type', 'method', 'schedule', 'scheduler', 'unit', 'tags',
+            'rule', 'query', 'engine', 'implementation',
+            'must_be', 'must_not_be', 'must_be_gt', 'must_be_ge',
+            'must_be_lt', 'must_be_le', 'must_be_between_min', 'must_be_between_max'
+        ]
+        
+        for field in updatable_fields:
+            if field in updates:
+                setattr(suggestion, field, updates[field])
+        
+        db.commit()
+        db.refresh(suggestion)
+        
+        return {
+            "id": suggestion.id,
+            "message": "Suggestion updated successfully"
+        }

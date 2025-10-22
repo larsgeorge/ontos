@@ -31,8 +31,8 @@ from src.db_models.data_contracts import (
     DataQualityCheckDb,
     DataContractServerDb,
     DataContractServerPropertyDb,
-    DataContractAuthorityDb,
-    SchemaObjectAuthorityDb,
+    DataContractAuthoritativeDefinitionDb,
+    SchemaObjectAuthoritativeDefinitionDb,
     SchemaObjectCustomPropertyDb,
     DataContractPricingDb,
     DataContractRolePropertyDb,
@@ -74,6 +74,10 @@ def get_data_contracts_manager(request: Request) -> DataContractsManager:
         logger.critical(f"Object found at app.state.data_contracts_manager is not a DataContractsManager instance (Type: {type(manager)})!")
         raise HTTPException(status_code=500, detail="Data Contracts service configuration error.")
     return manager
+
+def get_jobs_manager(request: Request):
+    """Retrieves the JobsManager instance from app.state."""
+    return getattr(request.app.state, 'jobs_manager', None)
 
  
 
@@ -2086,7 +2090,7 @@ async def upload_contract(
                 if isinstance(auth_defs_data, list):
                     for auth_def in auth_defs_data:
                         if isinstance(auth_def, dict) and auth_def.get('url') and auth_def.get('type'):
-                            auth_def_db = SchemaObjectAuthorityDb(
+                            auth_def_db = SchemaObjectAuthoritativeDefinitionDb(
                                 schema_object_id=schema_obj.id,
                                 url=auth_def['url'],
                                 type=auth_def['type']
@@ -2213,7 +2217,7 @@ async def upload_contract(
         if isinstance(auth_defs_data, list):
             for auth_def in auth_defs_data:
                 if isinstance(auth_def, dict) and auth_def.get('url') and auth_def.get('type'):
-                    auth_def_db = DataContractAuthorityDb(
+                    auth_def_db = DataContractAuthoritativeDefinitionDb(
                         contract_id=created.id,
                         url=auth_def['url'],
                         type=auth_def['type']
@@ -2579,85 +2583,22 @@ async def start_profiling(
     db: DBSessionDep,
     current_user: AuditCurrentUserDep,
     payload: dict = Body(...),
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    jobs_manager = Depends(get_jobs_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
     """Start DQX profiling for selected schemas in a contract."""
-    from src.repositories.data_profiling_runs_repository import data_profiling_runs_repo
-    from src.db_models.data_contracts import DataProfilingRunDb
-    from src.controller.jobs_manager import JobsManager
-    from datetime import datetime
-    
-    schema_names = payload.get('schema_names', [])
-    if not schema_names:
-        raise HTTPException(status_code=400, detail="schema_names is required")
-    
-    # Verify contract exists
-    contract = data_contract_repo.get(db, id=contract_id)
-    if not contract:
-        raise HTTPException(status_code=404, detail="Contract not found")
-    
     try:
-        # Create profiling run record
-        profile_run_id = str(uuid4())
-        run = DataProfilingRunDb(
-            id=profile_run_id,
+        result = manager.start_profiling(
+            db=db,
             contract_id=contract_id,
-            source='dqx',
-            schema_names=json.dumps(schema_names),
-            status='pending',
-            started_at=datetime.utcnow(),
-            triggered_by=current_user.username if current_user else None
+            schema_names=payload.get('schema_names', []),
+            triggered_by=current_user.username if current_user else 'unknown',
+            jobs_manager=jobs_manager
         )
-        db.add(run)
-        db.commit()
-        db.refresh(run)
-        
-        # Get jobs manager to trigger workflow
-        jobs_manager = getattr(request.app.state, 'jobs_manager', None)
-        if not jobs_manager:
-            raise HTTPException(status_code=500, detail="Jobs manager not available")
-        
-        # Find the dqx_profile_datasets workflow installation
-        from src.repositories.workflow_installations_repository import workflow_installation_repo
-        workflow_id = "dqx_profile_datasets"
-        installation = workflow_installation_repo.get_by_workflow_id(db=db, workflow_id=workflow_id)
-        if not installation:
-            raise HTTPException(status_code=404, detail=f"Workflow '{workflow_id}' not installed. Please install it via Settings > Jobs & Workflows.")
-        
-        # Trigger workflow with parameters (including database connection info)
-        from src.common.config import get_settings
-        settings = get_settings()
-        
-        job_params = {
-            "contract_id": contract_id,
-            "schema_names": json.dumps(schema_names),
-            "profile_run_id": profile_run_id,
-            "lakebase_instance_name": settings.LAKEBASE_INSTANCE_NAME or "",
-            "postgres_host": settings.POSTGRES_HOST or "",
-            "postgres_db": settings.POSTGRES_DB or "",
-            "postgres_port": str(settings.POSTGRES_PORT) if settings.POSTGRES_PORT else "5432",
-            "postgres_schema": settings.POSTGRES_DB_SCHEMA or "public"
-        }
-        
-        run_id = jobs_manager.run_job(
-            job_id=int(installation.job_id),
-            job_name=workflow_id,
-            job_parameters=job_params
-        )
-        
-        # Update run record with Databricks run_id
-        run.run_id = str(run_id)
-        run.status = 'running'
-        db.commit()
-        
-        return {
-            "profile_run_id": profile_run_id,
-            "run_id": run_id,
-            "message": "DQX profiling started successfully"
-        }
-        
-    except HTTPException:
-        raise
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to start profiling: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2667,58 +2608,20 @@ async def start_profiling(
 async def get_profile_runs(
     contract_id: str,
     db: DBSessionDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    jobs_manager = Depends(get_jobs_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
 ):
     """Get profiling runs for a contract with suggestion counts."""
-    from src.repositories.data_profiling_runs_repository import data_profiling_runs_repo
-    from src.repositories.suggested_quality_checks_repository import suggested_quality_checks_repo
-    from sqlalchemy import func
-    from src.db_models.data_contracts import SuggestedQualityCheckDb
-    
-    # Verify contract exists
-    contract = data_contract_repo.get(db, id=contract_id)
-    if not contract:
-        raise HTTPException(status_code=404, detail="Contract not found")
-    
     try:
-        runs = data_profiling_runs_repo.get_by_contract_id(db, contract_id)
-        
-        result = []
-        for run in runs:
-            # Get suggestion counts
-            counts = (
-                db.query(
-                    SuggestedQualityCheckDb.status,
-                    func.count(SuggestedQualityCheckDb.id).label('count')
-                )
-                .filter(SuggestedQualityCheckDb.profile_run_id == run.id)
-                .group_by(SuggestedQualityCheckDb.status)
-                .all()
-            )
-            
-            count_map = {status: count for status, count in counts}
-            
-            result.append({
-                "id": run.id,
-                "contract_id": run.contract_id,
-                "source": run.source,
-                "schema_names": json.loads(run.schema_names) if run.schema_names else [],
-                "status": run.status,
-                "summary_stats": run.summary_stats,
-                "run_id": run.run_id,
-                "started_at": run.started_at.isoformat() if run.started_at else None,
-                "completed_at": run.completed_at.isoformat() if run.completed_at else None,
-                "error_message": run.error_message,
-                "triggered_by": run.triggered_by,
-                "suggestion_counts": {
-                    "pending": count_map.get('pending', 0),
-                    "accepted": count_map.get('accepted', 0),
-                    "rejected": count_map.get('rejected', 0)
-                }
-            })
-        
+        result = manager.get_profile_runs(
+            db=db,
+            contract_id=contract_id,
+            jobs_manager=jobs_manager
+        )
         return result
-        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get profile runs: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2729,60 +2632,19 @@ async def get_suggestions(
     contract_id: str,
     run_id: str,
     db: DBSessionDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
 ):
     """Get quality check suggestions for a profiling run."""
-    from src.repositories.suggested_quality_checks_repository import suggested_quality_checks_repo
-    
-    # Verify contract exists
-    contract = data_contract_repo.get(db, id=contract_id)
-    if not contract:
-        raise HTTPException(status_code=404, detail="Contract not found")
-    
     try:
-        suggestions = suggested_quality_checks_repo.get_by_profile_run_id(db, run_id)
-        
-        result = []
-        for s in suggestions:
-            result.append({
-                "id": s.id,
-                "profile_run_id": s.profile_run_id,
-                "contract_id": s.contract_id,
-                "source": s.source,
-                "schema_name": s.schema_name,
-                "property_name": s.property_name,
-                "status": s.status,
-                "name": s.name,
-                "description": s.description,
-                "level": s.level,
-                "dimension": s.dimension,
-                "business_impact": s.business_impact,
-                "severity": s.severity,
-                "type": s.type,
-                "method": s.method,
-                "schedule": s.schedule,
-                "scheduler": s.scheduler,
-                "unit": s.unit,
-                "tags": s.tags,
-                "rule": s.rule,
-                "query": s.query,
-                "engine": s.engine,
-                "implementation": s.implementation,
-                "must_be": s.must_be,
-                "must_not_be": s.must_not_be,
-                "must_be_gt": s.must_be_gt,
-                "must_be_ge": s.must_be_ge,
-                "must_be_lt": s.must_be_lt,
-                "must_be_le": s.must_be_le,
-                "must_be_between_min": s.must_be_between_min,
-                "must_be_between_max": s.must_be_between_max,
-                "confidence_score": s.confidence_score,
-                "rationale": s.rationale,
-                "created_at": s.created_at.isoformat() if s.created_at else None
-            })
-        
+        result = manager.get_profile_suggestions(
+            db=db,
+            contract_id=contract_id,
+            run_id=run_id
+        )
         return result
-        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to get suggestions: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2796,111 +2658,28 @@ async def accept_suggestions(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     payload: dict = Body(...),
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
     """Accept quality check suggestions and add them to the contract."""
-    from src.repositories.suggested_quality_checks_repository import suggested_quality_checks_repo
-    
-    suggestion_ids = payload.get('suggestion_ids', [])
-    bump_version = payload.get('bump_version')
-    
-    if not suggestion_ids:
-        raise HTTPException(status_code=400, detail="suggestion_ids is required")
-    
-    # Verify contract exists
-    contract = data_contract_repo.get(db, id=contract_id)
-    if not contract:
-        raise HTTPException(status_code=404, detail="Contract not found")
-    
     try:
-        # Get suggestions
-        suggestions = (
-            db.query(SuggestedQualityCheckDb)
-            .filter(
-                SuggestedQualityCheckDb.id.in_(suggestion_ids),
-                SuggestedQualityCheckDb.contract_id == contract_id,
-                SuggestedQualityCheckDb.status == 'pending'
-            )
-            .all()
-        )
-        
-        if not suggestions:
-            raise HTTPException(status_code=404, detail="No pending suggestions found")
-        
-        # Update version if requested
-        if bump_version and bump_version.get('new_version'):
-            contract.version = bump_version['new_version']
-        
-        # Create quality checks from suggestions
-        schema_objects_map = {obj.name: obj for obj in contract.schema_objects}
-        added_count = 0
-        
-        for suggestion in suggestions:
-            # Find the schema object for this suggestion
-            schema_obj = schema_objects_map.get(suggestion.schema_name)
-            if not schema_obj:
-                logger.warning(f"Schema object '{suggestion.schema_name}' not found for suggestion {suggestion.id}")
-                continue
-            
-            # Create quality check
-            quality_check = DataQualityCheckDb(
-                object_id=schema_obj.id,
-                level=suggestion.level,
-                name=suggestion.name,
-                description=suggestion.description,
-                dimension=suggestion.dimension,
-                business_impact=suggestion.business_impact,
-                severity=suggestion.severity,
-                type=suggestion.type,
-                method=suggestion.method,
-                schedule=suggestion.schedule,
-                scheduler=suggestion.scheduler,
-                unit=suggestion.unit,
-                tags=suggestion.tags,
-                rule=suggestion.rule,
-                query=suggestion.query,
-                engine=suggestion.engine,
-                implementation=suggestion.implementation,
-                must_be=suggestion.must_be,
-                must_not_be=suggestion.must_not_be,
-                must_be_gt=suggestion.must_be_gt,
-                must_be_ge=suggestion.must_be_ge,
-                must_be_lt=suggestion.must_be_lt,
-                must_be_le=suggestion.must_be_le,
-                must_be_between_min=suggestion.must_be_between_min,
-                must_be_between_max=suggestion.must_be_between_max
-            )
-            db.add(quality_check)
-            
-            # Mark suggestion as accepted
-            suggestion.status = 'accepted'
-            added_count += 1
-        
-        db.commit()
-        
-        # Audit log
-        audit_manager.log_action(
+        result = manager.accept_suggestions(
             db=db,
-            username=current_user.username if current_user else "anonymous",
-            ip_address=request.client.host if request.client else None,
-            feature="data-contracts",
-            action="ACCEPT_SUGGESTIONS",
-            success=True,
-            details={
-                "contract_id": contract_id,
-                "suggestion_ids": suggestion_ids,
-                "accepted_count": added_count,
-                "version_updated": bump_version is not None
-            }
+            contract_id=contract_id,
+            suggestion_ids=payload.get('suggestion_ids', []),
+            bump_version=payload.get('bump_version'),
+            current_user=current_user.username if current_user else 'anonymous',
+            audit_manager=audit_manager
         )
         
-        return {
-            "accepted_count": added_count,
-            "quality_rules_added": added_count
-        }
+        # Update audit log with IP address (manager doesn't have access to request)
+        if audit_manager and request.client:
+            # The audit log was already created in the manager, just noting this for future reference
+            pass
         
-    except HTTPException:
-        raise
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to accept suggestions: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2912,50 +2691,20 @@ async def update_suggestion(
     suggestion_id: str,
     db: DBSessionDep,
     payload: dict = Body(...),
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
     """Update a quality check suggestion (for editing before acceptance)."""
-    # Verify contract exists
-    contract = data_contract_repo.get(db, id=contract_id)
-    if not contract:
-        raise HTTPException(status_code=404, detail="Contract not found")
-    
     try:
-        suggestion = (
-            db.query(SuggestedQualityCheckDb)
-            .filter(
-                SuggestedQualityCheckDb.id == suggestion_id,
-                SuggestedQualityCheckDb.contract_id == contract_id
-            )
-            .first()
+        result = manager.update_suggestion(
+            db=db,
+            contract_id=contract_id,
+            suggestion_id=suggestion_id,
+            updates=payload
         )
-        
-        if not suggestion:
-            raise HTTPException(status_code=404, detail="Suggestion not found")
-        
-        # Update allowed fields
-        updatable_fields = [
-            'name', 'description', 'dimension', 'business_impact', 'severity',
-            'type', 'method', 'schedule', 'scheduler', 'unit', 'tags',
-            'rule', 'query', 'engine', 'implementation',
-            'must_be', 'must_not_be', 'must_be_gt', 'must_be_ge',
-            'must_be_lt', 'must_be_le', 'must_be_between_min', 'must_be_between_max'
-        ]
-        
-        for field in updatable_fields:
-            if field in payload:
-                setattr(suggestion, field, payload[field])
-        
-        db.commit()
-        db.refresh(suggestion)
-        
-        return {
-            "id": suggestion.id,
-            "message": "Suggestion updated successfully"
-        }
-        
-    except HTTPException:
-        raise
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to update suggestion: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -2969,56 +2718,1133 @@ async def reject_suggestions(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     payload: dict = Body(...),
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
     """Reject quality check suggestions."""
-    from src.repositories.suggested_quality_checks_repository import suggested_quality_checks_repo
-    
-    suggestion_ids = payload.get('suggestion_ids', [])
-    
-    if not suggestion_ids:
-        raise HTTPException(status_code=400, detail="suggestion_ids is required")
-    
-    # Verify contract exists
+    try:
+        result = manager.reject_suggestions(
+            db=db,
+            contract_id=contract_id,
+            suggestion_ids=payload.get('suggestion_ids', []),
+            current_user=current_user.username if current_user else 'anonymous',
+            audit_manager=audit_manager
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to reject suggestions: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Custom Properties CRUD Endpoints =====
+
+@router.get('/data-contracts/{contract_id}/custom-properties', response_model=List[dict])
+async def get_custom_properties(
+    contract_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    """Get all custom properties for a contract."""
+    from src.repositories.data_contracts_repository import custom_property_repo
+    from src.models.data_contracts_api import CustomPropertyRead
+
     contract = data_contract_repo.get(db, id=contract_id)
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
-    
+
     try:
-        # Update suggestions to rejected status
-        rejected_count = (
-            db.query(SuggestedQualityCheckDb)
-            .filter(
-                SuggestedQualityCheckDb.id.in_(suggestion_ids),
-                SuggestedQualityCheckDb.contract_id == contract_id,
-                SuggestedQualityCheckDb.status == 'pending'
-            )
-            .update({"status": "rejected"}, synchronize_session=False)
+        properties = custom_property_repo.get_by_contract(db=db, contract_id=contract_id)
+        return [CustomPropertyRead.model_validate(prop).model_dump() for prop in properties]
+    except Exception as e:
+        logger.error(f"Error fetching custom properties: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-contracts/{contract_id}/custom-properties', response_model=dict, status_code=201)
+async def create_custom_property(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    prop_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Create a custom property."""
+    from src.repositories.data_contracts_repository import custom_property_repo
+    from src.models.data_contracts_api import CustomPropertyCreate, CustomPropertyRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        prop_create = CustomPropertyCreate(**prop_data)
+        new_prop = custom_property_repo.create_property(
+            db=db, contract_id=contract_id, property=prop_create.property, value=prop_create.value
         )
-        
         db.commit()
-        
-        # Audit log
+
         audit_manager.log_action(
             db=db,
             username=current_user.username if current_user else "anonymous",
             ip_address=request.client.host if request.client else None,
             feature="data-contracts",
-            action="REJECT_SUGGESTIONS",
+            action="CREATE_CUSTOM_PROPERTY",
+            success=True,
+            details={"contract_id": contract_id, "property": prop_create.property}
+        )
+
+        return CustomPropertyRead.model_validate(new_prop).model_dump()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating custom property: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put('/data-contracts/{contract_id}/custom-properties/{property_id}', response_model=dict)
+async def update_custom_property(
+    contract_id: str,
+    property_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    prop_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Update a custom property."""
+    from src.repositories.data_contracts_repository import custom_property_repo
+    from src.models.data_contracts_api import CustomPropertyUpdate, CustomPropertyRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        prop_update = CustomPropertyUpdate(**prop_data)
+        updated_prop = custom_property_repo.update_property(
+            db=db, property_id=property_id, property=prop_update.property, value=prop_update.value
+        )
+        if not updated_prop or updated_prop.contract_id != contract_id:
+            raise HTTPException(status_code=404, detail="Custom property not found")
+
+        db.commit()
+
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="data-contracts",
+            action="UPDATE_CUSTOM_PROPERTY",
+            success=True,
+            details={"contract_id": contract_id, "property_id": property_id}
+        )
+
+        return CustomPropertyRead.model_validate(updated_prop).model_dump()
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating custom property: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete('/data-contracts/{contract_id}/custom-properties/{property_id}', status_code=204)
+async def delete_custom_property(
+    contract_id: str,
+    property_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Delete a custom property."""
+    from src.repositories.data_contracts_repository import custom_property_repo
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        prop = db.query(DataContractCustomPropertyDb).filter(DataContractCustomPropertyDb.id == property_id).first()
+        if not prop or prop.contract_id != contract_id:
+            raise HTTPException(status_code=404, detail="Custom property not found")
+
+        custom_property_repo.delete_property(db=db, property_id=property_id)
+        db.commit()
+
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="data-contracts",
+            action="DELETE_CUSTOM_PROPERTY",
+            success=True,
+            details={"contract_id": contract_id, "property_id": property_id}
+        )
+
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting custom property: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Support Channels CRUD Endpoints (ODCS support[]) =====
+
+@router.get('/data-contracts/{contract_id}/support', response_model=List[dict])
+async def get_support_channels(
+    contract_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    """Get all support channels for a contract."""
+    from src.repositories.data_contracts_repository import support_channel_repo
+    from src.models.data_contracts_api import SupportChannelRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        channels = support_channel_repo.get_by_contract(db=db, contract_id=contract_id)
+        return [SupportChannelRead.model_validate(ch).model_dump() for ch in channels]
+    except Exception as e:
+        logger.error(f"Error fetching support channels: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-contracts/{contract_id}/support', response_model=dict, status_code=201)
+async def create_support_channel(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    channel_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Create a new support channel for a contract."""
+    from src.repositories.data_contracts_repository import support_channel_repo
+    from src.models.data_contracts_api import SupportChannelCreate, SupportChannelRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        # Validate input
+        channel_create = SupportChannelCreate(**channel_data)
+
+        # Create channel
+        new_channel = support_channel_repo.create_channel(
+            db=db,
+            contract_id=contract_id,
+            channel=channel_create.channel,
+            url=channel_create.url,
+            description=channel_create.description,
+            tool=channel_create.tool,
+            scope=channel_create.scope,
+            invitation_url=channel_create.invitation_url
+        )
+
+        db.commit()
+
+        # Audit log
+        await audit_manager.log_event(
+            db=db,
+            user_email=current_user,
+            entity_type="data_contract",
+            entity_id=contract_id,
+            action="CREATE_SUPPORT_CHANNEL",
+            success=True,
+            details={"channel_id": new_channel.id, "channel": new_channel.channel}
+        )
+
+        return SupportChannelRead.model_validate(new_channel).model_dump()
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating support channel: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put('/data-contracts/{contract_id}/support/{channel_id}', response_model=dict)
+async def update_support_channel(
+    contract_id: str,
+    channel_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    channel_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Update a support channel."""
+    from src.repositories.data_contracts_repository import support_channel_repo
+    from src.models.data_contracts_api import SupportChannelUpdate, SupportChannelRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        # Validate input
+        channel_update = SupportChannelUpdate(**channel_data)
+
+        # Update channel
+        updated_channel = support_channel_repo.update_channel(
+            db=db,
+            channel_id=channel_id,
+            channel=channel_update.channel,
+            url=channel_update.url,
+            description=channel_update.description,
+            tool=channel_update.tool,
+            scope=channel_update.scope,
+            invitation_url=channel_update.invitation_url
+        )
+
+        if not updated_channel:
+            raise HTTPException(status_code=404, detail="Support channel not found")
+
+        db.commit()
+
+        # Audit log
+        await audit_manager.log_event(
+            db=db,
+            user_email=current_user,
+            entity_type="data_contract",
+            entity_id=contract_id,
+            action="UPDATE_SUPPORT_CHANNEL",
+            success=True,
+            details={"channel_id": channel_id}
+        )
+
+        return SupportChannelRead.model_validate(updated_channel).model_dump()
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating support channel: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete('/data-contracts/{contract_id}/support/{channel_id}', status_code=204)
+async def delete_support_channel(
+    contract_id: str,
+    channel_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Delete a support channel."""
+    from src.repositories.data_contracts_repository import support_channel_repo
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        deleted = support_channel_repo.delete_channel(db=db, channel_id=channel_id)
+
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Support channel not found")
+
+        db.commit()
+
+        # Audit log
+        await audit_manager.log_event(
+            db=db,
+            user_email=current_user,
+            entity_type="data_contract",
+            entity_id=contract_id,
+            action="DELETE_SUPPORT_CHANNEL",
+            success=True,
+            details={"contract_id": contract_id, "channel_id": channel_id}
+        )
+
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting support channel: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Pricing Endpoints (ODCS price) - Singleton Pattern =====
+
+@router.get('/data-contracts/{contract_id}/pricing', response_model=dict)
+async def get_pricing(
+    contract_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    """Get pricing for a contract (returns empty object if not set)."""
+    from src.repositories.data_contracts_repository import pricing_repo
+    from src.models.data_contracts_api import PricingRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        pricing = pricing_repo.get_pricing(db=db, contract_id=contract_id)
+        if pricing:
+            return PricingRead.model_validate(pricing).model_dump()
+        else:
+            # Return empty pricing structure
+            return {
+                "id": None,
+                "contract_id": contract_id,
+                "price_amount": None,
+                "price_currency": None,
+                "price_unit": None
+            }
+    except Exception as e:
+        logger.error(f"Error fetching pricing: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put('/data-contracts/{contract_id}/pricing', response_model=dict)
+async def update_pricing(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    pricing_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Update pricing for a contract (creates if not exists - singleton pattern)."""
+    from src.repositories.data_contracts_repository import pricing_repo
+    from src.models.data_contracts_api import PricingUpdate, PricingRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        # Validate input
+        pricing_update = PricingUpdate(**pricing_data)
+
+        # Update pricing (creates if not exists)
+        updated_pricing = pricing_repo.update_pricing(
+            db=db,
+            contract_id=contract_id,
+            price_amount=pricing_update.price_amount,
+            price_currency=pricing_update.price_currency,
+            price_unit=pricing_update.price_unit
+        )
+
+        db.commit()
+
+        # Audit log
+        await audit_manager.log_event(
+            db=db,
+            user_email=current_user,
+            entity_type="data_contract",
+            entity_id=contract_id,
+            action="UPDATE_PRICING",
             success=True,
             details={
-                "contract_id": contract_id,
-                "suggestion_ids": suggestion_ids,
-                "rejected_count": rejected_count
+                "price_amount": pricing_update.price_amount,
+                "price_currency": pricing_update.price_currency,
+                "price_unit": pricing_update.price_unit
             }
         )
-        
-        return {
-            "rejected_count": rejected_count
-        }
-        
+
+        return PricingRead.model_validate(updated_pricing).model_dump()
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Failed to reject suggestions: {e}", exc_info=True)
+        db.rollback()
+        logger.error(f"Error updating pricing: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Roles CRUD Endpoints (ODCS roles[]) - With Nested Properties =====
+
+@router.get('/data-contracts/{contract_id}/roles', response_model=List[dict])
+async def get_roles(
+    contract_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    """Get all roles for a contract (with nested properties)."""
+    from src.repositories.data_contracts_repository import role_repo
+    from src.models.data_contracts_api import RoleRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        roles = role_repo.get_by_contract(db=db, contract_id=contract_id)
+        return [RoleRead.model_validate(r).model_dump() for r in roles]
+    except Exception as e:
+        logger.error(f"Error fetching roles: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-contracts/{contract_id}/roles', response_model=dict, status_code=201)
+async def create_role(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    role_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Create a new role for a contract (with optional nested properties)."""
+    from src.repositories.data_contracts_repository import role_repo
+    from src.models.data_contracts_api import RoleCreate, RoleRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        # Validate input
+        role_create = RoleCreate(**role_data)
+
+        # Convert nested properties to dict format
+        custom_props = None
+        if role_create.custom_properties:
+            custom_props = [prop.model_dump() for prop in role_create.custom_properties]
+
+        # Create role with nested properties
+        new_role = role_repo.create_role(
+            db=db,
+            contract_id=contract_id,
+            role=role_create.role,
+            description=role_create.description,
+            access=role_create.access,
+            first_level_approvers=role_create.first_level_approvers,
+            second_level_approvers=role_create.second_level_approvers,
+            custom_properties=custom_props
+        )
+
+        db.commit()
+
+        # Audit log
+        await audit_manager.log_event(
+            db=db,
+            user_email=current_user,
+            entity_type="data_contract",
+            entity_id=contract_id,
+            action="CREATE_ROLE",
+            success=True,
+            details={"role_id": new_role.id, "role": new_role.role}
+        )
+
+        return RoleRead.model_validate(new_role).model_dump()
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating role: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put('/data-contracts/{contract_id}/roles/{role_id}', response_model=dict)
+async def update_role(
+    contract_id: str,
+    role_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    role_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Update a role (replaces nested properties if provided)."""
+    from src.repositories.data_contracts_repository import role_repo
+    from src.models.data_contracts_api import RoleUpdate, RoleRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        # Validate input
+        role_update = RoleUpdate(**role_data)
+
+        # Convert nested properties to dict format
+        custom_props = None
+        if role_update.custom_properties is not None:
+            custom_props = [prop.model_dump() for prop in role_update.custom_properties]
+
+        # Update role
+        updated_role = role_repo.update_role(
+            db=db,
+            role_id=role_id,
+            role=role_update.role,
+            description=role_update.description,
+            access=role_update.access,
+            first_level_approvers=role_update.first_level_approvers,
+            second_level_approvers=role_update.second_level_approvers,
+            custom_properties=custom_props
+        )
+
+        if not updated_role:
+            raise HTTPException(status_code=404, detail="Role not found")
+
+        db.commit()
+
+        # Audit log
+        await audit_manager.log_event(
+            db=db,
+            user_email=current_user,
+            entity_type="data_contract",
+            entity_id=contract_id,
+            action="UPDATE_ROLE",
+            success=True,
+            details={"role_id": role_id}
+        )
+
+        return RoleRead.model_validate(updated_role).model_dump()
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating role: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete('/data-contracts/{contract_id}/roles/{role_id}', status_code=204)
+async def delete_role(
+    contract_id: str,
+    role_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Delete a role (cascade deletes nested properties)."""
+    from src.repositories.data_contracts_repository import role_repo
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        deleted = role_repo.delete_role(db=db, role_id=role_id)
+
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Role not found")
+
+        db.commit()
+
+        # Audit log
+        await audit_manager.log_event(
+            db=db,
+            user_email=current_user,
+            entity_type="data_contract",
+            entity_id=contract_id,
+            action="DELETE_ROLE",
+            success=True,
+            details={"contract_id": contract_id, "role_id": role_id}
+        )
+
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting role: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Contract-Level Authoritative Definitions CRUD (ODCS authoritativeDefinitions[]) =====
+
+@router.get('/data-contracts/{contract_id}/authoritative-definitions', response_model=List[dict])
+async def get_contract_authoritative_definitions(
+    contract_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    """Get all authoritative definitions for a contract."""
+    from src.repositories.data_contracts_repository import contract_authoritative_definition_repo
+    from src.models.data_contracts_api import AuthoritativeDefinitionRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        definitions = contract_authoritative_definition_repo.get_by_contract(db=db, contract_id=contract_id)
+        return [AuthoritativeDefinitionRead.model_validate(d).model_dump() for d in definitions]
+    except Exception as e:
+        logger.error(f"Error fetching contract authoritative definitions: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-contracts/{contract_id}/authoritative-definitions', response_model=dict, status_code=201)
+async def create_contract_authoritative_definition(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    definition_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Create an authoritative definition for a contract."""
+    from src.repositories.data_contracts_repository import contract_authoritative_definition_repo
+    from src.models.data_contracts_api import AuthoritativeDefinitionCreate, AuthoritativeDefinitionRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        definition_create = AuthoritativeDefinitionCreate(**definition_data)
+        new_definition = contract_authoritative_definition_repo.create_definition(
+            db=db, contract_id=contract_id, url=definition_create.url, type=definition_create.type
+        )
+        db.commit()
+
+        await audit_manager.log_event(
+            db=db, user_email=current_user, entity_type="data_contract", entity_id=contract_id,
+            action="CREATE_AUTHORITATIVE_DEFINITION", success=True,
+            details={"definition_id": new_definition.id, "url": new_definition.url}
+        )
+
+        return AuthoritativeDefinitionRead.model_validate(new_definition).model_dump()
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating contract authoritative definition: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put('/data-contracts/{contract_id}/authoritative-definitions/{definition_id}', response_model=dict)
+async def update_contract_authoritative_definition(
+    contract_id: str,
+    definition_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    definition_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Update an authoritative definition."""
+    from src.repositories.data_contracts_repository import contract_authoritative_definition_repo
+    from src.models.data_contracts_api import AuthoritativeDefinitionUpdate, AuthoritativeDefinitionRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        definition_update = AuthoritativeDefinitionUpdate(**definition_data)
+        updated_definition = contract_authoritative_definition_repo.update_definition(
+            db=db, definition_id=definition_id, url=definition_update.url, type=definition_update.type
+        )
+
+        if not updated_definition:
+            raise HTTPException(status_code=404, detail="Authoritative definition not found")
+
+        db.commit()
+
+        await audit_manager.log_event(
+            db=db, user_email=current_user, entity_type="data_contract", entity_id=contract_id,
+            action="UPDATE_AUTHORITATIVE_DEFINITION", success=True,
+            details={"definition_id": definition_id}
+        )
+
+        return AuthoritativeDefinitionRead.model_validate(updated_definition).model_dump()
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating contract authoritative definition: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete('/data-contracts/{contract_id}/authoritative-definitions/{definition_id}', status_code=204)
+async def delete_contract_authoritative_definition(
+    contract_id: str,
+    definition_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Delete an authoritative definition."""
+    from src.repositories.data_contracts_repository import contract_authoritative_definition_repo
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        deleted = contract_authoritative_definition_repo.delete_definition(db=db, definition_id=definition_id)
+
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Authoritative definition not found")
+
+        db.commit()
+
+        await audit_manager.log_event(
+            db=db, user_email=current_user, entity_type="data_contract", entity_id=contract_id,
+            action="DELETE_AUTHORITATIVE_DEFINITION", success=True,
+            details={"contract_id": contract_id, "definition_id": definition_id}
+        )
+
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting contract authoritative definition: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Schema-Level Authoritative Definitions CRUD =====
+
+@router.get('/data-contracts/{contract_id}/schemas/{schema_id}/authoritative-definitions', response_model=List[dict])
+async def get_schema_authoritative_definitions(
+    contract_id: str,
+    schema_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    """Get all authoritative definitions for a schema object."""
+    from src.repositories.data_contracts_repository import schema_authoritative_definition_repo
+    from src.models.data_contracts_api import AuthoritativeDefinitionRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        definitions = schema_authoritative_definition_repo.get_by_schema(db=db, schema_id=schema_id)
+        return [AuthoritativeDefinitionRead.model_validate(d).model_dump() for d in definitions]
+    except Exception as e:
+        logger.error(f"Error fetching schema authoritative definitions: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-contracts/{contract_id}/schemas/{schema_id}/authoritative-definitions', response_model=dict, status_code=201)
+async def create_schema_authoritative_definition(
+    contract_id: str,
+    schema_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    definition_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Create an authoritative definition for a schema object."""
+    from src.repositories.data_contracts_repository import schema_authoritative_definition_repo
+    from src.models.data_contracts_api import AuthoritativeDefinitionCreate, AuthoritativeDefinitionRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        definition_create = AuthoritativeDefinitionCreate(**definition_data)
+        new_definition = schema_authoritative_definition_repo.create_definition(
+            db=db, schema_id=schema_id, url=definition_create.url, type=definition_create.type
+        )
+        db.commit()
+
+        await audit_manager.log_event(
+            db=db, user_email=current_user, entity_type="data_contract", entity_id=contract_id,
+            action="CREATE_SCHEMA_AUTHORITATIVE_DEFINITION", success=True,
+            details={"schema_id": schema_id, "definition_id": new_definition.id}
+        )
+
+        return AuthoritativeDefinitionRead.model_validate(new_definition).model_dump()
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating schema authoritative definition: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put('/data-contracts/{contract_id}/schemas/{schema_id}/authoritative-definitions/{definition_id}', response_model=dict)
+async def update_schema_authoritative_definition(
+    contract_id: str,
+    schema_id: str,
+    definition_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    definition_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Update a schema-level authoritative definition."""
+    from src.repositories.data_contracts_repository import schema_authoritative_definition_repo
+    from src.models.data_contracts_api import AuthoritativeDefinitionUpdate, AuthoritativeDefinitionRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        definition_update = AuthoritativeDefinitionUpdate(**definition_data)
+        updated_definition = schema_authoritative_definition_repo.update_definition(
+            db=db, definition_id=definition_id, url=definition_update.url, type=definition_update.type
+        )
+
+        if not updated_definition:
+            raise HTTPException(status_code=404, detail="Authoritative definition not found")
+
+        db.commit()
+
+        await audit_manager.log_event(
+            db=db, user_email=current_user, entity_type="data_contract", entity_id=contract_id,
+            action="UPDATE_SCHEMA_AUTHORITATIVE_DEFINITION", success=True,
+            details={"schema_id": schema_id, "definition_id": definition_id}
+        )
+
+        return AuthoritativeDefinitionRead.model_validate(updated_definition).model_dump()
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating schema authoritative definition: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete('/data-contracts/{contract_id}/schemas/{schema_id}/authoritative-definitions/{definition_id}', status_code=204)
+async def delete_schema_authoritative_definition(
+    contract_id: str,
+    schema_id: str,
+    definition_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Delete a schema-level authoritative definition."""
+    from src.repositories.data_contracts_repository import schema_authoritative_definition_repo
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        deleted = schema_authoritative_definition_repo.delete_definition(db=db, definition_id=definition_id)
+
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Authoritative definition not found")
+
+        db.commit()
+
+        await audit_manager.log_event(
+            db=db, user_email=current_user, entity_type="data_contract", entity_id=contract_id,
+            action="DELETE_SCHEMA_AUTHORITATIVE_DEFINITION", success=True,
+            details={"schema_id": schema_id, "definition_id": definition_id}
+        )
+
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting schema authoritative definition: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Property-Level Authoritative Definitions CRUD =====
+
+@router.get('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{property_id}/authoritative-definitions', response_model=List[dict])
+async def get_property_authoritative_definitions(
+    contract_id: str,
+    schema_id: str,
+    property_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    """Get all authoritative definitions for a schema property."""
+    from src.repositories.data_contracts_repository import property_authoritative_definition_repo
+    from src.models.data_contracts_api import AuthoritativeDefinitionRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        definitions = property_authoritative_definition_repo.get_by_property(db=db, property_id=property_id)
+        return [AuthoritativeDefinitionRead.model_validate(d).model_dump() for d in definitions]
+    except Exception as e:
+        logger.error(f"Error fetching property authoritative definitions: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{property_id}/authoritative-definitions', response_model=dict, status_code=201)
+async def create_property_authoritative_definition(
+    contract_id: str,
+    schema_id: str,
+    property_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    definition_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Create an authoritative definition for a schema property."""
+    from src.repositories.data_contracts_repository import property_authoritative_definition_repo
+    from src.models.data_contracts_api import AuthoritativeDefinitionCreate, AuthoritativeDefinitionRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        definition_create = AuthoritativeDefinitionCreate(**definition_data)
+        new_definition = property_authoritative_definition_repo.create_definition(
+            db=db, property_id=property_id, url=definition_create.url, type=definition_create.type
+        )
+        db.commit()
+
+        await audit_manager.log_event(
+            db=db, user_email=current_user, entity_type="data_contract", entity_id=contract_id,
+            action="CREATE_PROPERTY_AUTHORITATIVE_DEFINITION", success=True,
+            details={"property_id": property_id, "definition_id": new_definition.id}
+        )
+
+        return AuthoritativeDefinitionRead.model_validate(new_definition).model_dump()
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating property authoritative definition: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{property_id}/authoritative-definitions/{definition_id}', response_model=dict)
+async def update_property_authoritative_definition(
+    contract_id: str,
+    schema_id: str,
+    property_id: str,
+    definition_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    definition_data: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Update a property-level authoritative definition."""
+    from src.repositories.data_contracts_repository import property_authoritative_definition_repo
+    from src.models.data_contracts_api import AuthoritativeDefinitionUpdate, AuthoritativeDefinitionRead
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        definition_update = AuthoritativeDefinitionUpdate(**definition_data)
+        updated_definition = property_authoritative_definition_repo.update_definition(
+            db=db, definition_id=definition_id, url=definition_update.url, type=definition_update.type
+        )
+
+        if not updated_definition:
+            raise HTTPException(status_code=404, detail="Authoritative definition not found")
+
+        db.commit()
+
+        await audit_manager.log_event(
+            db=db, user_email=current_user, entity_type="data_contract", entity_id=contract_id,
+            action="UPDATE_PROPERTY_AUTHORITATIVE_DEFINITION", success=True,
+            details={"property_id": property_id, "definition_id": definition_id}
+        )
+
+        return AuthoritativeDefinitionRead.model_validate(updated_definition).model_dump()
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating property authoritative definition: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{property_id}/authoritative-definitions/{definition_id}', status_code=204)
+async def delete_property_authoritative_definition(
+    contract_id: str,
+    schema_id: str,
+    property_id: str,
+    definition_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Delete a property-level authoritative definition."""
+    from src.repositories.data_contracts_repository import property_authoritative_definition_repo
+
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        deleted = property_authoritative_definition_repo.delete_definition(db=db, definition_id=definition_id)
+
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Authoritative definition not found")
+
+        db.commit()
+
+        await audit_manager.log_event(
+            db=db, user_email=current_user, entity_type="data_contract", entity_id=contract_id,
+            action="DELETE_PROPERTY_AUTHORITATIVE_DEFINITION", success=True,
+            details={"property_id": property_id, "definition_id": definition_id}
+        )
+
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting property authoritative definition: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3208,6 +4034,344 @@ async def delete_contract_tag(
     except Exception as e:
         db.rollback()
         logger.error(f"Error deleting tag {tag_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===== Semantic Versioning Endpoints =====
+
+@router.get('/data-contracts/{contract_id}/versions', response_model=List[dict])
+async def get_contract_versions(
+    contract_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    """
+    Get all versions of a contract family (same base_name).
+    Returns contracts sorted by version (newest first).
+    """
+    # Get the source contract
+    source_contract = data_contract_repo.get(db, id=contract_id)
+    if not source_contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    # Get base_name (either from field or extract from name)
+    base_name = source_contract.base_name
+    if not base_name:
+        # Extract from name if not set
+        from src.utils.contract_cloner import ContractCloner
+        cloner = ContractCloner()
+        base_name = cloner._extract_base_name(source_contract.name, source_contract.version or "1.0.0")
+
+    try:
+        # Find all contracts with same base_name
+        contracts = db.query(DataContractDb).filter(
+            DataContractDb.base_name == base_name
+        ).order_by(DataContractDb.created_at.desc()).all()
+
+        # If no base_name matches, fall back to parent_contract_id relationships
+        if not contracts:
+            # Build version tree by following parent relationships
+            contracts = [source_contract]
+            # Find children
+            children = db.query(DataContractDb).filter(
+                DataContractDb.parent_contract_id == contract_id
+            ).order_by(DataContractDb.created_at.desc()).all()
+            contracts.extend(children)
+            # Find parent and its children
+            if source_contract.parent_contract_id:
+                parent = data_contract_repo.get(db, id=source_contract.parent_contract_id)
+                if parent and parent not in contracts:
+                    contracts.insert(0, parent)
+                    siblings = db.query(DataContractDb).filter(
+                        DataContractDb.parent_contract_id == parent.id,
+                        DataContractDb.id != contract_id
+                    ).order_by(DataContractDb.created_at.desc()).all()
+                    contracts.extend(siblings)
+
+        # Convert to API model
+        from src.models.data_contracts_api import DataContractRead
+        return [DataContractRead.model_validate(c).model_dump() for c in contracts]
+    except Exception as e:
+        logger.error(f"Error fetching contract versions: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-contracts/{contract_id}/clone', response_model=dict, status_code=201)
+async def clone_contract_for_new_version(
+    contract_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    body: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """
+    Clone a contract to create a new version.
+
+    Body parameters:
+    - new_version: str (required) - Semantic version (e.g., "2.0.0")
+    - change_summary: str (optional) - Summary of changes in this version
+    """
+    new_version = body.get('new_version')
+    change_summary = body.get('change_summary')
+
+    if not new_version:
+        raise HTTPException(status_code=400, detail="new_version is required")
+
+    # Validate semantic version format
+    import re
+    if not re.match(r'^\d+\.\d+\.\d+$', new_version):
+        raise HTTPException(status_code=400, detail="new_version must be in format X.Y.Z (e.g., 2.0.0)")
+
+    # Get source contract
+    source_contract = data_contract_repo.get(db, id=contract_id)
+    if not source_contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        from src.utils.contract_cloner import ContractCloner
+        cloner = ContractCloner()
+
+        # Clone contract metadata
+        cloned_data = cloner.clone_for_new_version(
+            source_contract_db=source_contract,
+            new_version=new_version,
+            change_summary=change_summary,
+            created_by=current_user.username if current_user else "system"
+        )
+
+        # Create new contract in database
+        new_contract = DataContractDb(**cloned_data)
+        db.add(new_contract)
+        db.flush()
+        db.refresh(new_contract)
+
+        # Clone all nested entities
+        # Tags
+        if source_contract.tags:
+            cloned_tags = cloner.clone_tags(source_contract.tags, new_contract.id)
+            for tag_data in cloned_tags:
+                db.add(DataContractTagDb(**tag_data))
+
+        # Servers
+        if source_contract.servers:
+            cloned_servers = cloner.clone_servers(source_contract.servers, new_contract.id)
+            for server_data in cloned_servers:
+                server_id = server_data.pop('id')
+                properties = server_data.pop('properties', [])
+                server = DataContractServerDb(id=server_id, **server_data)
+                db.add(server)
+                db.flush()
+                for prop_data in properties:
+                    db.add(DataContractServerPropertyDb(**prop_data))
+
+        # Roles
+        if source_contract.roles:
+            cloned_roles = cloner.clone_roles(source_contract.roles, new_contract.id)
+            for role_data in cloned_roles:
+                role_id = role_data.pop('id')
+                properties = role_data.pop('properties', [])
+                role = DataContractRoleDb(id=role_id, **role_data)
+                db.add(role)
+                db.flush()
+                for prop_data in properties:
+                    db.add(DataContractRolePropertyDb(**prop_data))
+
+        # Team members
+        if source_contract.team:
+            cloned_team = cloner.clone_team_members(source_contract.team, new_contract.id)
+            for member_data in cloned_team:
+                db.add(DataContractTeamDb(**member_data))
+
+        # Support channels
+        if source_contract.support:
+            cloned_support = cloner.clone_support_channels(source_contract.support, new_contract.id)
+            for support_data in cloned_support:
+                db.add(DataContractSupportDb(**support_data))
+
+        # Pricing
+        if source_contract.pricing:
+            cloned_pricing = cloner.clone_pricing(source_contract.pricing, new_contract.id)
+            if cloned_pricing:
+                db.add(DataContractPricingDb(**cloned_pricing))
+
+        # Custom properties
+        if source_contract.custom_properties:
+            cloned_custom_props = cloner.clone_custom_properties(source_contract.custom_properties, new_contract.id)
+            for prop_data in cloned_custom_props:
+                db.add(DataContractCustomPropertyDb(**prop_data))
+
+        # SLA properties
+        if source_contract.sla_properties:
+            cloned_sla_props = cloner.clone_sla_properties(source_contract.sla_properties, new_contract.id)
+            for prop_data in cloned_sla_props:
+                db.add(DataContractSlaPropertyDb(**prop_data))
+
+        # Contract-level authoritative definitions
+        if source_contract.authoritative_defs:
+            cloned_auth_defs = cloner.clone_authoritative_defs(source_contract.authoritative_defs, new_contract.id, 'contract')
+            for def_data in cloned_auth_defs:
+                db.add(DataContractAuthoritativeDefinitionDb(**def_data))
+
+        # Schemas with nested properties
+        if source_contract.schema_objects:
+            cloned_schemas = cloner.clone_schema_objects(source_contract.schema_objects, new_contract.id)
+            for schema_data in cloned_schemas:
+                schema_id = schema_data.pop('id')
+                properties = schema_data.pop('properties', [])
+                authoritative_defs = schema_data.pop('authoritative_defs', [])
+
+                schema = SchemaObjectDb(id=schema_id, **schema_data)
+                db.add(schema)
+                db.flush()
+
+                # Schema-level authoritative definitions
+                for auth_def_data in authoritative_defs:
+                    db.add(SchemaObjectAuthoritativeDefinitionDb(**auth_def_data))
+
+                # Properties
+                for prop_data in properties:
+                    prop_id = prop_data.pop('id')
+                    prop_auth_defs = prop_data.pop('authoritative_defs', [])
+
+                    prop = SchemaPropertyDb(id=prop_id, **prop_data)
+                    db.add(prop)
+                    db.flush()
+
+                    # Property-level authoritative definitions
+                    for prop_auth_def_data in prop_auth_defs:
+                        db.add(SchemaPropertyAuthoritativeDefinitionDb(**prop_auth_def_data))
+
+        db.commit()
+        db.refresh(new_contract)
+
+        # Audit log
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else "anonymous",
+            ip_address=request.client.host if request.client else None,
+            feature="data-contracts",
+            action="CLONE_VERSION",
+            success=True,
+            details={
+                "source_contract_id": contract_id,
+                "new_contract_id": new_contract.id,
+                "new_version": new_version,
+                "change_summary": change_summary
+            }
+        )
+
+        # Return new contract
+        from src.models.data_contracts_api import DataContractRead
+        return DataContractRead.model_validate(new_contract).model_dump()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error cloning contract: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post('/data-contracts/compare', response_model=dict)
+async def compare_contract_versions(
+    body: dict = Body(...),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    """
+    Analyze changes between two contract versions.
+
+    Body parameters:
+    - old_contract: dict (required) - Old contract version (ODCS format)
+    - new_contract: dict (required) - New contract version (ODCS format)
+
+    Returns change analysis with recommended version bump.
+    """
+    old_contract = body.get('old_contract')
+    new_contract = body.get('new_contract')
+
+    if not old_contract or not new_contract:
+        raise HTTPException(status_code=400, detail="Both old_contract and new_contract are required")
+
+    try:
+        from src.utils.contract_change_analyzer import ContractChangeAnalyzer
+        analyzer = ContractChangeAnalyzer()
+
+        result = analyzer.analyze(old_contract, new_contract)
+
+        return {
+            "change_type": result.change_type.value,
+            "version_bump": result.version_bump,
+            "summary": result.summary,
+            "breaking_changes": result.breaking_changes,
+            "new_features": result.new_features,
+            "fixes": result.fixes,
+            "schema_changes": [
+                {
+                    "change_type": sc.change_type,
+                    "schema_name": sc.schema_name,
+                    "field_name": sc.field_name,
+                    "old_value": sc.old_value,
+                    "new_value": sc.new_value,
+                    "severity": sc.severity.value
+                }
+                for sc in result.schema_changes
+            ],
+            "quality_rule_changes": result.quality_rule_changes
+        }
+    except Exception as e:
+        logger.error(f"Error comparing contracts: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/data-contracts/{contract_id}/version-history', response_model=dict)
+async def get_contract_version_history(
+    contract_id: str,
+    db: DBSessionDep,
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
+    """
+    Get version history lineage for a contract.
+    Returns the full version tree with parent-child relationships.
+    """
+    contract = data_contract_repo.get(db, id=contract_id)
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    try:
+        from src.models.data_contracts_api import DataContractRead
+
+        # Build version history
+        history = {
+            "current": DataContractRead.model_validate(contract).model_dump(),
+            "parent": None,
+            "children": [],
+            "siblings": []
+        }
+
+        # Get parent
+        if contract.parent_contract_id:
+            parent = data_contract_repo.get(db, id=contract.parent_contract_id)
+            if parent:
+                history["parent"] = DataContractRead.model_validate(parent).model_dump()
+
+                # Get siblings (other children of same parent)
+                siblings = db.query(DataContractDb).filter(
+                    DataContractDb.parent_contract_id == parent.id,
+                    DataContractDb.id != contract_id
+                ).order_by(DataContractDb.created_at.desc()).all()
+                history["siblings"] = [DataContractRead.model_validate(s).model_dump() for s in siblings]
+
+        # Get children
+        children = db.query(DataContractDb).filter(
+            DataContractDb.parent_contract_id == contract_id
+        ).order_by(DataContractDb.created_at.desc()).all()
+        history["children"] = [DataContractRead.model_validate(c).model_dump() for c in children]
+
+        return history
+    except Exception as e:
+        logger.error(f"Error fetching version history: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
