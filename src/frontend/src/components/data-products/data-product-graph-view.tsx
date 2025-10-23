@@ -263,21 +263,28 @@ interface DataProductGraphViewProps {
 const DataProductGraphView: React.FC<DataProductGraphViewProps> = ({ products, viewMode, setViewMode, navigate }) => {
     const initialElements = useMemo(() => {
         const validProducts = products.filter(p => p.id);
-        const productNodes: Node<DataProductNodeData>[] = validProducts.map((product) => ({
-            id: product.id!,
-            type: 'dataProduct',
-            position: { x: 0, y: 0 }, 
-            data: { 
-                label: product.info.title, 
-                productType: product.productType, 
-                version: product.version, 
-                status: product.info.status, 
-                inputPorts: product.inputPorts || [], 
-                outputPorts: product.outputPorts || [], 
-                nodeId: product.id!, 
-                navigate: navigate
-            },
-        }));
+        const productNodes: Node<DataProductNodeData>[] = validProducts.map((product) => {
+            // ODPS v1.0.0: Get first output port type if available
+            const firstOutputType = (product.outputPorts && product.outputPorts.length > 0)
+                ? product.outputPorts[0].type
+                : undefined;
+
+            return {
+                id: product.id!,
+                type: 'dataProduct',
+                position: { x: 0, y: 0 },
+                data: {
+                    label: product.name || 'Unnamed Product', // ODPS v1.0.0: use name field
+                    productType: firstOutputType, // ODPS v1.0.0: use first output port type
+                    version: product.version || 'N/A',
+                    status: product.status, // ODPS v1.0.0: status is at root level
+                    inputPorts: product.inputPorts || [],
+                    outputPorts: product.outputPorts || [],
+                    nodeId: product.id!,
+                    navigate: navigate
+                },
+            };
+        });
 
         const productNodeIds = new Set(productNodes.map(n => n.id));
         const externalSourceIds = new Map<string, Node>(); // Store unique external sources and their nodes
