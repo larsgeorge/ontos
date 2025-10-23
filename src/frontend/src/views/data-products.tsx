@@ -393,11 +393,11 @@ export default function DataProducts() {
       ),
       cell: ({ row }) => {
         const product = row.original;
-        const domainName = product.info.domain;
+        const domainName = product.domain;
         const domainId = getDomainIdByName(domainName);
         return (
           <div>
-            <div className="font-medium">{product.info.title}</div>
+            <div className="font-medium">{product.name || 'Unnamed Product'}</div>
             {domainName && domainId && (
               <div
                 className="text-xs text-muted-foreground cursor-pointer hover:underline"
@@ -414,13 +414,16 @@ export default function DataProducts() {
       },
     },
     {
-      accessorKey: "info.owner",
+      accessorKey: "team.members",
       header: ({ column }: { column: Column<DataProduct, unknown> }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
           Owner <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => <div>{row.original.info.owner}</div>,
+      cell: ({ row }) => {
+        const owner = row.original.team?.members?.find(m => m.role === 'owner');
+        return <div>{owner?.name || owner?.username || 'N/A'}</div>;
+      },
     },
     {
       accessorKey: "version",
@@ -432,27 +435,29 @@ export default function DataProducts() {
       cell: ({ row }) => <Badge variant="secondary">{row.original.version}</Badge>,
     },
     {
-      accessorKey: "productType",
+      accessorKey: "outputPorts",
       header: ({ column }: { column: Column<DataProduct, unknown> }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
           Type <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => (
-        row.original.productType ? 
-        <Badge variant="outline">{row.original.productType}</Badge> : 'N/A'
-      ),
+      cell: ({ row }) => {
+        const firstOutputPort = row.original.outputPorts?.[0];
+        const productType = firstOutputPort?.type;
+        return productType ? 
+          <Badge variant="outline">{productType}</Badge> : 'N/A';
+      },
     },
     {
-      accessorKey: "info.status",
+      accessorKey: "status",
       header: ({ column }: { column: Column<DataProduct, unknown> }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
           Status <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       ),
       cell: ({ row }) => (
-        row.original.info.status ?
-        <Badge variant={getStatusColor(row.original.info.status)}>{row.original.info.status}</Badge> : 'N/A'
+        row.original.status ?
+        <Badge variant={getStatusColor(row.original.status)}>{row.original.status}</Badge> : 'N/A'
       ),
     },
     {

@@ -152,7 +152,8 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
     if (!selectedDomainId) return allProducts;
     if (!matchSets) return [];
     return allProducts.filter(p => {
-      const productDomainRaw = p?.info?.domain;
+      // ODPS v1.0.0: domain is at root level, not in info
+      const productDomainRaw = p?.domain;
       const productDomainIdLike = productDomainRaw != null ? String(productDomainRaw) : '';
       const productDomainLower = productDomainIdLike.toLowerCase();
       if (!productDomainLower) return false;
@@ -221,35 +222,43 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
               .sort((a, b) => new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime())
               .slice(0, maxItems)
               .map(p => {
-                const rawDomain = (p?.info?.domain as any);
+                // ODPS v1.0.0: domain is at root level, not in info
+                const rawDomain = (p?.domain as any);
                 const domainStr = rawDomain != null ? String(rawDomain) : '';
                 const resolvedById = getDomainName(domainStr);
                 const resolvedByName = !resolvedById && domainStr
                   ? (domains.find(d => d.name.toLowerCase() === domainStr.toLowerCase())?.name || null)
                   : null;
                 const domainLabel = resolvedById || resolvedByName || (domainStr || null);
+
+                // ODPS v1.0.0: Get description from structured description
+                const description = p.description?.purpose || p.description?.usage || '';
+
+                // ODPS v1.0.0: Get owner from team
+                const owner = p.team?.members?.[0]?.username || p.team?.name || t('discoverySection.unknown');
+
                 return (
-                  <div key={p.id || p.info.title} className="group">
+                  <div key={p.id || p.name} className="group">
                     <Card className="transition-shadow group-hover:shadow-md h-full">
                       <CardHeader>
                         <div className="flex items-center gap-2">
                           <Database className="h-5 w-5 text-primary" />
                           <CardTitle className="truncate flex-1">
                             <Link to={p.id ? `/data-products/${p.id}` : '/data-products'} className="hover:underline">
-                              {p.info?.title || t('discoverySection.untitled')}
+                              {p.name || t('discoverySection.untitled')}
                             </Link>
                           </CardTitle>
                           <button
                             className="inline-flex items-center justify-center text-foreground/80 hover:text-foreground transition-colors"
                             title={t('discoverySection.info')}
                             aria-label={t('discoverySection.info')}
-                            onClick={() => { if (p.id) { setInfoProductId(p.id); setInfoProductTitle(p.info?.title); } }}
+                            onClick={() => { if (p.id) { setInfoProductId(p.id); setInfoProductTitle(p.name); } }}
                           >
                             <Info className="h-4 w-4" />
                           </button>
                         </div>
-                        {p.info?.description ? (
-                          <CardDescription className="line-clamp-2">{p.info.description}</CardDescription>
+                        {description ? (
+                          <CardDescription className="line-clamp-2">{description}</CardDescription>
                         ) : null}
                       </CardHeader>
                       <CardContent>
@@ -257,8 +266,8 @@ export default function DiscoverySection({ maxItems = 12 }: DiscoverySectionProp
                           {t('discoverySection.domain')}: {domainLabel || t('discoverySection.unknown')}
                         </div>
                         <div className="flex justify-between text-xs text-muted-foreground">
-                          <span className="truncate max-w-[60%]">{t('discoverySection.owner')}: {p.info?.owner || t('discoverySection.unknown')}</span>
-                          <span>{p.info?.status || t('discoverySection.status')}</span>
+                          <span className="truncate max-w-[60%]">{t('discoverySection.owner')}: {owner}</span>
+                          <span>{p.status || t('discoverySection.status')}</span>
                         </div>
                       </CardContent>
                     </Card>

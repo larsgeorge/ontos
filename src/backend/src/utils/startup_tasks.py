@@ -50,7 +50,7 @@ from src.db_models.audit_log import AuditLogDb
 # Import the DataAssetReviewRequestDb DB model
 from src.db_models.data_asset_reviews import DataAssetReviewRequestDb
 # Import the DataProductDb DB model
-from src.db_models.data_products import DataProductDb, InfoDb, InputPortDb, OutputPortDb
+from src.db_models.data_products import DataProductDb, InputPortDb, OutputPortDb
 from src.db_models.compliance import CompliancePolicyDb
 
 # Import Demo Data Loader
@@ -309,11 +309,10 @@ def load_demo_semantic_links(db: Session) -> None:
                     if domain:
                         entity_id = str(domain.id)
                 elif entity_type == 'data_product':
-                    # Query data products to find by title
-                    from src.db_models.data_products import InfoDb
-                    info = db.query(InfoDb).filter(InfoDb.title == entity_name).first()
-                    if info:
-                        entity_id = str(info.data_product_id)
+                    # Query data products to find by name (ODPS v1.0.0)
+                    product = db.query(DataProductDb).filter(DataProductDb.name == entity_name).first()
+                    if product:
+                        entity_id = str(product.id)
                 elif entity_type == 'data_contract':
                     # Query data contracts to find by name
                     from src.db_models.data_contracts import DataContractDb

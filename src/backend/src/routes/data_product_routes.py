@@ -59,15 +59,16 @@ async def submit_product_certification(
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
     try:
-        from src.db_models.data_products import DataProductDb, InfoDb
+        from src.db_models.data_products import DataProductDb
         product = db.query(DataProductDb).filter(DataProductDb.id == product_id).first()
-        if not product or not product.info:
+        if not product:
             raise HTTPException(status_code=404, detail="Data product not found")
-        cur = (product.info.status or '').upper()
-        if cur != 'SANDBOX':
-            raise HTTPException(status_code=409, detail=f"Invalid transition from {product.info.status} to PENDING_CERTIFICATION")
-        product.info.status = 'PENDING_CERTIFICATION'
-        db.add(product.info)
+        # ODPS v1.0.0: Use status field directly (proposed, draft, active, deprecated, retired)
+        cur = (product.status or '').lower()
+        if cur != 'draft':
+            raise HTTPException(status_code=409, detail=f"Invalid transition from {product.status} to active (certification)")
+        product.status = 'active'  # ODPS: certification moves draft to active
+        db.add(product)
         db.flush()
         audit_manager.log_action(
             db=db,
@@ -76,9 +77,9 @@ async def submit_product_certification(
             feature=DATA_PRODUCTS_FEATURE_ID,
             action='SUBMIT_CERTIFICATION',
             success=True,
-            details={ 'product_id': product_id, 'from': cur, 'to': product.info.status }
+            details={ 'product_id': product_id, 'from': cur, 'to': product.status }
         )
-        return { 'status': product.info.status }
+        return { 'status': product.status }
     except HTTPException:
         raise
     except Exception as e:

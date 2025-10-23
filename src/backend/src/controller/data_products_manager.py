@@ -1,61 +1,66 @@
+"""
+ODPS v1.0.0 Data Products Manager
+
+This module implements the business logic layer for ODPS v1.0.0 Data Products.
+Handles product creation, updates, versioning, contract integration, and search indexing.
+"""
+
 import asyncio
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional, Any
+from pathlib import Path
 
 import yaml
-from pydantic import ValidationError, parse_obj_as, BaseModel
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-# Import Databricks SDK components
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound, PermissionDenied
 
 from src.models.data_products import (
-    DataOutput,
     DataProduct as DataProductApi,
     DataProductCreate,
+    DataProductUpdate,
     DataProductStatus,
-    DataProductType,
-    DataSource,
-    SchemaField,
-    GenieSpaceRequest
+    Description,
+    AuthoritativeDefinition,
+    CustomProperty,
+    InputPort,
+    OutputPort,
+    ManagementPort,
+    Support,
+    Team,
+    TeamMember,
+    GenieSpaceRequest,
+    NewVersionRequest
 )
 from src.models.users import UserInfo
-
-# Import the specific repository
 from src.repositories.data_products_repository import data_product_repo
-
-# Import Search Interfaces
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
-# Import the registry decorator
 from src.common.search_registry import searchable_asset
-
-# Import NotificationsManager (adjust path if necessary)
 from src.controller.notifications_manager import NotificationsManager
-
-# Import TagsManager and entity tag repository for tag integration
 from src.controller.tags_manager import TagsManager
 from src.repositories.tags_repository import entity_tag_repo
 from src.models.tags import AssignedTagCreate
-
 from src.common.logging import get_logger
-logger = get_logger(__name__)
-
-# Import necessary components for creating a session
 from src.common.database import get_session_factory
 
-# Import config to get data path - Removed get_settings as it's not needed for path
-# from src.common.config import get_settings 
-from pathlib import Path
+logger = get_logger(__name__)
 
-# Inherit from SearchableAsset
+
 @searchable_asset
 class DataProductsManager(SearchableAsset):
-    def __init__(self, db: Session, ws_client: Optional[WorkspaceClient] = None, notifications_manager: Optional[NotificationsManager] = None, tags_manager: Optional[TagsManager] = None):
+    def __init__(
+        self,
+        db: Session,
+        ws_client: Optional[WorkspaceClient] = None,
+        notifications_manager: Optional[NotificationsManager] = None,
+        tags_manager: Optional[TagsManager] = None
+    ):
         """
-        Initializes the DataProductsManager.
+        Initializes the DataProductsManager for ODPS v1.0.0.
 
         Args:
             db: SQLAlchemy Session for database operations.
@@ -69,75 +74,64 @@ class DataProductsManager(SearchableAsset):
         self._notifications_manager = notifications_manager
         self._tags_manager = tags_manager
         self._entity_tag_repo = entity_tag_repo
-        if not self._ws_client:
-             logger.warning("WorkspaceClient was not provided to DataProductsManager. SDK operations might fail.")
-        if not self._notifications_manager:
-             logger.warning("NotificationsManager was not provided to DataProductsManager. Notifications will not be sent.")
-        if not self._tags_manager:
-             logger.warning("TagsManager was not provided to DataProductsManager. Tag operations will not be available.")
 
-    def get_types(self) -> List[str]:
-        """Get all available data product types"""
-        return [t.value for t in DataProductType]
+        if not self._ws_client:
+            logger.warning("WorkspaceClient not provided to DataProductsManager. SDK operations might fail.")
+        if not self._notifications_manager:
+            logger.warning("NotificationsManager not provided. Notifications will not be sent.")
+        if not self._tags_manager:
+            logger.warning("TagsManager not provided. Tag operations will not be available.")
 
     def get_statuses(self) -> List[str]:
-        """Get all available data product statuses"""
+        """Get all ODPS v1.0.0 status values."""
         return [s.value for s in DataProductStatus]
 
     def create_product(self, product_data: Dict[str, Any]) -> DataProductApi:
-        """Validates input data and creates a new data product via the repository."""
-        logger.debug(f"Manager attempting to create product from data: {product_data}")
+        """Creates a new ODPS v1.0.0 data product via the repository."""
+        logger.debug(f"Manager creating ODPS product from data: {product_data}")
         try:
-            # Validate the input dict into a Pydantic model first
-            try:
-                # Ensure ID exists before validation if needed
-                if not product_data.get('id'):
-                     product_data['id'] = str(uuid.uuid4())
-                     logger.info(f"Generated ID {product_data['id']} during create_product validation.")
-                
-                # Ensure timestamps are set if missing from input data
-                now = datetime.utcnow()
-                product_data.setdefault('created_at', now)
-                product_data.setdefault('updated_at', now)
-                
-                # Validate
-                product_api_model = DataProductApi(**product_data)
-                
-            except ValidationError as e:
-                 logger.error(f"Validation failed converting dict to DataProductApi model: {e}")
-                 # Raise a specific error or handle as needed
-                 raise ValueError(f"Invalid data provided for product creation: {e}") from e
+            # Generate ID if missing
+            if not product_data.get('id'):
+                product_data['id'] = str(uuid.uuid4())
+                logger.info(f"Generated ID {product_data['id']} for new product.")
 
-            # Extract tags before creating the product (tags are handled separately)
+            # Ensure ODPS required fields have defaults
+            product_data.setdefault('apiVersion', 'v1.0.0')
+            product_data.setdefault('kind', 'DataProduct')
+            product_data.setdefault('status', DataProductStatus.DRAFT.value)
+
+            # Validate
+            try:
+                product_api_model = DataProductCreate(**product_data)
+            except ValidationError as e:
+                logger.error(f"Validation failed for ODPS product: {e}")
+                raise ValueError(f"Invalid ODPS product data: {e}") from e
+
+            # Extract tags (handled separately)
             tags_data = product_data.get('tags', [])
 
-            # Now pass the validated Pydantic model to the repository
-            # The repository's create method expects the Pydantic model (DataProductCreate alias)
+            # Create via repository
             created_db_obj = self._repo.create(db=self._db, obj_in=product_api_model)
 
-            # Handle tag assignments if tags are provided and tags_manager is available
+            # Handle tag assignments
             if tags_data and self._tags_manager:
                 try:
                     self._assign_tags_to_product(created_db_obj.id, tags_data)
                 except Exception as e:
                     logger.error(f"Failed to assign tags to product {created_db_obj.id}: {e}")
-                    # Note: We don't rollback the product creation, just log the error
 
-            # Load and return the product with its tags
+            # Load and return with tags
             return self._load_product_with_tags(created_db_obj)
 
         except SQLAlchemyError as e:
-            logger.error(f"Database error creating data product: {e}")
+            logger.error(f"Database error creating ODPS product: {e}")
             raise
-        except ValueError as e: # Catch validation errors from above or repo mapping
-            logger.error(f"Value error during product creation: {e}")
-            raise # Re-raise ValueError
-        except ValidationError as e:
-            logger.error(f"Validation error mapping DB object to API model: {e}")
-            raise ValueError(f"Internal data mapping error: {e}")
+        except ValueError as e:
+            logger.error(f"Value error during ODPS product creation: {e}")
+            raise
 
     def get_product(self, product_id: str) -> Optional[DataProductApi]:
-        """Get a data product by ID using the repository."""
+        """Get an ODPS v1.0.0 data product by ID."""
         try:
             product_db = self._repo.get(db=self._db, id=product_id)
             if product_db:
@@ -146,18 +140,14 @@ class DataProductsManager(SearchableAsset):
         except SQLAlchemyError as e:
             logger.error(f"Database error getting product {product_id}: {e}")
             raise
-        except ValidationError as e:
-            logger.error(f"Validation error mapping DB object to API model for ID {product_id}: {e}")
-            raise ValueError(f"Internal data mapping error for ID {product_id}: {e}")
         except Exception as e:
             logger.error(f"Unexpected error getting product {product_id}: {e}")
             raise
 
     def list_products(self, skip: int = 0, limit: int = 100) -> List[DataProductApi]:
-        """List data products using the repository."""
+        """List ODPS v1.0.0 data products."""
         try:
             products_db = self._repo.get_multi(db=self._db, skip=skip, limit=limit)
-            # Load each product with its tags
             products_with_tags = []
             for product_db in products_db:
                 product_with_tags = self._load_product_with_tags(product_db)
@@ -166,76 +156,55 @@ class DataProductsManager(SearchableAsset):
         except SQLAlchemyError as e:
             logger.error(f"Database error listing products: {e}")
             raise
-        except ValidationError as e:
-             logger.error(f"Validation error mapping list of DB objects to API models: {e}")
-             raise ValueError(f"Internal data mapping error during list: {e}")
         except Exception as e:
             logger.error(f"Unexpected error listing products: {e}")
             raise
 
     def update_product(self, product_id: str, product_data_dict: Dict[str, Any]) -> Optional[DataProductApi]:
-        """Update an existing data product. Expects a dictionary for product_data_dict."""
-        logger.debug(f"Manager attempting to update product ID {product_id} with dict data.")
+        """Update an existing ODPS v1.0.0 data product."""
+        logger.debug(f"Manager updating ODPS product {product_id}")
         try:
             db_obj = self._repo.get(db=self._db, id=product_id)
             if not db_obj:
                 logger.warning(f"Attempted to update non-existent product: {product_id}")
                 return None
 
-            # Extract tags before updating the product (tags are handled separately)
+            # Extract tags (handled separately)
             tags_data = product_data_dict.get('tags', [])
 
-            # Prepare the dictionary for Pydantic validation
+            # Prepare update payload
             update_payload = product_data_dict.copy()
-            update_payload['id'] = product_id  # Ensure ID from path is used
-            update_payload['updated_at'] = datetime.utcnow() # Set update timestamp
-            
-            # Preserve created_at from the existing DB object if it exists in the dict or db_obj
-            if 'created_at' not in update_payload and hasattr(db_obj, 'created_at'):
-                update_payload['created_at'] = db_obj.created_at
-            elif 'created_at' not in update_payload:
-                # Fallback if created_at is somehow missing everywhere, though unlikely for an update
-                update_payload['created_at'] = db_obj.updated_at # Or some other sensible default
+            update_payload['id'] = product_id
 
-            # Validate the dictionary into the Pydantic model (DataProductUpdate or DataProductApi)
+            # Validate
             try:
-                # Assuming DataProductUpdate is an alias or same as DataProductApi for now
-                # If DataProductUpdate is different, ensure it's imported and used here.
-                product_update_model = DataProductApi(**update_payload) 
+                product_update_model = DataProductUpdate(**update_payload)
             except ValidationError as e:
-                logger.error(f"Validation error for update data (ID: {product_id}): {e.errors()}")
-                raise ValueError(f"Invalid data for product update: {e.errors()}") from e
+                logger.error(f"Validation error for ODPS update: {e}")
+                raise ValueError(f"Invalid ODPS update data: {e}") from e
 
-            # Pass the validated Pydantic model to the repository's update method
+            # Update via repository
             updated_db_obj = self._repo.update(db=self._db, db_obj=db_obj, obj_in=product_update_model)
 
-            # Handle tag updates if tags are provided and tags_manager is available
-            if tags_data is not None and self._tags_manager:  # Check explicitly for None since empty list is valid
+            # Handle tag updates
+            if tags_data is not None and self._tags_manager:
                 try:
-                    # set_tags_for_entity automatically handles removing old tags and setting new ones
                     self._assign_tags_to_product(product_id, tags_data)
                 except Exception as e:
                     logger.error(f"Failed to update tags for product {product_id}: {e}")
-                    # Note: We don't rollback the product update, just log the error
 
-            # Load and return the product with its tags
+            # Load and return with tags
             return self._load_product_with_tags(updated_db_obj)
-            
+
         except SQLAlchemyError as e:
-            logger.error(f"Database error updating data product {product_id}: {e}")
+            logger.error(f"Database error updating ODPS product {product_id}: {e}")
             raise
-        except ValueError as e: # Catch validation errors from above
-            logger.error(f"Value error during product update for ID {product_id}: {e}")
-            raise
-        except ValidationError as e: # Catch from_orm errors
-            logger.error(f"Validation error mapping DB object to API model post-update for ID {product_id}: {e}")
-            raise ValueError(f"Internal data mapping error post-update for ID {product_id}: {e}")
-        except Exception as e:
-            logger.error(f"Unexpected error updating data product {product_id}: {e}")
+        except ValueError as e:
+            logger.error(f"Value error updating ODPS product {product_id}: {e}")
             raise
 
     def delete_product(self, product_id: str) -> bool:
-        """Delete a data product using the repository."""
+        """Delete an ODPS v1.0.0 data product."""
         try:
             deleted_obj = self._repo.remove(db=self._db, id=product_id)
             return deleted_obj is not None
@@ -246,373 +215,310 @@ class DataProductsManager(SearchableAsset):
             logger.error(f"Unexpected error deleting product {product_id}: {e}")
             raise
 
-    def create_new_version(self, original_product_id: str, new_version: str) -> DataProductApi:
-        """Creates a new version of a data product based on an existing one."""
-        logger.info(f"Creating new version '{new_version}' based on product ID: {original_product_id}")
-        original_product = self.get_product(original_product_id) # Fetches the API model
+    def create_new_version(self, original_product_id: str, request: NewVersionRequest) -> DataProductApi:
+        """Creates a new version of an ODPS v1.0.0 data product."""
+        logger.info(f"Creating new ODPS version '{request.new_version}' from product {original_product_id}")
+
+        original_product = self.get_product(original_product_id)
         if not original_product:
             raise ValueError(f"Original data product with ID {original_product_id} not found.")
 
-        # Create a new dictionary from the original product
-        # Use exclude to avoid copying fields that should be new/reset
+        # Create new product data (exclude id, created_at, updated_at)
         new_product_data = original_product.model_dump(
-            exclude={'id', 'created_at', 'updated_at', 'version'}
+            exclude={'id', 'created_at', 'updated_at'}
         )
 
-        # Generate a new ID and set the new version
+        # Generate new ID and set new version
         new_product_data['id'] = str(uuid.uuid4())
-        new_product_data['version'] = new_version
-        
-        # Optionally reset status to DRAFT
-        if 'info' in new_product_data and isinstance(new_product_data['info'], dict):
-            new_product_data['info']['status'] = DataProductStatus.DRAFT.value
-            logger.info(f"Resetting status to DRAFT for new version {new_product_data['id']}")
-        else:
-             logger.warning(f"Could not reset status for new version of {original_product_id} - info block missing or not a dict.")
+        new_product_data['version'] = request.new_version
+
+        # Reset status to DRAFT
+        new_product_data['status'] = DataProductStatus.DRAFT.value
+        logger.info(f"Resetting status to DRAFT for new version {new_product_data['id']}")
 
         try:
-            # Validate the dictionary as a DataProduct API model before creation
-            new_product_api_model = DataProductApi(**new_product_data)
-            
-            # Create the new product in the database
+            # Validate and create
+            new_product_api_model = DataProductCreate(**new_product_data)
             created_db_obj = self._repo.create(db=self._db, obj_in=new_product_api_model)
-            
-            logger.info(f"Successfully created new version {new_version} (ID: {created_db_obj.id}) from {original_product_id}")
-            return DataProductApi.from_orm(created_db_obj)
-        
+
+            logger.info(f"Successfully created new version {request.new_version} (ID: {created_db_obj.id})")
+            return DataProductApi.model_validate(created_db_obj)
+
         except ValidationError as e:
-            logger.error(f"Validation error creating new version data: {e}")
+            logger.error(f"Validation error creating new ODPS version: {e}")
             raise ValueError(f"Validation error creating new version: {e}")
         except SQLAlchemyError as e:
             logger.error(f"Database error creating new version: {e}")
             raise
-        except Exception as e:
-            logger.error(f"Unexpected error creating new version: {e}")
-            raise
 
     async def initiate_genie_space_creation(self, request: GenieSpaceRequest, user_info: UserInfo, db: Session):
-        """
-        Simulates the initiation of a Genie Space creation process.
-
-        Args:
-            request: The request containing product IDs.
-            user_info: The UserInfo object for the initiating user.
-            db: The database session from the current request context.
-        """
+        """Initiates Genie Space creation for selected ODPS data products."""
         if not self._notifications_manager:
-            logger.error("Cannot initiate Genie Space creation: NotificationsManager is not configured.")
+            logger.error("Cannot initiate Genie Space creation: NotificationsManager not configured.")
             raise RuntimeError("Notification system is not available.")
 
-        user_email = user_info.email # Use email for recipient
+        user_email = user_info.email
         product_ids_str = ", ".join(request.product_ids)
-        logger.info(f"Initiating Genie Space creation for products: {product_ids_str} by user: {user_email}")
+        logger.info(f"Initiating Genie Space for products: {product_ids_str} by {user_email}")
 
-        # 1. Send initial notification (pass the db session and use email)
+        # Send initial notification
         try:
             await self._notifications_manager.create_notification(
-                db=db, # Pass the database session
-                user_id=user_email, # Use email as recipient
+                db=db,
+                user_id=user_email,
                 title="Genie Space Creation Started",
-                description=f"Genie Space creation for Data Product(s) {product_ids_str} initiated. You will be notified when it's ready.",
+                description=f"Genie Space creation for Data Product(s) {product_ids_str} initiated. "
+                           "You will be notified when it's ready.",
                 status="info"
             )
         except Exception as e:
-            logger.error(f"Failed to send initial Genie Space creation notification: {e}", exc_info=True)
-            # Proceed with simulation even if notification fails, but log it.
+            logger.error(f"Failed to send initial Genie Space notification: {e}", exc_info=True)
 
-        # 2. Schedule background task, passing user email
+        # Schedule background task
         asyncio.create_task(self._simulate_genie_space_completion(request.product_ids, user_email))
-
-        logger.info(f"Genie Space creation background simulation scheduled for products: {product_ids_str}")
+        logger.info(f"Genie Space background simulation scheduled for: {product_ids_str}")
 
     async def _simulate_genie_space_completion(self, product_ids: List[str], user_email: str):
-        """Simulates the completion of Genie Space creation and sends notification."""
-        # Import necessary components for creating a session
-        from src.common.database import get_session_factory
-        
-        logger.info(f"Starting background simulation for Genie Space completion (products: {product_ids}). Waiting...")
-        await asyncio.sleep(15) # Simulate a 15-second delay
-        logger.info(f"Background simulation wait complete for products: {product_ids}.")
+        """Simulates Genie Space completion and sends notification."""
+        logger.info(f"Starting Genie Space simulation for products: {product_ids}. Waiting...")
+        await asyncio.sleep(15)
+        logger.info(f"Simulation wait complete for products: {product_ids}.")
 
         product_ids_str = ", ".join(product_ids)
         mock_genie_space_url = f"https://<databricks-host>/genie-space/{uuid.uuid4()}"
-        logger.info(f"Simulated Genie Space creation completed for products: {product_ids_str}. Mock URL: {mock_genie_space_url}")
+        logger.info(f"Simulated Genie Space creation completed. Mock URL: {mock_genie_space_url}")
 
         if not self._notifications_manager:
-            logger.error("Cannot send Genie Space completion notification: NotificationsManager is not configured.")
+            logger.error("Cannot send Genie Space completion notification: NotificationsManager not configured.")
             return
 
         session_factory = get_session_factory()
         if not session_factory:
-            logger.error("Cannot send Genie Space completion notification: Database session factory not available.")
+            logger.error("Cannot send notification: Database session factory not available.")
             return
 
-        db_session = None
         try:
-            # Create a new session specifically for this background task
             with session_factory() as db_session:
-                logger.info(f"Creating completion notification for user {user_email}...")
+                logger.info(f"Creating completion notification for {user_email}...")
                 await self._notifications_manager.create_notification(
-                    db=db_session, # Pass the new database session
-                    user_id=user_email, # Use email as recipient
+                    db=db_session,
+                    user_id=user_email,
                     title="Genie Space Ready",
                     description=f"Your Genie Space for Data Product(s) {product_ids_str} is ready.",
                     link=mock_genie_space_url,
                     status="success"
                 )
-                logger.info(f"Completion notification created for user {user_email}.")
-                # The context manager handles commit/rollback/close for db_session
+                logger.info(f"Completion notification created for {user_email}.")
         except Exception as e:
             logger.error(f"Failed to send Genie Space completion notification: {e}", exc_info=True)
-            # No explicit rollback needed due to context manager
-
-    def _resolve_team_name_to_id(self, db: Session, team_name: str) -> Optional[str]:
-        """Helper method to resolve team name to team UUID."""
-        if not team_name:
-            return None
-
-        try:
-            from src.repositories.teams_repository import team_repo
-            team = team_repo.get_by_name(db, name=team_name)
-            if team:
-                logger.info(f"Successfully resolved team '{team_name}' to ID: {team.id}")
-                return str(team.id)
-            else:
-                logger.warning(f"Team '{team_name}' not found")
-                return None
-        except Exception as e:
-            logger.warning(f"Failed to resolve team '{team_name}': {e}")
-            return None
 
     def load_initial_data(self, db: Session) -> bool:
-        """Load data products from the default YAML file into the database if empty."""
+        """Load ODPS v1.0.0 data products from YAML file into the database if empty."""
         # Check if products already exist
         try:
             existing_products = self._repo.get_multi(db=db, limit=1)
             if existing_products:
-                 logger.info("DataProductsManager: Data products table is not empty. Skipping initial data loading.")
-                 return False # Indicate that loading was skipped
+                logger.info("Data products table not empty. Skipping initial data loading.")
+                return False
         except SQLAlchemyError as e:
-             logger.error(f"DataProductsManager: Error checking for existing data products: {e}", exc_info=True)
-             raise # Propagate error, startup might need to handle this
+            logger.error(f"Error checking for existing data products: {e}", exc_info=True)
+            raise
 
-        # Construct the default YAML path relative to the project structure
-        # settings = get_settings() # No longer needed for path
-        # yaml_path = Path(settings.APP_DATA_DIR) / "data_products.yaml" # Incorrect
-        
-        # Corrected path construction relative to this file's location
-        base_dir = Path(__file__).parent.parent # Navigate up from controller/ to api/
+        # Construct YAML path
+        base_dir = Path(__file__).parent.parent
         yaml_path = base_dir / "data" / "data_products.yaml"
-        
-        logger.info(f"DataProductsManager: Attempting to load initial data from {yaml_path}...")
+        logger.info(f"Attempting to load ODPS initial data from {yaml_path}...")
 
         try:
             if not yaml_path.is_file():
-                 logger.warning(f"DataProductsManager: Data product YAML file not found at {yaml_path}. No products loaded.")
-                 return False
+                logger.warning(f"ODPS data file not found at {yaml_path}. No products loaded.")
+                return False
 
             with yaml_path.open() as file:
                 data = yaml.safe_load(file)
-            
+
             if not isinstance(data, list):
-                 logger.error(f"DataProductsManager: YAML file {yaml_path} should contain a list of products.")
-                 return False
+                logger.error(f"YAML file {yaml_path} should contain a list of ODPS products.")
+                return False
 
             loaded_count = 0
             errors = 0
+
             for product_dict in data:
                 if not isinstance(product_dict, dict):
-                    logger.warning("DataProductsManager: Skipping non-dictionary item in YAML data.")
+                    logger.warning("Skipping non-dictionary item in YAML data.")
                     continue
+
                 try:
                     # Generate ID if missing
                     if not product_dict.get('id'):
-                         product_dict['id'] = str(uuid.uuid4())
-                         
-                    # Set timestamps if missing
-                    now = datetime.utcnow()
-                    product_dict.setdefault('created_at', now)
-                    product_dict.setdefault('updated_at', now)
+                        product_dict['id'] = str(uuid.uuid4())
 
-                    # Resolve owner_team to owner_team_id if present
-                    if 'info' in product_dict and isinstance(product_dict['info'], dict):
-                        info_dict = product_dict['info']
-                        if 'owner_team' in info_dict:
-                            owner_team = info_dict.pop('owner_team')  # Remove owner_team
-                            owner_team_id = self._resolve_team_name_to_id(db, owner_team)
-                            if owner_team_id:
-                                info_dict['owner_team_id'] = owner_team_id
-                            else:
-                                logger.warning(f"Could not resolve owner_team '{owner_team}' for product ID {product_dict.get('id')}. Product will be created without team ownership.")
+                    # Ensure ODPS required fields
+                    product_dict.setdefault('apiVersion', 'v1.0.0')
+                    product_dict.setdefault('kind', 'DataProduct')
+                    product_dict.setdefault('status', DataProductStatus.DRAFT.value)
 
-                    # Pre-process tags: Convert tag_fqn format to AssignedTagCreate format
-                    self._preprocess_tags_for_yaml_loading(product_dict)
-
-                    # Extract and store all tags before model creation
+                    # Extract top-level tags for internal tag assignment
+                    # IMPORTANT: Do NOT preprocess nested tags (in ports) as ODPS expects simple strings
+                    tags_data_raw = product_dict.pop('tags', [])
+                    
+                    # Convert top-level tags to internal format for tag assignment
                     tags_data = []
-                    port_tags_data = {}
+                    if tags_data_raw:
+                        for tag_item in tags_data_raw:
+                            if isinstance(tag_item, str):
+                                tags_data.append({"tag_fqn": tag_item, "assigned_value": None})
+                            elif isinstance(tag_item, dict):
+                                if 'assigned_value' not in tag_item:
+                                    tag_item['assigned_value'] = None
+                                tags_data.append(tag_item)
 
-                    # Extract product-level tags
-                    if 'tags' in product_dict:
-                        tags_data = product_dict.pop('tags', [])
-
-                    # Extract port-level tags
-                    if 'inputPorts' in product_dict:
-                        for i, port in enumerate(product_dict['inputPorts']):
-                            if 'tags' in port:
-                                port_tags_data[f"input_{i}"] = port.pop('tags', [])
-
-                    if 'outputPorts' in product_dict:
-                        for i, port in enumerate(product_dict['outputPorts']):
-                            if 'tags' in port:
-                                port_tags_data[f"output_{i}"] = port.pop('tags', [])
-
-                    # Now create the API model with cleaned data (no tags)
-                    product_api = DataProductApi(**product_dict)
-                    
-                    # Check if product exists using the current session 'db'
-                    # We need a get method that uses the repo and the passed db session
-                    # Let's assume get_product should accept the session
-                    # NOTE: We need to modify get_product/update_product/create_product or the repo methods 
-                    # to accept the 'db' session parameter. 
-                    # For now, we will directly use the repo with the passed db session.
-                    
-                    existing_db = self._repo.get(db=db, id=product_api.id) # Use passed db session
+                    # Create API model and save (nested tags remain as strings for ODPS compliance)
+                    product_api = DataProductCreate(**product_dict)
+                    existing_db = self._repo.get(db=db, id=product_api.id)
 
                     if existing_db:
-                        logger.warning(f"DataProductsManager: Product ID {product_api.id} exists, attempting update from YAML using current session.")
-                        # We need an update method that uses the repo and the passed db session.
-                        # Pass the validated API model 'product_api' to the repo's update.
-                        updated_product = self._repo.update(db=db, db_obj=existing_db, obj_in=product_api) # Use passed db session
-                        # Assign tags after update
-                        if tags_data and self._tags_manager:
-                            self._assign_tags_to_product(product_api.id, tags_data)
+                        logger.warning(f"Product ID {product_api.id} exists, updating from YAML.")
+                        self._repo.update(db=db, db_obj=existing_db, obj_in=product_api)
                     else:
-                        logger.info(f"DataProductsManager: Creating product ID {product_api.id} from YAML using current session.")
-                        # Pass the validated API model 'product_api' to the repo's create.
-                        created_product = self._repo.create(db=db, obj_in=product_api) # Use passed db session
-                        # Assign tags after creation
-                        if tags_data and self._tags_manager:
-                            self._assign_tags_to_product(product_api.id, tags_data)
+                        logger.info(f"Creating ODPS product ID {product_api.id} from YAML.")
+                        self._repo.create(db=db, obj_in=product_api)
+
+                    # Assign tags
+                    if tags_data and self._tags_manager:
+                        self._assign_tags_to_product(product_api.id, tags_data)
 
                     loaded_count += 1
+
                 except (ValidationError, ValueError, SQLAlchemyError) as e:
                     if isinstance(e, ValidationError):
-                        logger.error(f"DataProductsManager: Validation error processing product from YAML (ID: {product_dict.get('id', 'N/A')}): {len(e.errors())} validation errors")
+                        logger.error(f"Validation error for ODPS product (ID: {product_dict.get('id', 'N/A')}): "
+                                   f"{len(e.errors())} errors")
                         for i, error in enumerate(e.errors()):
-                            logger.error(f"  Validation Error {i+1}: {error}")
+                            logger.error(f"  Error {i+1}: {error}")
                     else:
-                        logger.error(f"DataProductsManager: Error processing product from YAML (ID: {product_dict.get('id', 'N/A')}): {e}")
-                    db.rollback() # Rollback this specific product's transaction part
+                        logger.error(f"Error processing ODPS product (ID: {product_dict.get('id', 'N/A')}): {e}")
+                    db.rollback()
                     errors += 1
-                except Exception as inner_e: # Catch unexpected errors per product
-                     logger.error(f"DataProductsManager: Unexpected error processing product from YAML (ID: {product_dict.get('id', 'N/A')}): {inner_e}", exc_info=True)
-                     db.rollback() # Rollback this specific product's transaction part
-                     errors += 1
-
+                except Exception as inner_e:
+                    logger.error(f"Unexpected error processing ODPS product (ID: {product_dict.get('id', 'N/A')}): "
+                               f"{inner_e}", exc_info=True)
+                    db.rollback()
+                    errors += 1
 
             if errors == 0 and loaded_count > 0:
-                 db.commit() # Commit only if all products loaded successfully
-                 logger.info(f"DataProductsManager: Successfully loaded and committed {loaded_count} data products from {yaml_path}.")
+                db.commit()
+                logger.info(f"Successfully loaded {loaded_count} ODPS products from {yaml_path}.")
             elif loaded_count > 0 and errors > 0:
-                 logger.warning(f"DataProductsManager: Processed {loaded_count + errors} products from {yaml_path}, but encountered {errors} errors. Changes for successful products were rolled back.")
-                 # Rollback is handled per error, no final commit needed
+                logger.warning(f"Processed {loaded_count + errors} ODPS products, but encountered {errors} errors.")
             elif errors > 0:
-                 logger.error(f"DataProductsManager: Encountered {errors} errors processing products from {yaml_path}. No products loaded.")
-                 # Rollback is handled per error, no final commit needed
+                logger.error(f"Encountered {errors} errors processing ODPS products. No products loaded.")
             else:
-                 logger.info(f"DataProductsManager: No new data products found to load from {yaml_path}.")
-                 # No commit needed if nothing was loaded
+                logger.info(f"No new ODPS products found to load from {yaml_path}.")
 
-            return loaded_count > 0 and errors == 0 # Return True only if some were loaded without errors
+            return loaded_count > 0 and errors == 0
 
-        except FileNotFoundError: # Catching outside the loop
-            logger.warning(f"DataProductsManager: Data product YAML file not found at {yaml_path}. No products loaded.")
+        except FileNotFoundError:
+            logger.warning(f"ODPS data file not found at {yaml_path}. No products loaded.")
             return False
         except yaml.YAMLError as e:
-            logger.error(f"DataProductsManager: Error parsing data product YAML file {yaml_path}: {e}")
-            db.rollback() # Rollback if YAML parsing failed
+            logger.error(f"Error parsing ODPS YAML file {yaml_path}: {e}")
+            db.rollback()
             return False
-        except SQLAlchemyError as e: # Catch DB errors outside the loop (e.g., during initial check)
-             logger.error(f"DataProductsManager: Database error during initial data load from {yaml_path}: {e}", exc_info=True)
-             db.rollback()
-             return False
-        except Exception as e: # Catch any other unexpected error during file handling/setup
-            error_msg = str(e)
-            logger.error(f"DataProductsManager: Unexpected error during YAML load setup ({yaml_path}): {error_msg}", exc_info=True)
+        except SQLAlchemyError as e:
+            logger.error(f"Database error during ODPS initial data load: {e}", exc_info=True)
+            db.rollback()
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error during ODPS YAML load: {e}", exc_info=True)
             db.rollback()
             return False
 
     def save_to_yaml(self, yaml_path: str) -> bool:
-        """Save current data products from DB to a YAML file."""
+        """Save current ODPS v1.0.0 data products to a YAML file."""
         try:
             all_products_api = self.list_products(limit=10000)
-            
-            products_list = [p.dict(by_alias=True) for p in all_products_api]
-            
+            products_list = [p.model_dump(by_alias=True) for p in all_products_api]
+
             with open(yaml_path, 'w') as file:
                 yaml.dump(products_list, file, default_flow_style=False, sort_keys=False)
-            logger.info(f"Saved {len(products_list)} data products to {yaml_path}")
+
+            logger.info(f"Saved {len(products_list)} ODPS products to {yaml_path}")
             return True
-        except (SQLAlchemyError, ValidationError, ValueError) as e:
-            logger.error(f"Error retrieving or processing data for saving to YAML: {e}")
-            return False
+
         except Exception as e:
-            logger.error(f"Error saving data products to YAML {yaml_path}: {e}")
+            logger.error(f"Error saving ODPS products to YAML {yaml_path}: {e}")
             return False
 
-    # --- Reinstate Helper methods for distinct values --- 
-    # These now delegate to the repository which handles DB interaction.
-
-    def get_distinct_owners(self) -> List[str]:
-        """Get all distinct data product owners."""
-        try:
-            return self._repo.get_distinct_owners(db=self._db)
-        except Exception as e:
-            logger.error(f"Error getting distinct owners from repository: {e}", exc_info=True)
-            # Depending on desired behavior, re-raise or return empty list
-            # raise # Option 1: Let the route handler catch it
-            return [] # Option 2: Return empty on error
+    # --- ODPS-specific query helpers ---
 
     def get_distinct_domains(self) -> List[str]:
-        """Get distinct 'domain' values from the 'info' JSON column."""
-        # TODO: Add get_distinct_domains to repository if needed
-        logger.warning("get_distinct_domains called - not implemented in repository yet.")
-        return [] # Placeholder until implemented in repo
+        """Get distinct domain values from ODPS products."""
+        try:
+            return self._repo.get_distinct_domains(db=self._db)
+        except Exception as e:
+            logger.error(f"Error getting distinct domains: {e}", exc_info=True)
+            return []
+
+    def get_distinct_tenants(self) -> List[str]:
+        """Get distinct tenant values from ODPS products."""
+        try:
+            return self._repo.get_distinct_tenants(db=self._db)
+        except Exception as e:
+            logger.error(f"Error getting distinct tenants: {e}", exc_info=True)
+            return []
 
     def get_distinct_statuses(self) -> List[str]:
-        """Get all distinct data product statuses from info and output ports."""
+        """Get all distinct ODPS status values."""
         try:
             return self._repo.get_distinct_statuses(db=self._db)
         except Exception as e:
-            logger.error(f"Error getting distinct statuses from repository: {e}", exc_info=True)
+            logger.error(f"Error getting distinct statuses: {e}", exc_info=True)
             return []
 
     def get_distinct_product_types(self) -> List[str]:
-        """Get all distinct data product types."""
+        """Get distinct product types from output ports."""
         try:
-            # Call the new repository method
             return self._repo.get_distinct_product_types(db=self._db)
         except Exception as e:
-            logger.error(f"Error getting distinct product types from repository: {e}", exc_info=True)
+            logger.error(f"Error getting distinct product types: {e}", exc_info=True)
             return []
 
-    # --- Implementation of SearchableAsset --- 
-    def get_search_index_items(self) -> List[SearchIndexItem]:
-        """Fetches data products and maps them to SearchIndexItem format."""
-        logger.info("Fetching data products for search indexing...")
-        items = []
+    def get_distinct_owners(self) -> List[str]:
+        """Get distinct owner names from product teams."""
         try:
-            # Fetch all products (adjust limit if needed, but potentially large)
-            # Consider fetching only necessary fields if performance becomes an issue
-            products_api = self.list_products(limit=10000) # Fetch Pydantic models
-            
+            return self._repo.get_distinct_owners(db=self._db)
+        except Exception as e:
+            logger.error(f"Error getting distinct owners: {e}", exc_info=True)
+            return []
+
+    # --- SearchableAsset implementation ---
+
+    def get_search_index_items(self) -> List[SearchIndexItem]:
+        """Fetches ODPS v1.0.0 data products and maps them to SearchIndexItem format."""
+        logger.info("Fetching ODPS products for search indexing...")
+        items = []
+
+        try:
+            products_api = self.list_products(limit=10000)
+
             for product in products_api:
-                if not product.id or not product.info or not product.info.title:
-                     logger.warning(f"Skipping product due to missing id or info.title: {product}")
-                     continue
-                     
-                # Normalize tags as strings for SearchIndexItem
+                if not product.id or not product.name:
+                    logger.warning(f"Skipping ODPS product due to missing id or name: {product}")
+                    continue
+
+                # Get description from ODPS structured description
+                description = ""
+                if product.description:
+                    parts = []
+                    if product.description.purpose:
+                        parts.append(product.description.purpose)
+                    if product.description.usage:
+                        parts.append(product.description.usage)
+                    description = " | ".join(parts)
+
+                # Normalize tags
                 tag_strings: List[str] = []
                 try:
                     for t in (product.tags or []):
@@ -620,10 +526,6 @@ class DataProductsManager(SearchableAsset):
                             fqn = t.get('tag_fqn')
                             if fqn:
                                 tag_strings.append(str(fqn))
-                            elif t.get('tag_id'):
-                                tag_strings.append(str(t.get('tag_id')))
-                            else:
-                                tag_strings.append(str(t))
                         else:
                             tag_strings.append(str(t))
                 except Exception:
@@ -632,51 +534,41 @@ class DataProductsManager(SearchableAsset):
                 items.append(
                     SearchIndexItem(
                         id=f"product::{product.id}",
-                        version=product.version, # Add version
-                        product_type=product.productType if product.productType else None, 
-                        type="data-product", # Keep type for frontend icon/rendering
-                        feature_id="data-products", # <-- Add this
-                        title=product.info.title,
-                        description=product.info.description or "",
+                        version=product.version,
+                        type="data-product",
+                        feature_id="data-products",
+                        title=product.name,
+                        description=description,
                         link=f"/data-products/{product.id}",
                         tags=tag_strings
-                        # Add other fields like owner, status, domain if desired
-                        # owner=product.info.owner,
-                        # status=product.info.status,
-                        # domain=product.info.domain
                     )
                 )
-            logger.info(f"Prepared {len(items)} data products for search index.")
-            return items
-        except Exception as e:
-            logger.error(f"Error fetching or mapping data products for search: {e}", exc_info=True)
-            return [] # Return empty list on error
 
-    # --- Tag Integration Methods ---
+            logger.info(f"Prepared {len(items)} ODPS products for search index.")
+            return items
+
+        except Exception as e:
+            logger.error(f"Error fetching/mapping ODPS products for search: {e}", exc_info=True)
+            return []
+
+    # --- Tag integration helpers ---
 
     def _assign_tags_to_product(self, product_id: str, tags_data: List[Dict[str, Any]]) -> None:
-        """Helper method to assign tags to a data product.
-        
-        Uses the repository's set_tags_for_entity method which automatically creates
-        tags if they don't exist (via find_or_create_tag).
-        """
+        """Helper to assign tags to an ODPS data product."""
         if not self._tags_manager:
             logger.warning("TagsManager not available, cannot assign tags")
             return
 
         try:
-            # Convert tags_data to List[AssignedTagCreate]
             assigned_tags = []
             for tag_data in tags_data:
                 if isinstance(tag_data, dict):
-                    # Already in dict format with tag_id, tag_fqn, and/or assigned_value
                     try:
                         assigned_tag = AssignedTagCreate(**tag_data)
                         assigned_tags.append(assigned_tag)
                     except Exception as e:
                         logger.warning(f"Failed to parse tag data {tag_data}: {e}")
                 else:
-                    # Legacy format - assume it's a tag name/fqn string
                     try:
                         assigned_tag = AssignedTagCreate(tag_fqn=str(tag_data), assigned_value=None)
                         assigned_tags.append(assigned_tag)
@@ -684,10 +576,9 @@ class DataProductsManager(SearchableAsset):
                         logger.warning(f"Failed to create AssignedTagCreate from string {tag_data}: {e}")
 
             if not assigned_tags:
-                logger.debug(f"No valid tags to assign to product {product_id}")
+                logger.debug(f"No valid tags to assign to ODPS product {product_id}")
                 return
 
-            # Use the tags manager's set_tags_for_entity which auto-creates missing tags and commits
             self._tags_manager.set_tags_for_entity(
                 db=self._db,
                 entity_id=product_id,
@@ -695,18 +586,16 @@ class DataProductsManager(SearchableAsset):
                 tags=assigned_tags,
                 user_email="system"
             )
-            logger.debug(f"Successfully assigned {len(assigned_tags)} tags to product {product_id}")
+            logger.debug(f"Successfully assigned {len(assigned_tags)} tags to ODPS product {product_id}")
 
         except Exception as e:
-            logger.error(f"Failed to assign tags to product {product_id}: {e}", exc_info=True)
+            logger.error(f"Failed to assign tags to ODPS product {product_id}: {e}", exc_info=True)
 
     def _load_product_with_tags(self, db_obj) -> DataProductApi:
-        """Helper method to load a data product with its associated tags."""
+        """Helper to load an ODPS data product with its associated tags."""
         try:
-            # Convert DB object to API model
-            product_api = DataProductApi.from_orm(db_obj)
+            product_api = DataProductApi.model_validate(db_obj)
 
-            # Load associated tags if tags_manager is available
             if self._tags_manager:
                 try:
                     assigned_tags = self._entity_tag_repo.get_assigned_tags_for_entity(
@@ -714,11 +603,9 @@ class DataProductsManager(SearchableAsset):
                         entity_id=db_obj.id,
                         entity_type="data_product"
                     )
-                    # Convert to the expected format
                     product_api.tags = assigned_tags
                 except Exception as e:
-                    logger.error(f"Failed to load tags for product {db_obj.id}: {e}")
-                    # Set empty tags list on error
+                    logger.error(f"Failed to load tags for ODPS product {db_obj.id}: {e}")
                     product_api.tags = []
             else:
                 product_api.tags = []
@@ -726,12 +613,12 @@ class DataProductsManager(SearchableAsset):
             return product_api
 
         except Exception as e:
-            logger.error(f"Failed to load product with tags: {e}")
-            # Fallback to basic conversion
-            return DataProductApi.from_orm(db_obj)
+            logger.error(f"Failed to load ODPS product with tags: {e}")
+            return DataProductApi.model_validate(db_obj)
 
-    def assign_tag_to_product(self, product_id: str, tag_id: str, assigned_value: Optional[str] = None, assigned_by: str = "system") -> bool:
-        """Public method to assign a tag to a data product."""
+    def assign_tag_to_product(self, product_id: str, tag_id: str, assigned_value: Optional[str] = None,
+                              assigned_by: str = "system") -> bool:
+        """Public method to assign a tag to an ODPS data product."""
         if not self._tags_manager:
             logger.error("TagsManager not available, cannot assign tag")
             return False
@@ -747,11 +634,11 @@ class DataProductsManager(SearchableAsset):
             )
             return True
         except Exception as e:
-            logger.error(f"Failed to assign tag {tag_id} to product {product_id}: {e}")
+            logger.error(f"Failed to assign tag {tag_id} to ODPS product {product_id}: {e}")
             return False
 
     def remove_tag_from_product(self, product_id: str, tag_id: str) -> bool:
-        """Public method to remove a tag from a data product."""
+        """Public method to remove a tag from an ODPS data product."""
         if not self._tags_manager:
             logger.error("TagsManager not available, cannot remove tag")
             return False
@@ -764,11 +651,11 @@ class DataProductsManager(SearchableAsset):
                 entity_type="data_product"
             )
         except Exception as e:
-            logger.error(f"Failed to remove tag {tag_id} from product {product_id}: {e}")
+            logger.error(f"Failed to remove tag {tag_id} from ODPS product {product_id}: {e}")
             return False
 
     def get_product_tags(self, product_id: str) -> List[Dict[str, Any]]:
-        """Public method to get all tags assigned to a data product."""
+        """Public method to get all tags assigned to an ODPS data product."""
         if not self._tags_manager:
             logger.warning("TagsManager not available, returning empty tags list")
             return []
@@ -780,46 +667,27 @@ class DataProductsManager(SearchableAsset):
                 entity_type="data_product"
             )
         except Exception as e:
-            logger.error(f"Failed to get tags for product {product_id}: {e}")
+            logger.error(f"Failed to get tags for ODPS product {product_id}: {e}")
             return []
 
     def _preprocess_tags_for_yaml_loading(self, product_dict: Dict[str, Any]) -> None:
-        """
-        Convert tag_fqn format in YAML to AssignedTagCreate format for DataProductCreate validation.
-
-        Converts:
-            tags:
-              - tag_fqn: "default/source"
-              - tag_fqn: "default/pos"
-
-        To:
-            tags:
-              - tag_fqn: "default/source"
-              - tag_fqn: "default/pos"
-
-        This ensures the YAML structure is compatible with AssignedTagCreate models.
-        """
+        """Convert tag_fqn format in YAML to AssignedTagCreate format."""
         def process_tags_in_dict(obj: Dict[str, Any]):
-            """Recursively process tags in nested dictionaries."""
             if 'tags' in obj and isinstance(obj['tags'], list):
                 new_tags = []
                 for tag_item in obj['tags']:
                     if isinstance(tag_item, dict) and 'tag_fqn' in tag_item:
-                        # Ensure assigned_value is present for AssignedTagCreate
                         if 'assigned_value' not in tag_item:
                             tag_item['assigned_value'] = None
                         new_tags.append(tag_item)
                     elif isinstance(tag_item, str):
-                        # Convert string to tag_fqn format with assigned_value
                         new_tags.append({"tag_fqn": tag_item, "assigned_value": None})
                     else:
-                        # Assume it's already in correct format but ensure assigned_value
                         if isinstance(tag_item, dict) and 'assigned_value' not in tag_item:
                             tag_item['assigned_value'] = None
                         new_tags.append(tag_item)
                 obj['tags'] = new_tags
 
-            # Recursively process nested dictionaries
             for key, value in obj.items():
                 if isinstance(value, dict):
                     process_tags_in_dict(value)
@@ -828,31 +696,28 @@ class DataProductsManager(SearchableAsset):
                         if isinstance(item, dict):
                             process_tags_in_dict(item)
 
-        # Process the main product dictionary
         process_tags_in_dict(product_dict)
 
-    # --- Contract-Product Integration Methods ---
+    # --- Contract-Product Integration (ODPS v1.0.0) ---
 
     def create_from_contract(
         self,
         contract_id: str,
         product_name: str,
-        product_type: DataProductType,
         version: str,
         output_port_name: Optional[str] = None
     ) -> DataProductApi:
         """
-        Creates a new Data Product from an existing Data Contract.
+        Creates a new ODPS v1.0.0 Data Product from an existing Data Contract.
 
-        The contract governs one output port of the product. Inherits domain_id,
-        owner_team_id, and project_id from the contract.
+        The contract governs one output port of the product. Inherits domain,
+        owner team, and project from the contract.
 
         Args:
             contract_id: ID of the contract to create product from
             product_name: Name for the new data product
-            product_type: Type of the data product (source, source-aligned, etc.)
             version: Version string for the product
-            output_port_name: Optional name for the output port (defaults to contract name)
+            output_port_name: Optional name for the output port
 
         Returns:
             Created DataProduct API model
@@ -860,17 +725,16 @@ class DataProductsManager(SearchableAsset):
         Raises:
             ValueError: If contract doesn't exist or is not in valid status
         """
-        logger.info(f"Creating Data Product '{product_name}' from contract {contract_id}")
+        logger.info(f"Creating ODPS Data Product '{product_name}' from contract {contract_id}")
 
-        # Import here to avoid circular dependency
         from src.repositories.data_contracts_repository import data_contract_repo
 
-        # Validate contract exists and get it
+        # Validate contract exists
         contract_db = data_contract_repo.get(db=self._db, id=contract_id)
         if not contract_db:
             raise ValueError(f"Data Contract with ID {contract_id} not found")
 
-        # Validate contract status (should be active or approved)
+        # Validate contract status
         valid_statuses = ['active', 'approved', 'certified']
         if contract_db.status and contract_db.status.lower() not in valid_statuses:
             raise ValueError(
@@ -878,103 +742,100 @@ class DataProductsManager(SearchableAsset):
                 f"Contract must be in one of: {', '.join(valid_statuses)}"
             )
 
-        # Create product data, inheriting from contract
-        now = datetime.utcnow()
+        # Create ODPS product data
         product_id = str(uuid.uuid4())
-
         product_data = {
             'id': product_id,
+            'apiVersion': 'v1.0.0',
+            'kind': 'DataProduct',
+            'name': product_name,
             'version': version,
-            'productType': product_type.value,
-            'created_at': now,
-            'updated_at': now,
-            'info': {
-                'title': product_name,
-                'description': f"Data Product created from contract: {contract_db.name}",
-                'status': DataProductStatus.DRAFT.value,
-                'owner_team_id': contract_db.owner_team_id,  # Inherit from contract
-                'domain_id': contract_db.domain_id,  # Inherit from contract
-                'project_id': contract_db.project_id,  # Inherit from contract
+            'status': DataProductStatus.DRAFT.value,
+            'domain': contract_db.domain_id,  # Inherit from contract
+            'description': {
+                'purpose': f"Data Product created from contract: {contract_db.name}",
+                'limitations': None,
+                'usage': None
             },
             'inputPorts': [],
             'outputPorts': [
                 {
-                    'id': str(uuid.uuid4()),
                     'name': output_port_name or contract_db.name,
+                    'version': version,
                     'description': f"Output governed by contract: {contract_db.name}",
-                    'dataContractId': contract_id,  # Link to contract
-                    'asset_type': None,
-                    'asset_identifier': None,
+                    'contractId': contract_id  # Link to contract
                 }
             ]
         }
 
-        # Create the product using standard create method
-        created_product = self.create_product(product_data)
+        # TODO: Add team members from contract owner
+        if contract_db.owner_team_id:
+            product_data['team'] = {
+                'name': f"Team from contract {contract_db.name}",
+                'members': []  # Could populate from contract owner
+            }
 
-        logger.info(f"Successfully created Data Product {product_id} from contract {contract_id}")
+        # Create the product
+        created_product = self.create_product(product_data)
+        logger.info(f"Successfully created ODPS Data Product {product_id} from contract {contract_id}")
         return created_product
 
     def get_products_by_contract(self, contract_id: str) -> List[DataProductApi]:
         """
-        Get all Data Products that use a specific Data Contract.
+        Get all ODPS Data Products that use a specific Data Contract.
 
         Args:
             contract_id: ID of the contract to search for
 
         Returns:
-            List of DataProduct API models that have output ports linked to this contract
+            List of DataProduct API models with output ports linked to this contract
         """
-        logger.debug(f"Fetching products linked to contract {contract_id}")
+        logger.debug(f"Fetching ODPS products linked to contract {contract_id}")
 
         try:
-            # Get all products
             all_products = self.list_products(limit=10000)
-
-            # Filter products that have output ports with this contract
             linked_products = []
+
             for product in all_products:
                 if product.outputPorts:
                     for port in product.outputPorts:
-                        if port.dataContractId == contract_id:
+                        if port.contractId == contract_id:
                             linked_products.append(product)
-                            break  # Found link, no need to check other ports
+                            break
 
-            logger.info(f"Found {len(linked_products)} products linked to contract {contract_id}")
+            logger.info(f"Found {len(linked_products)} ODPS products linked to contract {contract_id}")
             return linked_products
 
         except Exception as e:
-            logger.error(f"Error fetching products by contract {contract_id}: {e}")
+            logger.error(f"Error fetching ODPS products by contract {contract_id}: {e}")
             raise
 
     def get_contracts_for_product(self, product_id: str) -> List[str]:
         """
-        Get all Data Contract IDs associated with a Data Product's output ports.
+        Get all Data Contract IDs associated with an ODPS Data Product's output ports.
 
         Args:
             product_id: ID of the product
 
         Returns:
-            List of contract IDs (may be empty if no contracts are linked)
+            List of contract IDs (may be empty)
         """
-        logger.debug(f"Fetching contracts for product {product_id}")
+        logger.debug(f"Fetching contracts for ODPS product {product_id}")
 
         try:
             product = self.get_product(product_id)
             if not product:
                 raise ValueError(f"Product with ID {product_id} not found")
 
-            # Extract unique contract IDs from output ports
             contract_ids = []
             if product.outputPorts:
                 for port in product.outputPorts:
-                    if port.dataContractId and port.dataContractId not in contract_ids:
-                        contract_ids.append(port.dataContractId)
+                    if port.contractId and port.contractId not in contract_ids:
+                        contract_ids.append(port.contractId)
 
-            logger.info(f"Found {len(contract_ids)} contracts for product {product_id}")
+            logger.info(f"Found {len(contract_ids)} contracts for ODPS product {product_id}")
             return contract_ids
 
         except Exception as e:
-            logger.error(f"Error fetching contracts for product {product_id}: {e}")
+            logger.error(f"Error fetching contracts for ODPS product {product_id}: {e}")
             raise
-

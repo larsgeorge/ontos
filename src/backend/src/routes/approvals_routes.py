@@ -33,10 +33,11 @@ async def get_approvals_queue(
 
         # Products pending certification
         try:
-            from src.db_models.data_products import DataProductDb, InfoDb
-            q = db.query(DataProductDb).join(InfoDb).filter(InfoDb.status == 'PENDING_CERTIFICATION')
+            from src.db_models.data_products import DataProductDb
+            # ODPS v1.0.0: Query products in 'draft' status (awaiting approval to become 'active')
+            q = db.query(DataProductDb).filter(DataProductDb.status == 'draft')
             for p in q.all():
-                items['products'].append({ 'id': p.id, 'title': p.info.title if p.info else None, 'status': p.info.status if p.info else None })
+                items['products'].append({ 'id': p.id, 'title': p.name, 'status': p.status })
         except Exception:
             logger.debug("Approvals queue: products query failed", exc_info=True)
 

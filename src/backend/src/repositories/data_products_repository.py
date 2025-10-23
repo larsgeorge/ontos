@@ -1,311 +1,604 @@
+"""
+ODPS v1.0.0 Data Product Repository
+
+This module implements the repository layer for ODPS v1.0.0 Data Products.
+Handles mapping between API models (Pydantic) and DB models (SQLAlchemy).
+"""
+
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import select, Column, distinct
+from sqlalchemy import select, distinct
 from typing import List, Optional, Any, Dict, Union
-import json # Needed for parsing JSON strings
+import json
 
 from src.common.repository import CRUDBase
-from src.models.data_products import DataProduct as DataProductApi, Info, InputPort, OutputPort # Pydantic models
-# Import all relevant DB models
-from src.db_models.data_products import (DataProductDb, InfoDb, InputPortDb, OutputPortDb)
+from src.models.data_products import (
+    DataProduct as DataProductApi,
+    DataProductCreate,
+    DataProductUpdate,
+    Description,
+    AuthoritativeDefinition,
+    CustomProperty,
+    InputPort,
+    OutputPort,
+    ManagementPort,
+    Support,
+    Team,
+    TeamMember,
+    SBOM,
+    InputContract
+)
+from src.db_models.data_products import (
+    DataProductDb,
+    DescriptionDb,
+    AuthoritativeDefinitionDb,
+    CustomPropertyDb,
+    InputPortDb,
+    OutputPortDb,
+    ManagementPortDb,
+    SupportDb,
+    DataProductTeamDb,
+    DataProductTeamMemberDb,
+    SBOMDb,
+    InputContractDb
+)
 from src.common.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Define specific Pydantic models for create/update if they differ significantly
-# For now, using the main API model for simplicity
-DataProductCreate = DataProductApi
-DataProductUpdate = DataProductApi 
 
 class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProductUpdate]):
-    """Repository for DataProduct CRUD operations (Normalized Schema)."""
+    """Repository for ODPS v1.0.0 DataProduct CRUD operations."""
 
-    # We can override methods here if needed, e.g., for complex queries or specific logic.
-    # For basic CRUD with JSON fields, the base class might suffice initially.
-    # However, let's override create and update to show potential mapping/handling.
-
-    # Repository create method now expects the validated Pydantic model
-    def create(self, db: Session, *, obj_in: DataProductApi) -> DataProductDb:
-        logger.debug(f"Creating DataProduct (DB layer - normalized)")
-        
-        # 1. Prepare core DataProduct data (excluding relationships initially)
-        # Directly use attributes from the Pydantic model obj_in
-        db_obj = self.model(
-            id=obj_in.id,
-            dataProductSpecification=obj_in.dataProductSpecification,
-            links=json.dumps(obj_in.links) if obj_in.links is not None else '{}',
-            custom=json.dumps(obj_in.custom) if obj_in.custom is not None else '{}',
-            version=obj_in.version, # Assume validated model has it
-            # Handle productType being either enum or string after validation
-            product_type=obj_in.productType.value if hasattr(obj_in.productType, 'value') else obj_in.productType
-        )
-
-        # 2. Create InfoDb object (Exclude deprecated fields)
-        if obj_in.info:
-            # Exclude 'maturity' explicitly before passing to InfoDb constructor
-            info_data = obj_in.info.model_dump(exclude={'maturity'}) # Use model_dump and exclude
-            info_obj = InfoDb(**info_data)
-            db_obj.info = info_obj
-
-        # 3. Create InputPortDb objects
-        if obj_in.inputPorts: # Check if the list exists
-            for port_in in obj_in.inputPorts: # port_in is an InputPort Pydantic model
-                # Convert Pydantic model to dict, exclude tags since DB model doesn't have tags field
-                port_data = port_in.dict(exclude_none=True, exclude={'tags'}) # exclude tags for DB model
-
-                # Rename 'type' key if present
-                if 'type' in port_data:
-                    port_data['port_type'] = port_data.pop('type')
-
-                # Map assetType and assetIdentifier
-                port_data['asset_type'] = port_in.assetType
-                port_data['asset_identifier'] = port_in.assetIdentifier
-
-                # Ensure JSON fields are strings
-                port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
-                port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
-
-                # sourceOutputPortId is already correctly named from Pydantic model
-
-                port_obj = InputPortDb(**port_data)
-                db_obj.inputPorts.append(port_obj)
-            
-        # 4. Create OutputPortDb objects
-        if obj_in.outputPorts: # Check if the list exists
-            for port_in in obj_in.outputPorts: # port_in is an OutputPort Pydantic model
-                # Convert Pydantic model to dict, exclude tags since DB model doesn't have tags field
-                port_data = port_in.dict(exclude_none=True, exclude={'tags'}) # exclude tags for DB model
-                if 'type' in port_data:
-                    port_data['port_type'] = port_data.pop('type')
-
-                # Map assetType and assetIdentifier
-                port_data['asset_type'] = port_in.assetType
-                port_data['asset_identifier'] = port_in.assetIdentifier
-
-                port_data['server'] = json.dumps(port_data.get('server')) if port_data.get('server') else '{}'
-                port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
-                port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
-                port_obj = OutputPortDb(**port_data)
-                db_obj.outputPorts.append(port_obj)
-            
-        # 5. Handle Tags (Many-to-Many)
-        # Tags are now handled by the DataProductsManager using EntityTagRepository
+    def create(self, db: Session, *, obj_in: DataProductCreate) -> DataProductDb:
+        """Create a new ODPS v1.0.0 Data Product with all relationships."""
+        logger.debug(f"Creating ODPS v1.0.0 DataProduct: {obj_in.id}")
 
         try:
-            db.add(db_obj) # Adding parent cascades adds related objects
-            db.flush() 
-            db.refresh(db_obj) # Refresh to get IDs and load relationships if needed
-            logger.info(f"Successfully created DataProduct (DB - norm) with id: {db_obj.id}")
+            # 1. Create core DataProduct
+            db_obj = self.model(
+                id=obj_in.id,
+                api_version=obj_in.apiVersion,
+                kind=obj_in.kind,
+                status=obj_in.status,
+                name=obj_in.name,
+                version=obj_in.version,
+                domain=obj_in.domain,
+                tenant=obj_in.tenant,
+                project_id=None  # Set via manager if needed
+            )
+
+            # 2. Create Structured Description (One-to-One)
+            if obj_in.description:
+                desc_obj = DescriptionDb(
+                    purpose=obj_in.description.purpose,
+                    limitations=obj_in.description.limitations,
+                    usage=obj_in.description.usage
+                )
+                db_obj.description = desc_obj
+
+            # 3. Create Authoritative Definitions (One-to-Many)
+            if obj_in.authoritativeDefinitions:
+                for auth_def in obj_in.authoritativeDefinitions:
+                    auth_obj = AuthoritativeDefinitionDb(
+                        type=auth_def.type,
+                        url=auth_def.url,
+                        description=auth_def.description
+                    )
+                    db_obj.authoritative_definitions.append(auth_obj)
+
+            # 4. Create Custom Properties (One-to-Many)
+            if obj_in.customProperties:
+                for custom_prop in obj_in.customProperties:
+                    # Store value as JSON string to support any type
+                    value_str = json.dumps(custom_prop.value) if not isinstance(custom_prop.value, str) else custom_prop.value
+                    prop_obj = CustomPropertyDb(
+                        property=custom_prop.property,
+                        value=value_str,
+                        description=custom_prop.description
+                    )
+                    db_obj.custom_properties.append(prop_obj)
+
+            # 5. Create Input Ports (One-to-Many)
+            if obj_in.inputPorts:
+                for port in obj_in.inputPorts:
+                    port_obj = InputPortDb(
+                        name=port.name,
+                        version=port.version,
+                        contract_id=port.contractId,  # REQUIRED in ODPS!
+                        asset_type=port.assetType,
+                        asset_identifier=port.assetIdentifier
+                    )
+                    db_obj.input_ports.append(port_obj)
+
+            # 6. Create Output Ports (One-to-Many) with SBOM and InputContracts
+            if obj_in.outputPorts:
+                for port in obj_in.outputPorts:
+                    # Serialize server as JSON string
+                    server_json = None
+                    if port.server:
+                        server_json = json.dumps(port.server.model_dump(exclude_none=True))
+
+                    port_obj = OutputPortDb(
+                        name=port.name,
+                        version=port.version,
+                        description=port.description,
+                        port_type=port.type,
+                        contract_id=port.contractId,
+                        asset_type=port.assetType,
+                        asset_identifier=port.assetIdentifier,
+                        status=port.status,
+                        server=server_json,
+                        contains_pii=port.containsPii,
+                        auto_approve=port.autoApprove
+                    )
+
+                    # Create SBOM entries for this output port
+                    if port.sbom:
+                        for sbom in port.sbom:
+                            sbom_obj = SBOMDb(
+                                type=sbom.type,
+                                url=sbom.url
+                            )
+                            port_obj.sbom.append(sbom_obj)
+
+                    # Create InputContract entries for this output port
+                    if port.inputContracts:
+                        for input_contract in port.inputContracts:
+                            contract_obj = InputContractDb(
+                                contract_id=input_contract.id,
+                                contract_version=input_contract.version
+                            )
+                            port_obj.input_contracts.append(contract_obj)
+
+                    db_obj.output_ports.append(port_obj)
+
+            # 7. Create Management Ports (One-to-Many) - NEW in ODPS v1.0.0
+            if obj_in.managementPorts:
+                for mgmt_port in obj_in.managementPorts:
+                    mgmt_obj = ManagementPortDb(
+                        name=mgmt_port.name,
+                        content=mgmt_port.content,
+                        port_type=mgmt_port.type,
+                        url=mgmt_port.url,
+                        channel=mgmt_port.channel,
+                        description=mgmt_port.description
+                    )
+                    db_obj.management_ports.append(mgmt_obj)
+
+            # 8. Create Support Channels (One-to-Many)
+            if obj_in.support:
+                for support in obj_in.support:
+                    support_obj = SupportDb(
+                        channel=support.channel,
+                        url=support.url,
+                        description=support.description,
+                        tool=support.tool,
+                        scope=support.scope,
+                        invitation_url=support.invitationUrl
+                    )
+                    db_obj.support_channels.append(support_obj)
+
+            # 9. Create Team (One-to-One) with Members (One-to-Many)
+            if obj_in.team:
+                team_obj = DataProductTeamDb(
+                    name=obj_in.team.name,
+                    description=obj_in.team.description
+                )
+
+                # Create Team Members
+                if obj_in.team.members:
+                    for member in obj_in.team.members:
+                        member_obj = DataProductTeamMemberDb(
+                            username=member.username,
+                            name=member.name,
+                            description=member.description,
+                            role=member.role,
+                            date_in=member.dateIn,
+                            date_out=member.dateOut,
+                            replaced_by_username=member.replacedByUsername
+                        )
+                        team_obj.members.append(member_obj)
+
+                db_obj.team = team_obj
+
+            # 10. Persist to database
+            db.add(db_obj)
+            db.flush()
+            db.refresh(db_obj)
+            logger.info(f"Successfully created ODPS v1.0.0 DataProduct: {db_obj.id}")
             return db_obj
+
         except Exception as e:
-            logger.error(f"Database error creating normalized DataProduct: {e}", exc_info=True)
+            logger.error(f"Database error creating ODPS DataProduct: {e}", exc_info=True)
             db.rollback()
             raise
 
     def update(self, db: Session, *, db_obj: DataProductDb, obj_in: Union[DataProductUpdate, Dict[str, Any]]) -> DataProductDb:
-        logger.debug(f"Updating DataProduct (DB layer - normalized) with id: {db_obj.id}")
-        
+        """Update an ODPS v1.0.0 Data Product with all relationships."""
+        logger.debug(f"Updating ODPS v1.0.0 DataProduct: {db_obj.id}")
+
         # Convert Pydantic model to dict if necessary
         if not isinstance(obj_in, dict):
-            update_data = obj_in.dict(exclude_unset=True)
+            update_data = obj_in.model_dump(exclude_unset=True)
         else:
             update_data = obj_in
 
         try:
-            # Update core DataProduct fields
-            db_obj.dataProductSpecification = update_data.get('dataProductSpecification', db_obj.dataProductSpecification)
-            if 'links' in update_data: db_obj.links = json.dumps(update_data['links'])
-            if 'custom' in update_data: db_obj.custom = json.dumps(update_data['custom'])
-            # Update new fields
-            db_obj.version = update_data.get('version', db_obj.version)
-            if 'productType' in update_data: # Check for Pydantic field name
-                 # The value from .dict() or .model_dump() should already be the string value
-                 db_obj.product_type = update_data['productType']
+            # 1. Update core fields
+            if 'apiVersion' in update_data:
+                db_obj.api_version = update_data['apiVersion']
+            if 'kind' in update_data:
+                db_obj.kind = update_data['kind']
+            if 'status' in update_data:
+                db_obj.status = update_data['status']
+            if 'name' in update_data:
+                db_obj.name = update_data['name']
+            if 'version' in update_data:
+                db_obj.version = update_data['version']
+            if 'domain' in update_data:
+                db_obj.domain = update_data['domain']
+            if 'tenant' in update_data:
+                db_obj.tenant = update_data['tenant']
 
-            # Update Info (One-to-One)
-            if 'info' in update_data and db_obj.info:
-                info_update = update_data['info']
-                for key, value in info_update.items():
-                    # Handle deprecated maturity field if present in input
-                    if key == 'maturity' and 'maturity' not in InfoDb.__table__.columns:
-                         logger.warning("Ignoring deprecated 'maturity' field during Info update.")
-                         continue
-                    setattr(db_obj.info, key, value)
-            elif 'info' in update_data and not db_obj.info:
-                 # Create new Info if it didn't exist
-                 info_obj = InfoDb(**update_data['info'])
-                 db_obj.info = info_obj
+            # 2. Update Structured Description
+            if 'description' in update_data:
+                if db_obj.description:
+                    # Update existing
+                    desc_data = update_data['description']
+                    db_obj.description.purpose = desc_data.get('purpose', db_obj.description.purpose)
+                    db_obj.description.limitations = desc_data.get('limitations', db_obj.description.limitations)
+                    db_obj.description.usage = desc_data.get('usage', db_obj.description.usage)
+                else:
+                    # Create new
+                    desc_data = update_data['description']
+                    desc_obj = DescriptionDb(
+                        purpose=desc_data.get('purpose'),
+                        limitations=desc_data.get('limitations'),
+                        usage=desc_data.get('usage')
+                    )
+                    db_obj.description = desc_obj
 
-            # Update Ports (One-to-Many) - More complex, needs matching/creation/deletion
-            # This is a simplified example - full sync might be needed for robust updates
-            # For now, let's just clear and re-add (simpler but less efficient)
+            # 3. Update Authoritative Definitions (replace all)
+            if 'authoritativeDefinitions' in update_data:
+                db_obj.authoritative_definitions.clear()
+                for auth_def_dict in update_data['authoritativeDefinitions'] or []:
+                    auth_obj = AuthoritativeDefinitionDb(
+                        type=auth_def_dict['type'],
+                        url=auth_def_dict['url'],
+                        description=auth_def_dict.get('description')
+                    )
+                    db_obj.authoritative_definitions.append(auth_obj)
+
+            # 4. Update Custom Properties (replace all)
+            if 'customProperties' in update_data:
+                db_obj.custom_properties.clear()
+                for prop_dict in update_data['customProperties'] or []:
+                    value_str = json.dumps(prop_dict['value']) if not isinstance(prop_dict['value'], str) else prop_dict['value']
+                    prop_obj = CustomPropertyDb(
+                        property=prop_dict['property'],
+                        value=value_str,
+                        description=prop_dict.get('description')
+                    )
+                    db_obj.custom_properties.append(prop_obj)
+
+            # 5. Update Input Ports (replace all)
             if 'inputPorts' in update_data:
-                db_obj.inputPorts.clear() # Clear existing
-                for port_in_dict in update_data['inputPorts']:
-                     port_data = port_in_dict.copy()
-                     # Rename type if present
-                     if 'type' in port_data:
-                         port_data['port_type'] = port_data.pop('type')
-                     
-                     # Map Pydantic keys to DB keys
-                     port_data['asset_type'] = port_in_dict.get('assetType')
-                     port_data['asset_identifier'] = port_in_dict.get('assetIdentifier')
-                     
-                     # Remove original Pydantic keys to avoid conflict with **kwargs
-                     port_data.pop('assetType', None)
-                     port_data.pop('assetIdentifier', None)
+                db_obj.input_ports.clear()
+                for port_dict in update_data['inputPorts'] or []:
+                    port_obj = InputPortDb(
+                        name=port_dict['name'],
+                        version=port_dict['version'],
+                        contract_id=port_dict['contractId'],
+                        asset_type=port_dict.get('assetType'),
+                        asset_identifier=port_dict.get('assetIdentifier')
+                    )
+                    db_obj.input_ports.append(port_obj)
 
-                     # Stringify JSON fields
-                     port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
-                     port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
-                     port_data['tags'] = json.dumps(port_data.get('tags')) if port_data.get('tags') else '[]'
-                     # sourceOutputPortId is already correct in port_in_dict
-                     port_obj = InputPortDb(**port_data)
-                     db_obj.inputPorts.append(port_obj)
-                     
+            # 6. Update Output Ports (replace all) with SBOM and InputContracts
             if 'outputPorts' in update_data:
-                 db_obj.outputPorts.clear() # Clear existing
-                 for port_in_dict in update_data['outputPorts']:
-                     port_data = port_in_dict.copy()
-                     if 'type' in port_data:
-                         port_data['port_type'] = port_data.pop('type')
-                     
-                     # Map Pydantic keys to DB keys
-                     port_data['asset_type'] = port_in_dict.get('assetType')
-                     port_data['asset_identifier'] = port_in_dict.get('assetIdentifier')
+                db_obj.output_ports.clear()
+                for port_dict in update_data['outputPorts'] or []:
+                    # Serialize server
+                    server_json = None
+                    if port_dict.get('server'):
+                        server_json = json.dumps(port_dict['server']) if isinstance(port_dict['server'], dict) else port_dict['server']
 
-                     # Remove original Pydantic keys to avoid conflict with **kwargs
-                     port_data.pop('assetType', None)
-                     port_data.pop('assetIdentifier', None)
+                    port_obj = OutputPortDb(
+                        name=port_dict['name'],
+                        version=port_dict['version'],
+                        description=port_dict.get('description'),
+                        port_type=port_dict.get('type'),
+                        contract_id=port_dict.get('contractId'),
+                        asset_type=port_dict.get('assetType'),
+                        asset_identifier=port_dict.get('assetIdentifier'),
+                        status=port_dict.get('status'),
+                        server=server_json,
+                        contains_pii=port_dict.get('containsPii', False),
+                        auto_approve=port_dict.get('autoApprove', False)
+                    )
 
-                     # Stringify JSON fields
-                     port_data['server'] = json.dumps(port_data.get('server')) if port_data.get('server') else '{}'
-                     port_data['links'] = json.dumps(port_data.get('links')) if port_data.get('links') else '{}'
-                     port_data['custom'] = json.dumps(port_data.get('custom')) if port_data.get('custom') else '{}'
-                     port_data['tags'] = json.dumps(port_data.get('tags')) if port_data.get('tags') else '[]'
-                     port_obj = OutputPortDb(**port_data)
-                     db_obj.outputPorts.append(port_obj)
+                    # Add SBOM entries
+                    if port_dict.get('sbom'):
+                        for sbom_dict in port_dict['sbom']:
+                            sbom_obj = SBOMDb(
+                                type=sbom_dict.get('type', 'external'),
+                                url=sbom_dict['url']
+                            )
+                            port_obj.sbom.append(sbom_obj)
 
-            # Update Tags (Many-to-Many)
-            # Tags are now handled by the DataProductsManager using EntityTagRepository
+                    # Add InputContract entries
+                    if port_dict.get('inputContracts'):
+                        for contract_dict in port_dict['inputContracts']:
+                            contract_obj = InputContractDb(
+                                contract_id=contract_dict['id'],
+                                contract_version=contract_dict['version']
+                            )
+                            port_obj.input_contracts.append(contract_obj)
 
+                    db_obj.output_ports.append(port_obj)
+
+            # 7. Update Management Ports (replace all)
+            if 'managementPorts' in update_data:
+                db_obj.management_ports.clear()
+                for mgmt_dict in update_data['managementPorts'] or []:
+                    mgmt_obj = ManagementPortDb(
+                        name=mgmt_dict['name'],
+                        content=mgmt_dict['content'],
+                        port_type=mgmt_dict.get('type', 'rest'),
+                        url=mgmt_dict.get('url'),
+                        channel=mgmt_dict.get('channel'),
+                        description=mgmt_dict.get('description')
+                    )
+                    db_obj.management_ports.append(mgmt_obj)
+
+            # 8. Update Support Channels (replace all)
+            if 'support' in update_data:
+                db_obj.support_channels.clear()
+                for support_dict in update_data['support'] or []:
+                    support_obj = SupportDb(
+                        channel=support_dict['channel'],
+                        url=support_dict['url'],
+                        description=support_dict.get('description'),
+                        tool=support_dict.get('tool'),
+                        scope=support_dict.get('scope'),
+                        invitation_url=support_dict.get('invitationUrl')
+                    )
+                    db_obj.support_channels.append(support_obj)
+
+            # 9. Update Team with Members (replace all)
+            if 'team' in update_data:
+                team_dict = update_data['team']
+                if db_obj.team:
+                    # Update existing team
+                    db_obj.team.name = team_dict.get('name', db_obj.team.name)
+                    db_obj.team.description = team_dict.get('description', db_obj.team.description)
+
+                    # Replace members
+                    db_obj.team.members.clear()
+                    if team_dict.get('members'):
+                        for member_dict in team_dict['members']:
+                            member_obj = DataProductTeamMemberDb(
+                                username=member_dict['username'],
+                                name=member_dict.get('name'),
+                                description=member_dict.get('description'),
+                                role=member_dict.get('role'),
+                                date_in=member_dict.get('dateIn'),
+                                date_out=member_dict.get('dateOut'),
+                                replaced_by_username=member_dict.get('replacedByUsername')
+                            )
+                            db_obj.team.members.append(member_obj)
+                else:
+                    # Create new team
+                    team_obj = DataProductTeamDb(
+                        name=team_dict.get('name'),
+                        description=team_dict.get('description')
+                    )
+
+                    if team_dict.get('members'):
+                        for member_dict in team_dict['members']:
+                            member_obj = DataProductTeamMemberDb(
+                                username=member_dict['username'],
+                                name=member_dict.get('name'),
+                                description=member_dict.get('description'),
+                                role=member_dict.get('role'),
+                                date_in=member_dict.get('dateIn'),
+                                date_out=member_dict.get('dateOut'),
+                                replaced_by_username=member_dict.get('replacedByUsername')
+                            )
+                            team_obj.members.append(member_obj)
+
+                    db_obj.team = team_obj
+
+            # 10. Persist changes
             db.add(db_obj)
             db.flush()
             db.refresh(db_obj)
-            logger.info(f"Successfully updated DataProduct (DB - norm) with id: {db_obj.id}")
+            logger.info(f"Successfully updated ODPS v1.0.0 DataProduct: {db_obj.id}")
             return db_obj
+
         except Exception as e:
-            logger.error(f"Database error updating normalized DataProduct (id: {db_obj.id}): {e}", exc_info=True)
+            logger.error(f"Database error updating ODPS DataProduct {db_obj.id}: {e}", exc_info=True)
             db.rollback()
             raise
-            
-    # --- Overwrite get/get_multi to use relationship loading --- 
+
     def get(self, db: Session, id: Any) -> Optional[DataProductDb]:
-        logger.debug(f"Fetching DataProduct (DB - norm) with id: {id}")
+        """Get a single ODPS v1.0.0 Data Product with all relationships eagerly loaded."""
+        logger.debug(f"Fetching ODPS v1.0.0 DataProduct: {id}")
         try:
-            # Use options to eagerly load relationships using selectinload (efficient)
             return db.query(self.model).options(
-                selectinload(self.model.info),
-                selectinload(self.model.inputPorts),
-                selectinload(self.model.outputPorts),
-                # selectinload(self.model.tags) # Tags are loaded via DataProductManager now
+                selectinload(self.model.description),
+                selectinload(self.model.authoritative_definitions),
+                selectinload(self.model.custom_properties),
+                selectinload(self.model.input_ports),
+                selectinload(self.model.output_ports).selectinload(OutputPortDb.sbom),
+                selectinload(self.model.output_ports).selectinload(OutputPortDb.input_contracts),
+                selectinload(self.model.management_ports),
+                selectinload(self.model.support_channels),
+                selectinload(self.model.team).selectinload(DataProductTeamDb.members)
             ).filter(self.model.id == id).first()
         except Exception as e:
-            logger.error(f"Database error fetching normalized DataProduct by id {id}: {e}", exc_info=True)
+            logger.error(f"Database error fetching ODPS DataProduct {id}: {e}", exc_info=True)
             db.rollback()
             raise
 
-    def get_multi(
-        self, db: Session, *, skip: int = 0, limit: int = 100
-    ) -> List[DataProductDb]:
-        logger.debug(f"Fetching multiple DataProducts (DB - norm) with skip: {skip}, limit: {limit}")
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[DataProductDb]:
+        """Get multiple ODPS v1.0.0 Data Products with all relationships eagerly loaded."""
+        logger.debug(f"Fetching multiple ODPS v1.0.0 DataProducts (skip: {skip}, limit: {limit})")
         try:
             return db.query(self.model).options(
-                 selectinload(self.model.info),
-                 selectinload(self.model.inputPorts),
-                 selectinload(self.model.outputPorts),
-                 # selectinload(self.model.tags) # Tags are loaded via DataProductManager now
+                selectinload(self.model.description),
+                selectinload(self.model.authoritative_definitions),
+                selectinload(self.model.custom_properties),
+                selectinload(self.model.input_ports),
+                selectinload(self.model.output_ports).selectinload(OutputPortDb.sbom),
+                selectinload(self.model.output_ports).selectinload(OutputPortDb.input_contracts),
+                selectinload(self.model.management_ports),
+                selectinload(self.model.support_channels),
+                selectinload(self.model.team).selectinload(DataProductTeamDb.members)
             ).offset(skip).limit(limit).all()
         except Exception as e:
-            logger.error(f"Database error fetching multiple normalized DataProducts: {e}", exc_info=True)
+            logger.error(f"Database error fetching multiple ODPS DataProducts: {e}", exc_info=True)
             db.rollback()
             raise
-            
-    # --- Distinct Value Queries (Update for Normalized Schema) --- 
-    def get_distinct_product_types(self, db: Session) -> List[str]:
-        logger.debug("Querying distinct product_types from DB (normalized)...")
+
+    # --- ODPS-specific queries ---
+
+    def get_distinct_statuses(self, db: Session) -> List[str]:
+        """Get distinct status values from ODPS Data Products."""
+        logger.debug("Querying distinct ODPS statuses...")
         try:
-             # Query the DataProductDb table directly for product_type
-             result = db.execute(select(distinct(self.model.product_type)).where(self.model.product_type.isnot(None))).scalars().all()
-             return sorted(list(result))
+            result = db.execute(
+                select(distinct(self.model.status)).where(self.model.status.isnot(None))
+            ).scalars().all()
+            return sorted(list(result))
         except Exception as e:
-             logger.error(f"Error querying distinct product_types (normalized): {e}", exc_info=True)
-             return []
+            logger.error(f"Error querying distinct ODPS statuses: {e}", exc_info=True)
+            return []
+
+    def get_distinct_domains(self, db: Session) -> List[str]:
+        """Get distinct domain values from ODPS Data Products."""
+        logger.debug("Querying distinct ODPS domains...")
+        try:
+            result = db.execute(
+                select(distinct(self.model.domain)).where(self.model.domain.isnot(None))
+            ).scalars().all()
+            return sorted(list(result))
+        except Exception as e:
+            logger.error(f"Error querying distinct ODPS domains: {e}", exc_info=True)
+            return []
+
+    def get_distinct_tenants(self, db: Session) -> List[str]:
+        """Get distinct tenant values from ODPS Data Products."""
+        logger.debug("Querying distinct ODPS tenants...")
+        try:
+            result = db.execute(
+                select(distinct(self.model.tenant)).where(self.model.tenant.isnot(None))
+            ).scalars().all()
+            return sorted(list(result))
+        except Exception as e:
+            logger.error(f"Error querying distinct ODPS tenants: {e}", exc_info=True)
+            return []
+
+    def get_distinct_product_types(self, db: Session) -> List[str]:
+        """Get distinct output port type values from ODPS Data Products."""
+        from src.db_models.data_products import OutputPortDb
+        logger.debug("Querying distinct ODPS product types (output port types)...")
+        try:
+            result = db.execute(
+                select(distinct(OutputPortDb.port_type)).where(OutputPortDb.port_type.isnot(None))
+            ).scalars().all()
+            return sorted(list(result))
+        except Exception as e:
+            logger.error(f"Error querying distinct ODPS product types: {e}", exc_info=True)
+            return []
 
     def get_distinct_owners(self, db: Session) -> List[str]:
-        logger.debug("Querying distinct owners from DB (normalized)...")
+        """Get distinct owner names from ODPS Data Product teams."""
+        from src.db_models.data_products import DataProductTeamMemberDb
+        logger.debug("Querying distinct ODPS product owners...")
         try:
-             result = db.execute(select(distinct(InfoDb.owner_team_id)).where(InfoDb.owner_team_id.isnot(None))).scalars().all()
-             return sorted(list(result))
+            result = db.execute(
+                select(distinct(DataProductTeamMemberDb.name))
+                .where(DataProductTeamMemberDb.role == 'owner')
+                .where(DataProductTeamMemberDb.name.isnot(None))
+            ).scalars().all()
+            return sorted(list(result))
         except Exception as e:
-             logger.error(f"Error querying distinct owners (normalized): {e}", exc_info=True)
-             return []
-        
-    def get_distinct_statuses(self, db: Session) -> List[str]:
-        logger.debug("Querying distinct statuses from DB (normalized)...")
-        statuses = set()
-        try:
-            # 1. Get statuses from info.status
-            info_statuses = db.execute(select(distinct(InfoDb.status)).where(InfoDb.status.isnot(None))).scalars().all()
-            statuses.update(info_statuses)
-            
-            # 2. Get statuses from outputPorts.status
-            port_statuses = db.execute(select(distinct(OutputPortDb.status)).where(OutputPortDb.status.isnot(None))).scalars().all()
-            statuses.update(port_statuses)
-                     
-            return sorted([s for s in statuses if s]) # Filter out None/empty
-        except Exception as e:
-             logger.error(f"Error querying distinct statuses (normalized): {e}", exc_info=True)
-             return []
+            logger.error(f"Error querying distinct ODPS product owners: {e}", exc_info=True)
+            return []
 
-    # --- Project Filtering Methods ---
-    def get_by_project(self, db: Session, project_id: str, skip: int = 0, limit: int = 100) -> List[DataProductDb]:
-        """Get data products filtered by project_id."""
-        logger.debug(f"Fetching DataProducts for project {project_id} with skip: {skip}, limit: {limit}")
+    def get_by_status(self, db: Session, status: str, skip: int = 0, limit: int = 100) -> List[DataProductDb]:
+        """Get ODPS Data Products filtered by status."""
+        logger.debug(f"Fetching ODPS DataProducts with status '{status}' (skip: {skip}, limit: {limit})")
         try:
             return db.query(self.model).options(
-                selectinload(self.model.info),
-                selectinload(self.model.inputPorts),
-                selectinload(self.model.outputPorts),
+                selectinload(self.model.description),
+                selectinload(self.model.input_ports),
+                selectinload(self.model.output_ports),
+                selectinload(self.model.team).selectinload(DataProductTeamDb.members)
+            ).filter(self.model.status == status).offset(skip).limit(limit).all()
+        except Exception as e:
+            logger.error(f"Database error fetching ODPS DataProducts by status: {e}", exc_info=True)
+            db.rollback()
+            raise
+
+    def get_by_domain(self, db: Session, domain: str, skip: int = 0, limit: int = 100) -> List[DataProductDb]:
+        """Get ODPS Data Products filtered by domain."""
+        logger.debug(f"Fetching ODPS DataProducts for domain '{domain}' (skip: {skip}, limit: {limit})")
+        try:
+            return db.query(self.model).options(
+                selectinload(self.model.description),
+                selectinload(self.model.input_ports),
+                selectinload(self.model.output_ports),
+                selectinload(self.model.team).selectinload(DataProductTeamDb.members)
+            ).filter(self.model.domain == domain).offset(skip).limit(limit).all()
+        except Exception as e:
+            logger.error(f"Database error fetching ODPS DataProducts by domain: {e}", exc_info=True)
+            db.rollback()
+            raise
+
+    # --- Project filtering methods (Databricks extension) ---
+
+    def get_by_project(self, db: Session, project_id: str, skip: int = 0, limit: int = 100) -> List[DataProductDb]:
+        """Get ODPS Data Products filtered by project_id (Databricks extension)."""
+        logger.debug(f"Fetching ODPS DataProducts for project {project_id} (skip: {skip}, limit: {limit})")
+        try:
+            return db.query(self.model).options(
+                selectinload(self.model.description),
+                selectinload(self.model.input_ports),
+                selectinload(self.model.output_ports),
+                selectinload(self.model.team).selectinload(DataProductTeamDb.members)
             ).filter(self.model.project_id == project_id).offset(skip).limit(limit).all()
         except Exception as e:
-            logger.error(f"Database error fetching DataProducts by project {project_id}: {e}", exc_info=True)
+            logger.error(f"Database error fetching ODPS DataProducts by project: {e}", exc_info=True)
             db.rollback()
             raise
 
     def get_without_project(self, db: Session, skip: int = 0, limit: int = 100) -> List[DataProductDb]:
-        """Get data products that are not assigned to any project."""
-        logger.debug(f"Fetching DataProducts without project assignment with skip: {skip}, limit: {limit}")
+        """Get ODPS Data Products not assigned to any project."""
+        logger.debug(f"Fetching ODPS DataProducts without project (skip: {skip}, limit: {limit})")
         try:
             return db.query(self.model).options(
-                selectinload(self.model.info),
-                selectinload(self.model.inputPorts),
-                selectinload(self.model.outputPorts),
+                selectinload(self.model.description),
+                selectinload(self.model.input_ports),
+                selectinload(self.model.output_ports),
+                selectinload(self.model.team).selectinload(DataProductTeamDb.members)
             ).filter(self.model.project_id.is_(None)).offset(skip).limit(limit).all()
         except Exception as e:
-            logger.error(f"Database error fetching DataProducts without project: {e}", exc_info=True)
+            logger.error(f"Database error fetching ODPS DataProducts without project: {e}", exc_info=True)
             db.rollback()
             raise
 
     def count_by_project(self, db: Session, project_id: str) -> int:
-        """Count data products for a specific project."""
-        logger.debug(f"Counting DataProducts for project {project_id}")
+        """Count ODPS Data Products for a specific project."""
+        logger.debug(f"Counting ODPS DataProducts for project {project_id}")
         try:
             return db.query(self.model).filter(self.model.project_id == project_id).count()
         except Exception as e:
-            logger.error(f"Database error counting DataProducts by project {project_id}: {e}", exc_info=True)
+            logger.error(f"Database error counting ODPS DataProducts by project: {e}", exc_info=True)
             db.rollback()
             raise
 
+
 # Create a single instance of the repository for use
-# This could also be instantiated within the manager or injected via FastAPI deps
-data_product_repo = DataProductRepository(DataProductDb) 
+data_product_repo = DataProductRepository(DataProductDb)

@@ -1,0 +1,517 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "title": "Open Data Product Standard (ODPS)",
+  "description": "An open data product standard descriptor to enable defining data products.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "id", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "default": "v1.0.0",
+      "description": "Version of the standard used to build data product. Default value is v1.0.0.",
+      "enum": ["v0.9.0", "v1.0.0"]
+    },
+    "kind": {
+      "type": "string",
+      "default": "DataProduct",
+      "description": "The kind of file this is. Valid value is `DataProduct`.",
+      "enum": ["DataProduct"]
+    },
+    "id": {
+      "type": "string",
+      "description": "A unique identifier used to reduce the risk of dataset name collisions, such as a UUID."
+    },
+    "name": {
+      "type": "string",
+      "description": "Name of the data product."
+    },
+    "version": {
+      "type": "string",
+      "description": "Current version of the data product. Not required, but highly recommended."
+    },
+    "status": {
+      "type": "string",
+      "description": "Current status of the data product.",
+      "examples": ["proposed", "draft", "active", "deprecated", "retired"]
+    },
+    "domain": {
+      "type": "string",
+      "description": "Business domain"
+    },
+    "tenant": {
+      "type": "string",
+      "description": "Organization identifier"
+    },
+    "authoritativeDefinitions": {
+      "type": "array",
+      "description": "List of links to sources that provide more details on the data contract.",
+      "items": {
+        "$ref": "#/$defs/AuthoritativeDefinition"
+      }
+    },
+    "description": {
+      "$ref": "#/$defs/Description"
+    },
+    "customProperties": {
+      "type": "array",
+      "description": "A list of key/value pairs for custom properties.",
+      "items": {
+        "$ref": "#/$defs/CustomProperty"
+      }
+    },
+    "tags": {
+      "$ref": "#/$defs/Tags"
+    },
+    "inputPorts": {
+      "type": "array",
+      "description": "List of objects describing an input port. You need at least one as a data product needs to get data somewhere.",
+      "items": {
+        "$ref": "#/$defs/InputPort"
+      }
+    },
+    "outputPorts": {
+      "type": "array",
+      "description": "List of objects describing an output port. You need at least one, as a data product without output is useless.",
+      "items": {
+        "$ref": "#/$defs/OutputPort"
+      }
+    },
+    "managementPorts": {
+      "type": "array",
+      "description": "Management ports define access points for managing the data product.",
+      "items": {
+        "$ref": "#/$defs/ManagementPort"
+      }
+    },
+    "support": {
+      "type": "array",
+      "description": "Support and communication channels.",
+      "items": {
+        "$ref": "#/$defs/Support"
+      }
+    },
+    "team": {
+      "$ref": "#/$defs/Team"
+    },
+    "productCreatedTs": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp in UTC of when the data contract was created, using ISO 8601."
+    }
+  },
+  "$defs": {
+    "Tags": {
+      "type": "array",
+      "description": "A list of tags that may be assigned to the elements (object or property); the tags keyword may appear at any level. Tags may be used to better categorize an element. For example, `finance`, `sensitive`, `employee_record`.",
+      "examples": ["finance", "sensitive", "employee_record"],
+      "items": {
+        "type": "string"
+      }
+    },
+    "Description": {
+      "type": "object",
+      "description": "Object containing the descriptions.",
+      "additionalProperties": false,
+      "properties": {
+        "purpose": {
+          "type": "string",
+          "description": "Intended purpose for the provided data."
+        },
+        "limitations": {
+          "type": "string",
+          "description": "Technical, compliance, and legal limitations for data use."
+        },
+        "usage": {
+          "type": "string",
+          "description": "Recommended usage of the data."
+        },
+        "authoritativeDefinitions": {
+          "type": "array",
+          "description": "List of links to sources that provide more details on the data contract.",
+          "items": {
+            "$ref": "#/$defs/AuthoritativeDefinition"
+          }
+        },
+        "customProperties": {
+          "type": "array",
+          "description": "A list of key/value pairs for custom properties.",
+          "items": {
+            "$ref": "#/$defs/CustomProperty"
+          }
+        }
+      }
+    },
+    "CustomProperty": {
+      "type": "object",
+      "description": "A key/value pair for custom properties.",
+      "additionalProperties": false,
+      "properties": {
+        "property": {
+          "type": "string",
+          "description": "The name of the key. Names should be in camel case, the same as if they were permanent properties in the contract."
+        },
+        "value": {
+          "description": "The value of the key."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description."
+        }
+      },
+      "required": ["property", "value"]
+    },
+    "AuthoritativeDefinition": {
+      "type": "object",
+      "description": "A type/link pair for authoritative definitions.",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Type of definition for authority.",
+          "examples": ["businessDefinition", "transformationImplementation", "videoTutorial", "tutorial", "implementation"]
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to the authority."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description."
+        }
+      },
+      "required": ["type", "url"]
+    },
+    "InputPort": {
+      "type": "object",
+      "description": "An input port describing expectations.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the input port."
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of the input port."
+        },
+        "contractId": {
+          "type": "string",
+          "description": "Contract ID for the input port."
+        },
+        "tags": {
+          "$ref": "#/$defs/Tags"
+        },
+        "customProperties": {
+          "type": "array",
+          "description": "Custom properties block.",
+          "items": {
+            "$ref": "#/$defs/CustomProperty"
+          }
+        },
+        "authoritativeDefinitions": {
+          "type": "array",
+          "description": "Authoritative definitions block.",
+          "items": {
+            "$ref": "#/$defs/AuthoritativeDefinition"
+          }
+        }
+      },
+      "required": ["name", "version", "contractId"]
+    },
+    "OutputPort": {
+      "type": "object",
+      "description": "An output port describing promises.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the output port."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human readable short description of the output port."
+        },
+        "type": {
+          "type": "string",
+          "description": "There can be different types of output ports, each automated and handled differently. Here you can indicate the type."
+        },
+        "version": {
+          "type": "string",
+          "description": "For each version, a different instance of the output port is listed. The combination of the name and version is the key."
+        },
+        "contractId": {
+          "type": "string",
+          "description": "Contract ID for the output port."
+        },
+        "sbom": {
+          "type": "array",
+          "description": "The SBOM can/should be at the version level.",
+          "items": {
+            "$ref": "#/$defs/SBOM"
+          }
+        },
+        "inputContracts": {
+          "type": "array",
+          "description": "Dependencies or input contracts.",
+          "items": {
+            "$ref": "#/$defs/InputContract"
+          }
+        },
+        "tags": {
+          "$ref": "#/$defs/Tags"
+        },
+        "customProperties": {
+          "type": "array",
+          "description": "Custom properties block.",
+          "items": {
+            "$ref": "#/$defs/CustomProperty"
+          }
+        },
+        "authoritativeDefinitions": {
+          "type": "array",
+          "description": "Authoritative definitions block.",
+          "items": {
+            "$ref": "#/$defs/AuthoritativeDefinition"
+          }
+        }
+      },
+      "required": ["name", "version"]
+    },
+    "SBOM": {
+      "type": "object",
+      "description": "Software Bill of Materials.",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "default": "external",
+          "description": "Type of SBOM."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to the SBOM."
+        }
+      },
+      "required": ["url"]
+    },
+    "InputContract": {
+      "type": "object",
+      "description": "Input contract dependency.",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Contract ID or contractId."
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of the input contract."
+        }
+      },
+      "required": ["id", "version"]
+    },
+    "ManagementPort": {
+      "type": "object",
+      "description": "Management port for managing the data product.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Endpoint identifier or unique name."
+        },
+        "content": {
+          "type": "string",
+          "description": "Content type.",
+          "examples": ["discoverability", "observability", "control", "dictionary"]
+        },
+        "type": {
+          "type": "string",
+          "default": "rest",
+          "description": "Type: can be `rest` or `topic`. Default is `rest`.",
+          "examples": ["rest", "topic"]
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to access the endpoint."
+        },
+        "channel": {
+          "type": "string",
+          "description": "Channel to communicate with the data product."
+        },
+        "description": {
+          "type": "string",
+          "description": "Purpose and usage."
+        },
+        "tags": {
+          "$ref": "#/$defs/Tags"
+        },
+        "customProperties": {
+          "type": "array",
+          "description": "Custom properties block.",
+          "items": {
+            "$ref": "#/$defs/CustomProperty"
+          }
+        },
+        "authoritativeDefinitions": {
+          "type": "array",
+          "description": "Authoritative definitions block.",
+          "items": {
+            "$ref": "#/$defs/AuthoritativeDefinition"
+          }
+        }
+      },
+      "required": ["name", "content"]
+    },
+    "Support": {
+      "type": "object",
+      "description": "Support channel.",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "type": "string",
+          "description": "Channel name or identifier."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Access URL using normal URL scheme (https, mailto, etc.)."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the channel, free text."
+        },
+        "tool": {
+          "type": "string",
+          "description": "Name of the tool.",
+          "examples": ["email", "slack", "teams", "discord", "ticket", "other"]
+        },
+        "scope": {
+          "type": "string",
+          "description": "Scope can be: `interactive`, `announcements`, `issues`.",
+          "examples": ["interactive", "announcements", "issues"]
+        },
+        "invitationUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Some tools uses invitation URL for requesting or subscribing. Follows the URL scheme."
+        },
+        "tags": {
+          "$ref": "#/$defs/Tags"
+        },
+        "customProperties": {
+          "type": "array",
+          "description": "Custom properties block.",
+          "items": {
+            "$ref": "#/$defs/CustomProperty"
+          }
+        },
+        "authoritativeDefinitions": {
+          "type": "array",
+          "description": "Authoritative definitions block.",
+          "items": {
+            "$ref": "#/$defs/AuthoritativeDefinition"
+          }
+        }
+      },
+      "required": ["channel", "url"]
+    },
+    "TeamMember": {
+      "type": "object",
+      "description": "Team member information.",
+      "additionalProperties": false,
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "The user's username or email."
+        },
+        "name": {
+          "type": "string",
+          "description": "The user's name."
+        },
+        "description": {
+          "type": "string",
+          "description": "The user's description."
+        },
+        "role": {
+          "type": "string",
+          "description": "The user's job role; Examples might be owner, data steward. There is no limit on the role."
+        },
+        "dateIn": {
+          "type": "string",
+          "format": "date",
+          "description": "The date when the user joined the team."
+        },
+        "dateOut": {
+          "type": "string",
+          "format": "date",
+          "description": "The date when the user ceased to be part of the team."
+        },
+        "replacedByUsername": {
+          "type": "string",
+          "description": "The username of the user who replaced the previous user."
+        },
+        "tags": {
+          "$ref": "#/$defs/Tags"
+        },
+        "customProperties": {
+          "type": "array",
+          "description": "Custom properties block.",
+          "items": {
+            "$ref": "#/$defs/CustomProperty"
+          }
+        },
+        "authoritativeDefinitions": {
+          "type": "array",
+          "description": "Authoritative definitions block.",
+          "items": {
+            "$ref": "#/$defs/AuthoritativeDefinition"
+          }
+        }
+      },
+      "required": ["username"]
+    },
+    "Team": {
+      "type": "object",
+      "description": "Team information.",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Team name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Team description."
+        },
+        "members": {
+          "type": "array",
+          "description": "List of members.",
+          "items": {
+            "$ref": "#/$defs/TeamMember"
+          }
+        },
+        "tags": {
+          "$ref": "#/$defs/Tags"
+        },
+        "customProperties": {
+          "type": "array",
+          "description": "Custom properties block.",
+          "items": {
+            "$ref": "#/$defs/CustomProperty"
+          }
+        },
+        "authoritativeDefinitions": {
+          "type": "array",
+          "description": "Authoritative definitions block.",
+          "items": {
+            "$ref": "#/$defs/AuthoritativeDefinition"
+          }
+        }
+      }
+    }
+  }
+}

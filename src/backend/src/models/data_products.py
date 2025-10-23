@@ -1,143 +1,179 @@
-from datetime import datetime
+"""
+ODPS v1.0.0 (Open Data Product Standard) API Models
+
+This module implements Pydantic models for the Bitol ODPS v1.0.0 specification.
+Schema: https://github.com/bitol-io/open-data-product-standard/blob/main/schema/odps-json-schema-v1.0.0.json
+
+These models are used for API request/response validation and serialization.
+"""
+
+from datetime import datetime, date
 from enum import Enum
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any
 import json
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator, computed_field
+from pydantic import BaseModel, Field, field_validator
 
 from .tags import AssignedTag, AssignedTagCreate
 
-# Get a logger instance for this module
 from src.common.logging import get_logger
 logger = get_logger(__name__)
 
-class DataProductType(str, Enum):
-    SOURCE = "source"
-    SOURCE_ALIGNED = "source-aligned"
-    AGGREGATE = "aggregate"
-    CONSUMER_ALIGNED = "consumer-aligned"
-    SINK = "sink"
+
+# ============================================================================
+# ODPS v1.0.0 Enums
+# ============================================================================
 
 class DataProductStatus(str, Enum):
+    """ODPS v1.0.0 Status values"""
+    PROPOSED = "proposed"
     DRAFT = "draft"
-    SANDBOX = "sandbox"
-    PENDING_CERTIFICATION = "pending_certification"
-    CERTIFIED = "certified"
-    CANDIDATE = "candidate"
-    IN_DEVELOPMENT = "in-development"
     ACTIVE = "active"
     DEPRECATED = "deprecated"
-    ARCHIVED = "archived"
     RETIRED = "retired"
-    DELETED = "deleted"
 
-class SchemaField(BaseModel):
-    name: str
-    type: str
-    description: Optional[str] = None
 
-class DataSource(BaseModel):
-    name: str
-    type: str
-    connection: str
+# ============================================================================
+# Shared Validators
+# ============================================================================
 
-class DataOutput(BaseModel):
-    name: str
-    type: str
-    location: str
-    data_fields: List[SchemaField] = Field(..., alias="schema")
-
-class Info(BaseModel):
-    title: str = Field(..., description="The display name of this data product", example="Search Queries all")
-    owner_team_id: Optional[str] = Field(None, description="The UUID of the team that owns the data product")
-    domain: Optional[str] = Field(None, description="The technical id of the domain", example="ecommerce")
-    description: Optional[str] = Field(None, example="All search queries with user interactions")
-    status: Optional[str] = Field(None, description="Status like 'proposed', 'in development', 'active', 'retired'", example="active")
-    archetype: Optional[str] = Field(None, description="The domain data archetype, e.g., 'consumer-aligned', 'aggregate', 'source-aligned'", example="consumer-aligned")
-    maturity: Optional[str] = Field(None, description="Deprecated maturity level", example="managed", deprecated=True)
-
-    model_config = {
-        "from_attributes": True # Pydantic v2 alias for orm_mode
-    }
-
-class Link(BaseModel):
-    href: HttpUrl
-    rel: Optional[str] = None
-    type: Optional[str] = None
-
-    model_config = {
-        "from_attributes": True
-    }
-
-# --- Shared Validator --- 
 def parse_json_if_string(v: Any) -> Any:
     """Parses input if it's a string, returns original otherwise."""
     if isinstance(v, str):
         try:
             return json.loads(v)
         except json.JSONDecodeError:
-            # Let standard validation handle errors for invalid JSON
-            pass 
+            pass
     return v
 
-class Port(BaseModel):
-    id: str = Field(..., description="A technical identifier for this port", example="kafka_search_topic")
-    name: str = Field(..., description="The display name for this port", example="kafka_search_topic")
-    description: Optional[str] = Field(None, description="The description for this port")
-    type: Optional[str] = Field(None, description="The technical type of the port (e.g., 'Kafka', 'snowflake')")
-    assetType: Optional[str] = Field(None, alias="asset_type", description="Type of linked Databricks asset (e.g., 'table', 'notebook', 'job')", example="table")
-    assetIdentifier: Optional[str] = Field(None, alias="asset_identifier", description="Unique identifier for the linked asset (e.g., catalog.schema.table, /path/to/notebook, job_id)", example="main.data.raw_sales")
-    location: Optional[str] = Field(None, description="Location details (e.g., topic name, table name)")
-    links: Optional[Dict[str, str]] = Field(default_factory=dict, description="Links to external resources like schemas or catalogs")
-    custom: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Custom fields")
-    tags: Optional[List[AssignedTag]] = Field(default_factory=list, description="Rich tags with metadata")
 
-    # Validator for fields stored as JSON string in DB Port models
-    _parse_port_json_fields = field_validator('links', 'custom', 'tags', mode='before')(parse_json_if_string)
+# ============================================================================
+# ODPS v1.0.0 Core Models
+# ============================================================================
 
-    model_config = {
-        "from_attributes": True,
-        "populate_by_name": True # Allow using DB column names
-    }
+class AuthoritativeDefinition(BaseModel):
+    """ODPS v1.0.0 Authoritative Definition"""
+    type: str = Field(..., description="Type of definition (businessDefinition, transformationImplementation, etc.)")
+    url: str = Field(..., description="URL to the authoritative source")
+    description: Optional[str] = Field(None, description="Optional description")
 
-class InputPort(Port):
-    sourceSystemId: str = Field(..., description="Technical identifier for the source system", example="search-service")
-    sourceOutputPortId: Optional[str] = Field(None, description="The specific output port ID on the source system this input connects to")
+    model_config = {"from_attributes": True}
+
+
+class CustomProperty(BaseModel):
+    """ODPS v1.0.0 Custom Property"""
+    property: str = Field(..., description="Property name in camelCase")
+    value: Any = Field(..., description="Property value (can be any type)")
+    description: Optional[str] = Field(None, description="Optional description")
+
+    model_config = {"from_attributes": True}
+
+
+class Description(BaseModel):
+    """ODPS v1.0.0 Structured Description"""
+    purpose: Optional[str] = Field(None, description="Intended purpose for the provided data")
+    limitations: Optional[str] = Field(None, description="Technical, compliance, and legal limitations for data use")
+    usage: Optional[str] = Field(None, description="Recommended usage of the data")
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Links to authoritative sources")
+    customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties for description")
+
+    model_config = {"from_attributes": True}
+
+
+# ============================================================================
+# ODPS v1.0.0 Port Models
+# ============================================================================
+
+class InputPort(BaseModel):
+    """ODPS v1.0.0 Input Port"""
+    # ODPS required fields
+    name: str = Field(..., description="Name of the input port")
+    version: str = Field(..., description="Version of the input port")
+    contractId: str = Field(..., alias="contract_id", description="Contract ID for the input port (REQUIRED in ODPS)")
+
+    # ODPS optional fields
+    tags: Optional[List[str]] = Field(None, description="Tags for categorization")
+    customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
+
+    # Databricks extensions
+    assetType: Optional[str] = Field(None, alias="asset_type", description="Type of Databricks asset (table, notebook, job)")
+    assetIdentifier: Optional[str] = Field(None, alias="asset_identifier", description="Unique identifier for the asset")
 
     model_config = {
         "from_attributes": True,
         "populate_by_name": True
     }
+
+
+class SBOM(BaseModel):
+    """ODPS v1.0.0 Software Bill of Materials"""
+    type: str = Field("external", description="Type of SBOM")
+    url: str = Field(..., description="URL to the SBOM")
+
+    model_config = {"from_attributes": True}
+
+
+class InputContract(BaseModel):
+    """ODPS v1.0.0 Input Contract (Dependency)"""
+    id: str = Field(..., alias="contract_id", description="Contract ID or contractId")
+    version: str = Field(..., alias="contract_version", description="Version of the input contract")
+
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True
+    }
+
 
 class Server(BaseModel):
-    project: Optional[str] = Field(None, description="The project name (bigquery)", example="dp-search")
-    dataset: Optional[str] = Field(None, description="The dataset name (bigquery)", example="search-queries")
-    account: Optional[str] = Field(None, description="The account name (snowflake)", example="https://acme-test_aws_us_east_2.snowflakecomputing.com")
-    database: Optional[str] = Field(None, description="The database name (snowflake,postgres)", example="SEARCH_DB")
-    schema_name: Optional[str] = Field(None, alias="schema", description="The schema name (snowflake,postgres)", example="SEARCH_QUERIES_ALL_NPII_V1")
-    host: Optional[str] = Field(None, description="The host name (kafka)", example="kafka.acme.com")
-    topic: Optional[str] = Field(None, description="The topic name (kafka)", example="search-queries")
-    location: Optional[str] = Field(None, description="The location url (s3)", example="s3://acme-search-queries")
-    delimiter: Optional[str] = Field(None, description="The delimiter (s3)", example="'newline'")
-    format: Optional[str] = Field(None, description="The format of the data (s3)", example="'json'")
-    table: Optional[str] = Field(None, description="The table name (postgres)", example="search_queries")
-    view: Optional[str] = Field(None, description="The view name (postgres)", example="search_queries")
-    share: Optional[str] = Field(None, description="The share name (databricks)")
-    additionalProperties: Optional[str] = Field(None, description="Field for additional server properties, expected as a single string by the schema.")
+    """Databricks extension - Connection details for output ports"""
+    project: Optional[str] = Field(None, description="Project name (BigQuery)")
+    dataset: Optional[str] = Field(None, description="Dataset name (BigQuery)")
+    account: Optional[str] = Field(None, description="Account name (Snowflake)")
+    database: Optional[str] = Field(None, description="Database name (Snowflake, Postgres)")
+    schema_name: Optional[str] = Field(None, alias="schema", description="Schema name (Snowflake, Postgres)")
+    host: Optional[str] = Field(None, description="Host name (Kafka)")
+    topic: Optional[str] = Field(None, description="Topic name (Kafka)")
+    location: Optional[str] = Field(None, description="Location URL (S3)")
+    delimiter: Optional[str] = Field(None, description="Delimiter (S3)")
+    format: Optional[str] = Field(None, description="Format of the data (S3)")
+    table: Optional[str] = Field(None, description="Table name (Postgres)")
+    view: Optional[str] = Field(None, description="View name (Postgres)")
+    share: Optional[str] = Field(None, description="Share name (Databricks)")
+    additionalProperties: Optional[str] = Field(None, description="Additional server properties")
+
+    _parse_server_json = field_validator('*', mode='before')(parse_json_if_string)
 
     model_config = {
         "from_attributes": True,
         "populate_by_name": True
     }
 
-class OutputPort(Port):
-    status: Optional[str] = Field(None, description="Status of the output port implementation", example="active")
-    server: Optional[Server] = Field(None, description="Connection details for the actual data")
-    containsPii: bool = Field(False, description="Flag if this output port contains PII")
-    autoApprove: bool = Field(False, description="Automatically approve requested data usage agreements")
-    dataContractId: Optional[str] = Field(None, description="Technical identifier of the data contract", example="search-queries-all")
 
-    # Validator for the 'server' field stored as JSON string in OutputPortDb
+class OutputPort(BaseModel):
+    """ODPS v1.0.0 Output Port"""
+    # ODPS required fields
+    name: str = Field(..., description="Name of the output port")
+    version: str = Field(..., description="Version of the output port")
+
+    # ODPS optional fields
+    description: Optional[str] = Field(None, description="Description of the output port")
+    type: Optional[str] = Field(None, alias="port_type", description="Type of output port")
+    contractId: Optional[str] = Field(None, alias="contract_id", description="Contract ID for the output port")
+    sbom: Optional[List[SBOM]] = Field(None, description="Software Bill of Materials")
+    inputContracts: Optional[List[InputContract]] = Field(None, alias="input_contracts", description="Input contract dependencies")
+    tags: Optional[List[str]] = Field(None, description="Tags for categorization")
+    customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
+
+    # Databricks extensions
+    assetType: Optional[str] = Field(None, alias="asset_type", description="Type of Databricks asset")
+    assetIdentifier: Optional[str] = Field(None, alias="asset_identifier", description="Unique identifier for the asset")
+    status: Optional[str] = Field(None, description="Status of the output port")
+    server: Optional[Server] = Field(None, description="Connection details")
+    containsPii: bool = Field(False, alias="contains_pii", description="Contains PII flag")
+    autoApprove: bool = Field(False, alias="auto_approve", description="Auto-approve flag")
+
     _parse_server_json = field_validator('server', mode='before')(parse_json_if_string)
 
     model_config = {
@@ -145,111 +181,198 @@ class OutputPort(Port):
         "populate_by_name": True
     }
 
-class DataProduct(BaseModel):
-    dataProductSpecification: str = Field("0.0.1", description="Version of the Data Product Specification")
-    id: str = Field(..., description="Organizational unique technical identifier", example="search-queries-all")
-    info: Info = Field(..., description="Information about the data product")
-    version: str = Field("1.0.0", description="Version identifier for the data product", example="1.0.0")
-    productType: DataProductType = Field(..., alias='product_type', description="Type indicating the stage in the data flow", example=DataProductType.CONSUMER_ALIGNED)
-    inputPorts: Optional[List[InputPort]] = Field(default_factory=list, description="List of input ports")
-    outputPorts: Optional[List[OutputPort]] = Field(default_factory=list, description="List of output ports")
-    links: Optional[Dict[str, str]] = Field(default_factory=dict)
-    custom: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    # Rich tags with metadata
-    tags: Optional[List[AssignedTag]] = Field(default_factory=list, description="Rich tags with metadata")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-    # Validator for fields stored as JSON string in DataProductDb
-    _parse_root_json_fields = field_validator('links', 'custom', mode='before')(parse_json_if_string)
+# ============================================================================
+# ODPS v1.0.0 Management Port (NEW)
+# ============================================================================
 
-    # Rich tags are now handled through AssignedTag objects
+class ManagementPort(BaseModel):
+    """ODPS v1.0.0 Management Port - For observability, control, etc."""
+    # ODPS required fields
+    name: str = Field(..., description="Endpoint identifier or unique name")
+    content: str = Field(..., description="Content type (discoverability, observability, control, dictionary)")
 
-    model_config = {
-        "use_enum_values": True,
-        "populate_by_name": True,
-        "from_attributes": True
-    }
-
-
-# --- Request Models ---
-
-class GenieSpaceRequest(BaseModel):
-    """Request model for initiating Genie Space creation."""
-    product_ids: List[str] = Field(..., description="List of Data Product IDs to include in the Genie Space.")
-
-class NewVersionRequest(BaseModel):
-    """Request model for creating a new version of a Data Product."""
-    new_version: str = Field(..., description="The new version string (e.g., 1.1.0, 2.0.0)", example="1.1.0")
-    # Optional fields could be added later, e.g.:
-    # copy_tags: bool = Field(True, description="Copy tags from the original version.")
-    # reset_status_to_draft: bool = Field(True, description="Reset the status of the new version to 'draft'.")
-
-# --- Create Models for Input (Accept both simple strings and rich tags) ---
-
-class PortCreate(BaseModel):
-    """Create model for ports that accepts both string and rich tags"""
-    id: str = Field(..., description="A technical identifier for this port")
-    name: str = Field(..., description="The display name for this port")
-    description: Optional[str] = Field(None, description="The description for this port")
-    type: Optional[str] = Field(None, description="The technical type of the port")
-    assetType: Optional[str] = Field(None, alias="asset_type", description="Type of linked Databricks asset")
-    assetIdentifier: Optional[str] = Field(None, alias="asset_identifier", description="Unique identifier for the linked asset")
-    location: Optional[str] = Field(None, description="Location details")
-    links: Optional[Dict[str, str]] = Field(default_factory=dict, description="Links to external resources")
-    custom: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Custom fields")
-    tags: Optional[List[AssignedTagCreate]] = Field(default_factory=list, description="Rich tags with metadata")
+    # ODPS optional fields
+    type: str = Field("rest", alias="port_type", description="Type (rest or topic)")
+    url: Optional[str] = Field(None, description="URL to access the endpoint")
+    channel: Optional[str] = Field(None, description="Channel to communicate with the data product")
+    description: Optional[str] = Field(None, description="Purpose and usage")
+    tags: Optional[List[str]] = Field(None, description="Tags")
+    customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
 
     model_config = {
         "from_attributes": True,
         "populate_by_name": True
     }
 
-class InputPortCreate(PortCreate):
-    """Create model for input ports"""
-    sourceSystemId: str = Field(..., description="Technical identifier for the source system")
-    sourceOutputPortId: Optional[str] = Field(None, description="The specific output port ID on the source system")
 
-class OutputPortCreate(PortCreate):
-    """Create model for output ports"""
-    status: Optional[str] = Field(None, description="Status of the output port implementation")
-    server: Optional[Server] = Field(None, description="Connection details for the actual data")
-    containsPii: bool = Field(False, description="Flag if this output port contains PII")
-    autoApprove: bool = Field(False, description="Automatically approve requested data usage agreements")
-    dataContractId: Optional[str] = Field(None, description="Technical identifier of the data contract")
+# ============================================================================
+# ODPS v1.0.0 Support Channel
+# ============================================================================
 
-class DataProductCreate(BaseModel):
-    """Create model for data products that accepts both string and rich tags"""
-    dataProductSpecification: str = Field("0.0.1", description="Version of the Data Product Specification")
-    id: str = Field(..., description="Organizational unique technical identifier")
-    info: Info = Field(..., description="Information about the data product")
-    version: str = Field("1.0.0", description="Version identifier for the data product")
-    productType: DataProductType = Field(..., alias='product_type', description="Type indicating the stage in the data flow")
-    inputPorts: Optional[List[InputPortCreate]] = Field(default_factory=list, description="List of input ports")
-    outputPorts: Optional[List[OutputPortCreate]] = Field(default_factory=list, description="List of output ports")
-    links: Optional[Dict[str, str]] = Field(default_factory=dict)
-    custom: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    tags: Optional[List[AssignedTagCreate]] = Field(default_factory=list, description="Rich tags with metadata")
+class Support(BaseModel):
+    """ODPS v1.0.0 Support Channel"""
+    # ODPS required fields
+    channel: str = Field(..., description="Channel name or identifier")
+    url: str = Field(..., description="Access URL")
+
+    # ODPS optional fields
+    description: Optional[str] = Field(None, description="Description of the channel")
+    tool: Optional[str] = Field(None, description="Tool name (email, slack, teams, discord, ticket, other)")
+    scope: Optional[str] = Field(None, description="Scope (interactive, announcements, issues)")
+    invitationUrl: Optional[str] = Field(None, alias="invitation_url", description="Invitation URL")
+    tags: Optional[List[str]] = Field(None, description="Tags")
+    customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
 
     model_config = {
-        "use_enum_values": True,
-        "populate_by_name": True,
-        "from_attributes": True
+        "from_attributes": True,
+        "populate_by_name": True
     }
 
-class DataProductUpdate(BaseModel):
-    """Update model for data products"""
-    info: Optional[Info] = Field(None, description="Information about the data product")
-    version: Optional[str] = Field(None, description="Version identifier for the data product")
-    productType: Optional[DataProductType] = Field(None, alias='product_type', description="Type indicating the stage in the data flow")
-    inputPorts: Optional[List[InputPortCreate]] = Field(None, description="List of input ports")
-    outputPorts: Optional[List[OutputPortCreate]] = Field(None, description="List of output ports")
-    links: Optional[Dict[str, str]] = Field(None)
-    custom: Optional[Dict[str, Any]] = Field(None)
-    tags: Optional[List[AssignedTagCreate]] = Field(None, description="Rich tags with metadata")
+
+# ============================================================================
+# ODPS v1.0.0 Team
+# ============================================================================
+
+class TeamMember(BaseModel):
+    """ODPS v1.0.0 Team Member"""
+    # ODPS required fields
+    username: str = Field(..., description="User's username or email")
+
+    # ODPS optional fields
+    name: Optional[str] = Field(None, description="User's name")
+    description: Optional[str] = Field(None, description="User's description")
+    role: Optional[str] = Field(None, description="User's role (owner, data steward, etc.)")
+    dateIn: Optional[date] = Field(None, alias="date_in", description="Date when user joined")
+    dateOut: Optional[date] = Field(None, alias="date_out", description="Date when user left")
+    replacedByUsername: Optional[str] = Field(None, alias="replaced_by_username", description="Replacement username")
+    tags: Optional[List[str]] = Field(None, description="Tags")
+    customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
 
     model_config = {
-        "use_enum_values": True,
-        "populate_by_name": True,
-        "from_attributes": True
+        "from_attributes": True,
+        "populate_by_name": True
+    }
+
+
+class Team(BaseModel):
+    """ODPS v1.0.0 Team"""
+    name: Optional[str] = Field(None, description="Team name")
+    description: Optional[str] = Field(None, description="Team description")
+    members: Optional[List[TeamMember]] = Field(None, description="List of team members")
+    tags: Optional[List[str]] = Field(None, description="Tags")
+    customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
+
+    model_config = {"from_attributes": True}
+
+
+# ============================================================================
+# ODPS v1.0.0 Data Product (Main Model)
+# ============================================================================
+
+class DataProduct(BaseModel):
+    """ODPS v1.0.0 Data Product"""
+    # ODPS v1.0.0 required fields
+    apiVersion: str = Field("v1.0.0", description="Version of the ODPS standard")
+    kind: str = Field("DataProduct", description="Resource type")
+    id: str = Field(..., description="Unique identifier")
+    status: str = Field(..., description="Status (proposed, draft, active, deprecated, retired)")
+
+    # ODPS v1.0.0 optional fields
+    name: Optional[str] = Field(None, description="Name of the data product")
+    version: Optional[str] = Field(None, description="Version of the data product")
+    domain: Optional[str] = Field(None, description="Business domain")
+    tenant: Optional[str] = Field(None, description="Organization identifier")
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
+    description: Optional[Description] = Field(None, description="Structured description")
+    customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
+    tags: Optional[List[str]] = Field(None, description="Tags for categorization")
+    inputPorts: Optional[List[InputPort]] = Field(None, alias="input_ports", description="Input ports")
+    outputPorts: Optional[List[OutputPort]] = Field(None, alias="output_ports", description="Output ports")
+    managementPorts: Optional[List[ManagementPort]] = Field(None, alias="management_ports", description="Management ports")
+    support: Optional[List[Support]] = Field(None, alias="support_channels", description="Support channels")
+    team: Optional[Team] = Field(None, description="Team information")
+    productCreatedTs: Optional[datetime] = Field(None, alias="product_created_ts", description="Product creation timestamp")
+
+    # Audit fields (not in ODPS, but useful)
+    created_at: Optional[datetime] = Field(None, description="Record creation timestamp")
+    updated_at: Optional[datetime] = Field(None, description="Record update timestamp")
+
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True
+    }
+
+
+# ============================================================================
+# Request/Response Models
+# ============================================================================
+
+class GenieSpaceRequest(BaseModel):
+    """Request model for initiating Genie Space creation."""
+    product_ids: List[str] = Field(..., description="List of Data Product IDs to include in the Genie Space")
+
+
+class NewVersionRequest(BaseModel):
+    """Request model for creating a new version of a Data Product."""
+    new_version: str = Field(..., description="The new version string (e.g., 1.1.0, 2.0.0)")
+
+
+# ============================================================================
+# Create/Update Models
+# ============================================================================
+
+class DataProductCreate(BaseModel):
+    """Create model for Data Products"""
+    # ODPS v1.0.0 required
+    apiVersion: str = Field("v1.0.0", description="ODPS version")
+    kind: str = Field("DataProduct", description="Resource type")
+    id: str = Field(..., description="Unique identifier")
+    status: str = Field("draft", description="Initial status")
+
+    # ODPS optional
+    name: Optional[str] = Field(None, description="Product name")
+    version: Optional[str] = Field(None, description="Product version")
+    domain: Optional[str] = Field(None, description="Domain")
+    tenant: Optional[str] = Field(None, description="Tenant")
+    description: Optional[Description] = Field(None, description="Description")
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
+    customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
+    tags: Optional[List[str]] = Field(None, description="Tags")
+    inputPorts: Optional[List[InputPort]] = Field(None, description="Input ports")
+    outputPorts: Optional[List[OutputPort]] = Field(None, description="Output ports")
+    managementPorts: Optional[List[ManagementPort]] = Field(None, description="Management ports")
+    support: Optional[List[Support]] = Field(None, description="Support channels")
+    team: Optional[Team] = Field(None, description="Team")
+
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True
+    }
+
+
+class DataProductUpdate(BaseModel):
+    """Update model for Data Products"""
+    name: Optional[str] = None
+    version: Optional[str] = None
+    status: Optional[str] = None
+    domain: Optional[str] = None
+    tenant: Optional[str] = None
+    description: Optional[Description] = None
+    authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = None
+    customProperties: Optional[List[CustomProperty]] = None
+    tags: Optional[List[str]] = None
+    inputPorts: Optional[List[InputPort]] = None
+    outputPorts: Optional[List[OutputPort]] = None
+    managementPorts: Optional[List[ManagementPort]] = None
+    support: Optional[List[Support]] = None
+    team: Optional[Team] = None
+
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True
     }

@@ -1,362 +1,437 @@
-# Retail Sales Optimization Example Chain (v1.0)
+# ODPS v1.0.0 Demo Data Products
+# Retail Sales Optimization Example Chain
+
 # --- 1. Source Product: POS Transactions ---
-- dataProductSpecification: "0.0.1"
+- apiVersion: "v1.0.0"
+  kind: "DataProduct"
   id: "retail-pos-source-v1"
+  status: "active"
+  name: "POS Transaction Stream v1"
   version: "1.0.0"
-  productType: "source"
-  info:
-    title: "POS Transaction Stream v1"
-    owner_team: "data-engineering"
-    domain: "Retail Operations"
-    description: "Raw point-of-sale transaction stream from store systems."
-    status: "active"
-  inputPorts: [] # Source product has no inputs defined within this system
+  domain: "Retail Operations"
+  tenant: "retail-demo"
+  description:
+    purpose: "Provide real-time point-of-sale transaction data from store systems for downstream analytics and operational use cases."
+    usage: "Consume this stream for real-time fraud detection, inventory tracking, or as a foundation for prepared analytics datasets."
+    limitations: "Raw data format may contain system-specific codes. Some transactions may have delayed timestamps."
+  inputPorts: [] # Source product has no inputs
   outputPorts:
-    - id: "pos-kafka-stream-v1"
-      name: "POS Kafka Stream"
-      description: "Real-time feed of raw POS transaction events."
+    - name: "POS Kafka Stream"
+      version: "1.0.0"
+      description: "Real-time feed of raw POS transaction events"
       type: "kafka"
       status: "active"
       server:
         host: "kafka.example.com"
         topic: "pos-transactions-raw-v1"
       tags:
-        - tag_fqn: "default/kafka"
-        - tag_fqn: "default/realtime"
-        - tag_fqn: "default/pos"
-        - tag_fqn: "default/raw"
+        - "kafka"
+        - "realtime"
+        - "pos"
+        - "raw"
+  managementPorts:
+    - name: "pos-observability"
+      content: "observability"
+      type: "rest"
+      url: "https://observability.example.com/pos-source/metrics"
+      description: "Prometheus metrics for stream health and throughput"
+  support:
+    - channel: "pos-stream-support"
+      url: "https://slack.com/channels/pos-stream-support"
+      tool: "slack"
+      scope: "interactive"
+      description: "24/7 support channel for POS stream issues"
+  team:
+    name: "Data Engineering"
+    members:
+      - username: "eng-lead@example.com"
+        name: "Alice Engineer"
+        role: "owner"
   tags:
-    - tag_fqn: "default/source"
-    - tag_fqn: "default/pos"
-    - tag_fqn: "default/transactions"
-    - tag_fqn: "default/v1"
-  links:
-    sourceSystemDocs: "https://wiki.example.com/systems/pos-system"
+    - "source"
+    - "pos"
+    - "transactions"
+    - "v1"
+  authoritativeDefinitions:
+    - type: "businessDefinition"
+      url: "https://wiki.example.com/systems/pos-system"
+      description: "POS system documentation"
 
 # --- 2. Source-Aligned Product: Prepared Sales Transactions ---
-- dataProductSpecification: "0.0.1"
+- apiVersion: "v1.0.0"
+  kind: "DataProduct"
   id: "retail-sales-prepared-v1"
+  status: "active"
+  name: "Prepared Sales Transactions v1"
   version: "1.0.0"
-  productType: "source-aligned"
-  info:
-    title: "Prepared Sales Transactions v1"
-    owner_team: "data-engineering"
-    domain: "Retail Analytics"
-    description: "Cleaned, validated, and standardized sales transaction data, ready for analytics."
-    status: "active"
+  domain: "Retail Analytics"
+  tenant: "retail-demo"
+  description:
+    purpose: "Provide cleaned, validated, and standardized sales transaction data ready for analytics consumption."
+    usage: "Use for BI reporting, demand forecasting, customer analytics, and other downstream analytical use cases."
+    limitations: "Data is batch-processed with 1-hour lag. PII fields are masked according to data governance policies."
   inputPorts:
-    - id: "pos-source-input-v1"
-      name: "Raw POS Stream"
-      description: "Input from the raw POS transaction stream."
-      sourceSystemId: "data-product:retail-pos-source-v1" # Correct: Links to source product
-      sourceOutputPortId: "pos-kafka-stream-v1"
-      type: "data-product"
+    - name: "Raw POS Stream"
+      version: "1.0.0"
+      contractId: "pos-transaction-contract-v1"
       tags:
-        - tag_fqn: "default/pos"
-        - tag_fqn: "default/raw"
+        - "pos"
+        - "raw"
   outputPorts:
-    - id: "prepared-sales-delta-v1"
-      name: "prepared_sales_delta"
-      description: "Delta table containing cleaned sales transactions."
+    - name: "prepared_sales_delta"
+      version: "1.0.0"
+      description: "Delta table containing cleaned sales transactions"
       type: "table"
       status: "active"
+      contractId: "prepared-sales-contract-v1"
       server:
         location: "s3://data-lake/prepared/retail/sales/v1"
         format: "delta"
-        # Potential table/schema/catalog details if needed
-        # database: "prepared_db"
-        # table: "sales_transactions_v1"
-      containsPii: true # Example flag
+      containsPii: true
       tags:
-        - tag_fqn: "default/delta"
-        - tag_fqn: "default/s3"
-        - tag_fqn: "default/prepared"
-        - tag_fqn: "default/sales"
-        - tag_fqn: "default/pii"
+        - "delta"
+        - "s3"
+        - "prepared"
+        - "sales"
+        - "pii"
+  managementPorts:
+    - name: "data-quality-dashboard"
+      content: "observability"
+      type: "rest"
+      url: "https://dq.example.com/dash/prepared-sales-v1"
+      description: "Great Expectations data quality dashboard"
+  support:
+    - channel: "prepared-data-support"
+      url: "https://slack.com/channels/prepared-data-support"
+      tool: "slack"
+      scope: "issues"
+  team:
+    name: "Data Engineering"
+    members:
+      - username: "eng-lead@example.com"
+        name: "Alice Engineer"
+        role: "owner"
+      - username: "data-steward@example.com"
+        name: "Bob Steward"
+        role: "data steward"
   tags:
-    - tag_fqn: "default/prepared"
-    - tag_fqn: "default/sales"
-    - tag_fqn: "default/transactions"
-    - tag_fqn: "default/analytics-ready"
-    - tag_fqn: "default/v1"
-  links:
-    etlJob: "https://jobs.example.com/jobs/prepare-sales-v1"
-    qualityDashboard: "https://dq.example.com/dash/prepared-sales-v1"
+    - "prepared"
+    - "sales"
+    - "transactions"
+    - "analytics-ready"
+    - "v1"
+  authoritativeDefinitions:
+    - type: "transformationImplementation"
+      url: "https://jobs.example.com/jobs/prepare-sales-v1"
+      description: "ETL job implementation"
 
 # --- 3. Aggregate Product: Demand Forecasting ---
-- dataProductSpecification: "0.0.1"
+- apiVersion: "v1.0.0"
+  kind: "DataProduct"
   id: "retail-demand-forecast-v1"
+  status: "active"
+  name: "Demand Forecast Model Output v1"
   version: "1.0.0"
-  productType: "aggregate"
-  info:
-    title: "Demand Forecast Model Output v1"
-    owner_team: "analytics-team"
-    domain: "Retail Analytics"
-    description: "Predicted demand for products at various locations based on historical sales and external factors."
-    status: "active"
+  domain: "Retail Analytics"
+  tenant: "retail-demo"
+  description:
+    purpose: "Provide predicted demand for products at various locations based on historical sales and external factors."
+    usage: "Use for inventory planning, supply chain optimization, and promotional planning."
+    limitations: "Forecasts are updated daily. Accuracy degrades beyond 30-day horizon. External factors like holidays may require manual adjustment."
   inputPorts:
-    - id: "prepared-sales-input-v1"
-      name: "Prepared Sales Data"
-      description: "Input from the prepared sales transactions data product."
-      sourceSystemId: "data-product:retail-sales-prepared-v1" # Correct: Links to prepared product
-      sourceOutputPortId: "prepared-sales-delta-v1"
-      type: "data-product"
+    - name: "Prepared Sales Data"
+      version: "1.0.0"
+      contractId: "prepared-sales-contract-v1"
       tags:
-        - tag_fqn: "default/sales"
-        - tag_fqn: "default/prepared"
-    # Example of another input - could be another data product or an external source
-    # - id: "weather-data-input-v1"
-    #   name: "Historical Weather Data"
-    #   sourceSystemId: "external:weather-api"
-    #   type: "api"
+        - "sales"
+        - "prepared"
   outputPorts:
-    - id: "forecast-table-v1"
-      name: "demand_forecast_table"
-      description: "Delta table containing product demand forecasts."
+    - name: "demand_forecast_table"
+      version: "1.0.0"
+      description: "Delta table containing product demand forecasts"
       type: "table"
       status: "active"
+      contractId: "demand-forecast-contract-v1"
       server:
         location: "s3://data-analytics/retail/forecast/v1"
         format: "delta"
-        # database: "analytics_db"
-        # table: "demand_forecast_v1"
       tags:
-        - tag_fqn: "default/delta"
-        - tag_fqn: "default/s3"
-        - tag_fqn: "default/forecast"
-        - tag_fqn: "default/predictive"
+        - "delta"
+        - "s3"
+        - "forecast"
+        - "predictive"
+  managementPorts:
+    - name: "model-monitoring"
+      content: "observability"
+      type: "rest"
+      url: "https://mlflow.example.com/models/demand-forecast-v1"
+      description: "MLflow model monitoring and metrics"
+  support:
+    - channel: "ml-support"
+      url: "https://teams.com/channels/ml-support"
+      tool: "teams"
+      scope: "interactive"
+  team:
+    name: "Analytics Team"
+    members:
+      - username: "ml-lead@example.com"
+        name: "Charlie ML"
+        role: "owner"
+      - username: "data-scientist@example.com"
+        name: "Dana Scientist"
+        role: "contributor"
   tags:
-    - tag_fqn: "default/forecasting"
-    - tag_fqn: "default/demand"
-    - tag_fqn: "default/analytics"
-    - tag_fqn: "default/ml"
-    - tag_fqn: "default/v1"
-  links:
-    modelTrainingNotebook: "https://notebooks.example.com/models/demand-forecast-v1"
-    modelCard: "https://models.example.com/cards/demand-forecast-v1"
+    - "forecasting"
+    - "demand"
+    - "analytics"
+    - "ml"
+    - "v1"
+  authoritativeDefinitions:
+    - type: "implementation"
+      url: "https://notebooks.example.com/models/demand-forecast-v1"
+      description: "Model training notebook"
+    - type: "businessDefinition"
+      url: "https://models.example.com/cards/demand-forecast-v1"
+      description: "Model card with business context"
 
 # --- 4. Consumer-Aligned Product: Inventory Optimization ---
-- dataProductSpecification: "0.0.1"
+- apiVersion: "v1.0.0"
+  kind: "DataProduct"
   id: "retail-inventory-optim-v1"
+  status: "active"
+  name: "Inventory Optimization Recommendations v1"
   version: "1.0.0"
-  productType: "consumer-aligned"
-  info:
-    title: "Inventory Optimization Recommendations v1"
-    owner_team: "operations-team"
-    domain: "Supply Chain"
-    description: "Recommendations for inventory reordering based on demand forecasts and stock levels."
-    status: "active"
+  domain: "Supply Chain"
+  tenant: "retail-demo"
+  description:
+    purpose: "Provide automated inventory reordering recommendations based on demand forecasts and current stock levels."
+    usage: "API consumed by inventory management system to trigger automated reorders. Review recommendations in dashboard before approval."
+    limitations: "Recommendations assume lead times from supplier contracts. Manual override required for new products or discontinued items."
   inputPorts:
-    - id: "forecast-input-v1"
-      name: "Demand Forecast Data"
-      description: "Input from the demand forecast data product."
-      sourceSystemId: "data-product:retail-demand-forecast-v1" # Correct: Links to forecast product
-      sourceOutputPortId: "forecast-table-v1"
-      type: "data-product"
+    - name: "Demand Forecast Data"
+      version: "1.0.0"
+      contractId: "demand-forecast-contract-v1"
       tags:
-        - tag_fqn: "default/forecast"
-    # Example: Could also take current inventory snapshot as input
-    # - id: "current-inventory-input-v1"
-    #   name: "Current Inventory Levels"
-    #   sourceSystemId: "inventory_db:stock_levels"
-    #   type: "database"
+        - "forecast"
   outputPorts:
-    - id: "inventory-reorder-api-v1"
-      name: "Inventory Reorder API"
-      description: "API endpoint consumed by the inventory management system to trigger reorders."
+    - name: "Inventory Reorder API"
+      version: "1.0.0"
+      description: "API endpoint consumed by inventory management system to trigger reorders"
       type: "api"
       status: "active"
       server:
-        location: "https://api.example.com/inventory/reorder/v1" # URL of the API
+        location: "https://api.example.com/inventory/reorder/v1"
+      autoApprove: false
       tags:
-        - tag_fqn: "default/api"
-        - tag_fqn: "default/inventory"
-        - tag_fqn: "default/reorder"
-        - tag_fqn: "default/action"
-    # Could also have a table output showing current recommendations
-    # - id: "inventory-recommendations-table-v1"
-    #   name: "inventory_recommendations_table"
-    #   type: "table"
-    #   ...
+        - "api"
+        - "inventory"
+        - "reorder"
+        - "action"
+  managementPorts:
+    - name: "api-monitoring"
+      content: "observability"
+      type: "rest"
+      url: "https://api-metrics.example.com/inventory-optim"
+      description: "API performance and error rate monitoring"
+    - name: "data-dictionary"
+      content: "dictionary"
+      type: "rest"
+      url: "https://docs.example.com/api/inventory-optim/v1"
+      description: "OpenAPI specification and data dictionary"
+  support:
+    - channel: "inventory-ops-support"
+      url: "https://jira.example.com/projects/INV"
+      tool: "ticket"
+      scope: "issues"
+      description: "JIRA project for inventory optimization issues"
+  team:
+    name: "Operations Team"
+    members:
+      - username: "ops-lead@example.com"
+        name: "Eve Operations"
+        role: "owner"
   tags:
-    - tag_fqn: "default/inventory"
-    - tag_fqn: "default/optimization"
-    - tag_fqn: "default/supply-chain"
-    - tag_fqn: "default/recommendations"
-    - tag_fqn: "default/v1"
+    - "inventory"
+    - "optimization"
+    - "supply-chain"
+    - "recommendations"
+    - "v1"
 
 # --- 5. Aggregate Product: Price Optimization ---
-- dataProductSpecification: "0.0.1"
+- apiVersion: "v1.0.0"
+  kind: "DataProduct"
   id: "retail-price-optim-v1"
+  status: "active"
+  name: "Price Optimization Model Output v1"
   version: "1.0.0"
-  productType: "aggregate" # Or consumer-aligned depending on primary consumer
-  info:
-    title: "Price Optimization Model Output v1"
-    owner_team: "analytics-team"
-    domain: "Retail Analytics"
-    description: "Recommended pricing strategies based on demand, competition, and customer behavior."
-    status: "active"
+  domain: "Retail Analytics"
+  tenant: "retail-demo"
+  description:
+    purpose: "Provide data-driven pricing recommendations based on demand elasticity, competitive positioning, and customer behavior."
+    usage: "Review recommendations weekly and apply to pricing systems via bulk import. Use sensitivity analysis for strategic items."
+    limitations: "Model excludes promotional pricing. Recommendations should be reviewed by category managers before implementation."
   inputPorts:
-    - id: "forecast-input-price-v1" # Unique ID for this input instance
-      name: "Demand Forecast Data"
-      description: "Input from the demand forecast data product."
-      sourceSystemId: "data-product:retail-demand-forecast-v1" # Correct: Links to forecast product
-      sourceOutputPortId: "forecast-table-v1"
-      type: "data-product"
-    - id: "competitor-pricing-input-v1"
-      name: "Competitor Pricing Feed"
-      description: "External feed of competitor pricing data."
-      sourceSystemId: "external:competitor-scraper" # Identifier for the external source
-      type: "feed" # Example type for an external feed
-      location: "sftp://datafeeds.example.com/incoming/competitor_prices.csv"
+    - name: "Demand Forecast Data"
+      version: "1.0.0"
+      contractId: "demand-forecast-contract-v1"
+    - name: "Competitor Pricing Feed"
+      version: "1.0.0"
+      contractId: "competitor-pricing-contract-v1"
       tags:
-        - tag_fqn: "default/external"
-        - tag_fqn: "default/competitor"
-        - tag_fqn: "default/pricing"
+        - "external"
+        - "competitor"
+        - "pricing"
   outputPorts:
-    - id: "price-recommendations-table-v1"
-      name: "price_recommendations_table"
-      description: "Delta table containing optimal price recommendations."
+    - name: "price_recommendations_table"
+      version: "1.0.0"
+      description: "Delta table containing optimal price recommendations with confidence intervals"
       type: "table"
       status: "active"
+      contractId: "price-recommendations-contract-v1"
       server:
         location: "s3://data-analytics/retail/pricing/v1"
         format: "delta"
       tags:
-        - tag_fqn: "default/delta"
-        - tag_fqn: "default/s3"
-        - tag_fqn: "default/pricing"
-        - tag_fqn: "default/recommendations"
+        - "delta"
+        - "s3"
+        - "pricing"
+        - "recommendations"
+  support:
+    - channel: "pricing-team"
+      url: "https://slack.com/channels/pricing-team"
+      tool: "slack"
+      scope: "interactive"
+  team:
+    name: "Analytics Team"
+    members:
+      - username: "pricing-analyst@example.com"
+        name: "Frank Analyst"
+        role: "owner"
   tags:
-    - tag_fqn: "default/pricing"
-    - tag_fqn: "default/optimization"
-    - tag_fqn: "default/analytics"
-    - tag_fqn: "default/ml"
-    - tag_fqn: "default/v1"
+    - "pricing"
+    - "optimization"
+    - "analytics"
+    - "ml"
+    - "v1"
 
 # --- 6. Consumer-Aligned Product: Personalized Marketing ---
-- dataProductSpecification: "0.0.1"
+- apiVersion: "v1.0.0"
+  kind: "DataProduct"
   id: "retail-customer-recs-v1"
+  status: "active"
+  name: "Customer Marketing Recommendations v1"
   version: "1.0.0"
-  productType: "consumer-aligned"
-  info:
-    title: "Customer Marketing Recommendations v1"
-    owner_team: "marketing-team"
-    domain: "Marketing"
-    description: "Targeted customer lists and product recommendations for marketing campaigns."
-    status: "active"
+  domain: "Marketing"
+  tenant: "retail-demo"
+  description:
+    purpose: "Provide targeted customer segments and personalized product recommendations for marketing campaigns."
+    usage: "Export customer lists weekly for email campaigns. Use real-time API for website personalization."
+    limitations: "Contains PII - restricted access. Email frequency caps applied per GDPR. Opt-out customers excluded automatically."
   inputPorts:
-    - id: "prepared-sales-input-marketing-v1" # Unique ID
-      name: "Prepared Sales Data"
-      description: "Input from prepared sales transactions."
-      sourceSystemId: "data-product:retail-sales-prepared-v1" # Correct: Links to prepared product
-      sourceOutputPortId: "prepared-sales-delta-v1"
-      type: "data-product"
-    - id: "customer-profile-input-v1"
-      name: "Customer Profile Data"
-      description: "Input from the main customer profile database."
-      sourceSystemId: "crm_db:customer_profiles" # Identifier for the CRM source
-      type: "database"
-      location: "jdbc:postgresql://crm-db:5432/profiles"
+    - name: "Prepared Sales Data"
+      version: "1.0.0"
+      contractId: "prepared-sales-contract-v1"
+    - name: "Customer Profile Data"
+      version: "1.0.0"
+      contractId: "customer-profile-contract-v1"
       tags:
-        - tag_fqn: "default/crm"
-        - tag_fqn: "default/customer"
+        - "crm"
+        - "customer"
   outputPorts:
-    - id: "marketing-campaign-target-v1"
-      name: "marketing_campaign_list"
-      description: "CSV file containing customer IDs and recommended campaign details."
-      type: "file" # Example: output is a file
+    - name: "marketing_campaign_list"
+      version: "1.0.0"
+      description: "CSV file containing customer IDs and recommended campaign details"
+      type: "file"
       status: "active"
       server:
         location: "s3://data-marketing/retail/campaigns/v1/targets.csv"
         format: "csv"
+      containsPii: true
       tags:
-        - tag_fqn: "default/csv"
-        - tag_fqn: "default/s3"
-        - tag_fqn: "default/marketing"
-        - tag_fqn: "default/campaign"
-        - tag_fqn: "default/target-list"
+        - "csv"
+        - "s3"
+        - "marketing"
+        - "campaign"
+        - "target-list"
+  support:
+    - channel: "marketing-ops"
+      url: "https://slack.com/channels/marketing-ops"
+      tool: "slack"
+      scope: "announcements"
+      description: "Campaign launch announcements and coordination"
+  team:
+    name: "Marketing Team"
+    members:
+      - username: "marketing-lead@example.com"
+        name: "Grace Marketing"
+        role: "owner"
   tags:
-    - tag_fqn: "default/marketing"
-    - tag_fqn: "default/recommendations"
-    - tag_fqn: "default/personalization"
-    - tag_fqn: "default/customer"
-    - tag_fqn: "default/v1"
+    - "marketing"
+    - "recommendations"
+    - "personalization"
+    - "customer"
+    - "v1"
 
 # --- 7. Consumer-Aligned Product: BI Dashboard Data ---
-- dataProductSpecification: "0.0.1"
+- apiVersion: "v1.0.0"
+  kind: "DataProduct"
   id: "retail-performance-dashboard-v1"
+  status: "active"
+  name: "Retail Performance Dashboard Data v1"
   version: "1.0.0"
-  productType: "consumer-aligned"
-  info:
-    title: "Retail Performance Dashboard Data v1"
-    owner_team: "analytics-team"
-    domain: "Retail Analytics"
-    description: "Aggregated data optimized for the main retail performance BI dashboard."
-    status: "active"
+  domain: "Retail Analytics"
+  tenant: "retail-demo"
+  description:
+    purpose: "Provide aggregated, denormalized data optimized for executive-level retail performance dashboards."
+    usage: "Connect BI tools directly via provided connection string. Data refreshes nightly at 2 AM EST."
+    limitations: "Historical data limited to 2 years rolling window. Custom KPIs require data team support."
   inputPorts:
-    - id: "prepared-sales-input-bi-v1" # Unique ID
-      name: "Prepared Sales Data"
-      sourceSystemId: "data-product:retail-sales-prepared-v1" # Correct: Links to prepared product
-      sourceOutputPortId: "prepared-sales-delta-v1"
-      type: "data-product"
-    - id: "forecast-input-bi-v1" # Unique ID
-      name: "Demand Forecast Data"
-      sourceSystemId: "data-product:retail-demand-forecast-v1" # Correct: Links to forecast product
-      sourceOutputPortId: "forecast-table-v1"
-      type: "data-product"
-    # Example: Assuming inventory optim product outputs a status table
-    - id: "inventory-snapshot-input-bi-v1"
-      name: "Inventory Snapshot"
-      sourceSystemId: "inventory_db:daily_stock_snapshot" # Sourced directly
-      type: "table"
-      location: "delta.`/mnt/inventory/snapshots/daily_v1`"
+    - name: "Prepared Sales Data"
+      version: "1.0.0"
+      contractId: "prepared-sales-contract-v1"
+    - name: "Demand Forecast Data"
+      version: "1.0.0"
+      contractId: "demand-forecast-contract-v1"
+    - name: "Inventory Snapshot"
+      version: "1.0.0"
+      contractId: "inventory-snapshot-contract-v1"
   outputPorts:
-    - id: "bi-dashboard-connection-v1"
-      name: "BI Tool Connection"
-      description: "Direct connection details or endpoint for the BI dashboard consumption."
-      type: "dashboard" # Example type for a dashboard output
+    - name: "BI Tool Connection"
+      version: "1.0.0"
+      description: "Direct connection endpoint for BI tool consumption"
+      type: "dashboard"
       status: "active"
       server:
-        # Could be connection details or just the dashboard URL
         location: "https://bi.example.com/dashboards/retail-perf-v1"
-        # database: "bi_reporting_db"
-        # table: "retail_summary_v1"
       tags:
-        - tag_fqn: "default/dashboard"
-        - tag_fqn: "default/tableau"
-        - tag_fqn: "default/powerbi"
-        - tag_fqn: "default/reporting"
+        - "dashboard"
+        - "tableau"
+        - "powerbi"
+        - "reporting"
+  managementPorts:
+    - name: "dashboard-url"
+      content: "discoverability"
+      type: "rest"
+      url: "https://bi.example.com/dashboards/retail-perf-v1"
+      description: "Link to interactive dashboard"
+  support:
+    - channel: "bi-support"
+      url: "https://teams.com/channels/bi-support"
+      tool: "teams"
+      scope: "interactive"
+  team:
+    name: "Analytics Team"
+    members:
+      - username: "bi-dev@example.com"
+        name: "Henry BI"
+        role: "owner"
   tags:
-    - tag_fqn: "default/bi"
-    - tag_fqn: "default/reporting"
-    - tag_fqn: "default/dashboard"
-    - tag_fqn: "default/kpi"
-    - tag_fqn: "default/v1"
-  links:
-    dashboardUrl: "https://bi.example.com/dashboards/retail-perf-v1"
-
-# --- Example Sink Product: Archival ---
-# - dataProductSpecification: "0.0.1"
-#   id: "retail-data-archival-v1"
-#   version: "1.0.0"
-#   productType: "sink"
-#   info:
-#     title: "Retail Data Archival Sink v1"
-#     owner_team: "governance-team"
-#     domain: "Compliance"
-#     description: "Sink product responsible for archiving various retail data products."
-#     status: "active"
-#   inputPorts:
-#     - id: "prepared-sales-archive-input-v1"
-#       name: "Prepared Sales Data (for archive)"
-#       sourceSystemId: "data-product:retail-sales-prepared-v1"
-#       type: "data-product"
-#     - id: "forecast-archive-input-v1"
-#       name: "Demand Forecast Data (for archive)"
-#       sourceSystemId: "data-product:retail-demand-forecast-v1"
-#       type: "data-product"
-#   outputPorts: [] # Sink has no outputs defined within this system
-#   tags: ["sink", "archival", "compliance", "v1"]
-#   custom:
-#     retentionPolicy: "7 years" 
+    - "bi"
+    - "reporting"
+    - "dashboard"
+    - "kpi"
+    - "v1"
+  authoritativeDefinitions:
+    - type: "businessDefinition"
+      url: "https://docs.example.com/dashboards/retail-performance"
+      description: "Dashboard user guide and KPI definitions"

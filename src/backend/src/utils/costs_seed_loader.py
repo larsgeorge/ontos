@@ -25,9 +25,10 @@ def _resolve_entity_id(db: Session, entity_type: str, entity_name: str) -> Optio
             obj = db.query(DataDomain).filter(DataDomain.name == entity_name).first()
             return str(obj.id) if obj else None
         if entity_type == "data_product":
-            from src.db_models.data_products import InfoDb
-            info = db.query(InfoDb).filter(InfoDb.title == entity_name).first()
-            return str(info.data_product_id) if info else None
+            from src.db_models.data_products import DataProductDb
+            # ODPS v1.0.0: Query data products by name field (not info.title)
+            product = db.query(DataProductDb).filter(DataProductDb.name == entity_name).first()
+            return str(product.id) if product else None
         if entity_type == "data_contract":
             from src.db_models.data_contracts import DataContractDb
             obj = db.query(DataContractDb).filter(DataContractDb.name == entity_name).first()

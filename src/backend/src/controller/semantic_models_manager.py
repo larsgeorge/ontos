@@ -645,9 +645,9 @@ class SemanticModelsManager:
         except Exception as e:
             logger.debug(f"Skipping data domains load into graph: {e}")
 
-        # Data Products: resolve id and title from data_product_info
+        # Data Products: ODPS v1.0.0 schema - use data_products table with id and name fields
         try:
-            rows = self._db.execute(sql_text("SELECT data_product_id, title FROM data_product_info")).fetchall()
+            rows = self._db.execute(sql_text("SELECT id, name FROM data_products")).fetchall()
             for r in rows:
                 subj = URIRef(f"urn:ontos:data_product:{r[0]}")
                 context.add((subj, RDF.type, URIRef("urn:ontos:entity-type:data_product")))
