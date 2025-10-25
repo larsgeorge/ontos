@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/hooks/use-toast'
-import { ArrowLeftRight, Plus, Trash2, Edit2, Clock, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { ArrowLeftRight, Plus, Trash2, Edit2, Clock, CheckCircle2, XCircle } from 'lucide-react'
 import { ColumnDef } from "@tanstack/react-table"
 import useBreadcrumbStore from '@/stores/breadcrumb-store'
 import { DataTable } from '@/components/ui/data-table'
@@ -39,8 +39,6 @@ export default function EntitlementsSync() {
 
   useEffect(() => {
     fetchConfigs()
-    fetchConnections()
-    fetchCatalogs()
     setStaticSegments([])
     setDynamicTitle('Entitlements Sync')
 
@@ -49,6 +47,14 @@ export default function EntitlementsSync() {
       setDynamicTitle(null)
     }
   }, [setStaticSegments, setDynamicTitle])
+
+  // Load connections and catalogs when dialog opens
+  useEffect(() => {
+    if (isDialogOpen) {
+      fetchConnections()
+      fetchCatalogs()
+    }
+  }, [isDialogOpen])
 
   const fetchConfigs = async () => {
     try {
@@ -347,18 +353,13 @@ export default function EntitlementsSync() {
         </Dialog>
       </div>
 
-      {isLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="animate-spin h-8 w-8 text-primary" />
-        </div>
-      ) : (
-        <DataTable
-          columns={columns}
-          data={configs}
-          searchColumn="name"
-          storageKey="entitlements-sync-sort"
-        />
-      )}
+      <DataTable
+        columns={columns}
+        data={configs}
+        searchColumn="name"
+        storageKey="entitlements-sync-sort"
+        isLoading={isLoading}
+      />
     </div>
   )
 } 

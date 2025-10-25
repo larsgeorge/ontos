@@ -1,7 +1,7 @@
 configs:
   - id: "sync-1"
     name: "Snowflake Production"
-    connection_id: "conn-123"
+    connection_id: ""
     schedule: "0 0 * * *"
     is_enabled: true
     catalogs: ["prod", "analytics"]
@@ -11,7 +11,7 @@ configs:
 
   - id: "sync-2"
     name: "Snowflake Development"
-    connection_id: "conn-456"
+    connection_id: ""
     schedule: "0 */4 * * *"
     is_enabled: true
     catalogs: ["dev", "test"]
@@ -21,7 +21,7 @@ configs:
 
   - id: "sync-3"
     name: "Redshift Analytics"
-    connection_id: "conn-789"
+    connection_id: ""
     schedule: "0 0 * * *"
     is_enabled: false
     catalogs: []

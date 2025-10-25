@@ -14,7 +14,7 @@ import {
   Row, // Import Row type
 } from "@tanstack/react-table";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { useTranslation } from 'react-i18next';
 
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,10 @@ interface DataTableProps<TData, TValue> {
   toolbarActions?: React.ReactNode; // Optional: Actions for the toolbar (e.g., Create button)
   bulkActions?: (selectedRows: TData[]) => React.ReactNode; // Optional: Actions for selected rows
   onRowClick?: (row: Row<TData>) => void; // Optional: Handler for row click
+  storageKey?: string; // Unique key for localStorage persistence (e.g., "data-contracts-sort")
+  defaultSortColumn?: string; // Column ID to sort by default (auto-detected if not provided)
+  defaultSortDirection?: 'asc' | 'desc'; // Default sort direction (default: 'asc')
+  isLoading?: boolean; // Optional: Show loading state
 }
 
 export function DataTable<TData, TValue>({
@@ -58,14 +62,74 @@ export function DataTable<TData, TValue>({
   searchColumn,
   toolbarActions,
   bulkActions,
-  onRowClick, // Add onRowClick prop
+  onRowClick,
+  storageKey,
+  defaultSortColumn,
+  defaultSortDirection = 'asc',
+  isLoading = false,
 }: DataTableProps<TData, TValue>) {
   const { t } = useTranslation('data-table');
-  const [sorting, setSorting] = React.useState<SortingState>([]);
+  
+  // Helper function to detect the default sort column from columns
+  const detectDefaultSortColumn = React.useCallback((): string | null => {
+    if (defaultSortColumn) return defaultSortColumn;
+    
+    // Look for common name-like columns
+    const nameColumns = ['name', 'title', 'info.title'];
+    for (const col of columns) {
+      const colId = typeof col.id === 'string' ? col.id : '';
+      const accessorKey = (col as any).accessorKey;
+      
+      if (nameColumns.includes(colId) || nameColumns.includes(accessorKey)) {
+        return colId || accessorKey;
+      }
+    }
+    
+    return null;
+  }, [columns, defaultSortColumn]);
+
+  // Initialize sorting state with localStorage and default sorting
+  const getInitialSorting = React.useCallback((): SortingState => {
+    // Try to load from localStorage if storageKey is provided
+    if (storageKey) {
+      try {
+        const stored = localStorage.getItem(storageKey);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to load sorting from localStorage:', error);
+      }
+    }
+    
+    // Fall back to default sorting
+    const defaultColumn = detectDefaultSortColumn();
+    if (defaultColumn) {
+      return [{ id: defaultColumn, desc: defaultSortDirection === 'desc' }];
+    }
+    
+    return [];
+  }, [storageKey, detectDefaultSortColumn, defaultSortDirection]);
+
+  const [sorting, setSorting] = React.useState<SortingState>(getInitialSorting);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [globalFilter, setGlobalFilter] = React.useState("");
+
+  // Persist sorting to localStorage whenever it changes
+  React.useEffect(() => {
+    if (storageKey && sorting.length > 0) {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(sorting));
+      } catch (error) {
+        console.warn('Failed to save sorting to localStorage:', error);
+      }
+    }
+  }, [sorting, storageKey]);
 
   // Add default select column
   const tableColumns: ColumnDef<TData, TValue>[] = React.useMemo(() => [
@@ -213,7 +277,18 @@ export function DataTable<TData, TValue>({
                 ))}
               </TableHeader>
               <TableBody>
-                {table.getRowModel().rows?.length ? (
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={tableColumns.length}
+                      className="h-24 text-center"
+                    >
+                      <div className="flex justify-center items-center">
+                        <Loader2 className="animate-spin h-8 w-8 text-primary" />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : table.getRowModel().rows?.length ? (
                   table.getRowModel().rows.map((row) => (
                     <TableRow
                       key={row.id}

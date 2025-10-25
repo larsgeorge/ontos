@@ -64,10 +64,10 @@ class EntitlementsSyncManager:
             connections = self.workspace_client.connections.list()
             return [
                 {
-                    "id": conn.id,
+                    "id": conn.name,
                     "name": conn.name,
-                    "type": conn.type,
-                    "provider": conn.provider
+                    "type": conn.connection_type,
+                    "provider": conn.options.get("provider", "") if conn.options else ""
                 }
                 for conn in connections
             ]
