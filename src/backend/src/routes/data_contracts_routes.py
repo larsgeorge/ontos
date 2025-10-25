@@ -118,7 +118,7 @@ async def get_contracts(
         logger.error(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
 
-@router.get('/data-contracts/{contract_id}', response_model=DataContractRead)
+@router.get('/data-contracts/{contract_id}', response_model=DataContractRead, response_model_by_alias=False)
 async def get_contract(contract_id: str, db: DBSessionDep, _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))):
     """Get a specific data contract with full ODCS structure"""
     contract = data_contract_repo.get_with_all(db, id=contract_id)
@@ -772,7 +772,10 @@ def _build_contract_read_from_db(db, db_contract) -> DataContractRead:
                         must_be_between_max=check.must_be_between_max
                     ))
 
-    return DataContractRead(
+    logger.info(f"[DEBUG SERIALIZE] Building response for contract {db_contract.id}")
+    logger.info(f"[DEBUG SERIALIZE] db_contract.owner_team_id = {db_contract.owner_team_id}")
+    
+    result = DataContractRead(
         id=db_contract.id,
         name=db_contract.name,
         version=db_contract.version,
@@ -797,6 +800,11 @@ def _build_contract_read_from_db(db, db_contract) -> DataContractRead:
         created=db_contract.created_at.isoformat() if db_contract.created_at else None,
         updated=db_contract.updated_at.isoformat() if db_contract.updated_at else None,
     )
+    
+    logger.info(f"[DEBUG SERIALIZE] result.owner_team_id = {result.owner_team_id}")
+    logger.info(f"[DEBUG SERIALIZE] result.model_dump() owner_team_id = {result.model_dump().get('owner_team_id')}")
+    
+    return result
 
 
 @router.post('/data-contracts', response_model=DataContractRead)
@@ -853,7 +861,7 @@ async def create_contract(
             details=details_for_audit
         )
 
-@router.put('/data-contracts/{contract_id}', response_model=DataContractRead)
+@router.put('/data-contracts/{contract_id}', response_model=DataContractRead, response_model_by_alias=False)
 async def update_contract(
     contract_id: str,
     request: Request,
@@ -865,6 +873,9 @@ async def update_contract(
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
 ):
     """Update a data contract"""
+    logger.info(f"[DEBUG UPDATE] Received update for contract {contract_id}")
+    logger.info(f"[DEBUG UPDATE] contract_data.owner_team_id = {contract_data.owner_team_id}")
+    logger.info(f"[DEBUG UPDATE] contract_data dict = {contract_data.model_dump()}")
     success = False
     details_for_audit = {
         "params": {"contract_id": contract_id},
@@ -2769,6 +2780,54 @@ async def get_contract_version_history(
     except Exception as e:
         logger.error(f"Error fetching version history: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/data-contracts/{contract_id}/import-team-members', response_model=list)
+async def get_team_members_for_import(
+    contract_id: str,
+    team_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE))
+):
+    """Get team members formatted for import into contract ODCS team array.
+    
+    Route handler: parses parameters, audits request, delegates to manager, returns response.
+    All business logic is in the manager.
+    """
+    success = False
+    members = []
+    try:
+        # Delegate business logic to manager
+        members = manager.get_team_members_for_import(
+            db=db,
+            contract_id=contract_id,
+            team_id=team_id,
+            current_user=current_user.username if current_user else None
+        )
+        
+        success = True
+        return members
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error fetching team members for import: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Audit the action
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else 'anonymous',
+            ip_address=request.client.host if request.client else None,
+            feature='data-contracts',
+            action='GET_TEAM_MEMBERS_FOR_IMPORT',
+            success=success,
+            details={"contract_id": contract_id, "team_id": team_id, "member_count": len(members)}
+        )
 
 
 def register_routes(app):

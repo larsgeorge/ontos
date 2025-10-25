@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useDomains } from '@/hooks/use-domains'
 import { useToast } from '@/hooks/use-toast'
 import type { DataContractCreate } from '@/types/data-contract'
+import type { TeamSummary } from '@/types/team'
 
 type BasicFormProps = {
   isOpen: boolean
@@ -36,7 +37,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
 
   // Form state
   const [name, setName] = useState('')
-  const [version, setVersion] = useState('1.0.0')
+  const [version, setVersion] = useState('0.0.1')
   const [status, setStatus] = useState('draft')
   const [ownerTeamId, setOwnerTeamId] = useState('')
   const [domain, setDomain] = useState('')
@@ -46,11 +47,30 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   const [descriptionPurpose, setDescriptionPurpose] = useState('')
   const [descriptionLimitations, setDescriptionLimitations] = useState('')
 
+  // Teams state
+  const [teams, setTeams] = useState<TeamSummary[]>([])
+  const [teamsLoading, setTeamsLoading] = useState(false)
+
+  // Fetch teams when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setTeamsLoading(true)
+      fetch('/api/teams/summary')
+        .then(res => res.json())
+        .then(data => setTeams(Array.isArray(data) ? data : []))
+        .catch(err => {
+          console.error('Failed to fetch teams:', err)
+          setTeams([])
+        })
+        .finally(() => setTeamsLoading(false))
+    }
+  }, [isOpen])
+
   // Initialize form state when dialog opens or initial data changes
   useEffect(() => {
     if (isOpen && initial) {
       setName(initial.name || '')
-      setVersion(initial.version || '1.0.0')
+      setVersion(initial.version || '0.0.1')
       setStatus(initial.status || 'draft')
       setOwnerTeamId(initial.owner_team_id || '')
       setDomain(initial.domain || '')
@@ -62,7 +82,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
     } else if (isOpen && !initial) {
       // Reset to defaults for new contract
       setName('')
-      setVersion('1.0.0')
+      setVersion('0.0.1')
       setStatus('draft')
       setOwnerTeamId('')
       setDomain('')
@@ -81,13 +101,16 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       return
     }
 
+    console.log('[DEBUG FORM] ownerTeamId state before submit:', ownerTeamId)
+    console.log('[DEBUG FORM] ownerTeamId !== "__none__":', ownerTeamId !== '__none__')
+    
     setIsSubmitting(true)
     try {
       const payload: DataContractCreate = {
         name: name.trim(),
-        version: version.trim() || '1.0.0',
+        version: version.trim() || '0.0.1',
         status: status || 'draft',
-        owner_team_id: ownerTeamId.trim() || undefined,
+        owner_team_id: ownerTeamId && ownerTeamId !== '__none__' ? ownerTeamId : undefined,
         kind: 'DataContract',
         apiVersion: 'v3.0.2',
         domainId: domain && domain !== '__none__' ? domain : undefined,
@@ -100,6 +123,9 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         },
       }
 
+      console.log('[DEBUG FORM] Payload owner_team_id:', payload.owner_team_id)
+      console.log('[DEBUG FORM] Full payload:', JSON.stringify(payload, null, 2))
+      
       await onSubmit(payload)
       onOpenChange(false)
     } catch (error: any) {
@@ -147,7 +173,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
                 id="version"
                 value={version}
                 onChange={(e) => setVersion(e.target.value)}
-                placeholder="1.0.0"
+                placeholder="0.0.1"
               />
             </div>
             <div className="space-y-2">
@@ -167,15 +193,22 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
             </div>
           </div>
 
-          {/* Owner Team ID */}
+          {/* Owner Team */}
           <div className="space-y-2">
-            <Label htmlFor="ownerTeamId">Owner Team ID</Label>
-            <Input
-              id="ownerTeamId"
-              value={ownerTeamId}
-              onChange={(e) => setOwnerTeamId(e.target.value)}
-              placeholder="UUID of the owning team"
-            />
+            <Label htmlFor="ownerTeamId">Owner Team</Label>
+            <Select value={ownerTeamId} onValueChange={setOwnerTeamId} disabled={teamsLoading}>
+              <SelectTrigger id="ownerTeamId">
+                <SelectValue placeholder="Select an owner team (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None</SelectItem>
+                {teams.map((team) => (
+                  <SelectItem key={team.id} value={team.id}>
+                    {team.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Domain */}

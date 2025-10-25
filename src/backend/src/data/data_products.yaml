@@ -21,6 +21,7 @@
       description: "Real-time feed of raw POS transaction events"
       type: "kafka"
       status: "active"
+      contractId: "pos-transaction-contract-v1"
       server:
         host: "kafka.example.com"
         topic: "pos-transactions-raw-v1"

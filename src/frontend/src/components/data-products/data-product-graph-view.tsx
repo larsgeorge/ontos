@@ -50,16 +50,18 @@ const DataProductNode: React.FC<NodeProps<DataProductNodeData>> = ({ data }) => 
             {/* Input Port Handles (Left) - With Tooltips, NO Provider here */}
             {/* <TooltipProvider delayDuration={100}> */}
                  {Array.isArray(data.inputPorts) && data.inputPorts.map((port, index) => {
-                    if (!port?.id) {
+                    if (!port) {
                         return null;
                     }
+                    // ODPS v1.0.0: Use port.id if available, otherwise fallback to port.name or index
+                    const portId = (port as any).id || port.name || `input-${index}`;
                     const calculatedTop = inputBaseTopOffset + index * (handleHeight + 10);
                     return (
                         // Use a wrapper fragment and separate trigger div
-                        <React.Fragment key={`input-frag-${port.id}`}>
+                        <React.Fragment key={`input-frag-${portId}`}>
                              <Tooltip>
                                 {/* Transparent div as trigger, positioned over the handle */}
-                                <TooltipTrigger 
+                                <TooltipTrigger
                                     style={{
                                         position: 'absolute',
                                         left: '-8px', // Position to cover handle area
@@ -72,23 +74,23 @@ const DataProductNode: React.FC<NodeProps<DataProductNodeData>> = ({ data }) => 
                                 />
                                 <TooltipContent side="left">
                                     <p className="font-semibold">{port.name} (Input)</p>
-                                    {port.description && <p className="text-xs text-muted-foreground">{port.description}</p>}
-                                    <p className="text-xs"><span className="text-muted-foreground">ID:</span> {port.id}</p>
-                                    <p className="text-xs"><span className="text-muted-foreground">Source:</span> {port.sourceSystemId}{port.sourceOutputPortId ? `:${port.sourceOutputPortId}`: ''}</p>
+                                    {(port as any).description && <p className="text-xs text-muted-foreground">{(port as any).description}</p>}
+                                    <p className="text-xs"><span className="text-muted-foreground">Contract:</span> {port.contractId}</p>
+                                    <p className="text-xs"><span className="text-muted-foreground">Version:</span> {port.version}</p>
                                 </TooltipContent>
                             </Tooltip>
                             {/* Render the Handle itself */}
                             <Handle
-                                key={`input-${port.id}`} // Keep original key if needed, or remove if fragment key is enough
+                                key={`input-${portId}`}
                                 type="target"
                                 position={Position.Left}
-                                id={port.id}
+                                id={portId}
                                 isConnectable={false}
                                 // No onClick needed here now
-                                style={{ 
-                                    top: `${calculatedTop}px`, 
+                                style={{
+                                    top: `${calculatedTop}px`,
                                     left: '-5px',
-                                    width: `${handleWidth}px`, 
+                                    width: `${handleWidth}px`,
                                     height: `${handleHeight}px`,
                                     borderRadius: '2px',
                                     background: '#55aaff',
@@ -103,16 +105,18 @@ const DataProductNode: React.FC<NodeProps<DataProductNodeData>> = ({ data }) => 
             {/* Output Port Handles (Right) - With Tooltips, NO Provider here */}
              {/* <TooltipProvider delayDuration={100}> */}
                 {Array.isArray(data.outputPorts) && data.outputPorts.map((port, index) => {
-                     if (!port?.id) {
+                     if (!port) {
                         return null;
                     }
-                    const calculatedTop = outputBaseTopOffset + index * (handleHeight + 10); 
+                    // ODPS v1.0.0: Use port.id if available, otherwise fallback to port.name or index
+                    const portId = (port as any).id || port.name || `output-${index}`;
+                    const calculatedTop = outputBaseTopOffset + index * (handleHeight + 10);
                     return (
                          // Use a wrapper fragment and separate trigger div
-                        <React.Fragment key={`output-frag-${port.id}`}>
+                        <React.Fragment key={`output-frag-${portId}`}>
                              <Tooltip>
                                  {/* Transparent div as trigger, positioned over the handle */}
-                                <TooltipTrigger 
+                                <TooltipTrigger
                                     style={{
                                         position: 'absolute',
                                         right: '-8px', // Position to cover handle area
@@ -126,22 +130,23 @@ const DataProductNode: React.FC<NodeProps<DataProductNodeData>> = ({ data }) => 
                                 <TooltipContent side="right">
                                     <p className="font-semibold">{port.name} (Output)</p>
                                     {port.description && <p className="text-xs text-muted-foreground">{port.description}</p>}
-                                    <p className="text-xs"><span className="text-muted-foreground">ID:</span> {port.id}</p>
+                                    {port.contractId && <p className="text-xs"><span className="text-muted-foreground">Contract:</span> {port.contractId}</p>}
+                                    <p className="text-xs"><span className="text-muted-foreground">Version:</span> {port.version}</p>
                                 </TooltipContent>
                             </Tooltip>
                              {/* Render the Handle itself */}
                             <Handle
-                                key={`output-${port.id}`} // Keep original key if needed, or remove if fragment key is enough
+                                key={`output-${portId}`}
                                 type="source"
                                 position={Position.Right}
-                                id={port.id}
+                                id={portId}
                                 isConnectable={false}
                                  // No onClick needed here now
-                                style={{ 
-                                    top: `${calculatedTop}px`, 
+                                style={{
+                                    top: `${calculatedTop}px`,
                                     right: '-5px',
-                                    width: `${handleWidth}px`, 
-                                    height: `${handleHeight}px`, 
+                                    width: `${handleWidth}px`,
+                                    height: `${handleHeight}px`,
                                     borderRadius: '2px',
                                     background: '#ffaa55',
                                     zIndex: 5 // Lower z-index than trigger
@@ -287,60 +292,62 @@ const DataProductGraphView: React.FC<DataProductGraphViewProps> = ({ products, v
         });
 
         const productNodeIds = new Set(productNodes.map(n => n.id));
-        const externalSourceIds = new Map<string, Node>(); // Store unique external sources and their nodes
         const initialEdges: Edge[] = [];
 
-        // Pass 1: Identify external sources and create edges
+        // ODPS v1.0.0: Create a map of contractId -> {productId, outputPortId}
+        const contractToOutputPort = new Map<string, {productId: string, portId: string}[]>();
+
         validProducts.forEach((product) => {
-            if (Array.isArray(product.inputPorts)) {
-                product.inputPorts.forEach((port: InputPort) => {
-                    if (port?.id && port.sourceSystemId) {
-                        const sourceId = port.sourceSystemId;
-                        if (sourceId.startsWith('data-product:')) {
-                            const sourceProductId = sourceId.substring('data-product:'.length);
-                            const sourceHandleId = port.sourceOutputPortId;
-                            if (productNodeIds.has(sourceProductId) && sourceHandleId) {
-                                const edgeToAdd = { 
-                                    id: `e-${sourceProductId}-${port.sourceOutputPortId}-${product.id!}-${port.id}`, 
-                                    source: sourceProductId, 
-                                    target: product.id!, 
-                                    sourceHandle: sourceHandleId, 
-                                    targetHandle: port.id, 
-                                    type: 'smoothstep', 
-                                    markerEnd: { type: MarkerType.ArrowClosed }, 
-                                    animated: true, 
-                                };
-                                initialEdges.push(edgeToAdd);
-                            } else {
-                                if (!sourceHandleId) {
+            if (Array.isArray(product.outputPorts) && product.id) {
+                product.outputPorts.forEach((outputPort, index) => {
+                    if (outputPort?.contractId) {
+                        // Use port.id if available, otherwise use port.name or generate from index
+                        const portId = (outputPort as any).id || outputPort.name || `output-${index}`;
+                        const entries = contractToOutputPort.get(outputPort.contractId) || [];
+                        entries.push({ productId: product.id!, portId });
+                        contractToOutputPort.set(outputPort.contractId, entries);
+                    }
+                });
+            }
+        });
+
+        // ODPS v1.0.0: Match input ports to output ports via contractId
+        validProducts.forEach((product) => {
+            if (Array.isArray(product.inputPorts) && product.id) {
+                product.inputPorts.forEach((inputPort, index) => {
+                    if (inputPort?.contractId) {
+                        // Use port.id if available, otherwise use port.name or generate from index
+                        const inputPortId = (inputPort as any).id || inputPort.name || `input-${index}`;
+
+                        // Find output ports with matching contractId
+                        const sourceOutputPorts = contractToOutputPort.get(inputPort.contractId);
+
+                        if (sourceOutputPorts && sourceOutputPorts.length > 0) {
+                            // Create edge from each matching output port
+                            sourceOutputPorts.forEach((source) => {
+                                // Don't create self-loops
+                                if (source.productId !== product.id) {
+                                    const edgeId = `e-${source.productId}-${source.portId}-${product.id}-${inputPortId}`;
+                                    initialEdges.push({
+                                        id: edgeId,
+                                        source: source.productId,
+                                        target: product.id!,
+                                        sourceHandle: source.portId,
+                                        targetHandle: inputPortId,
+                                        type: 'smoothstep',
+                                        markerEnd: { type: MarkerType.ArrowClosed },
+                                        animated: true,
+                                    });
                                 }
-                                if (!productNodeIds.has(sourceProductId)) {
-                                }
-                            }
-                        } else {
-                            // External Source Found
-                            const externalNodeId = `external-${sourceId}`; // Create a unique node ID
-                            // Check if we already created a node for this external source
-                            if (!externalSourceIds.has(externalNodeId)) {
-                                const externalNode: Node<ExternalSourceNodeData> = {
-                                    id: externalNodeId,
-                                    type: 'externalSource',
-                                    position: { x: 0, y: 0 }, // Position set by layout
-                                    data: { label: sourceId },
-                                };
-                                externalSourceIds.set(externalNodeId, externalNode);
-                            }
-                            // Create edge from external source node
-                            const edgeToAdd = { id: `e-${externalNodeId}-${product.id!}-${port.id}`, source: externalNodeId, target: product.id!, sourceHandle: 'external-source-handle', targetHandle: port.id, type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed }, animated: true, };
-                            initialEdges.push(edgeToAdd);
+                            });
                         }
                     }
                 });
             }
         });
 
-        // Combine product nodes and external nodes
-        const allInitialNodes = [...productNodes, ...Array.from(externalSourceIds.values())];
+        // Use only product nodes (no external sources in ODPS v1.0.0)
+        const allInitialNodes = productNodes;
 
         // Pass 2: Apply layout to ALL nodes and edges
         return getLayoutedElements(allInitialNodes, initialEdges);

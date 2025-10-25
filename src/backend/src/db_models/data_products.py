@@ -37,6 +37,7 @@ class DataProductDb(Base):
 
     # ==================== Databricks Extensions ====================
     project_id = Column(String, ForeignKey('projects.id'), nullable=True, index=True)
+    owner_team_id = Column(String, ForeignKey('teams.id'), nullable=True, index=True)  # Team UUID reference
 
     # ==================== Audit Fields ====================
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -51,6 +52,7 @@ class DataProductDb(Base):
     management_ports = relationship("ManagementPortDb", back_populates="product", cascade="all, delete-orphan")
     support_channels = relationship("SupportDb", back_populates="product", cascade="all, delete-orphan")
     team = relationship("DataProductTeamDb", back_populates="product", uselist=False, cascade="all, delete-orphan")
+    owner_team = relationship("TeamDb", foreign_keys=[owner_team_id])
 
     def __repr__(self):
         return f"<DataProductDb(id='{self.id}', name='{self.name}', status='{self.status}')>"

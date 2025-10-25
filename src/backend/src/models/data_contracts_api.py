@@ -131,9 +131,30 @@ class QualityRule(BaseModel):
 
 
 class TeamMember(BaseModel):
-    role: str  # 'steward', 'consumer', 'expert', 'admin'
-    email: str
+    """ODCS v3.0.2 Team Member"""
+    # Core ODCS fields
+    username: str  # Required by ODCS - maps to email/identifier
+    role: str  # 'steward', 'consumer', 'expert', 'admin', etc.
     name: Optional[str] = None
+    description: Optional[str] = None
+    dateIn: Optional[str] = None  # ISO date format
+    dateOut: Optional[str] = None  # ISO date format
+    replacedByUsername: Optional[str] = None
+    
+    # Legacy/convenience field (will be aliased to username for backward compatibility)
+    email: Optional[str] = None
+    
+    class Config:
+        populate_by_name = True
+        
+    def __init__(self, **data):
+        # If email is provided but not username, copy email to username
+        if 'email' in data and 'username' not in data:
+            data['username'] = data['email']
+        # If username is provided but not email, copy username to email (for backward compatibility)
+        elif 'username' in data and 'email' not in data:
+            data['email'] = data['username']
+        super().__init__(**data)
 
 
 class AccessControl(BaseModel):
@@ -395,6 +416,9 @@ class DataContractUpdate(BaseModel):
     parent_contract_id: Optional[str] = Field(None, alias='parentContractId')
     base_name: Optional[str] = Field(None, alias='baseName')
     change_summary: Optional[str] = Field(None, alias='changeSummary')
+
+    class Config:
+        populate_by_name = True
 
 
 class DataContractRead(BaseModel):

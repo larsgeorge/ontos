@@ -31,6 +31,7 @@ import CreateFromContractDialog from '@/components/data-products/create-from-con
 import DqxSchemaSelectDialog from '@/components/data-contracts/dqx-schema-select-dialog'
 import DqxSuggestionsDialog from '@/components/data-contracts/dqx-suggestions-dialog'
 import AuthoritativeDefinitionFormDialog from '@/components/data-contracts/authoritative-definition-form-dialog'
+import ImportTeamMembersDialog from '@/components/data-contracts/import-team-members-dialog'
 import type { DataProduct } from '@/types/data-product'
 import type { DataProfilingRun } from '@/types/data-contract'
 
@@ -173,6 +174,10 @@ export default function DataContractDetails() {
   const [loadingProducts, setLoadingProducts] = useState(false)
   const [isCreateProductDialogOpen, setIsCreateProductDialogOpen] = useState(false)
 
+  // Team import state
+  const [isImportTeamMembersOpen, setIsImportTeamMembersOpen] = useState(false)
+  const [ownerTeamName, setOwnerTeamName] = useState<string>('')
+
   // Authoritative Definitions state (contract-level)
   type AuthoritativeDefinition = { id: string; url: string; type: string }
   const [contractAuthDefs, setContractAuthDefs] = useState<AuthoritativeDefinition[]>([])
@@ -233,6 +238,23 @@ export default function DataContractDetails() {
     }
   }
 
+  const fetchOwnerTeamName = async (teamId: string) => {
+    if (!teamId) return
+    console.log('[DEBUG] fetchOwnerTeamName called with teamId:', teamId)
+    try {
+      const response = await fetch(`/api/teams/${teamId}`)
+      console.log('[DEBUG] Team fetch response status:', response.status)
+      if (response.ok) {
+        const data = await response.json()
+        console.log('[DEBUG] Team data received:', data)
+        setOwnerTeamName(data.name || '')
+        console.log('[DEBUG] Owner team name set to:', data.name)
+      }
+    } catch (e) {
+      console.warn('Failed to fetch owner team:', e)
+    }
+  }
+
   const fetchContractAuthDefs = async () => {
     if (!contractId) return
     try {
@@ -288,8 +310,23 @@ export default function DataContractDetails() {
 
       if (!contractRes.ok) throw new Error('Failed to load contract')
       const contractData: DataContract = await contractRes.json()
+      console.log('[DEBUG] Contract data loaded:', {
+        id: contractData.id,
+        name: contractData.name,
+        owner_team_id: contractData.owner_team_id,
+        hasOwnerTeamId: !!contractData.owner_team_id
+      })
       setContract(contractData)
       setDynamicTitle(contractData.name)
+
+      // Fetch owner team name if set
+      if (contractData.owner_team_id) {
+        console.log('[DEBUG] Fetching owner team name for:', contractData.owner_team_id)
+        await fetchOwnerTeamName(contractData.owner_team_id)
+      } else {
+        console.log('[DEBUG] No owner_team_id, clearing team name')
+        setOwnerTeamName('')
+      }
 
       if (linksRes.ok) {
         const linksData = await linksRes.json()
@@ -530,27 +567,48 @@ export default function DataContractDetails() {
 
   // CRUD handlers for main metadata
   const handleUpdateMetadata = async (payload: any) => {
+    console.log('[DEBUG] handleUpdateMetadata called with payload.owner_team_id:', payload.owner_team_id)
+    console.log('[DEBUG] Full payload:', JSON.stringify(payload, null, 2))
     try {
+      const updatePayload = {
+        name: payload.name,
+        version: payload.version,
+        status: payload.status,
+        owner_team_id: payload.owner_team_id,
+        tenant: payload.tenant,
+        dataProduct: payload.dataProduct,
+        domainId: payload.domainId,
+        descriptionUsage: payload.description?.usage,
+        descriptionPurpose: payload.description?.purpose,
+        descriptionLimitations: payload.description?.limitations,
+      }
+      console.log('[DEBUG] Update payload owner_team_id:', updatePayload.owner_team_id)
+      console.log('[DEBUG] Sending update request:', JSON.stringify(updatePayload, null, 2))
+      
       const res = await fetch(`/api/data-contracts/${contractId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: payload.name,
-          version: payload.version,
-          status: payload.status,
-          owner_team_id: payload.owner_team_id,
-          tenant: payload.tenant,
-          dataProduct: payload.dataProduct,
-          domainId: payload.domainId,
-          descriptionUsage: payload.description?.usage,
-          descriptionPurpose: payload.description?.purpose,
-          descriptionLimitations: payload.description?.limitations,
-        })
+        body: JSON.stringify(updatePayload)
       })
+      
+      console.log('[DEBUG] Update response status:', res.status)
       if (!res.ok) throw new Error('Update failed')
+      
+      console.log('[DEBUG] Calling fetchDetails()...')
       await fetchDetails()
+      
+      // If owner_team_id was updated, fetch the new team name
+      if (payload.owner_team_id) {
+        console.log('[DEBUG] Re-fetching team name after update for:', payload.owner_team_id)
+        await fetchOwnerTeamName(payload.owner_team_id)
+      } else {
+        console.log('[DEBUG] No owner_team_id in payload, clearing name')
+        setOwnerTeamName('')
+      }
+      
       toast({ title: 'Updated', description: 'Contract metadata updated.' })
     } catch (e) {
+      console.error('[DEBUG] Update error:', e)
       toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
       throw e
     }
@@ -999,6 +1057,37 @@ export default function DataContractDetails() {
     fetchProfileRuns()
   }
 
+  const handleImportTeamMembers = async (members: TeamMember[]) => {
+    if (!contract) return
+    
+    try {
+      // Append to existing team array
+      const updatedTeam = [...(contract.team || []), ...members]
+      
+      // Store team assignment metadata in customProperties
+      const customProps = contract.customProperties || {}
+      const now = new Date().toISOString()
+      
+      await updateContract({
+        team: updatedTeam,
+        customProperties: {
+          ...customProps,
+          assignedTeamId: contract.owner_team_id,
+          assignedTeamName: ownerTeamName,
+          assignedTeamDate: now
+        }
+      })
+      
+      toast({
+        title: 'Team Members Imported',
+        description: `Successfully imported ${members.length} team ${members.length === 1 ? 'member' : 'members'} to the contract.`
+      })
+    } catch (e) {
+      // Error already handled by updateContract
+      throw e
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -1060,7 +1149,20 @@ export default function DataContractDetails() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid md:grid-cols-4 gap-4">
-            <div className="space-y-1"><Label>Owner:</Label> <span className="text-sm block">{contract.owner_team_id || 'N/A'}</span></div>
+            <div className="space-y-1">
+              <Label>Owner:</Label>
+              {contract.owner_team_id && ownerTeamName ? (
+                <span
+                  className="text-sm block cursor-pointer text-primary hover:underline"
+                  onClick={() => navigate(`/teams/${contract.owner_team_id}`)}
+                  title={`Team ID: ${contract.owner_team_id}`}
+                >
+                  {ownerTeamName}
+                </span>
+              ) : (
+                <span className="text-sm block">{contract.owner_team_id || 'N/A'}</span>
+              )}
+            </div>
             <div className="space-y-1">
               <Label>Status:</Label> 
               <Badge variant="secondary" className="ml-1">{contract.status}</Badge>
@@ -1722,10 +1824,33 @@ export default function DataContractDetails() {
               <CardTitle className="text-xl">Team Members ({contract.team?.length || 0})</CardTitle>
               <CardDescription>Team responsible for this contract</CardDescription>
             </div>
-            <Button size="sm" onClick={() => { setEditingTeamMemberIndex(null); setIsTeamMemberFormOpen(true); }}>
-              <Plus className="h-4 w-4 mr-1.5" />
-              Add Member
-            </Button>
+            <div className="flex gap-2">
+              {(() => {
+                console.log('[DEBUG] Rendering Team Members buttons:', {
+                  owner_team_id: contract.owner_team_id,
+                  ownerTeamName,
+                  hasOwnerTeamId: !!contract.owner_team_id,
+                  shouldShowButton: !!contract.owner_team_id
+                })
+                return null
+              })()}
+              {contract.owner_team_id && (
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => setIsImportTeamMembersOpen(true)}
+                  disabled={!ownerTeamName}
+                  title={ownerTeamName ? `Import members from ${ownerTeamName}` : 'Loading team...'}
+                >
+                  <Plus className="h-4 w-4 mr-1.5" />
+                  Import from Team
+                </Button>
+              )}
+              <Button size="sm" onClick={() => { setEditingTeamMemberIndex(null); setIsTeamMemberFormOpen(true); }}>
+                <Plus className="h-4 w-4 mr-1.5" />
+                Add Member
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -1735,7 +1860,7 @@ export default function DataContractDetails() {
                 <div key={idx} className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center gap-3">
                     <Badge variant="outline">{member.role}</Badge>
-                    <span className="text-sm">{member.name || member.email}</span>
+                    <span className="text-sm">{member.name || member.username || member.email}</span>
                   </div>
                   <div className="flex gap-2">
                     <Button size="sm" variant="ghost" onClick={() => { setEditingTeamMemberIndex(idx); setIsTeamMemberFormOpen(true); }}>
@@ -2120,6 +2245,19 @@ export default function DataContractDetails() {
         onSubmit={editingPropertyAuthDef !== null ? handleUpdatePropertyAuthDef : handleAddPropertyAuthDef}
         level="property"
       />
+
+      {/* Import Team Members Dialog */}
+      {contract?.owner_team_id && (
+        <ImportTeamMembersDialog
+          isOpen={isImportTeamMembersOpen}
+          onOpenChange={setIsImportTeamMembersOpen}
+          entityId={contractId!}
+          entityType="contract"
+          teamId={contract.owner_team_id}
+          teamName={ownerTeamName || contract.owner_team_id}
+          onImport={handleImportTeamMembers}
+        />
+      )}
     </div>
   )
 }

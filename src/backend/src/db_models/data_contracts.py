@@ -242,9 +242,14 @@ class SchemaPropertyDb(Base):
 
 
 class DataQualityCheckDb(Base):
+    """Quality checks for data contracts. Can be object-level (table) or property-level (column).
+    - object-level: property_id is NULL, check applies to entire table
+    - property-level: property_id is set, check applies to specific column
+    """
     __tablename__ = "data_contract_quality_checks"
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     object_id = Column(String, ForeignKey("data_contract_schema_objects.id", ondelete="CASCADE"), nullable=False, index=True)
+    property_id = Column(String, ForeignKey("data_contract_schema_properties.id", ondelete="CASCADE"), nullable=True, index=True)
     level = Column(String, nullable=True)  # optional, e.g., object/property
     name = Column(String, nullable=True)
     description = Column(Text, nullable=True)
@@ -277,6 +282,7 @@ class DataQualityCheckDb(Base):
     must_not_between_max = Column(String, nullable=True)
 
     schema_object = relationship("SchemaObjectDb", back_populates="quality_checks")
+    property = relationship("SchemaPropertyDb", foreign_keys=[property_id])
 
 
 class DataProfilingRunDb(Base):

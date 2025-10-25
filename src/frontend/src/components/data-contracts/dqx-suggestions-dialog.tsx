@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Checkbox } from '@/components/ui/checkbox'
 import { DataTable } from '@/components/ui/data-table'
 import { ColumnDef } from '@tanstack/react-table'
 import { useToast } from '@/hooks/use-toast'
@@ -69,16 +68,6 @@ export default function DqxSuggestionsDialog({
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleToggleSelection = (id: string) => {
-    const newSet = new Set(selectedIds)
-    if (newSet.has(id)) {
-      newSet.delete(id)
-    } else {
-      newSet.add(id)
-    }
-    setSelectedIds(newSet)
   }
 
   const handleSelectAll = (schemaName?: string) => {
@@ -182,28 +171,7 @@ export default function DqxSuggestionsDialog({
     setPendingAction(null)
   }
 
-  const createColumns = (schemaName: string): ColumnDef<SuggestedQualityCheck>[] => [
-    {
-      id: 'select',
-      header: () => {
-        const schemaSuggestions = suggestionsBySchema[schemaName] || []
-        const allSelected = schemaSuggestions.every(s => selectedIds.has(s.id))
-        
-        return (
-          <Checkbox
-            checked={allSelected}
-            onCheckedChange={() => handleSelectAll(schemaName)}
-          />
-        )
-      },
-      cell: ({ row }) => (
-        <Checkbox
-          checked={selectedIds.has(row.original.id)}
-          onCheckedChange={() => handleToggleSelection(row.original.id)}
-        />
-      ),
-      size: 40
-    },
+  const createColumns = (): ColumnDef<SuggestedQualityCheck>[] => [
     {
       accessorKey: 'property_name',
       header: 'Column',
@@ -304,7 +272,7 @@ export default function DqxSuggestionsDialog({
                       {schemaNames[0]}
                     </div>
                     <DataTable
-                      columns={createColumns(schemaNames[0])}
+                      columns={createColumns()}
                       data={suggestionsBySchema[schemaNames[0]]}
                     />
                   </div>
@@ -324,7 +292,7 @@ export default function DqxSuggestionsDialog({
                     {schemaNames.map(schemaName => (
                       <TabsContent key={schemaName} value={schemaName} className="mt-4">
                         <DataTable
-                          columns={createColumns(schemaName)}
+                          columns={createColumns()}
                           data={suggestionsBySchema[schemaName]}
                         />
                       </TabsContent>

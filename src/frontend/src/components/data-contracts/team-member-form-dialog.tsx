@@ -24,7 +24,8 @@ export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, i
   useEffect(() => {
     if (isOpen && initial) {
       setRole(initial.role || '')
-      setEmail(initial.email || '')
+      // Prefer email, fallback to username (for ODCS v3.0.2 compatibility)
+      setEmail(initial.email || initial.username || '')
       setName(initial.name || '')
     } else if (isOpen && !initial) {
       setRole('')
@@ -40,12 +41,12 @@ export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, i
     }
 
     if (!email.trim()) {
-      toast({ title: 'Validation Error', description: 'Email is required', variant: 'destructive' })
+      toast({ title: 'Validation Error', description: 'Email/Username is required', variant: 'destructive' })
       return
     }
 
-    // Basic email validation
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    // Basic email validation (if it looks like an email)
+    if (email.includes('@') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       toast({ title: 'Validation Error', description: 'Please enter a valid email address', variant: 'destructive' })
       return
     }
@@ -53,8 +54,9 @@ export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, i
     setIsSubmitting(true)
     try {
       const member: TeamMember = {
+        username: email.trim(), // ODCS v3.0.2 uses username
         role: role.trim(),
-        email: email.trim(),
+        email: email.trim(), // Keep for backward compatibility
         name: name.trim() || undefined,
       }
 
@@ -96,14 +98,13 @@ export default function TeamMemberFormDialog({ isOpen, onOpenChange, onSubmit, i
 
           <div className="space-y-2">
             <Label htmlFor="email">
-              Email <span className="text-destructive">*</span>
+              Email/Username <span className="text-destructive">*</span>
             </Label>
             <Input
               id="email"
-              type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="user@example.com"
+              placeholder="user@example.com or username"
             />
           </div>
 

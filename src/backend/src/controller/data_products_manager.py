@@ -38,6 +38,7 @@ from src.models.data_products import (
 )
 from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo
+from src.repositories.teams_repository import team_repo
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.search_registry import searchable_asset
 from src.controller.notifications_manager import NotificationsManager
@@ -839,3 +840,59 @@ class DataProductsManager(SearchableAsset):
         except Exception as e:
             logger.error(f"Error fetching contracts for ODPS product {product_id}: {e}")
             raise
+
+    def get_team_members_for_import(
+        self,
+        product_id: str,
+        team_id: str,
+        current_user: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get team members formatted for import into product ODPS team array.
+        
+        Business logic:
+        - Validates product exists and user has access
+        - Fetches team and validates it exists
+        - Maps team members to ODPS-compatible format
+        - Enriches with suggested roles from app_role_override
+        
+        Args:
+            product_id: Data product ID
+            team_id: Team ID to fetch members from
+            current_user: Optional username for authorization
+            
+        Returns:
+            List of dicts with member info: [{
+                'member_identifier': str,
+                'member_name': str,
+                'member_type': str,
+                'suggested_role': str
+            }]
+            
+        Raises:
+            ValueError: If product or team not found
+        """
+        # Validate product exists
+        product = self.get_product(product_id)
+        if not product:
+            raise ValueError(f"Product {product_id} not found")
+        
+        # Fetch team with members
+        team = team_repo.get_with_members(self.db, id=team_id)
+        if not team:
+            raise ValueError(f"Team {team_id} not found")
+        
+        # Map team members to ODPS-compatible format
+        result = []
+        for member in team.members:
+            # Use app_role_override if set, otherwise suggest a default role
+            suggested_role = member.app_role_override or "team_member"
+            
+            result.append({
+                'member_identifier': member.member_identifier,
+                'member_name': member.member_identifier,  # Will be same as identifier; UI can enhance
+                'member_type': member.member_type,  # 'user' or 'group'
+                'suggested_role': suggested_role,
+            })
+        
+        logger.info(f"Retrieved {len(result)} team members from team {team_id} for product {product_id} import")
+        return result

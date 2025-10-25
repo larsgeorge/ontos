@@ -287,6 +287,7 @@ class DataProduct(BaseModel):
     version: Optional[str] = Field(None, description="Version of the data product")
     domain: Optional[str] = Field(None, description="Business domain")
     tenant: Optional[str] = Field(None, description="Organization identifier")
+    owner_team_id: Optional[str] = Field(None, description="Owner team UUID")
     authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
     description: Optional[Description] = Field(None, description="Structured description")
     customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
@@ -339,6 +340,7 @@ class DataProductCreate(BaseModel):
     version: Optional[str] = Field(None, description="Product version")
     domain: Optional[str] = Field(None, description="Domain")
     tenant: Optional[str] = Field(None, description="Tenant")
+    owner_team_id: Optional[str] = Field(None, description="Owner team UUID")
     description: Optional[Description] = Field(None, description="Description")
     authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
     customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
@@ -362,6 +364,7 @@ class DataProductUpdate(BaseModel):
     status: Optional[str] = None
     domain: Optional[str] = None
     tenant: Optional[str] = None
+    owner_team_id: Optional[str] = None
     description: Optional[Description] = None
     authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = None
     customProperties: Optional[List[CustomProperty]] = None

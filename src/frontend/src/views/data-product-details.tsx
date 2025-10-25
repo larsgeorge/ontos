@@ -9,6 +9,7 @@ import TeamMemberFormDialog from '@/components/data-products/team-member-form-di
 import SupportChannelFormDialog from '@/components/data-products/support-channel-form-dialog';
 import StatusTransitionDialog from '@/components/data-products/status-transition-dialog';
 import ImportExportDialog from '@/components/data-products/import-export-dialog';
+import ImportTeamMembersDialog from '@/components/data-contracts/import-team-members-dialog';
 import { useApi } from '@/hooks/use-api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -88,6 +89,10 @@ export default function DataProductDetails() {
   const [isSupportChannelDialogOpen, setIsSupportChannelDialogOpen] = useState(false);
   const [isStatusTransitionDialogOpen, setIsStatusTransitionDialogOpen] = useState(false);
   const [isImportExportDialogOpen, setIsImportExportDialogOpen] = useState(false);
+  const [isImportTeamMembersOpen, setIsImportTeamMembersOpen] = useState(false);
+  
+  // Owner team state
+  const [ownerTeamName, setOwnerTeamName] = useState<string | null>(null);
 
   // Permissions
   const featureId = 'data-products';
@@ -110,6 +115,21 @@ export default function DataProductDetails() {
     if (lowerStatus === 'draft' || lowerStatus === 'proposed') return 'secondary';
     if (lowerStatus === 'retired' || lowerStatus === 'deprecated') return 'outline';
     return 'default';
+  };
+
+  const fetchOwnerTeamName = async (teamId: string) => {
+    try {
+      const response = await fetch(`/api/teams/summary`);
+      if (response.ok) {
+        const teams = await response.json();
+        const team = teams.find((t: any) => t.id === teamId);
+        if (team) {
+          setOwnerTeamName(team.name);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch owner team name:', error);
+    }
   };
 
   const fetchProductDetails = async () => {
@@ -139,6 +159,13 @@ export default function DataProductDetails() {
       const productData = checkApiResponse(productResp, 'Product Details');
       setProduct(productData);
       setLinks(Array.isArray(linksResp.data) ? linksResp.data : []);
+
+      // Fetch owner team name if owner_team_id is set
+      if (productData.owner_team_id) {
+        await fetchOwnerTeamName(productData.owner_team_id);
+      } else {
+        setOwnerTeamName(null);
+      }
 
       // ODPS v1.0.0: name is at root level
       setDynamicTitle(productData.name || 'Unnamed Product');
@@ -286,6 +313,67 @@ export default function DataProductDetails() {
     }
   };
 
+  const handleImportTeamMembers = async (members: TeamMember[]) => {
+    if (!productId || !product) return;
+    
+    try {
+      // Append imported members to existing team members
+      const existingMembers = product.team?.members || [];
+      const updatedMembers = [...existingMembers, ...members];
+      const updatedTeam = { ...product.team, members: updatedMembers };
+      
+      const res = await fetch(`/api/data-products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...product, team: updatedTeam }),
+      });
+      
+      if (!res.ok) {
+        throw new Error(`Failed to import team members (${res.status})`);
+      }
+      
+      // Store team assignment metadata in customProperties
+      const teamMetadata = {
+        property: 'assigned_team',
+        value: JSON.stringify({
+          team_id: product.owner_team_id,
+          team_name: ownerTeamName,
+          assigned_at: new Date().toISOString(),
+          member_count: members.length
+        }),
+        description: 'App team assignment metadata'
+      };
+      
+      const existingCustomProps = product.customProperties || [];
+      const updatedCustomProps = [
+        ...existingCustomProps.filter(p => p.property !== 'assigned_team'),
+        teamMetadata
+      ];
+      
+      await fetch(`/api/data-products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...product, team: updatedTeam, customProperties: updatedCustomProps }),
+      });
+      
+      await fetchProductDetails();
+      setIsImportTeamMembersOpen(false);
+      
+      toast({
+        title: 'Team Members Imported',
+        description: `Successfully imported ${members.length} team member(s) from ${ownerTeamName}`,
+      });
+    } catch (error) {
+      console.error('Failed to import team members:', error);
+      toast({
+        title: 'Import Failed',
+        description: error instanceof Error ? error.message : 'Failed to import team members',
+        variant: 'destructive',
+      });
+      throw error;
+    }
+  };
+
   const handleAddSupportChannel = async (channel: Support) => {
     if (!productId || !product) return;
     try {
@@ -392,8 +480,10 @@ export default function DataProductDetails() {
     );
   }
 
-  // ODPS v1.0.0: Get owner from team
-  const owner = product.team?.members?.[0]?.username || product.team?.name || 'N/A';
+  // ODPS v1.0.0: Get owner - prefer owner_team_id, fallback to first team member
+  const owner = product.owner_team_id 
+    ? (ownerTeamName || product.owner_team_id)
+    : (product.team?.members?.[0]?.username || product.team?.name || 'N/A');
   const domainLabel = product.domain ? (getDomainName(product.domain) || product.domain) : 'N/A';
 
   return (
@@ -646,7 +736,24 @@ export default function DataProductDetails() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Team ({product.team?.members?.length || 0} members)</span>
-            {canWrite && <Button size="sm" onClick={() => setIsTeamMemberDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />Add Member</Button>}
+            <div className="flex gap-2">
+              {canWrite && product.owner_team_id && (
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => setIsImportTeamMembersOpen(true)}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Import from Team
+                </Button>
+              )}
+              {canWrite && (
+                <Button size="sm" onClick={() => setIsTeamMemberDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Member
+                </Button>
+              )}
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -775,6 +882,19 @@ export default function DataProductDetails() {
         onOpenChange={setIsImportExportDialogOpen}
         currentProduct={product}
       />
+
+      {/* Import Team Members Dialog */}
+      {product.owner_team_id && (
+        <ImportTeamMembersDialog
+          isOpen={isImportTeamMembersOpen}
+          onOpenChange={setIsImportTeamMembersOpen}
+          entityId={productId!}
+          entityType="product"
+          teamId={product.owner_team_id}
+          teamName={ownerTeamName || product.owner_team_id}
+          onImport={handleImportTeamMembers}
+        />
+      )}
     </div>
   );
 }

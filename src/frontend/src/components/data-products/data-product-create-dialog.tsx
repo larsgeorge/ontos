@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { DataProduct, DataProductStatus } from '@/types/data-product';
 import { useDomains } from '@/hooks/use-domains';
+import { useTeams } from '@/hooks/use-teams';
 
 /**
  * ODPS v1.0.0 Data Product Creation Dialog
@@ -27,10 +28,14 @@ import { useDomains } from '@/hooks/use-domains';
  * Complex nested entities (ports, team, support) are edited in the details view.
  */
 
+const productTypes = ['source', 'source-aligned', 'aggregate', 'consumer-aligned', 'sink'] as const;
+
 const dataProductCreateSchema = z.object({
   name: z.string().min(1, 'Product name is required'),
-  version: z.string().min(1, 'Version is required').default('1.0.0'),
+  version: z.string().min(1, 'Version is required').default('0.0.1'),
   status: z.string().min(1, 'Status is required'),
+  productType: z.enum(productTypes).optional(),
+  ownerTeamId: z.string().optional(),
   domain: z.string().optional(),
   tenant: z.string().optional(),
   purpose: z.string().optional(),
@@ -53,14 +58,17 @@ export default function DataProductCreateDialog({
 }: DataProductCreateDialogProps) {
   const { toast } = useToast();
   const { domains, loading: domainsLoading } = useDomains();
+  const { teams, loading: teamsLoading } = useTeams();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(dataProductCreateSchema),
     defaultValues: {
       name: '',
-      version: '1.0.0',
+      version: '0.0.1',
       status: DataProductStatus.DRAFT,
+      productType: undefined,
+      ownerTeamId: '',
       domain: '',
       tenant: '',
       purpose: '',
@@ -74,8 +82,10 @@ export default function DataProductCreateDialog({
     if (open) {
       form.reset({
         name: '',
-        version: '1.0.0',
+        version: '0.0.1',
         status: DataProductStatus.DRAFT,
+        productType: undefined,
+        ownerTeamId: '',
         domain: '',
         tenant: '',
         purpose: '',
@@ -89,6 +99,9 @@ export default function DataProductCreateDialog({
     setIsSubmitting(true);
 
     try {
+      // Get selected team name
+      const selectedTeam = teams.find(t => t.id === data.ownerTeamId);
+
       // Construct ODPS v1.0.0 product
       const productData: Partial<DataProduct> = {
         apiVersion: 'v1.0.0',
@@ -98,18 +111,29 @@ export default function DataProductCreateDialog({
         status: data.status,
         domain: data.domain || undefined,
         tenant: data.tenant || undefined,
+        owner_team_id: data.ownerTeamId || undefined,
         description: {
           purpose: data.purpose || undefined,
           limitations: data.limitations || undefined,
           usage: data.usage || undefined,
         },
+        // Set team from selected team
+        team: selectedTeam ? {
+          name: selectedTeam.name,
+          description: selectedTeam.description,
+          members: [],
+        } : undefined,
         // Initialize empty arrays for complex entities
         inputPorts: [],
         outputPorts: [],
         managementPorts: [],
         support: [],
         authoritativeDefinitions: [],
-        customProperties: [],
+        customProperties: data.productType ? [{
+          property: 'productType',
+          value: data.productType,
+          description: 'Type of data product in the value chain',
+        }] : [],
       };
 
       const response = await fetch('/api/data-products', {
@@ -179,7 +203,7 @@ export default function DataProductCreateDialog({
               <Input
                 id="version"
                 {...form.register('version')}
-                placeholder="1.0.0"
+                placeholder="0.0.1"
               />
               {form.formState.errors.version && (
                 <p className="text-sm text-red-500">{form.formState.errors.version.message}</p>
@@ -208,6 +232,62 @@ export default function DataProductCreateDialog({
               {form.formState.errors.status && (
                 <p className="text-sm text-red-500">{form.formState.errors.status.message}</p>
               )}
+            </div>
+          </div>
+
+          {/* Product Type & Owner Team */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="productType">Product Type</Label>
+              <Select
+                value={form.watch('productType') || ''}
+                onValueChange={(value) => form.setValue('productType', value as any)}
+              >
+                <SelectTrigger id="productType">
+                  <SelectValue placeholder="Select product type..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {productTypes.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Position in the data value chain
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ownerTeamId">Owner Team</Label>
+              <Select
+                value={form.watch('ownerTeamId') || ''}
+                onValueChange={(value) => form.setValue('ownerTeamId', value)}
+                disabled={teamsLoading}
+              >
+                <SelectTrigger id="ownerTeamId">
+                  <SelectValue placeholder="Select team..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {teamsLoading ? (
+                    <SelectItem value="" disabled>
+                      Loading teams...
+                    </SelectItem>
+                  ) : (
+                    teams.map((team) => (
+                      <SelectItem key={team.id} value={team.id}>
+                        {team.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Team responsible for this product
+              </p>
             </div>
           </div>
 

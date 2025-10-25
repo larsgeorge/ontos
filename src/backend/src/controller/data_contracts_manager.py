@@ -45,6 +45,7 @@ from src.db_models.data_contracts import (
     DataContractServerPropertyDb,
 )
 from src.repositories.data_contracts_repository import data_contract_repo
+from src.repositories.teams_repository import team_repo
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -797,49 +798,65 @@ class DataContractsManager(SearchableAsset):
                                 }
                             ]
 
-                        # Property-level quality rules (if they exist and are property-specific)
-                        if hasattr(prop, 'quality_checks') and prop.quality_checks:
-                            quality = []
-                            for check in prop.quality_checks:
-                                quality_dict = {
-                                    'rule': check.rule or check.name,
-                                    'type': check.type,
-                                }
-                                if check.description:
-                                    quality_dict['description'] = check.description
-                                if check.dimension:
-                                    quality_dict['dimension'] = check.dimension
-                                if check.business_impact:
-                                    quality_dict['businessImpact'] = check.business_impact
-                                if check.severity:
-                                    quality_dict['severity'] = check.severity
-                                if check.method:
-                                    quality_dict['method'] = check.method
-                                if check.schedule:
-                                    quality_dict['schedule'] = check.schedule
-                                if check.scheduler:
-                                    quality_dict['scheduler'] = check.scheduler
+                        # Property-level quality rules - filter from schema object's quality checks
+                        # Quality checks are stored at schema level with property_id linking to specific columns
+                        if hasattr(schema_obj, 'quality_checks') and schema_obj.quality_checks:
+                            property_quality_checks = [
+                                check for check in schema_obj.quality_checks 
+                                if check.property_id == prop.id
+                            ]
+                            if property_quality_checks:
+                                quality = []
+                                for check in property_quality_checks:
+                                    quality_dict = {
+                                        'rule': check.rule or check.name,
+                                        'type': check.type,
+                                    }
+                                    if check.description:
+                                        quality_dict['description'] = check.description
+                                    if check.dimension:
+                                        quality_dict['dimension'] = check.dimension
+                                    if check.business_impact:
+                                        quality_dict['businessImpact'] = check.business_impact
+                                    if check.severity:
+                                        quality_dict['severity'] = check.severity
+                                    if check.method:
+                                        quality_dict['method'] = check.method
+                                    if check.schedule:
+                                        quality_dict['schedule'] = check.schedule
+                                    if check.scheduler:
+                                        quality_dict['scheduler'] = check.scheduler
+                                    if check.unit:
+                                        quality_dict['unit'] = check.unit
+                                    if check.tags:
+                                        quality_dict['tags'] = check.tags
+                                    if check.query:
+                                        quality_dict['query'] = check.query
+                                    if check.engine:
+                                        quality_dict['engine'] = check.engine
+                                    if check.implementation:
+                                        quality_dict['implementation'] = check.implementation
 
-                                # Add comparison fields
-                                for field in ['must_be', 'must_not_be', 'must_be_gt', 'must_be_ge',
-                                             'must_be_lt', 'must_be_le', 'must_be_between_min', 'must_be_between_max']:
-                                    value = getattr(check, field, None)
-                                    if value:
-                                        camel_case_field = ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(field.split('_')))
-                                        quality_dict[camel_case_field] = value
+                                    # Add comparison fields
+                                    for field in ['must_be', 'must_not_be', 'must_be_gt', 'must_be_ge',
+                                                 'must_be_lt', 'must_be_le', 'must_be_between_min', 'must_be_between_max']:
+                                        value = getattr(check, field, None)
+                                        if value:
+                                            camel_case_field = ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(field.split('_')))
+                                            quality_dict[camel_case_field] = value
 
-                                # Add custom properties for quality rules
-                                if hasattr(check, 'custom_properties') and check.custom_properties:
-                                    custom_props = []
-                                    for custom_prop in check.custom_properties:
-                                        custom_props.append({
-                                            'property': custom_prop.property,
-                                            'value': custom_prop.value
-                                        })
-                                    quality_dict['customProperties'] = custom_props
+                                    # Add custom properties for quality rules
+                                    if hasattr(check, 'custom_properties') and check.custom_properties:
+                                        custom_props = []
+                                        for custom_prop in check.custom_properties:
+                                            custom_props.append({
+                                                'property': custom_prop.property,
+                                                'value': custom_prop.value
+                                            })
+                                        quality_dict['customProperties'] = custom_props
 
-                                quality.append(quality_dict)
-                            prop_dict['quality'] = quality
+                                    quality.append(quality_dict)
+                                prop_dict['quality'] = quality
                         elif prop.name == 'rcvr_cntry_code':
                             # Add sample property-level quality rule for ODCS compliance testing
                             prop_dict['quality'] = [
@@ -867,7 +884,8 @@ class DataContractsManager(SearchableAsset):
                     quality = []
                     for check in schema_obj.quality_checks:
                         # Skip property-level checks when exporting object-level quality
-                        if getattr(check, 'level', None) and str(check.level).lower() == 'property':
+                        # Property-level checks have property_id set and are exported with their properties
+                        if check.property_id is not None:
                             continue
                         quality_dict = {
                             'rule': check.rule or check.name,
@@ -2087,6 +2105,10 @@ class DataContractsManager(SearchableAsset):
             else:
                 data_dict = contract_data
             
+            logger.info(f"[DEBUG MANAGER] update_contract_with_relations data_dict keys: {data_dict.keys()}")
+            logger.info(f"[DEBUG MANAGER] owner_team_id in data_dict: {'owner_team_id' in data_dict}")
+            logger.info(f"[DEBUG MANAGER] owner_team_id value: {data_dict.get('owner_team_id')}")
+            
             db_obj = data_contract_repo.get(db, id=contract_id)
             if not db_obj:
                 raise ValueError("Contract not found")
@@ -2124,7 +2146,13 @@ class DataContractsManager(SearchableAsset):
                     update_payload[k] = v
             update_payload["updated_by"] = current_user
             
+            logger.info(f"[DEBUG MANAGER] update_payload keys: {update_payload.keys()}")
+            logger.info(f"[DEBUG MANAGER] update_payload owner_team_id: {update_payload.get('owner_team_id')}")
+            logger.info(f"[DEBUG MANAGER] Full update_payload: {update_payload}")
+            
             updated = data_contract_repo.update(db=db, db_obj=db_obj, obj_in=update_payload)
+            
+            logger.info(f"[DEBUG MANAGER] After update, db_obj.owner_team_id = {updated.owner_team_id}")
             
             # Handle schema objects if provided
             if data_dict.get('contract_schema') is not None or data_dict.get('schema') is not None:
@@ -3501,6 +3529,7 @@ class DataContractsManager(SearchableAsset):
             contract.version = bump_version['new_version']
         
         # Create quality checks from suggestions
+        # Build maps of schema objects and their properties for quick lookup
         schema_objects_map = {obj.name: obj for obj in contract.schema_objects}
         added_count = 0
         
@@ -3511,10 +3540,30 @@ class DataContractsManager(SearchableAsset):
                 logger.warning(f"Schema object '{suggestion.schema_name}' not found for suggestion {suggestion.id}")
                 continue
             
+            # For property-level checks, find the matching property
+            property_id = None
+            if suggestion.property_name:
+                # Find property by name within this schema object
+                property_obj = next(
+                    (prop for prop in schema_obj.properties if prop.name == suggestion.property_name),
+                    None
+                )
+                if property_obj:
+                    property_id = property_obj.id
+                else:
+                    logger.warning(f"Property '{suggestion.property_name}' not found in schema '{suggestion.schema_name}' for suggestion {suggestion.id}")
+                    # Continue anyway, will create as object-level check
+            
+            # Determine level: use suggestion.level if set, otherwise infer from property_name
+            level = suggestion.level
+            if not level:
+                level = 'property' if suggestion.property_name else 'object'
+            
             # Create quality check
             quality_check = DataQualityCheckDb(
                 object_id=schema_obj.id,
-                level=suggestion.level,
+                property_id=property_id,
+                level=level,
                 name=suggestion.name,
                 description=suggestion.description,
                 dimension=suggestion.dimension,
@@ -4796,4 +4845,62 @@ class DataContractsManager(SearchableAsset):
         )
         
         result["message"] = response_message
+        return result
+    
+    def get_team_members_for_import(
+        self,
+        db,
+        contract_id: str,
+        team_id: str,
+        current_user: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get team members formatted for import into contract ODCS team array.
+        
+        Business logic:
+        - Validates contract exists and user has access
+        - Fetches team and validates it exists
+        - Maps team members to ODCS-compatible format
+        - Enriches with suggested roles from app_role_override
+        
+        Args:
+            db: Database session
+            contract_id: Data contract ID
+            team_id: Team ID to fetch members from
+            current_user: Optional username for authorization
+            
+        Returns:
+            List of dicts with member info: [{
+                'member_identifier': str,
+                'member_name': str,
+                'member_type': str,
+                'suggested_role': str
+            }]
+            
+        Raises:
+            ValueError: If contract or team not found
+        """
+        # Validate contract exists
+        contract = data_contract_repo.get(db, id=contract_id)
+        if not contract:
+            raise ValueError(f"Contract {contract_id} not found")
+        
+        # Fetch team with members
+        team = team_repo.get_with_members(db, id=team_id)
+        if not team:
+            raise ValueError(f"Team {team_id} not found")
+        
+        # Map team members to ODCS-compatible format
+        result = []
+        for member in team.members:
+            # Use app_role_override if set, otherwise suggest a default role
+            suggested_role = member.app_role_override or "team_member"
+            
+            result.append({
+                'member_identifier': member.member_identifier,
+                'member_name': member.member_identifier,  # Will be same as identifier; UI can enhance
+                'member_type': member.member_type,  # 'user' or 'group'
+                'suggested_role': suggested_role,
+            })
+        
+        logger.info(f"Retrieved {len(result)} team members from team {team_id} for contract {contract_id} import")
         return result

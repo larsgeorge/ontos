@@ -188,6 +188,10 @@ export interface Team {
 export interface DataProduct {
   // ODPS v1.0.0 required fields
   apiVersion: string; // "v1.0.0"
+  
+  // Extensions
+  owner_team_id?: string // UUID of the owning team
+  owner_team_name?: string // Display name of the owning team
   kind: string; // "DataProduct"
   id: string;
   status: string; // proposed, draft, active, deprecated, retired

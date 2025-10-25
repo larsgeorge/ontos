@@ -85,11 +85,16 @@ export type ContractDescription = {
   limitations?: string
 }
 
-// ODCS compliant team member
+// ODCS v3.0.2 compliant team member
 export type TeamMember = {
+  username: string // Required by ODCS - maps to email/identifier
   role: string
-  email: string
   name?: string
+  description?: string
+  dateIn?: string // ISO date format
+  dateOut?: string // ISO date format
+  replacedByUsername?: string
+  email?: string // Legacy/convenience field (aliased to username)
 }
 
 // ODCS compliant access control
@@ -178,6 +183,7 @@ export interface DataContract {
   domainId?: string // Domain ID for backend API
   dataProduct?: string
   owner_team_id?: string // UUID of the owning team
+  owner_team_name?: string // Display name of the owning team
   description?: ContractDescription
   schema?: SchemaObject[]
   qualityRules?: QualityRule[]
@@ -270,4 +276,12 @@ export type DataContractCreate = {
   sla?: SLARequirements
   servers?: ServerConfig | ServerConfig[]
   customProperties?: Record<string, any>
+}
+
+// Team member for import (from app teams to ODCS team array)
+export type TeamMemberForImport = {
+  member_identifier: string
+  member_name: string
+  member_type: 'user' | 'group'
+  suggested_role: string
 } 

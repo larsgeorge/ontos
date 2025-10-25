@@ -34,25 +34,41 @@ export function Navigation({ isCollapsed }: NavigationProps) {
   // Get navigation groups based on maturity filters
   const rawNavigationGroups = getNavigationGroups(allowedMaturities);
 
+  // IDs of features to show ungrouped after Home
+  const ungroupedFeatureIds = ['data-domains', 'teams', 'projects'];
+
   // Filter groups and items based on permissions (only run when permissions are loaded)
-  const navigationGroups = React.useMemo(() => {
+  const { navigationGroups, ungroupedItems } = React.useMemo(() => {
     if (permissionsLoading || Object.keys(permissions).length === 0) {
       // Return empty or skeleton while loading/empty to prevent flashing
-      return [];
+      return { navigationGroups: [], ungroupedItems: [] };
     }
-    return rawNavigationGroups
+
+    // Extract ungrouped items from the raw navigation groups
+    const extractedUngroupedItems: FeatureConfig[] = [];
+    
+    const filteredGroups = rawNavigationGroups
       .map(group => ({
         ...group,
         // Filter items within the group
-        items: group.items.filter(item =>
-           // Settings and About might need special handling or always be visible
-           // For now, let's assume Settings requires ADMIN (handled by its roles)
-           // and About is always visible (doesn't have explicit permission)
-           item.id === 'about' || hasPermission(item.id, FeatureAccessLevel.READ_ONLY)
-        )
+        items: group.items.filter(item => {
+          const hasAccess = item.id === 'about' || hasPermission(item.id, FeatureAccessLevel.READ_ONLY);
+          
+          // If this item should be ungrouped and has access, add it to ungroupedItems
+          if (ungroupedFeatureIds.includes(item.id) && hasAccess) {
+            extractedUngroupedItems.push(item);
+            return false; // Remove from group
+          }
+          
+          return hasAccess;
+        })
       }))
       .filter(group => group.items.length > 0); // Remove groups that become empty after filtering
 
+    return { 
+      navigationGroups: filteredGroups, 
+      ungroupedItems: extractedUngroupedItems 
+    };
   }, [rawNavigationGroups, permissions, permissionsLoading, hasPermission]);
 
   // Handle loading state for permissions
@@ -143,6 +159,74 @@ export function Navigation({ isCollapsed }: NavigationProps) {
                   </NavLink>
             )
           }
+          {/* Render Ungrouped Items (Domains, Teams, Projects) */}
+          {ungroupedItems.map((item: FeatureConfig) => {
+            const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+            const translatedName = translateFeatureName(item.id, item.name);
+
+            return isCollapsed ? (
+              <Tooltip key={item.path}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'flex items-center justify-center rounded-lg p-2 transition-colors',
+                      isActive
+                        ? 'bg-muted text-primary'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )}
+                    aria-label={translatedName}
+                    asChild
+                  >
+                    <NavLink to={item.path}>
+                      <item.icon className="h-5 w-5" />
+                      <span className="sr-only">{translatedName}</span>
+                    </NavLink>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  {translatedName}
+                  {item.maturity !== 'ga' && (
+                    <sup className={cn(
+                      "ml-1 text-[10px] font-bold px-1 py-0.5 rounded whitespace-nowrap",
+                      item.maturity === 'beta' ? "bg-yellow-500/20 text-yellow-700 dark:bg-yellow-500/30 dark:text-yellow-400" : "",
+                      item.maturity === 'alpha' ? "bg-purple-500/20 text-purple-700 dark:bg-purple-500/30 dark:text-purple-400" : ""
+                    )}>
+                      {item.maturity === 'beta' ? 'β' : 'α'}
+                    </sup>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive: navIsActive }) =>
+                  cn(
+                    'flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium transition-colors',
+                    navIsActive
+                      ? 'bg-muted text-primary'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  )
+                }
+              >
+                <item.icon className="h-5 w-5 shrink-0" />
+                <span className="flex-1 min-w-0 truncate">
+                  {translatedName}
+                  {item.maturity !== 'ga' && (
+                    <sup className={cn(
+                      "ml-1 text-[10px] font-bold px-1 py-0.5 rounded whitespace-nowrap",
+                      item.maturity === 'beta' ? "bg-yellow-500/20 text-yellow-700 dark:bg-yellow-500/30 dark:text-yellow-400" : "",
+                      item.maturity === 'alpha' ? "bg-purple-500/20 text-purple-700 dark:bg-purple-500/30 dark:text-purple-400" : ""
+                    )}>
+                      {item.maturity === 'beta' ? 'β' : 'α'}
+                    </sup>
+                  )}
+                </span>
+              </NavLink>
+            );
+          })}
           {/* Render Other Groups */}
           {navigationGroups.map((group) => (
             <div key={group.name} className={cn("w-full", isCollapsed ? "" : "mb-2 last:mb-0")}>

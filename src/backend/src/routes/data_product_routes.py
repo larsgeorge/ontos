@@ -762,7 +762,7 @@ async def create_data_product_version(
             details=details_for_audit,
         )
 
-@router.put('/data-products/{product_id}', response_model=DataProduct)
+@router.put('/data-products/{product_id}', response_model=DataProduct, response_model_by_alias=False)
 async def update_data_product(
     product_id: str,
     request: Request,
@@ -955,7 +955,7 @@ async def delete_data_product(
             details=details_for_audit,
         )
 
-@router.get('/data-products/{product_id}', response_model=Any)
+@router.get('/data-products/{product_id}', response_model=Any, response_model_by_alias=False)
 async def get_data_product(
     product_id: str,
     manager: DataProductsManager = Depends(get_data_products_manager),
@@ -965,7 +965,7 @@ async def get_data_product(
         product = manager.get_product(product_id)
         if not product:
             raise HTTPException(status_code=404, detail="Data product not found")
-        return product.model_dump(exclude={'created_at', 'updated_at'}, exclude_none=True, exclude_unset=True)
+        return product.model_dump(by_alias=False, exclude={'created_at', 'updated_at'}, exclude_none=True, exclude_unset=True)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -992,6 +992,52 @@ async def create_genie_space_from_products(
     except Exception as e:
         logger.error(f"Unexpected error initiating Genie Space creation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to initiate Genie Space creation.")
+
+@router.get('/data-products/{product_id}/import-team-members', response_model=list)
+async def get_team_members_for_import(
+    product_id: str,
+    team_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
+):
+    """Get team members formatted for import into product ODPS team array.
+    
+    Route handler: parses parameters, audits request, delegates to manager, returns response.
+    All business logic is in the manager.
+    """
+    success = False
+    members = []
+    try:
+        # Delegate business logic to manager
+        members = manager.get_team_members_for_import(
+            product_id=product_id,
+            team_id=team_id,
+            current_user=current_user.username if current_user else None
+        )
+        
+        success = True
+        return members
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error fetching team members for import: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Audit the action
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username if current_user else 'anonymous',
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action='GET_TEAM_MEMBERS_FOR_IMPORT',
+            success=success,
+            details={"product_id": product_id, "team_id": team_id, "member_count": len(members)}
+        )
 
 def register_routes(app):
     app.include_router(router)
