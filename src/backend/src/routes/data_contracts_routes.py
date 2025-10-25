@@ -663,17 +663,23 @@ def _build_contract_read_from_db(db, db_contract) -> DataContractRead:
             properties=properties
         ))
 
-    # Build team (legacy minimal)
+    # Build team (ODCS v3.0.2 compliant)
     team = []
     if getattr(db_contract, 'team', None):
         for member in db_contract.team:
             entry = {
+                'username': member.username,
                 'role': member.role or 'member',
-                'email': member.username,
-                'name': None,
             }
+            # Add optional fields if present
             if getattr(member, 'description', None):
                 entry['description'] = member.description
+            if getattr(member, 'date_in', None):
+                entry['dateIn'] = member.date_in
+            if getattr(member, 'date_out', None):
+                entry['dateOut'] = member.date_out
+            if getattr(member, 'replaced_by_username', None):
+                entry['replacedByUsername'] = member.replaced_by_username
             team.append(entry)
 
     # Build support channels (legacy minimal)

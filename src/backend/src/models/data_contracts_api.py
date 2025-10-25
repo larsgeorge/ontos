@@ -411,6 +411,8 @@ class DataContractUpdate(BaseModel):
     qualityRules: Optional[List[QualityRule]] = Field(None)
     serverConfigs: Optional[List[ServerConfig]] = Field(None)
     sla: Optional[SLARequirements] = None
+    team: Optional[List[TeamMember]] = None  # ODCS team members
+    customProperties: Optional[Dict[str, Any]] = None  # Custom properties for team assignment metadata
 
     # Semantic versioning fields
     parent_contract_id: Optional[str] = Field(None, alias='parentContractId')

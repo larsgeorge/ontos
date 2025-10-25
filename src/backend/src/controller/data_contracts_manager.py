@@ -1797,9 +1797,12 @@ class DataContractsManager(SearchableAsset):
                 continue
             member_db = DataContractTeamDb(
                 contract_id=contract_id,
-                name=member_data.get('name'),
+                username=member_data.get('username'),
                 role=member_data.get('role'),
-                email=member_data.get('email')
+                description=member_data.get('description'),
+                date_in=member_data.get('dateIn'),
+                date_out=member_data.get('dateOut'),
+                replaced_by_username=member_data.get('replacedByUsername')
             )
             db.add(member_db)
     
@@ -2181,6 +2184,30 @@ class DataContractsManager(SearchableAsset):
                     # Add new quality rules
                     if data_dict['qualityRules']:
                         self._create_quality_checks(db, contract_id, data_dict['qualityRules'])
+            
+            # Handle team members if provided
+            if data_dict.get('team') is not None:
+                from src.db_models.data_contracts import DataContractTeamDb
+                # Remove existing team members
+                db.query(DataContractTeamDb).filter(
+                    DataContractTeamDb.contract_id == contract_id
+                ).delete()
+                
+                # Add new team members
+                if data_dict['team']:
+                    self._create_team_members(db, contract_id, data_dict['team'])
+            
+            # Handle custom properties if provided
+            if data_dict.get('customProperties') is not None:
+                from src.db_models.data_contracts import DataContractCustomPropertyDb
+                # Remove existing custom properties
+                db.query(DataContractCustomPropertyDb).filter(
+                    DataContractCustomPropertyDb.contract_id == contract_id
+                ).delete()
+                
+                # Add new custom properties
+                if data_dict['customProperties']:
+                    self._create_custom_properties_from_dict(db, contract_id, data_dict['customProperties'])
             
             # Handle contract-level semantic links if provided
             if data_dict.get('authoritativeDefinitions') is not None:

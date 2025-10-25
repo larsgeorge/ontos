@@ -911,7 +911,7 @@ export default function DataContractDetails() {
   }
 
   // Helper to update contract (read-modify-write pattern)
-  const updateContract = async (updates: Partial<any>) => {
+  const updateContract = async (updates: Partial<any>, showToast: boolean = true) => {
     try {
       const res = await fetch(`/api/data-contracts/${contractId}`, {
         method: 'PUT',
@@ -920,7 +920,9 @@ export default function DataContractDetails() {
       })
       if (!res.ok) throw new Error('Update failed')
       await fetchDetails()
-      toast({ title: 'Updated', description: 'Contract updated successfully.' })
+      if (showToast) {
+        toast({ title: 'Updated', description: 'Contract updated successfully.' })
+      }
     } catch (e) {
       toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
       throw e
@@ -1078,7 +1080,7 @@ export default function DataContractDetails() {
           assignedTeamName: ownerTeamName,
           assignedTeamDate: now
         }
-      })
+      }, false)  // Suppress generic toast, show custom one below
       
       toast({
         title: 'Team Members Imported',
