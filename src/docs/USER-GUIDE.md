@@ -2017,12 +2017,13 @@ Ontos provides comprehensive tools for data governance and management at enterpr
 
 ### Additional Resources
 
-- [Deployment Policy Guide](deployment-policy-implementation-summary.md)
-- [Semantic Linking System](semantic-linking-system.md)
-- [Compliance DSL Reference](compliance-dsl-reference.md)
-- [Compliance DSL Quick Guide](compliance-dsl-guide.md)
+- **Compliance DSL Documentation**:
+  - [Compliance DSL Quick Guide](/user-docs/compliance-dsl-guide) - Quick start guide for writing compliance rules
+  - [Compliance DSL Reference](/user-docs/compliance-dsl-reference) - Complete syntax reference and advanced examples
 - [User Journeys](user-journeys/README.md)
 - [API Documentation](http://localhost:8000/docs) (when running locally)
+
+**Note**: Compliance DSL documentation can be accessed via the Settings menu or directly through the documentation API.
 
 ---
 

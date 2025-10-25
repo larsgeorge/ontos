@@ -423,36 +423,122 @@ async def save_compliance_mapping(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# --- User Guide ---
+# --- Documentation System ---
 
-@router.get('/user-guide')
-async def get_user_guide():
-    """Serve the USER-GUIDE.md content"""
+def _get_docs_directory():
+    """Get the path to the documentation directory."""
     from pathlib import Path
-    
     # Path navigates up from routes/settings_routes.py to src/docs
     # __file__ = src/backend/src/routes/settings_routes.py
     # .parent.parent.parent.parent = src/
-    guide_path = Path(__file__).parent.parent.parent.parent / "docs" / "USER-GUIDE.md"
+    return Path(__file__).parent.parent.parent.parent / "docs"
+
+def _load_docs_registry():
+    """Load the documentation registry from docs.yaml."""
+    import yaml
+    from pathlib import Path
     
-    # Resolve to absolute path for better error reporting
-    resolved_path = guide_path.resolve()
+    docs_dir = _get_docs_directory()
+    registry_path = docs_dir / "docs.yaml"
     
-    logger.debug(f"Looking for user guide at: {resolved_path}")
-    
-    if not guide_path.exists():
-        logger.error(f"User guide not found. Checked path: {resolved_path}")
-        logger.error(f"Current __file__: {Path(__file__).resolve()}")
-        logger.error(f"Parent directories: {[p for p in Path(__file__).parents]}")
-        raise HTTPException(status_code=404, detail="User guide not found")
+    if not registry_path.exists():
+        logger.error(f"Documentation registry not found at: {registry_path}")
+        return {}
     
     try:
-        content = guide_path.read_text(encoding="utf-8")
-        logger.info(f"Successfully loaded user guide ({len(content)} chars)")
-        return {"content": content}
+        with open(registry_path, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+            return data.get('documents', {})
     except Exception as e:
-        logger.error(f"Error reading user guide from {resolved_path}: {e!s}")
+        logger.error(f"Error loading documentation registry: {e!s}")
+        return {}
+
+def _get_available_docs():
+    """Get all available markdown documentation files from registry."""
+    docs_dir = _get_docs_directory()
+    
+    # Load document definitions from YAML
+    available_docs = _load_docs_registry()
+    
+    # Validate that all files exist and add resolved paths
+    result = {}
+    for doc_key, doc_info in available_docs.items():
+        doc_path = docs_dir / doc_info["file"]
+        if doc_path.exists():
+            result[doc_key] = {
+                **doc_info,
+                "path": str(doc_path.resolve())
+            }
+        else:
+            logger.warning(f"Documentation file '{doc_info['file']}' not found at: {doc_path}")
+    
+    return result
+
+@router.get('/user-docs')
+async def list_available_docs():
+    """List all available user documentation files"""
+    try:
+        docs = _get_available_docs()
+        # Return without the internal 'path' field
+        result = {}
+        for doc_key, doc_info in docs.items():
+            entry = {
+                "title": doc_info["title"],
+                "description": doc_info["description"],
+                "file": doc_info["file"]
+            }
+            # Include optional category field if present
+            if "category" in doc_info:
+                entry["category"] = doc_info["category"]
+            result[doc_key] = entry
+        return result
+    except Exception as e:
+        logger.error(f"Error listing documentation: {e!s}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get('/user-docs/{doc_name}')
+async def get_documentation(doc_name: str):
+    """Serve a specific user documentation file by name"""
+    from pathlib import Path
+    
+    try:
+        available_docs = _get_available_docs()
+        
+        if doc_name not in available_docs:
+            logger.warning(f"Documentation '{doc_name}' not found. Available: {list(available_docs.keys())}")
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Documentation '{doc_name}' not found. Available: {', '.join(available_docs.keys())}"
+            )
+        
+        doc_info = available_docs[doc_name]
+        doc_path = Path(doc_info["path"])
+        
+        logger.debug(f"Loading documentation '{doc_name}' from: {doc_path}")
+        
+        content = doc_path.read_text(encoding="utf-8")
+        logger.info(f"Successfully loaded '{doc_name}' ({len(content)} chars)")
+        
+        result = {
+            "name": doc_name,
+            "title": doc_info["title"],
+            "description": doc_info["description"],
+            "content": content
+        }
+        # Include optional category field if present
+        if "category" in doc_info:
+            result["category"] = doc_info["category"]
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reading documentation '{doc_name}': {e!s}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get('/user-guide')
+async def get_user_guide():
+    """Serve the USER-GUIDE.md content (alias for /user-docs/user-guide for backward compatibility)"""
+    return await get_documentation("user-guide")
 
 
 # --- Database Schema ERD ---

@@ -1,0 +1,53 @@
+# Documentation Registry
+# This file defines all available documentation files served via the /api/docs endpoints
+#
+# To add a new document:
+# 1. Create the markdown file in this directory (src/docs/)
+# 2. Add an entry here with a unique key
+# 3. The document will be automatically available via /api/docs/{key}
+#
+# Fields:
+#   file: Filename of the markdown file (relative to src/docs/)
+#   title: Display title for the document
+#   description: Brief description of what the document covers
+#   category: Optional category for grouping (user-guide, reference, tutorial, etc.)
+
+documents:
+  user-guide:
+    file: USER-GUIDE.md
+    title: User Guide
+    description: Complete user guide for Ontos platform
+    category: user-guide
+
+  compliance-dsl-guide:
+    file: compliance-dsl-guide.md
+    title: Compliance DSL - Quick Guide
+    description: Quick guide for writing compliance rules
+    category: reference
+
+  compliance-dsl-reference:
+    file: compliance-dsl-reference.md
+    title: Compliance DSL Reference
+    description: Complete reference for Compliance DSL syntax
+    category: reference
+
+# Future document examples (uncomment and modify as needed):
+#
+#  deployment-guide:
+#    file: deployment-guide.md
+#    title: Deployment Guide
+#    description: Guide for deploying data contracts and products to Unity Catalog
+#    category: tutorial
+#
+#  api-reference:
+#    file: api-reference.md
+#    title: API Reference
+#    description: Complete REST API reference documentation
+#    category: reference
+#
+#  data-mesh-principles:
+#    file: data-mesh-principles.md
+#    title: Data Mesh Principles
+#    description: Understanding Data Mesh principles in Ontos
+#    category: user-guide
+
