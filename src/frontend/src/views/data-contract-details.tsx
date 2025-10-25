@@ -314,7 +314,9 @@ export default function DataContractDetails() {
         id: contractData.id,
         name: contractData.name,
         owner_team_id: contractData.owner_team_id,
-        hasOwnerTeamId: !!contractData.owner_team_id
+        hasOwnerTeamId: !!contractData.owner_team_id,
+        schema: contractData.schema,
+        schemaCount: contractData.schema?.length
       })
       setContract(contractData)
       setDynamicTitle(contractData.name)

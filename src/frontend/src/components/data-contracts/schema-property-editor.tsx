@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
 import { Plus, Trash2, Edit, Info } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -76,6 +77,11 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
   const SEMANTIC_ASSIGNMENT_TYPE = 'http://databricks.com/ontology/uc/semanticAssignment'
   const [authoritativeDefinitions, setAuthoritativeDefinitions] = useState<{ url: string; type: string }[]>([])
   const [semanticConcepts, setSemanticConcepts] = useState<{ iri: string; label?: string }[]>([])
+  
+  // Quality checks, tags, and custom properties
+  const [qualityChecks, setQualityChecks] = useState<any[]>([])
+  const [tags, setTags] = useState('')
+  const [customProps, setCustomProps] = useState<Record<string, any>>({})
 
   const resetForm = () => {
     setName('')
@@ -112,6 +118,9 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
     setTransformDescription('')
     setAuthoritativeDefinitions([])
     setSemanticConcepts([])
+    setQualityChecks([])
+    setTags('')
+    setCustomProps({})
     setEditingIndex(null)
   }
 
@@ -158,6 +167,10 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
     } else {
       setSemanticConcepts([])
     }
+    // Load quality checks, tags, and custom properties
+    setQualityChecks((prop as any).quality || [])
+    setTags((prop as any).tags ? (prop as any).tags.join(', ') : '')
+    setCustomProps((prop as any).customProperties || {})
   }
 
   const handleAddOrUpdate = () => {
@@ -207,6 +220,13 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
       // Keep semanticConcepts locally for UI use; parent may optionally consume it
       // @ts-ignore
       semanticConcepts: semanticConcepts && semanticConcepts.length > 0 ? semanticConcepts : undefined,
+      // Quality checks, tags, and custom properties
+      // @ts-ignore
+      quality: qualityChecks.length > 0 ? qualityChecks : undefined,
+      // @ts-ignore
+      tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
+      // @ts-ignore
+      customProperties: Object.keys(customProps).length > 0 ? customProps : undefined,
     }
 
     if (editingIndex !== null) {
@@ -252,10 +272,24 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
       {/* Property Form */}
       {!readOnly && (
         <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+          {/* Title showing which column is being edited */}
+          {editingIndex !== null ? (
+            <div className="flex items-center gap-2 pb-2 border-b mb-2">
+              <Edit className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Editing Column: <span className="font-mono text-primary">{name || properties[editingIndex]?.name}</span></h3>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 pb-2 border-b mb-2">
+              <Plus className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Adding New Column</h3>
+            </div>
+          )}
+          
           <Tabs defaultValue="core" className="w-full">
-            <TabsList className="grid w-full grid-cols-6">
+            <TabsList className="grid w-full grid-cols-7">
               <TabsTrigger value="core">Core</TabsTrigger>
               <TabsTrigger value="constraints">Constraints</TabsTrigger>
+              <TabsTrigger value="quality">Quality</TabsTrigger>
               <TabsTrigger value="governance">Governance</TabsTrigger>
               <TabsTrigger value="business">Business</TabsTrigger>
               <TabsTrigger value="transform">Transform</TabsTrigger>
@@ -505,6 +539,83 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
               </div>
             </TabsContent>
 
+            {/* Quality Tab */}
+            <TabsContent value="quality" className="space-y-3 mt-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold flex items-center">
+                    Property-Level Quality Checks
+                    <FieldTooltip content="ODCS quality checks that apply specifically to this column" />
+                  </Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const newCheck = {
+                        name: 'is_not_null',
+                        dimension: 'completeness',
+                        severity: 'error',
+                        type: 'library',
+                        rule: `${name || 'column'} IS NOT NULL`,
+                        description: 'Column should not contain null values'
+                      }
+                      setQualityChecks([...qualityChecks, newCheck])
+                    }}
+                    className="h-7"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add Check
+                  </Button>
+                </div>
+                
+                {qualityChecks.length > 0 ? (
+                  <div className="space-y-2">
+                    {qualityChecks.map((check, idx) => (
+                      <div key={idx} className="flex items-start justify-between p-3 border rounded-lg bg-background">
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm font-medium">{check.name || check.rule}</span>
+                            {check.dimension && (
+                              <Badge variant="outline" className="text-xs">{check.dimension}</Badge>
+                            )}
+                            {check.severity && (
+                              <Badge variant={check.severity === 'error' ? 'destructive' : 'default'} className="text-xs">
+                                {check.severity}
+                              </Badge>
+                            )}
+                          </div>
+                          {check.description && (
+                            <p className="text-xs text-muted-foreground">{check.description}</p>
+                          )}
+                          {check.rule && (
+                            <p className="text-xs font-mono text-muted-foreground">{check.rule}</p>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const updated = qualityChecks.filter((_, i) => i !== idx)
+                            setQualityChecks(updated)
+                          }}
+                          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 border-2 border-dashed rounded-lg">
+                    <p className="text-sm text-muted-foreground">No quality checks defined for this column</p>
+                    <p className="text-xs text-muted-foreground mt-1">Click "Add Check" to define quality rules</p>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
             {/* Governance Tab */}
             <TabsContent value="governance" className="space-y-3 mt-4">
               <div className="space-y-1.5">
@@ -536,6 +647,20 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
                   value={examples}
                   onChange={(e) => setExamples(e.target.value)}
                   placeholder='e.g., "John", "Jane" or ["value1", "value2"]'
+                  className="h-9"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="prop-tags" className="text-xs flex items-center">
+                  Tags
+                  <FieldTooltip content="ODCS tags for categorization (comma-separated)" />
+                </Label>
+                <Input
+                  id="prop-tags"
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                  placeholder='e.g., "finance", "sensitive", "employee_record"'
                   className="h-9"
                 />
               </div>
@@ -700,7 +825,11 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
                 return (
                   <tr
                     key={idx}
-                    className="border-t hover:bg-muted/50 cursor-pointer"
+                    className={`border-t hover:bg-muted/50 cursor-pointer ${
+                      editingIndex === idx 
+                        ? 'bg-primary/10 border-l-4 border-l-primary' 
+                        : ''
+                    }`}
                     onClick={() => handleEdit(idx)}
                   >
                     <td className="p-2">

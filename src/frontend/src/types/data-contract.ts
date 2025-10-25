@@ -54,6 +54,10 @@ export type ColumnProperty = {
   transformLogic?: string
   transformSourceObjects?: string
   transformDescription?: string
+  // ODCS quality checks, tags, and custom properties
+  quality?: QualityRule[]  // Property-level quality checks
+  tags?: string[]  // ODCS tags for categorization
+  customProperties?: Record<string, any>  // ODCS custom properties
 }
 
 // ODCS compliant schema object
