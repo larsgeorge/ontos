@@ -4,7 +4,7 @@
 # --- 1. Source Product: POS Transactions ---
 - apiVersion: "v1.0.0"
   kind: "DataProduct"
-  id: "retail-pos-source-v1"
+  id: "8a9b0c1d-2e3f-4g5h-6i7j-8k9l0m1n2o3p"
   status: "active"
   name: "POS Transaction Stream v1"
   version: "1.0.0"
@@ -61,7 +61,7 @@
 # --- 2. Source-Aligned Product: Prepared Sales Transactions ---
 - apiVersion: "v1.0.0"
   kind: "DataProduct"
-  id: "retail-sales-prepared-v1"
+  id: "9b0c1d2e-3f4g-5h6i-7j8k-9l0m1n2o3p4q"
   status: "active"
   name: "Prepared Sales Transactions v1"
   version: "1.0.0"
@@ -129,7 +129,7 @@
 # --- 3. Aggregate Product: Demand Forecasting ---
 - apiVersion: "v1.0.0"
   kind: "DataProduct"
-  id: "retail-demand-forecast-v1"
+  id: "0c1d2e3f-4g5h-6i7j-8k9l-0m1n2o3p4q5r"
   status: "active"
   name: "Demand Forecast Model Output v1"
   version: "1.0.0"
@@ -198,7 +198,7 @@
 # --- 4. Consumer-Aligned Product: Inventory Optimization ---
 - apiVersion: "v1.0.0"
   kind: "DataProduct"
-  id: "retail-inventory-optim-v1"
+  id: "1d2e3f4g-5h6i-7j8k-9l0m-1n2o3p4q5r6s"
   status: "active"
   name: "Inventory Optimization Recommendations v1"
   version: "1.0.0"
@@ -261,7 +261,7 @@
 # --- 5. Aggregate Product: Price Optimization ---
 - apiVersion: "v1.0.0"
   kind: "DataProduct"
-  id: "retail-price-optim-v1"
+  id: "2e3f4g5h-6i7j-8k9l-0m1n-2o3p4q5r6s7t"
   status: "active"
   name: "Price Optimization Model Output v1"
   version: "1.0.0"
@@ -318,7 +318,7 @@
 # --- 6. Consumer-Aligned Product: Personalized Marketing ---
 - apiVersion: "v1.0.0"
   kind: "DataProduct"
-  id: "retail-customer-recs-v1"
+  id: "3f4g5h6i-7j8k-9l0m-1n2o-3p4q5r6s7t8u"
   status: "active"
   name: "Customer Marketing Recommendations v1"
   version: "1.0.0"
@@ -376,7 +376,7 @@
 # --- 7. Consumer-Aligned Product: BI Dashboard Data ---
 - apiVersion: "v1.0.0"
   kind: "DataProduct"
-  id: "retail-performance-dashboard-v1"
+  id: "4g5h6i7j-8k9l-0m1n-2o3p-4q5r6s7t8u9v"
   status: "active"
   name: "Retail Performance Dashboard Data v1"
   version: "1.0.0"
