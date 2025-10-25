@@ -1,42 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import type { DataContractListItem, DataContractDraft } from '@/types/data-contract';
+import { useState, useEffect } from 'react';
+import type { DataContractListItem, DataContractCreate } from '@/types/data-contract';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useNavigate } from 'react-router-dom'
 import { useDomains } from '@/hooks/use-domains'
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Card, CardContent } from '@/components/ui/card';
 import { Plus, Pencil, Trash2, AlertCircle, Upload, ChevronDown, Loader2, KeyRound } from 'lucide-react';
-// Removed Ajv and draft store imports with modal removal
 import DataContractBasicFormDialog from '@/components/data-contracts/data-contract-basic-form-dialog'
 import { useDropzone } from 'react-dropzone';
-import {
-  ColumnDef,
-  ColumnFiltersState,
-  SortingState,
-  VisibilityState,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-  DropdownMenuCheckboxItem,
-} from "@/components/ui/dropdown-menu"
+import { ColumnDef } from "@tanstack/react-table"
 import { useToast } from "@/hooks/use-toast"
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { useProjectContext } from '@/stores/project-store';
+import { DataTable } from '@/components/ui/data-table';
 
 export default function DataContracts() {
   const { toast } = useToast();
@@ -48,15 +26,6 @@ export default function DataContracts() {
   const [openUploadDialog, setOpenUploadDialog] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-
-  // Table state
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-  const [rowSelection, setRowSelection] = useState({})
-  const [globalFilter, setGlobalFilter] = useState("")
-
-  // Removed inline editor form and validation state
   const [odcsPaste, setOdcsPaste] = useState<string>('')
 
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
@@ -107,7 +76,7 @@ export default function DataContracts() {
 
   // Removed per-row fetch for modal; navigation handles details
 
-  const createContract = async (formData: DataContractDraft) => {
+  const createContract = async (formData: DataContractCreate) => {
     try {
       const response = await fetch('/api/data-contracts', {
         method: 'POST',
@@ -194,44 +163,6 @@ export default function DataContracts() {
     await deleteContract(id);
   };
 
-  const handleExportOdcs = async (id: string, nameHint?: string) => {
-    try {
-      const response = await fetch(`/api/data-contracts/${id}/odcs/export`)
-      if (!response.ok) throw new Error('Failed to export ODCS')
-      // YAML download
-      const text = await response.text()
-      const contentDisposition = response.headers.get('Content-Disposition') || ''
-      const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
-      const suggestedName = filenameMatch?.[1]
-      const blob = new Blob([text], { type: 'application/x-yaml; charset=utf-8' })
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = suggestedName || `${(nameHint || 'contract').toLowerCase().replace(/\s+/g, '_')}-odcs.yaml`
-      a.click()
-      window.URL.revokeObjectURL(url)
-    } catch (e) {
-      toast({ title: 'Export failed', description: e instanceof Error ? e.message : 'Unable to export ODCS', variant: 'destructive' })
-    }
-  }
-
-  const handleDownloadContract = async (id: string, nameHint?: string, fmtHint?: string) => {
-    try {
-      const res = await fetch(`/api/data-contracts/${id}/export`)
-      if (!res.ok) throw new Error('Failed to export contract')
-      const text = await res.text()
-      const blob = new Blob([text], { type: 'text/plain' })
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${(nameHint || 'contract').toLowerCase().replace(/\s+/g, '_')}.${fmtHint || 'txt'}`
-      a.click()
-      window.URL.revokeObjectURL(url)
-    } catch (e) {
-      toast({ title: 'Export failed', description: e instanceof Error ? e.message : 'Unable to export contract', variant: 'destructive' })
-    }
-  };
-
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: async (acceptedFiles) => {
       if (acceptedFiles.length === 0) return;
@@ -289,27 +220,6 @@ export default function DataContracts() {
 
   const columns: ColumnDef<DataContractListItem>[] = [
     {
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={table.getIsAllPageRowsSelected()}
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          onClick={(e) => e.stopPropagation()}
-          aria-label="Select all"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          onClick={(e) => e.stopPropagation()}
-          aria-label="Select row"
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-    },
-    {
       accessorKey: "name",
       header: ({ column }) => {
         return (
@@ -325,7 +235,7 @@ export default function DataContracts() {
       cell: ({ row }) => {
         const contract = row.original;
         const domainId = (contract as any).domain_id || (contract as any).domainId;
-        const domainName = getDomainName(domainId) || contract.domain;
+        const domainName = getDomainName(domainId);
         return (
           <div>
             <div className="font-medium">{row.getValue("name")}</div>
@@ -444,26 +354,6 @@ export default function DataContracts() {
     },
   ];
 
-  const table = useReactTable({
-    data: contracts,
-    columns,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      rowSelection,
-      globalFilter,
-    },
-  });
-
   return (
     <div className="py-6">
       <h1 className="text-3xl font-bold mb-6 flex items-center gap-2">
@@ -482,40 +372,13 @@ export default function DataContracts() {
           <Loader2 className="animate-spin h-12 w-12 text-primary" />
         </div>
       ) : (
-        <div className="space-y-4">
-          {/* Toolbar aligned like products view via shared DataTable */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Input
-                placeholder="Filter contracts..."
-                value={globalFilter ?? ""}
-                onChange={(event) => setGlobalFilter(event.target.value)}
-                className="max-w-sm"
-              />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="ml-auto">
-                    Columns <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {table
-                    .getAllColumns()
-                    .filter((column) => column.getCanHide())
-                    .map((column) => (
-                      <DropdownMenuCheckboxItem
-                        key={column.id}
-                        className="capitalize"
-                        checked={column.getIsVisible()}
-                        onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                      >
-                        {column.id}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            <div className="flex items-center gap-2">
+        <DataTable
+          columns={columns}
+          data={contracts}
+          searchColumn="name"
+          storageKey="data-contracts-sort"
+          toolbarActions={
+            <>
               <Button onClick={() => setOpenWizard(true)} className="gap-2 h-9" title="Create Data Contract">
                 <Plus className="h-4 w-4" />
                 New Contract
@@ -524,171 +387,37 @@ export default function DataContracts() {
                 <Upload className="h-4 w-4" />
                 Upload File
               </Button>
-            </div>
-          </div>
-
-          {Object.keys(rowSelection).length > 0 && (() => {
-            const selectedIds = Object.keys(rowSelection).map((k) => contracts[Number(k)].id!).filter(Boolean);
-            const count = selectedIds.length;
-            return (
-              <div className="flex items-center justify-end py-2">
-                <div className="text-sm text-muted-foreground mr-3">{count} selected</div>
-                <div className="mx-2 h-6 w-px bg-muted-foreground/25" />
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 gap-1"
-                    onClick={() => handleBulkRequestAccess(selectedIds)}
-                    title="Request access for selected"
-                  >
-                    <KeyRound className="w-4 h-4 mr-1" />
-                    Request Access ({count})
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="h-9 gap-1"
-                    onClick={() => handleBulkDelete(selectedIds)}
-                    title="Delete selected"
-                  >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    Delete Selected ({count})
-                  </Button>
-                </div>
-              </div>
-            );
-          })()}
-
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => {
-                        return (
-                          <TableHead key={header.id}>
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext()
-                                )}
-                          </TableHead>
-                        );
-                      })}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {table.getRowModel().rows?.length ? (
-                    table.getRowModel().rows.map((row) => (
-                      <TableRow
-                        key={row.id}
-                        data-state={row.getIsSelected() && "selected"}
-                        className="cursor-pointer"
-                        onClick={() => {
-                          const id = row.original.id
-                          if (id) navigate(`/data-contracts/${id}`)
-                        }}
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id}>
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext()
-                            )}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell
-                        colSpan={columns.length}
-                        className="h-24 text-center"
-                      >
-                        No results.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <div className="flex items-center justify-between space-x-2 py-4">
-            <div className="flex-1 text-sm text-muted-foreground">
-              {table.getFilteredSelectedRowModel().rows.length} of{" "}
-              {table.getFilteredRowModel().rows.length} row(s) selected.
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="flex items-center space-x-2">
-                <p className="text-sm font-medium">Rows per page</p>
-                <Select
-                  value={`${table.getState().pagination.pageSize}`}
-                  onValueChange={(value) => {
-                    table.setPageSize(Number(value));
-                  }}
-                >
-                  <SelectTrigger className="h-8 w-[70px]">
-                    <SelectValue placeholder={table.getState().pagination.pageSize} />
-                  </SelectTrigger>
-                  <SelectContent side="top">
-                    {[10, 20, 30, 40, 50].map((pageSize) => (
-                      <SelectItem key={pageSize} value={`${pageSize}`}>
-                        {pageSize}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-                Page {table.getState().pagination.pageIndex + 1} of{" "}
-                {table.getPageCount()}
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  className="hidden h-8 w-8 p-0 lg:flex"
-                  onClick={() => table.setPageIndex(0)}
-                  disabled={!table.getCanPreviousPage()}
-                >
-                  <span className="sr-only">Go to first page</span>
-                  <ChevronDown className="h-4 w-4 rotate-90" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-8 w-8 p-0"
-                  onClick={() => table.previousPage()}
-                  disabled={!table.getCanPreviousPage()}
-                >
-                  <span className="sr-only">Go to previous page</span>
-                  <ChevronDown className="h-4 w-4 rotate-90" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-8 w-8 p-0"
-                  onClick={() => table.nextPage()}
-                  disabled={!table.getCanNextPage()}
-                >
-                  <span className="sr-only">Go to next page</span>
-                  <ChevronDown className="h-4 w-4 -rotate-90" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="hidden h-8 w-8 p-0 lg:flex"
-                  onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                  disabled={!table.getCanNextPage()}
-                >
-                  <span className="sr-only">Go to last page</span>
-                  <ChevronDown className="h-4 w-4 -rotate-90" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+          bulkActions={(selectedRows) => (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1"
+                onClick={() => handleBulkRequestAccess(selectedRows.map(r => r.id!).filter(Boolean))}
+                title="Request access for selected"
+              >
+                <KeyRound className="w-4 h-4 mr-1" />
+                Request Access ({selectedRows.length})
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="h-9 gap-1"
+                onClick={() => handleBulkDelete(selectedRows.map(r => r.id!).filter(Boolean))}
+                title="Delete selected"
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                Delete Selected ({selectedRows.length})
+              </Button>
+            </>
+          )}
+          onRowClick={(row) => {
+            const id = row.original.id;
+            if (id) navigate(`/data-contracts/${id}`);
+          }}
+        />
       )}
 
       {/* Upload Dialog */}

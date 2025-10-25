@@ -115,7 +115,7 @@ export default function TeamsView() {
     setIsFormOpen(true);
   };
 
-  const handleFormSubmitSuccess = (savedTeam: TeamRead) => {
+  const handleFormSubmitSuccess = (_savedTeam: TeamRead) => {
     fetchTeams();
   };
 
@@ -268,21 +268,16 @@ export default function TeamsView() {
 
   return (
     <div className="py-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-             <UserCheck className="w-8 h-8" />
-             {t('title')}
-          </h1>
-          {hasProjectContext && currentProject && (
-            <p className="text-muted-foreground mt-1">
-              {t('showingTeamsForProject')} <span className="font-medium">{currentProject.name}</span>
-            </p>
-          )}
-        </div>
-        <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading || apiIsLoading}>
-            <PlusCircle className="mr-2 h-4 w-4" /> {t('addNewTeam')}
-        </Button>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+           <UserCheck className="w-8 h-8" />
+           {t('title')}
+        </h1>
+        {hasProjectContext && currentProject && (
+          <p className="text-muted-foreground mt-1">
+            {t('showingTeamsForProject')} <span className="font-medium">{currentProject.name}</span>
+          </p>
+        )}
       </div>
 
       {(apiIsLoading || permissionsLoading) ? (
@@ -307,7 +302,12 @@ export default function TeamsView() {
              columns={columns}
              data={teams}
              searchColumn="name"
-             toolbarActions={null}
+             storageKey="teams-sort"
+             toolbarActions={
+               <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading || apiIsLoading} className="h-9">
+                 <PlusCircle className="mr-2 h-4 w-4" /> {t('addNewTeam')}
+               </Button>
+             }
           />
           <TeamFormDialog
             isOpen={isFormOpen}

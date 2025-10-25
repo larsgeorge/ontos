@@ -2,14 +2,15 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import TagChip from '@/components/ui/tag-chip';
-import { Plus, Pencil, Trash2, AlertCircle, Database, ChevronDown, Upload, X, Loader2, Sparkles, Table, Workflow, KeyRound } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertCircle, Database, ChevronDown, Upload, Loader2, Sparkles, KeyRound, Table as TableIcon, Workflow } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ViewModeToggle } from '@/components/common/view-mode-toggle';
 import {
   Column,
   ColumnDef,
 } from "@tanstack/react-table"
 import { useApi } from '@/hooks/use-api';
-import { DataProduct, DataProductStatus, DataProductArchetype, DataProductOwner } from '@/types/data-product';
+import { DataProduct, DataProductStatus, DataProductOwner } from '@/types/data-product';
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { RelativeDate } from '@/components/common/relative-date';
@@ -61,8 +62,8 @@ export default function DataProducts() {
   const [statuses, setStatuses] = useState<DataProductStatus[]>([]);
   const [owners, setOwners] = useState<DataProductOwner[]>([]);
 
-  // Add state for product types
-  const [productTypes, setProductTypes] = useState<string[]>([]);
+  // Add state for product types (reserved for future use)
+  // const [productTypes, setProductTypes] = useState<string[]>([]);
 
   const [viewMode, setViewMode] = useState<'table' | 'graph'>('table');
 
@@ -71,7 +72,7 @@ export default function DataProducts() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { getDomainName, getDomainIdByName } = useDomains();
+  const { getDomainIdByName } = useDomains();
   const refreshNotifications = useNotificationsStore((state) => state.refreshNotifications);
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle);
@@ -105,23 +106,23 @@ export default function DataProducts() {
         }
 
         // Fetch products and dropdown values concurrently
-        const [productsResp, statusesResp, ownersResp, typesResp] = await Promise.all([
+        const [productsResp, statusesResp, ownersResp/*, typesResp*/] = await Promise.all([
           get<DataProduct[]>(productsEndpoint),
           get<DataProductStatus[]>('/api/data-products/statuses'),
           get<DataProductOwner[]>('/api/data-products/owners'),
-          get<string[]>('/api/data-products/types'), // Fetch product types
+          // get<string[]>('/api/data-products/types'), // Fetch product types (reserved for future use)
         ]);
 
         // Check responses using the helper
         const productsData = checkApiResponse(productsResp, 'Products');
         const statusesData = checkApiResponse(statusesResp, 'Statuses');
         const ownersData = checkApiResponse(ownersResp, 'Owners');
-        const typesData = checkApiResponse(typesResp, 'Product Types');
+        // const typesData = checkApiResponse(typesResp, 'Product Types'); // (reserved for future use)
 
         setProducts(Array.isArray(productsData) ? productsData : []);
         setStatuses(Array.isArray(statusesData) ? statusesData : []);
         setOwners(Array.isArray(ownersData) ? ownersData : []);
-        setProductTypes(Array.isArray(typesData) ? typesData : []); // Set product types
+        // setProductTypes(Array.isArray(typesData) ? typesData : []); // Set product types (reserved for future use)
 
       } catch (err: any) {
         console.error('Error fetching initial data:', err);
@@ -129,7 +130,7 @@ export default function DataProducts() {
         // Reset state on error
         setProducts([]);
         setStatuses([]);
-        setProductTypes([]); // Reset types on error
+        // setProductTypes([]); // Reset types on error (reserved for future use)
         setOwners([]);
       } finally {
         setLoading(false);
@@ -189,7 +190,7 @@ export default function DataProducts() {
   };
 
   // --- Wizard Submit Success Handler ---
-  const handleWizardSubmitSuccess = (savedProduct: DataProduct) => {
+  const handleWizardSubmitSuccess = (_savedProduct: DataProduct) => {
     fetchProducts();
   };
 
@@ -531,16 +532,15 @@ export default function DataProducts() {
   ], [handleOpenWizard, handleDeleteProduct, getStatusColor, canWrite, canAdmin, permissionsLoading, navigate]);
 
   // --- Button Variant Logic (Moved outside) ---
-  const tableButtonVariant = viewMode === 'table' ? 'secondary' : 'ghost';
-  const graphButtonVariant = viewMode === 'graph' ? 'secondary' : 'ghost';
-
   // --- Render Logic ---
   return (
     <div className="py-6">
-      <h1 className="text-3xl font-bold mb-6 flex items-center gap-2">
-        <Database className="w-8 h-8" />
-        Data Products
-      </h1>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <Database className="w-8 h-8" />
+          Data Products
+        </h1>
+      </div>
 
       {/* 1. Check Permissions Loading */}
       {permissionsLoading ? (
@@ -566,64 +566,54 @@ export default function DataProducts() {
         </Alert>
       ) : (
         // 5. Render Content (if permissions OK and data loaded without error)
-        viewMode === 'table' ? (
-          <DataTable
-            columns={columns}
-            data={products}
-            searchColumn="info.title"
-            toolbarActions={
-              <>
-                {/* Create Button - Conditionally enabled */}
-                <Button
-                    onClick={() => handleOpenWizard()}
-                    className="gap-2 h-9"
-                    disabled={!canWrite || permissionsLoading}
-                    title={canWrite ? "Create Data Product" : "Create (Permission Denied)"}
-                >
-                  <Plus className="h-4 w-4" />
-                  Create Product
-                </Button>
-                {/* Upload Button - Conditionally enabled */}
-                <Button
-                    onClick={triggerFileUpload}
-                    className="gap-2 h-9"
-                    variant="outline"
-                    disabled={isUploading || !canWrite || permissionsLoading}
-                    title={canWrite ? "Upload Data Product File" : "Upload (Permission Denied)"}
-                >
-                  <Upload className="h-4 w-4" />
-                  {isUploading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</>) : 'Upload File'}
-                </Button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept=".json,.yaml,.yml"
-                  style={{ display: 'none' }}
-                />
-                {/* View Toggle Buttons - Moved Here */}
-                <div className="flex items-center gap-1 border rounded-md p-0.5 ml-auto">
-                    <Button
-                        variant={tableButtonVariant}
-                        size="sm"
-                        onClick={() => setViewMode('table')}
-                        className="h-8 px-2"
-                        title="Table View"
-                    >
-                        <Table className="h-4 w-4" />
-                    </Button>
-                    <Button
-                        variant={graphButtonVariant}
-                        size="sm"
-                        onClick={() => setViewMode('graph')}
-                        className="h-8 px-2"
-                        title="Graph View"
-                    >
-                        <Workflow className="h-4 w-4" />
-                    </Button>
-                </div>
-              </>
-            }
+        <div className="space-y-4">
+          <div className="flex items-center justify-end">
+            <ViewModeToggle
+              currentView={viewMode}
+              onViewChange={setViewMode}
+              tableViewIcon={<TableIcon className="h-4 w-4" />}
+              graphViewIcon={<Workflow className="h-4 w-4" />}
+            />
+          </div>
+
+          {viewMode === 'table' ? (
+            <DataTable
+              columns={columns}
+              data={products}
+              searchColumn="info.title"
+              storageKey="data-products-sort"
+              toolbarActions={
+                <>
+                  {/* Create Button - Conditionally enabled */}
+                  <Button
+                      onClick={() => handleOpenWizard()}
+                      className="gap-2 h-9"
+                      disabled={!canWrite || permissionsLoading}
+                      title={canWrite ? "Create Data Product" : "Create (Permission Denied)"}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create Product
+                  </Button>
+                  {/* Upload Button - Conditionally enabled */}
+                  <Button
+                      onClick={triggerFileUpload}
+                      className="gap-2 h-9"
+                      variant="outline"
+                      disabled={isUploading || !canWrite || permissionsLoading}
+                      title={canWrite ? "Upload Data Product File" : "Upload (Permission Denied)"}
+                  >
+                    <Upload className="h-4 w-4" />
+                    {isUploading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</>) : 'Upload File'}
+                  </Button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept=".json,.yaml,.yml"
+                    style={{ display: 'none' }}
+                  />
+                </>
+              }
             bulkActions={(selectedRows) => {
               // Remove view toggle logic from here
               return (
@@ -674,14 +664,15 @@ export default function DataProducts() {
               }
             }}
           />
-        ) : (
-          <DataProductGraphView 
-              products={products} 
-              viewMode={viewMode}
-              setViewMode={setViewMode}
-              navigate={navigate}
-          />
-        )
+          ) : (
+            <DataProductGraphView 
+                products={products} 
+                viewMode={viewMode}
+                setViewMode={setViewMode}
+                navigate={navigate}
+            />
+          )}
+        </div>
       )}
 
       {/* Render the new Wizard Dialog Component */}

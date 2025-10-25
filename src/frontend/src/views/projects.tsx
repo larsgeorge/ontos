@@ -260,14 +260,11 @@ export default function ProjectsView() {
 
   return (
     <div className="py-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
            <FolderOpen className="w-8 h-8" />
            {t('title')}
         </h1>
-        <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading || apiIsLoading}>
-            <PlusCircle className="mr-2 h-4 w-4" /> {t('addNewProject')}
-        </Button>
       </div>
 
       {(apiIsLoading || permissionsLoading) ? (
@@ -292,7 +289,12 @@ export default function ProjectsView() {
              columns={columns}
              data={projects}
              searchColumn="name"
-             toolbarActions={null}
+             storageKey="projects-sort"
+             toolbarActions={
+               <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading || apiIsLoading} className="h-9">
+                 <PlusCircle className="mr-2 h-4 w-4" /> {t('addNewProject')}
+               </Button>
+             }
           />
           <ProjectFormDialog
             isOpen={isFormOpen}

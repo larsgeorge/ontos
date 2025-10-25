@@ -90,9 +90,12 @@ export default function DataProductDetails() {
   const [isStatusTransitionDialogOpen, setIsStatusTransitionDialogOpen] = useState(false);
   const [isImportExportDialogOpen, setIsImportExportDialogOpen] = useState(false);
   const [isImportTeamMembersOpen, setIsImportTeamMembersOpen] = useState(false);
-  
+
+  // Team member editing state
+  const [editingTeamMemberIndex, setEditingTeamMemberIndex] = useState<number | null>(null);
+
   // Owner team state
-  const [ownerTeamName, setOwnerTeamName] = useState<string | null>(null);
+  const [ownerTeamName, setOwnerTeamName] = useState<string>('');
 
   // Permissions
   const featureId = 'data-products';
@@ -118,17 +121,15 @@ export default function DataProductDetails() {
   };
 
   const fetchOwnerTeamName = async (teamId: string) => {
+    if (!teamId) return
     try {
-      const response = await fetch(`/api/teams/summary`);
+      const response = await fetch(`/api/teams/${teamId}`)
       if (response.ok) {
-        const teams = await response.json();
-        const team = teams.find((t: any) => t.id === teamId);
-        if (team) {
-          setOwnerTeamName(team.name);
-        }
+        const data = await response.json()
+        setOwnerTeamName(data.name || '')
       }
-    } catch (error) {
-      console.error('Failed to fetch owner team name:', error);
+    } catch (e) {
+      console.warn('Failed to fetch owner team:', e)
     }
   };
 
@@ -164,7 +165,7 @@ export default function DataProductDetails() {
       if (productData.owner_team_id) {
         await fetchOwnerTeamName(productData.owner_team_id);
       } else {
-        setOwnerTeamName(null);
+        setOwnerTeamName('');
       }
 
       // ODPS v1.0.0: name is at root level
@@ -308,8 +309,71 @@ export default function DataProductDetails() {
       });
       if (!res.ok) throw new Error(`Failed to add team member (${res.status})`);
       await fetchProductDetails();
+      toast({
+        title: 'Team Member Added',
+        description: 'Team member added successfully.',
+      });
     } catch (e: any) {
+      toast({
+        title: 'Error',
+        description: e?.message || 'Failed to add team member',
+        variant: 'destructive',
+      });
       throw new Error(e?.message || 'Failed to add team member');
+    }
+  };
+
+  const handleUpdateTeamMember = async (member: TeamMember) => {
+    if (!productId || !product || editingTeamMemberIndex === null) return;
+    try {
+      const updatedMembers = [...(product.team?.members || [])];
+      updatedMembers[editingTeamMemberIndex] = member;
+      const updatedTeam = { ...product.team, members: updatedMembers };
+      const res = await fetch(`/api/data-products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...product, team: updatedTeam }),
+      });
+      if (!res.ok) throw new Error(`Failed to update team member (${res.status})`);
+      await fetchProductDetails();
+      setEditingTeamMemberIndex(null);
+      toast({
+        title: 'Team Member Updated',
+        description: 'Team member updated successfully.',
+      });
+    } catch (e: any) {
+      toast({
+        title: 'Error',
+        description: e?.message || 'Failed to update team member',
+        variant: 'destructive',
+      });
+      throw new Error(e?.message || 'Failed to update team member');
+    }
+  };
+
+  const handleDeleteTeamMember = async (index: number) => {
+    if (!productId || !product) return;
+    if (!confirm('Remove this team member?')) return;
+    try {
+      const updatedMembers = (product.team?.members || []).filter((_, i) => i !== index);
+      const updatedTeam = { ...product.team, members: updatedMembers };
+      const res = await fetch(`/api/data-products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...product, team: updatedTeam }),
+      });
+      if (!res.ok) throw new Error(`Failed to delete team member (${res.status})`);
+      await fetchProductDetails();
+      toast({
+        title: 'Team Member Removed',
+        description: 'Team member removed successfully.',
+      });
+    } catch (e: any) {
+      toast({
+        title: 'Error',
+        description: e?.message || 'Failed to delete team member',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -480,10 +544,6 @@ export default function DataProductDetails() {
     );
   }
 
-  // ODPS v1.0.0: Get owner - prefer owner_team_id, fallback to first team member
-  const owner = product.owner_team_id 
-    ? (ownerTeamName || product.owner_team_id)
-    : (product.team?.members?.[0]?.username || product.team?.name || 'N/A');
   const domainLabel = product.domain ? (getDomainName(product.domain) || product.domain) : 'N/A';
 
   return (
@@ -581,7 +641,17 @@ export default function DataProductDetails() {
             </div>
             <div className="space-y-1">
               <Label>Owner:</Label>
-              <span className="text-sm block">{owner}</span>
+              {product.owner_team_id && ownerTeamName ? (
+                <span
+                  className="text-sm block cursor-pointer text-primary hover:underline"
+                  onClick={() => navigate(`/teams/${product.owner_team_id}`)}
+                  title={`Team ID: ${product.owner_team_id}`}
+                >
+                  {ownerTeamName}
+                </span>
+              ) : (
+                <span className="text-sm block">{product.owner_team_id || 'N/A'}</span>
+              )}
             </div>
             <div className="space-y-1">
               <Label>API Version:</Label>
@@ -760,11 +830,33 @@ export default function DataProductDetails() {
           {product.team?.members && product.team.members.length > 0 ? (
             <div className="space-y-2">
               {product.team.members.map((member, idx) => (
-                <div key={idx} className="border rounded p-3">
-                  <div className="font-medium">{member.name || member.username}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {member.role && `Role: ${member.role}`} | {member.username}
+                <div key={idx} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline">{member.role || 'Member'}</Badge>
+                    <span className="text-sm">{member.name || member.username}</span>
                   </div>
+                  {canWrite && (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingTeamMemberIndex(idx);
+                          setIsTeamMemberDialogOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteTeamMember(idx)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -813,6 +905,8 @@ export default function DataProductDetails() {
           setIsEditDialogOpen(false);
           fetchProductDetails();
         }}
+        product={product || undefined}
+        mode="edit"
       />
 
       <CreateVersionDialog
@@ -857,8 +951,12 @@ export default function DataProductDetails() {
 
       <TeamMemberFormDialog
         isOpen={isTeamMemberDialogOpen}
-        onOpenChange={setIsTeamMemberDialogOpen}
-        onSubmit={handleAddTeamMember}
+        onOpenChange={(open) => {
+          setIsTeamMemberDialogOpen(open);
+          if (!open) setEditingTeamMemberIndex(null);
+        }}
+        onSubmit={editingTeamMemberIndex !== null ? handleUpdateTeamMember : handleAddTeamMember}
+        initial={editingTeamMemberIndex !== null ? product?.team?.members?.[editingTeamMemberIndex] : undefined}
       />
 
       <SupportChannelFormDialog

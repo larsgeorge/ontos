@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import { MoreHorizontal, PlusCircle, Loader2, AlertCircle, BoxSelect, ListTree, TableIcon, WorkflowIcon } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, Loader2, AlertCircle, BoxSelect, TableIcon, WorkflowIcon } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { DataDomain } from '@/types/data-domain';
@@ -127,7 +127,7 @@ export default function DataDomainsView() {
     setIsFormOpen(true);
   };
 
-  const handleFormSubmitSuccess = (savedDomain: DataDomain) => {
+  const handleFormSubmitSuccess = (_savedDomain: DataDomain) => {
     fetchDataDomains();
   };
 
@@ -284,22 +284,11 @@ export default function DataDomainsView() {
 
   return (
     <div className="py-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-2">
            <BoxSelect className="w-8 h-8" />
            {t('title')}
         </h1>
-        <div className="flex items-center gap-2">
-            <ViewModeToggle
-                currentView={viewMode}
-                onViewChange={setViewMode}
-                tableViewIcon={<TableIcon className="h-4 w-4" />}
-                graphViewIcon={<WorkflowIcon className="h-4 w-4" />}
-            />
-            <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading || apiIsLoading}>
-                <PlusCircle className="mr-2 h-4 w-4" /> {t('addNewDomain')}
-            </Button>
-        </div>
       </div>
 
       {(apiIsLoading || permissionsLoading) ? (
@@ -318,24 +307,42 @@ export default function DataDomainsView() {
               <AlertTitle>{t('messages.errorLoadingData')}</AlertTitle>
               <AlertDescription>{componentError}</AlertDescription>
           </Alert>
-      ) : viewMode === 'table' ? (
-        <>
-          <DataTable
-             columns={columns}
-             data={domains}
-             searchColumn="name"
-             toolbarActions={null}
-          />
-          <DataDomainFormDialog
-            isOpen={isFormOpen}
-            onOpenChange={setIsFormOpen}
-            domain={editingDomain}
-            onSubmitSuccess={handleFormSubmitSuccess}
-            allDomains={domains}
-          />
-        </>
       ) : (
-        <DataDomainGraphView domains={domains} />
+        <div className="space-y-4">
+          <div className="flex items-center justify-end">
+            <ViewModeToggle
+              currentView={viewMode}
+              onViewChange={setViewMode}
+              tableViewIcon={<TableIcon className="h-4 w-4" />}
+              graphViewIcon={<WorkflowIcon className="h-4 w-4" />}
+            />
+          </div>
+
+          {viewMode === 'table' ? (
+            <>
+              <DataTable
+                columns={columns}
+                data={domains}
+                searchColumn="name"
+                storageKey="data-domains-sort"
+                toolbarActions={
+                  <Button onClick={handleOpenCreateDialog} disabled={!canWrite || permissionsLoading || apiIsLoading} className="h-9">
+                    <PlusCircle className="mr-2 h-4 w-4" /> {t('addNewDomain')}
+                  </Button>
+                }
+              />
+              <DataDomainFormDialog
+                isOpen={isFormOpen}
+                onOpenChange={setIsFormOpen}
+                domain={editingDomain}
+                onSubmitSuccess={handleFormSubmitSuccess}
+                allDomains={domains}
+              />
+            </>
+          ) : (
+            <DataDomainGraphView domains={domains} />
+          )}
+        </div>
       )}
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

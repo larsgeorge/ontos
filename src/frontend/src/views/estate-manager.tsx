@@ -1,29 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { ChevronDown, MoreHorizontal, Globe, Plus, Share2, Database, Columns, Trash2, List, Network } from 'lucide-react';
-import {
-  ColumnDef,
-  ColumnFiltersState,
-  SortingState,
-  VisibilityState,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
-import { Checkbox } from "@/components/ui/checkbox"
+import { MoreHorizontal, Globe, Plus, Share2, Database, Network } from 'lucide-react';
+import { ColumnDef } from "@tanstack/react-table"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,27 +17,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useNavigate } from 'react-router-dom';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
-import { Table as TableIcon, Workflow as WorkflowIcon } from 'lucide-react';
 import { ViewModeToggle } from '@/components/common/view-mode-toggle';
-
-import ReactFlow, {
-    Node, 
-    Edge,
-    Background,
-    Controls,
-    MiniMap,
-    useNodesState,
-    useEdgesState,
-    Position,
-    MarkerType,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
-import EstateNode, { EstateNodeData, DynamicHandle } from '@/components/estates/estate-node';
+import { DataTable } from '@/components/ui/data-table';
 import EstateGraphView from '@/components/estates/estate-graph-view';
 
 // --- TypeScript Interfaces corresponding to Pydantic Models ---
@@ -97,9 +68,6 @@ interface Estate {
 }
 // --- End TypeScript Interfaces ---
 
-// Define nodeTypes outside the component for memoization
-const nodeTypes = { estateNode: EstateNode };
-
 export default function EstateManager() {
   const { toast } = useToast();
   const { get, post, put, delete: deleteEstateApi } = useApi();
@@ -109,10 +77,6 @@ export default function EstateManager() {
   const [estates, setEstates] = useState<Estate[]>([]);
   const [selectedEstate, setSelectedEstate] = useState<Estate | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
-  const [rowSelection, setRowSelection] = useState({});
   const [formData, setFormData] = useState<Partial<Estate>>({
     name: '',
     description: '',
@@ -229,38 +193,6 @@ export default function EstateManager() {
       });
     }
   };
-  
-  const handleDeleteSelected = async () => {
-    const selectedRows = table.getSelectedRowModel().rows;
-    if (selectedRows.length === 0) {
-        toast({ title: "No Rows Selected", description: "Please select estates to delete.", variant: "destructive" });
-        return;
-    }
-    if (!confirm(`Are you sure you want to delete ${selectedRows.length} selected estate(s)?`)) return;
-
-    const deletePromises = selectedRows.map(row => deleteEstateApi(`/api/estates/${row.original.id}`));
-    try {
-        const results = await Promise.allSettled(deletePromises);
-        const failedDeletes = results.filter(result => result.status === 'rejected' || (result.status === 'fulfilled' && result.value.error));
-        
-        if (failedDeletes.length > 0) {
-            toast({
-                title: "Partial Deletion Error",
-                description: `${failedDeletes.length} estate(s) could not be deleted. Check console for details.`,
-                variant: "destructive",
-            });
-            failedDeletes.forEach(fail => console.error("Deletion error:", (fail as any).reason || (fail as any).value?.error));
-        } else {
-            toast({ title: "Success", description: `${selectedRows.length} estate(s) deleted successfully.` });
-        }
-    } catch (err) {
-        toast({ title: "Bulk Delete Error", description: "An unexpected error occurred during bulk deletion.", variant: "destructive" });
-        console.error("Bulk delete error:", err);
-    } finally {
-        fetchEstates();
-        table.resetRowSelection();
-    }
-  };
 
   const handleSync = async (id: string) => {
     toast({ title: 'Triggering Sync', description: 'Requesting sync for the estate...' });
@@ -315,45 +247,10 @@ export default function EstateManager() {
 
   const columns: ColumnDef<Estate>[] = [
     {
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={table.getIsAllPageRowsSelected() ? true : (table.getIsSomePageRowsSelected() ? "indeterminate" : false)}
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
-          onClick={(e) => e.stopPropagation()}
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-    },
-    {
       accessorKey: "name",
-      header: ({ column }) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Name
-            <ChevronDown className="ml-2 h-4 w-4" />
-          </Button>
-        );
-      },
+      header: "Name",
       cell: ({ row }) => (
-        <div 
-            className="font-medium cursor-pointer hover:underline"
-            onClick={() => handleNodeClick(row.original.id)}
-        >
-            {row.getValue("name")}
-        </div>
+        <div className="font-medium">{row.getValue("name")}</div>
       ),
     },
     {
@@ -469,25 +366,6 @@ export default function EstateManager() {
     },
   ];
 
-  const table = useReactTable({
-    data: estates,
-    columns,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      rowSelection,
-    },
-  });
-
   return (
     <div className="py-6">
       <h1 className="text-3xl font-bold mb-6 flex items-center gap-2">
@@ -495,196 +373,28 @@ export default function EstateManager() {
       </h1>
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 flex-grow">
-            {viewMode === 'table' && (
-              <Input
-                placeholder="Filter estates (name, URL, metastore...)"
-                value={(table.getState().globalFilter as string) ?? ''}
-                onChange={(event) => table.setGlobalFilter(event.target.value)}
-                className="max-w-sm h-9"
-              />
-            )}
-          </div>
-          
-          <div className="flex items-center gap-2">
-            {viewMode === 'table' && Object.keys(rowSelection).length > 0 && (
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 text-red-600 hover:bg-red-600 hover:text-white border-red-600"
-                    onClick={handleDeleteSelected} 
-                >
-                    <Trash2 className="mr-2 h-4 w-4" /> Delete ({Object.keys(rowSelection).length})
-                </Button>
-            )}
-            {viewMode === 'table' && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="h-9">
-                    <Columns className="mr-2 h-4 w-4" /> Columns 
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {table
-                    .getAllColumns()
-                    .filter((column) => column.getCanHide())
-                    .map((column) => {
-                      return (
-                        <DropdownMenuCheckboxItem
-                          key={column.id}
-                          className="capitalize"
-                          checked={column.getIsVisible()}
-                          onCheckedChange={(value) =>
-                            column.toggleVisibility(!!value)
-                          }
-                        >
-                          {column.id.replace(/_/g, ' ')}
-                        </DropdownMenuCheckboxItem>
-                      );
-                    })}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            <ViewModeToggle 
-                currentView={viewMode}
-                onViewChange={setViewMode}
-                graphViewIcon={<WorkflowIcon className="h-4 w-4" />}
-                className="ml-auto"
-            />
-            <Button onClick={() => openDialog()} className="h-9">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Estate
-            </Button>
-          </div>
+        <div className="flex items-center justify-end">
+          <ViewModeToggle 
+              currentView={viewMode}
+              onViewChange={setViewMode}
+              graphViewIcon={<Network className="h-4 w-4" />}
+          />
         </div>
 
         {viewMode === 'table' ? (
-          <>
-            <Card>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    {table.getHeaderGroups().map((headerGroup) => (
-                      <TableRow key={headerGroup.id}>
-                        {headerGroup.headers.map((header) => {
-                          return (
-                            <TableHead key={header.id} style={{ whiteSpace: 'nowrap' }}>
-                              {header.isPlaceholder
-                                ? null
-                                : flexRender(
-                                    header.column.columnDef.header,
-                                    header.getContext()
-                                  )}
-                            </TableHead>
-                          );
-                        })}
-                      </TableRow>
-                    ))}
-                  </TableHeader>
-                  <TableBody>
-                    {table.getRowModel().rows?.length ? (
-                      table.getRowModel().rows.map((row) => (
-                        <TableRow
-                          key={row.id}
-                          data-state={row.getIsSelected() && "selected"}
-                        >
-                          {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id}>
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext()
-                              )}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell
-                          colSpan={columns.length}
-                          className="h-24 text-center"
-                        >
-                          No results. {estates.length > 0 ? "Try adjusting your filters." : "Create an estate to get started."}
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-
-            <div className="flex items-center justify-between space-x-2 py-4">
-              <div className="flex-1 text-sm text-muted-foreground">
-                {table.getFilteredSelectedRowModel().rows.length} of{" "}
-                {table.getFilteredRowModel().rows.length} row(s) selected.
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="flex items-center space-x-2">
-                  <p className="text-sm font-medium">Rows per page</p>
-                  <Select
-                    value={`${table.getState().pagination.pageSize}`}
-                    onValueChange={(value) => {
-                      table.setPageSize(Number(value));
-                    }}
-                  >
-                    <SelectTrigger className="h-8 w-[70px]">
-                      <SelectValue placeholder={table.getState().pagination.pageSize} />
-                    </SelectTrigger>
-                    <SelectContent side="top">
-                      {[10, 20, 30, 40, 50, 100].map((pageSize) => (
-                        <SelectItem key={pageSize} value={`${pageSize}`}>
-                          {pageSize}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-                  Page {table.getState().pagination.pageIndex + 1} of{" "}
-                  {table.getPageCount() > 0 ? table.getPageCount() : 1}
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    className="hidden h-8 w-8 p-0 lg:flex"
-                    onClick={() => table.setPageIndex(0)}
-                    disabled={!table.getCanPreviousPage()}
-                  >
-                    <span className="sr-only">Go to first page</span>
-                    <ChevronDown className="h-4 w-4 rotate-90" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-8 w-8 p-0"
-                    onClick={() => table.previousPage()}
-                    disabled={!table.getCanPreviousPage()}
-                  >
-                    <span className="sr-only">Go to previous page</span>
-                    <ChevronDown className="h-4 w-4 rotate-90" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-8 w-8 p-0"
-                    onClick={() => table.nextPage()}
-                    disabled={!table.getCanNextPage()}
-                  >
-                    <span className="sr-only">Go to next page</span>
-                    <ChevronDown className="h-4 w-4 -rotate-90" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="hidden h-8 w-8 p-0 lg:flex"
-                    onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                    disabled={!table.getCanNextPage()}
-                  >
-                    <span className="sr-only">Go to last page</span>
-                    <ChevronDown className="h-4 w-4 -rotate-90" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </>
+          <DataTable
+            columns={columns}
+            data={estates}
+            searchColumn="name"
+            storageKey="estate-manager-sort"
+            toolbarActions={
+              <Button onClick={() => openDialog()} className="h-9">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Estate
+              </Button>
+            }
+            onRowClick={(row) => handleNodeClick(row.original.id)}
+          />
         ) : (
           <div className="h-[calc(100vh-280px)] w-full border rounded-lg">
             <EstateGraphView estates={estates} onNodeClick={handleNodeClick} />
