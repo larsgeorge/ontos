@@ -762,7 +762,7 @@ async def create_data_product_version(
             details=details_for_audit,
         )
 
-@router.put('/data-products/{product_id}', response_model=DataProduct, response_model_by_alias=False)
+@router.put('/data-products/{product_id}', response_model=DataProduct)
 async def update_data_product(
     product_id: str,
     request: Request,
@@ -955,7 +955,7 @@ async def delete_data_product(
             details=details_for_audit,
         )
 
-@router.get('/data-products/{product_id}', response_model=Any, response_model_by_alias=False)
+@router.get('/data-products/{product_id}', response_model=Any)
 async def get_data_product(
     product_id: str,
     manager: DataProductsManager = Depends(get_data_products_manager),

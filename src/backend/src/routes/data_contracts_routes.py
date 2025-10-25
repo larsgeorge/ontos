@@ -118,7 +118,7 @@ async def get_contracts(
         logger.error(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
 
-@router.get('/data-contracts/{contract_id}', response_model=DataContractRead, response_model_by_alias=False)
+@router.get('/data-contracts/{contract_id}', response_model=DataContractRead)
 async def get_contract(contract_id: str, db: DBSessionDep, _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))):
     """Get a specific data contract with full ODCS structure"""
     contract = data_contract_repo.get_with_all(db, id=contract_id)
@@ -861,7 +861,7 @@ async def create_contract(
             details=details_for_audit
         )
 
-@router.put('/data-contracts/{contract_id}', response_model=DataContractRead, response_model_by_alias=False)
+@router.put('/data-contracts/{contract_id}', response_model=DataContractRead)
 async def update_contract(
     contract_id: str,
     request: Request,
