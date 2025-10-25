@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { useNotificationsStore } from '@/stores/notifications-store';
@@ -266,37 +266,36 @@ export default function RequestProductActionDialog({
           {/* Request Type Selection */}
           <div className="space-y-3">
             <Label className="text-sm font-medium">Request Type *</Label>
-            <div className="space-y-2">
-              {(['access', 'status_change', 'genie_space', 'new_version'] as RequestType[]).map((type) => {
-                const config = getRequestTypeConfig(type);
-                return (
-                  <div key={type} className={`flex items-start space-x-3 p-3 rounded-lg border ${!config.enabled ? 'opacity-50 bg-muted/30' : 'hover:bg-muted/50 cursor-pointer'} ${requestType === type ? 'border-primary bg-primary/10' : ''}`} 
-                    onClick={() => config.enabled && setRequestType(type)}>
-                    <input 
-                      type="radio" 
-                      id={type} 
-                      name="requestType" 
-                      value={type} 
-                      checked={requestType === type}
-                      disabled={!config.enabled}
-                      onChange={(e) => setRequestType(e.target.value as RequestType)}
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <label htmlFor={type} className={`flex items-center gap-2 text-sm font-medium ${!config.enabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                        {config.icon}
-                        {config.title}
-                      </label>
-                      <p className="text-xs text-muted-foreground mt-1">{config.description}</p>
-                      {!config.enabled && type === 'status_change' && (
-                        <p className="text-xs text-destructive mt-1">
-                          No transitions available for status '{productStatus}'
-                        </p>
-                      )}
-                    </div>
+            <Select value={requestType} onValueChange={(value) => setRequestType(value as RequestType)}>
+              <SelectTrigger>
+                <SelectValue>
+                  <div className="flex items-center gap-2">
+                    {currentConfig.icon}
+                    <span>{currentConfig.title}</span>
                   </div>
-                );
-              })}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {(['access', 'status_change', 'genie_space', 'new_version'] as RequestType[]).map((type) => {
+                  const config = getRequestTypeConfig(type);
+                  return (
+                    <SelectItem key={type} value={type} disabled={!config.enabled}>
+                      <div className="flex items-center gap-2">
+                        {config.icon}
+                        <span>{config.title}</span>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            <div className="p-3 bg-muted/50 rounded-lg border text-sm">
+              <p className="text-muted-foreground">{currentConfig.description}</p>
+              {!currentConfig.enabled && requestType === 'status_change' && (
+                <p className="text-destructive mt-2 text-xs">
+                  No transitions available for status '{productStatus}'
+                </p>
+              )}
             </div>
           </div>
 
@@ -348,26 +347,36 @@ export default function RequestProductActionDialog({
               {productStatus && getAllowedTransitions(productStatus).length > 0 ? (
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Select Target Status *</Label>
-                  <RadioGroup value={targetStatus} onValueChange={setTargetStatus}>
-                    {getAllowedTransitions(productStatus).map((status) => {
-                      const config = getStatusConfig(status);
-                      return (
-                        <div key={status} className="flex items-center space-x-2 rounded-lg border p-3 hover:bg-muted/50 transition-colors">
-                          <RadioGroupItem value={status} id={`status-${status}`} />
-                          <label
-                            htmlFor={`status-${status}`}
-                            className="flex-1 cursor-pointer"
-                          >
+                  <Select value={targetStatus} onValueChange={setTargetStatus}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose target status...">
+                        {targetStatus && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">{getStatusConfig(targetStatus).icon}</span>
+                            <span>{getStatusConfig(targetStatus).label}</span>
+                          </div>
+                        )}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getAllowedTransitions(productStatus).map((status) => {
+                        const config = getStatusConfig(status);
+                        return (
+                          <SelectItem key={status} value={status}>
                             <div className="flex items-center gap-2">
                               <span className="text-lg">{config.icon}</span>
-                              <span className="font-medium text-sm">{config.label}</span>
+                              <span>{config.label}</span>
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">{config.description}</p>
-                          </label>
-                        </div>
-                      );
-                    })}
-                  </RadioGroup>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  {targetStatus && (
+                    <div className="p-3 bg-muted/50 rounded-lg border text-sm">
+                      <p className="text-muted-foreground">{getStatusConfig(targetStatus).description}</p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <Alert variant="destructive">
