@@ -6,13 +6,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { useNotificationsStore } from '@/stores/notifications-store';
-import { Loader2, AlertCircle, FileText, Eye, Rocket, Database, ShieldCheck, Info } from 'lucide-react';
+import { Loader2, AlertCircle, FileText, Eye, Rocket, Database, ShieldCheck, Info, RefreshCw } from 'lucide-react';
 import type { DeploymentPolicy } from '@/types/deployment-policy';
+import {
+  getAllowedTransitions,
+  getStatusConfig,
+  getRecommendedAction,
+} from '@/lib/odcs-lifecycle';
 
-type RequestType = 'access' | 'review' | 'publish' | 'deploy';
+type RequestType = 'access' | 'review' | 'publish' | 'deploy' | 'status_change';
 
 interface RequestContractActionDialogProps {
   isOpen: boolean;
@@ -40,6 +46,7 @@ export default function RequestContractActionDialog({
   const [justification, setJustification] = useState('');
   const [catalog, setCatalog] = useState('');
   const [schema, setSchema] = useState('');
+  const [targetStatus, setTargetStatus] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -82,6 +89,15 @@ export default function RequestContractActionDialog({
           enabled: true,
           endpoint: `/api/data-contracts/${contractId}/request-deploy`,
         };
+      case 'status_change':
+        const allowedTransitions = contractStatus ? getAllowedTransitions(contractStatus) : [];
+        return {
+          icon: <RefreshCw className="h-5 w-5" />,
+          title: 'Request Status Change',
+          description: 'Request approval to change the lifecycle status of this contract.',
+          enabled: allowedTransitions.length > 0,
+          endpoint: `/api/data-contracts/${contractId}/request-status-change`,
+        };
     }
   };
 
@@ -109,6 +125,21 @@ export default function RequestContractActionDialog({
     
     if (requestType === 'deploy') {
       // Catalog and schema are optional
+    }
+    
+    if (requestType === 'status_change') {
+      if (!targetStatus) {
+        setError('Please select a target status');
+        return false;
+      }
+      if (!justification.trim()) {
+        setError('Please provide a justification for the status change');
+        return false;
+      }
+      if (justification.trim().length < 20) {
+        setError('Please provide a more detailed justification (at least 20 characters)');
+        return false;
+      }
     }
     
     return true;
@@ -152,6 +183,12 @@ export default function RequestContractActionDialog({
           schema: schema.trim() || undefined,
           message: message.trim() || undefined,
         };
+      } else if (requestType === 'status_change') {
+        payload = {
+          target_status: targetStatus,
+          justification: justification.trim(),
+          current_status: contractStatus,
+        };
       }
 
       const response = await post(config.endpoint, payload);
@@ -178,6 +215,7 @@ export default function RequestContractActionDialog({
       setJustification('');
       setCatalog('');
       setSchema('');
+      setTargetStatus('');
       onOpenChange(false);
 
     } catch (e: any) {
@@ -197,6 +235,7 @@ export default function RequestContractActionDialog({
     setJustification('');
     setCatalog('');
     setSchema('');
+    setTargetStatus('');
     setError(null);
     onOpenChange(false);
   };
@@ -272,7 +311,7 @@ export default function RequestContractActionDialog({
           <div className="space-y-3">
             <Label className="text-sm font-medium">Request Type *</Label>
             <div className="space-y-2">
-              {(['deploy', 'review', 'publish', 'access'] as RequestType[]).map((type) => {
+              {(['status_change', 'deploy', 'review', 'publish', 'access'] as RequestType[]).map((type) => {
                 const config = getRequestTypeConfig(type);
                 return (
                   <div key={type} className={`flex items-start space-x-3 p-3 rounded-lg border ${!config.enabled ? 'opacity-50 bg-muted/30' : 'hover:bg-muted/50 cursor-pointer'} ${requestType === type ? 'border-primary bg-primary/10' : ''}`} 
@@ -515,6 +554,109 @@ export default function RequestContractActionDialog({
                   className="min-h-[60px] resize-none"
                   disabled={submitting}
                 />
+              </div>
+            </div>
+          )}
+
+          {requestType === 'status_change' && (
+            <div className="space-y-4">
+              {/* Current Status */}
+              {contractStatus && (
+                <div className="rounded-lg border bg-muted/50 p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Label className="text-sm font-semibold">Current Status:</Label>
+                    <span className="text-lg">{getStatusConfig(contractStatus).icon}</span>
+                    <span className="font-medium">{getStatusConfig(contractStatus).label}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{getStatusConfig(contractStatus).description}</p>
+                </div>
+              )}
+
+              {/* Recommended Action */}
+              {contractStatus && getRecommendedAction(contractStatus) && (
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription className="text-sm">
+                    <strong>Recommended:</strong> {getRecommendedAction(contractStatus)}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Target Status Selection */}
+              {contractStatus && getAllowedTransitions(contractStatus).length > 0 ? (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Select Target Status *</Label>
+                  <RadioGroup value={targetStatus} onValueChange={setTargetStatus}>
+                    {getAllowedTransitions(contractStatus).map((status) => {
+                      const config = getStatusConfig(status);
+                      return (
+                        <div key={status} className="flex items-center space-x-2 rounded-lg border p-3 hover:bg-muted/50 transition-colors">
+                          <RadioGroupItem value={status} id={`status-${status}`} />
+                          <label
+                            htmlFor={`status-${status}`}
+                            className="flex-1 cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">{config.icon}</span>
+                              <span className="font-medium text-sm">{config.label}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">{config.description}</p>
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </RadioGroup>
+                </div>
+              ) : (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Terminal State:</strong> No transitions available from {contractStatus ? getStatusConfig(contractStatus).label : 'current'} status.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Justification */}
+              <div className="space-y-2">
+                <Label htmlFor="status-justification" className="text-sm font-medium">
+                  Justification *
+                </Label>
+                <Textarea
+                  id="status-justification"
+                  value={justification}
+                  onChange={(e) => setJustification(e.target.value)}
+                  placeholder="Explain why this status change is needed and any relevant context..."
+                  className="min-h-[100px] resize-none"
+                  disabled={submitting}
+                />
+                <div className="text-xs text-muted-foreground">
+                  Minimum 20 characters required. This will be reviewed by an admin.
+                </div>
+              </div>
+
+              {/* Lifecycle Diagram */}
+              <div className="rounded-lg border p-3 bg-muted/20">
+                <Label className="text-xs font-semibold mb-2 block">ODCS Lifecycle Flow:</Label>
+                <div className="flex items-center gap-1 text-xs font-mono flex-wrap">
+                  <span className={contractStatus?.toLowerCase() === 'draft' ? 'font-bold text-primary' : ''}>draft</span>
+                  <span>→</span>
+                  <span className={contractStatus?.toLowerCase() === 'proposed' ? 'font-bold text-primary' : ''}>proposed</span>
+                  <span>→</span>
+                  <span className={contractStatus?.toLowerCase() === 'under_review' ? 'font-bold text-primary' : ''}>under_review</span>
+                  <span>→</span>
+                  <span className={contractStatus?.toLowerCase() === 'approved' ? 'font-bold text-primary' : ''}>approved</span>
+                  <span>→</span>
+                  <span className={contractStatus?.toLowerCase() === 'active' ? 'font-bold text-primary' : ''}>active</span>
+                  <span>→</span>
+                  <span className={contractStatus?.toLowerCase() === 'certified' ? 'font-bold text-primary' : ''}>certified</span>
+                  <span>→</span>
+                  <span className={contractStatus?.toLowerCase() === 'deprecated' ? 'font-bold text-primary' : ''}>deprecated</span>
+                  <span>→</span>
+                  <span className={contractStatus?.toLowerCase() === 'retired' ? 'font-bold text-primary' : ''}>retired</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Current status is highlighted. Emergency deprecation allowed from any status.
+                </p>
               </div>
             </div>
           )}

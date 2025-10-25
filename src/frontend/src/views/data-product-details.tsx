@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { DataProduct, DataProductStatus, InputPort, OutputPort, ManagementPort, TeamMember, Support } from '@/types/data-product';
+import { DataProduct, InputPort, OutputPort, ManagementPort, TeamMember, Support } from '@/types/data-product';
 import DataProductCreateDialog from '@/components/data-products/data-product-create-dialog';
 import InputPortFormDialog from '@/components/data-products/input-port-form-dialog';
 import OutputPortFormDialog from '@/components/data-products/output-port-form-dialog';
 import ManagementPortFormDialog from '@/components/data-products/management-port-form-dialog';
 import TeamMemberFormDialog from '@/components/data-products/team-member-form-dialog';
 import SupportChannelFormDialog from '@/components/data-products/support-channel-form-dialog';
-import StatusTransitionDialog from '@/components/data-products/status-transition-dialog';
 import ImportExportDialog from '@/components/data-products/import-export-dialog';
 import ImportTeamMembersDialog from '@/components/data-contracts/import-team-members-dialog';
 import { useApi } from '@/hooks/use-api';
@@ -30,7 +29,7 @@ import type { EntitySemanticLink } from '@/types/semantic-link';
 import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 import { CommentSidebar } from '@/components/comments';
 import { useDomains } from '@/hooks/use-domains';
-import RequestAccessDialog from '@/components/access/request-access-dialog';
+import RequestProductActionDialog from '@/components/data-products/request-product-action-dialog';
 import EntityCostsPanel from '@/components/costs/entity-costs-panel';
 
 /**
@@ -78,8 +77,7 @@ export default function DataProductDetails() {
   const [iriDialogOpen, setIriDialogOpen] = useState(false);
   const [links, setLinks] = useState<EntitySemanticLink[]>([]);
   const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false);
-  const [isRequestAccessDialogOpen, setIsRequestAccessDialogOpen] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
 
   // Dialog states for nested entities
   const [isInputPortDialogOpen, setIsInputPortDialogOpen] = useState(false);
@@ -87,7 +85,6 @@ export default function DataProductDetails() {
   const [isManagementPortDialogOpen, setIsManagementPortDialogOpen] = useState(false);
   const [isTeamMemberDialogOpen, setIsTeamMemberDialogOpen] = useState(false);
   const [isSupportChannelDialogOpen, setIsSupportChannelDialogOpen] = useState(false);
-  const [isStatusTransitionDialogOpen, setIsStatusTransitionDialogOpen] = useState(false);
   const [isImportExportDialogOpen, setIsImportExportDialogOpen] = useState(false);
   const [isImportTeamMembersOpen, setIsImportTeamMembersOpen] = useState(false);
 
@@ -181,38 +178,6 @@ export default function DataProductDetails() {
     }
   };
 
-  // ODPS v1.0.0 Lifecycle state machine handler
-  const handleStatusTransition = async (targetStatus: string, notes?: string) => {
-    if (!productId || !product || !canWrite) return;
-
-    setIsTransitioning(true);
-    try {
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, status: targetStatus }),
-      });
-      if (!res.ok) throw new Error(`Status transition failed (${res.status})`);
-
-      await fetchProductDetails();
-
-      toast({
-        title: 'Status Updated',
-        description: `Product status changed to ${targetStatus.toUpperCase()}`,
-      });
-
-      // Log transition notes if provided
-      if (notes) {
-        console.log(`Status transition notes: ${notes}`);
-        // Could POST to an audit log endpoint here if implemented
-      }
-    } catch (e: any) {
-      throw new Error(e?.message || 'Status transition failed');
-    } finally {
-      setIsTransitioning(false);
-    }
-  };
-
   useEffect(() => {
     fetchProductDetails();
     return () => {
@@ -241,11 +206,6 @@ export default function DataProductDetails() {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete product';
       toast({ title: 'Error', description: `Failed to delete: ${errorMessage}`, variant: 'destructive' });
     }
-  };
-
-  const handleRequestAccess = () => {
-    if (!productId || !product) return;
-    setIsRequestAccessDialogOpen(true);
   };
 
   // Nested entity handlers
@@ -386,15 +346,10 @@ export default function DataProductDetails() {
       const updatedMembers = [...existingMembers, ...members];
       const updatedTeam = { ...product.team, members: updatedMembers };
       
-      const res = await fetch(`/api/data-products/${productId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, team: updatedTeam }),
-      });
-      
-      if (!res.ok) {
-        throw new Error(`Failed to import team members (${res.status})`);
-      }
+      // Convert tags from objects to strings (tag FQNs) if needed
+      const tags = Array.isArray(product.tags) 
+        ? product.tags.map((tag: any) => typeof tag === 'string' ? tag : (tag.tag_fqn || tag.tagFQN))
+        : [];
       
       // Store team assignment metadata in customProperties
       const teamMetadata = {
@@ -410,15 +365,25 @@ export default function DataProductDetails() {
       
       const existingCustomProps = product.customProperties || [];
       const updatedCustomProps = [
-        ...existingCustomProps.filter(p => p.property !== 'assigned_team'),
+        ...existingCustomProps.filter((p: any) => p.property !== 'assigned_team'),
         teamMetadata
       ];
       
-      await fetch(`/api/data-products/${productId}`, {
+      const res = await fetch(`/api/data-products/${productId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...product, team: updatedTeam, customProperties: updatedCustomProps }),
+        body: JSON.stringify({ 
+          ...product, 
+          team: updatedTeam, 
+          customProperties: updatedCustomProps,
+          tags // Use converted tags
+        }),
       });
+      
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => '');
+        throw new Error(`Failed to import team members (${res.status}): ${errorText}`);
+      }
       
       await fetchProductDetails();
       setIsImportTeamMembersOpen(false);
@@ -554,8 +519,8 @@ export default function DataProductDetails() {
           Back to List
         </Button>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleRequestAccess} size="sm">
-            <KeyRound className="mr-2 h-4 w-4" /> Request Access
+          <Button variant="outline" onClick={() => setIsRequestDialogOpen(true)} size="sm">
+            <KeyRound className="mr-2 h-4 w-4" /> Request...
           </Button>
           <CommentSidebar
             entityType="data_product"
@@ -594,23 +559,6 @@ export default function DataProductDetails() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* ODPS v1.0.0 Lifecycle actions */}
-          <div className="flex items-center gap-2">
-            {canWrite && product.status?.toLowerCase() !== 'retired' && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setIsStatusTransitionDialogOpen(true)}
-                disabled={isTransitioning}
-              >
-                Change Status
-              </Button>
-            )}
-            {product.status?.toLowerCase() === 'retired' && (
-              <Badge variant="destructive">Terminal State - No transitions available</Badge>
-            )}
-          </div>
-
           <div className="grid md:grid-cols-4 gap-4">
             <div className="space-y-1">
               <Label>Status:</Label>
@@ -922,12 +870,14 @@ export default function DataProductDetails() {
         onSelect={addIri}
       />
 
-      <RequestAccessDialog
-        open={isRequestAccessDialogOpen}
-        onOpenChange={setIsRequestAccessDialogOpen}
-        entityId={productId!}
-        entityType="data_product"
-        entityName={product.name || 'Unnamed Product'}
+      <RequestProductActionDialog
+        isOpen={isRequestDialogOpen}
+        onOpenChange={setIsRequestDialogOpen}
+        productId={productId!}
+        productName={product.name}
+        productStatus={product.status}
+        currentVersion={product.version}
+        onSuccess={() => fetchProductDetails()}
       />
 
       {/* Nested Entity Form Dialogs */}
@@ -963,15 +913,6 @@ export default function DataProductDetails() {
         isOpen={isSupportChannelDialogOpen}
         onOpenChange={setIsSupportChannelDialogOpen}
         onSubmit={handleAddSupportChannel}
-      />
-
-      {/* ODPS v1.0.0 Lifecycle State Machine */}
-      <StatusTransitionDialog
-        isOpen={isStatusTransitionDialogOpen}
-        onOpenChange={setIsStatusTransitionDialogOpen}
-        currentStatus={product.status || DataProductStatus.DRAFT}
-        onTransition={handleStatusTransition}
-        productName={product.name}
       />
 
       {/* ODPS v1.0.0 Import/Export */}
