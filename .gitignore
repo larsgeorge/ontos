@@ -31,3 +31,7 @@ audit_logs/
 
 .playwright-mcp/
 test-results/
+
+# License check outputs
+licenses.json
+licenses.csv

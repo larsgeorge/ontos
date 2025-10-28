@@ -70,6 +70,24 @@ It performs a TypeScript type check, then correctly bundles React in production 
 The build is minified and the filenames include the hashes.
 Your app is ready to be deployed!
 
+### License Checking
+
+The project includes license checking tools for both frontend and backend dependencies:
+
+#### `yarn license-check:all`
+
+Runs license checks on both frontend and backend dependencies (from `src/` directory).
+
+#### `yarn license-check:frontend`
+
+Checks licenses for frontend npm packages (summary view).
+
+#### `yarn license-check:backend`
+
+Checks licenses for backend Python packages (markdown format).
+
+For more details and additional options, see [License Checking Guide](docs/LICENSE_CHECKING.md).
+
 ## Environment Configuration
 
 The application requires a `.env` file in the root directory for configuration. Create a file named `.env` with the following variables (or set them as environment variables):
