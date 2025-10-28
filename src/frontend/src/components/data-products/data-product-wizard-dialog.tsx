@@ -692,19 +692,16 @@ export default function DataProductWizardDialog({
                 {form.formState.errors.info?.description && <p className="text-sm text-destructive mt-1">{form.formState.errors.info.description.message}</p>}
                 </div>
                 <div>
-                    <Label htmlFor="tags">Tags (comma-separated)</Label>
-                    {/* Update tag handling */}
+                    <Label htmlFor="tags">Tags</Label>
                     <Controller
                         name="tags"
                         control={form.control}
                         render={({ field }) => (
-                            <Input
-                            id="tags"
-                            value={Array.isArray(field.value) ? field.value.join(', ') : ''}
-                            onChange={(e) => {
-                                const tags = e.target.value.split(',').map(t => t.trim()).filter(Boolean);
-                                field.onChange(tags);
-                            }}
+                            <TagSelector
+                                value={field.value || []}
+                                onChange={field.onChange}
+                                placeholder="Search and select tags for this data product..."
+                                allowCreate={true}
                             />
                         )}
                     />

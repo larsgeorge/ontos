@@ -155,7 +155,7 @@ def initialize_managers(app: FastAPI):
             notifications_manager=app.state.notifications_manager
         )
         app.state.data_domain_manager = DataDomainManager(repository=data_domain_repo)
-        app.state.data_contracts_manager = DataContractsManager(data_dir=data_dir)
+        # data_contracts_manager moved below after tags_manager initialization
         app.state.semantic_models_manager = SemanticModelsManager(db=db_session, data_dir=Path(__file__).parent.parent / "data")
         # Also register in global app_state fallback
         try:
@@ -195,6 +195,10 @@ def initialize_managers(app: FastAPI):
                 tags_manager=tags_manager
             )
             logger.info("DataProductsManager initialized with TagsManager integration.")
+            
+            # Now instantiate DataContractsManager with TagsManager dependency
+            app.state.data_contracts_manager = DataContractsManager(data_dir=data_dir, tags_manager=tags_manager)
+            logger.info("DataContractsManager initialized with TagsManager integration.")
 
             # Ensure default tag namespace exists (using a new session for this setup task)
             with session_factory() as setup_db:

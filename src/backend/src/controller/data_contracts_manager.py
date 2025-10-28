@@ -53,9 +53,10 @@ logger = get_logger(__name__)
 # Inherit from SearchableAsset
 @searchable_asset
 class DataContractsManager(SearchableAsset):
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, tags_manager=None):
         self._contracts: Dict[str, DataContract] = {}
         self._data_dir = data_dir
+        self._tags_manager = tags_manager
 
     def _load_initial_data(self):
         """Loads initial data from the YAML file if it exists."""
@@ -2065,7 +2066,11 @@ class DataContractsManager(SearchableAsset):
             # Process semantic links if provided
             if data_dict.get('authoritativeDefinitions'):
                 self._process_semantic_links(db, created.id, data_dict, current_user)
-            
+
+            # Create team members if provided
+            if data_dict.get('team'):
+                self._create_team_members(db, created.id, data_dict['team'])
+
             db.commit()
             db.refresh(created)
             return created
@@ -2119,6 +2124,9 @@ class DataContractsManager(SearchableAsset):
             # Validate required fields
             if data_dict.get('name') is not None and (not data_dict['name'] or not data_dict['name'].strip()):
                 raise ValueError("Contract name cannot be empty")
+            
+            # Extract tags (handled separately)
+            tags_data = data_dict.get('tags')
             
             # Handle domain_id - convert empty string to None and validate existence
             domain_id = data_dict.get('domainId')
@@ -2196,6 +2204,31 @@ class DataContractsManager(SearchableAsset):
                 # Add new team members
                 if data_dict['team']:
                     self._create_team_members(db, contract_id, data_dict['team'])
+            
+            # Handle tags if provided and tags_manager is available
+            if tags_data is not None and self._tags_manager:
+                from src.models.tags import AssignedTagCreate
+                try:
+                    # Convert tags to AssignedTagCreate objects
+                    tag_creates = []
+                    for tag in tags_data:
+                        if isinstance(tag, str):
+                            tag_creates.append(AssignedTagCreate(tag_fqn=tag))
+                        elif isinstance(tag, dict):
+                            tag_creates.append(AssignedTagCreate(**tag))
+                    
+                    # Set tags for the contract entity
+                    self._tags_manager.set_tags_for_entity(
+                        db,
+                        entity_id=contract_id,
+                        entity_type="data_contract",
+                        tags=tag_creates,
+                        user_email=current_user
+                    )
+                    logger.info(f"Successfully updated {len(tag_creates)} tags for contract {contract_id}")
+                except Exception as e:
+                    logger.error(f"Failed to update tags for contract {contract_id}: {e}")
+                    # Don't fail the entire update if tags fail
             
             # Handle custom properties if provided
             if data_dict.get('customProperties') is not None:

@@ -405,6 +405,7 @@ class DataContractUpdate(BaseModel):
     descriptionUsage: Optional[str] = Field(None, alias='description_usage')
     descriptionPurpose: Optional[str] = Field(None, alias='description_purpose')
     descriptionLimitations: Optional[str] = Field(None, alias='description_limitations')
+    tags: Optional[List[AssignedTagCreate]] = Field(None)  # Tags to assign to the contract
     # Add schema and semantic links support for updates from wizard
     contract_schema: Optional[List[SchemaObject]] = Field(None, alias="schema")
     authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None)
@@ -440,7 +441,7 @@ class DataContractRead(BaseModel):
     description: Optional[ContractDescription] = None
 
     # ODCS v3.0.2 top-level fields
-    tags: Optional[List[AssignedTagCreate]] = Field(default_factory=list)
+    tags: Optional[List[AssignedTag]] = Field(default_factory=list)  # Read model returns AssignedTag, not AssignedTagCreate
     contractCreatedTs: Optional[str] = None
 
     # Schema section

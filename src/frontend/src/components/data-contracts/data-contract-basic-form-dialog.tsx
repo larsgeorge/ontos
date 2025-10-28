@@ -9,6 +9,8 @@ import { useDomains } from '@/hooks/use-domains'
 import { useToast } from '@/hooks/use-toast'
 import type { DataContractCreate } from '@/types/data-contract'
 import type { TeamSummary } from '@/types/team'
+import TagSelector from '@/components/ui/tag-selector'
+import type { AssignedTag } from '@/components/ui/tag-chip'
 
 type BasicFormProps = {
   isOpen: boolean
@@ -25,6 +27,7 @@ type BasicFormProps = {
     descriptionUsage?: string
     descriptionPurpose?: string
     descriptionLimitations?: string
+    tags?: (string | AssignedTag)[]
   }
 }
 
@@ -46,6 +49,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   const [descriptionUsage, setDescriptionUsage] = useState('')
   const [descriptionPurpose, setDescriptionPurpose] = useState('')
   const [descriptionLimitations, setDescriptionLimitations] = useState('')
+  const [tags, setTags] = useState<(string | AssignedTag)[]>([])
 
   // Teams state
   const [teams, setTeams] = useState<TeamSummary[]>([])
@@ -79,6 +83,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       setDescriptionUsage(initial.descriptionUsage || '')
       setDescriptionPurpose(initial.descriptionPurpose || '')
       setDescriptionLimitations(initial.descriptionLimitations || '')
+      setTags(initial.tags || [])
     } else if (isOpen && !initial) {
       // Reset to defaults for new contract
       setName('')
@@ -91,6 +96,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       setDescriptionUsage('')
       setDescriptionPurpose('')
       setDescriptionLimitations('')
+      setTags([])
     }
   }, [isOpen, initial])
 
@@ -106,6 +112,12 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
     
     setIsSubmitting(true)
     try {
+      // Normalize tags to tag IDs (strings) for backend compatibility
+      const normalizedTags = tags.map((tag: any) => {
+        if (typeof tag === 'string') return tag;
+        return tag.tag_id || tag.fully_qualified_name || tag.tag_name || tag;
+      });
+
       const payload: DataContractCreate = {
         name: name.trim(),
         version: version.trim() || '0.0.1',
@@ -116,6 +128,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         domainId: domain && domain !== '__none__' ? domain : undefined,
         tenant: tenant.trim() || undefined,
         dataProduct: dataProduct.trim() || undefined,
+        tags: normalizedTags.length > 0 ? normalizedTags as any : undefined,
         description: {
           usage: descriptionUsage.trim() || undefined,
           purpose: descriptionPurpose.trim() || undefined,
@@ -287,6 +300,20 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
                 rows={2}
               />
             </div>
+          </div>
+
+          {/* Tags Section */}
+          <div className="space-y-2 border-t pt-4">
+            <Label>Tags</Label>
+            <TagSelector
+              value={tags}
+              onChange={setTags}
+              placeholder="Search and select tags for this data contract..."
+              allowCreate={true}
+            />
+            <p className="text-xs text-muted-foreground">
+              Add tags to categorize and organize this data contract
+            </p>
           </div>
         </div>
 

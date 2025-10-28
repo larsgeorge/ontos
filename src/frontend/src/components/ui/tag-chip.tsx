@@ -78,7 +78,7 @@ const TagChip: React.FC<TagChipProps> = ({
     `${tag.tag_name}: ${tag.assigned_value}` : tagName;
 
   // Determine variant based on tag status if not explicitly provided
-  const effectiveVariant = variant || (isRichTag ? getVariantFromStatus(tag.status) : 'default');
+  const effectiveVariant = variant || (isRichTag ? getVariantFromStatus(tag.status) : 'info'); // Default to light blue for all tags
 
   const handleRemove = (e: React.MouseEvent) => {
     e.stopPropagation();

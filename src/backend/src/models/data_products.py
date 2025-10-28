@@ -291,7 +291,7 @@ class DataProduct(BaseModel):
     authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
     description: Optional[Description] = Field(None, description="Structured description")
     customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
-    tags: Optional[List[str]] = Field(None, description="Tags for categorization")
+    tags: Optional[List[AssignedTag]] = Field(default_factory=list, description="List of assigned tags with rich metadata")
     inputPorts: Optional[List[InputPort]] = Field(None, alias="input_ports", description="Input ports")
     outputPorts: Optional[List[OutputPort]] = Field(None, alias="output_ports", description="Output ports")
     managementPorts: Optional[List[ManagementPort]] = Field(None, alias="management_ports", description="Management ports")
@@ -302,6 +302,25 @@ class DataProduct(BaseModel):
     # Audit fields (not in ODPS, but useful)
     created_at: Optional[datetime] = Field(None, description="Record creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Record update timestamp")
+
+    # Field validators to parse JSON strings from database
+    @field_validator('tags', mode='before')
+    def parse_tags(cls, value):
+        if value is None:
+            return []
+        # If it's already a list of AssignedTag objects, return as-is
+        if isinstance(value, list) and value and hasattr(value[0], 'tag_id'):
+            return value
+        # Legacy support for JSON strings (should not be used anymore)
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    return parsed
+            except (json.JSONDecodeError, ValueError):
+                pass
+            return []
+        return value or []
 
     model_config = {
         "from_attributes": True,

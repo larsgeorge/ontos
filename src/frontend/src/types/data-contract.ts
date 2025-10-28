@@ -189,6 +189,7 @@ export interface DataContract {
   owner_team_id?: string // UUID of the owning team
   owner_team_name?: string // Display name of the owning team
   description?: ContractDescription
+  tags?: any[] // Tags assigned to the contract
   schema?: SchemaObject[]
   qualityRules?: QualityRule[]
   team?: TeamMember[]
@@ -272,6 +273,7 @@ export type DataContractCreate = {
   tenant?: string
   dataProduct?: string
   description?: ContractDescription
+  tags?: any[] // Tags to assign to the contract
   schema?: SchemaObject[]
   qualityRules?: QualityRule[]
   team?: TeamMember[]

@@ -9,8 +9,9 @@ import { Badge } from '@/components/ui/badge'
 import { Plus, Trash2, Edit, Info } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import type { ColumnProperty } from '@/types/data-contract'
+import type { ColumnProperty, QualityRule } from '@/types/data-contract'
 import BusinessConceptsDisplay from '@/components/business-concepts/business-concepts-display'
+import QualityRuleFormDialog from './quality-rule-form-dialog'
 
 const LOGICAL_TYPES = ['string', 'date', 'number', 'integer', 'object', 'array', 'boolean']
 const CLASSIFICATION_LEVELS = ['public', 'internal', 'confidential', 'restricted', 'pii', '1', '2', '3', '4', '5']
@@ -82,6 +83,10 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
   const [qualityChecks, setQualityChecks] = useState<any[]>([])
   const [tags, setTags] = useState('')
   const [customProps, setCustomProps] = useState<Record<string, any>>({})
+
+  // Quality rule dialog state
+  const [isQualityRuleDialogOpen, setIsQualityRuleDialogOpen] = useState(false)
+  const [editingQualityCheckIndex, setEditingQualityCheckIndex] = useState<number | null>(null)
 
   const resetForm = () => {
     setName('')
@@ -252,6 +257,20 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
     if (editingIndex === index) {
       resetForm()
     }
+  }
+
+  const handleAddQualityCheck = async (rule: QualityRule) => {
+    setQualityChecks([...qualityChecks, rule])
+    setIsQualityRuleDialogOpen(false)
+  }
+
+  const handleUpdateQualityCheck = async (rule: QualityRule) => {
+    if (editingQualityCheckIndex === null) return
+    const updated = [...qualityChecks]
+    updated[editingQualityCheckIndex] = rule
+    setQualityChecks(updated)
+    setEditingQualityCheckIndex(null)
+    setIsQualityRuleDialogOpen(false)
   }
 
   const FieldTooltip = ({ content }: { content: string }) => (
@@ -552,15 +571,8 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      const newCheck = {
-                        name: 'is_not_null',
-                        dimension: 'completeness',
-                        severity: 'error',
-                        type: 'library',
-                        rule: `${name || 'column'} IS NOT NULL`,
-                        description: 'Column should not contain null values'
-                      }
-                      setQualityChecks([...qualityChecks, newCheck])
+                      setEditingQualityCheckIndex(null)
+                      setIsQualityRuleDialogOpen(true)
                     }}
                     className="h-7"
                   >
@@ -592,18 +604,32 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
                             <p className="text-xs font-mono text-muted-foreground">{check.rule}</p>
                           )}
                         </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
-                            const updated = qualityChecks.filter((_, i) => i !== idx)
-                            setQualityChecks(updated)
-                          }}
-                          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingQualityCheckIndex(idx)
+                              setIsQualityRuleDialogOpen(true)
+                            }}
+                            className="h-7 w-7 p-0"
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              const updated = qualityChecks.filter((_, i) => i !== idx)
+                              setQualityChecks(updated)
+                            }}
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -757,7 +783,10 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
             {/* Semantics Tab */}
             <TabsContent value="semantics" className="space-y-3 mt-4">
               <div className="space-y-2">
-                <Label className="text-xs flex items-center">Linked Business Properties</Label>
+                <Label className="text-sm font-semibold flex items-center">
+                  Linked Business Concepts
+                  <FieldTooltip content="Link this property to business concepts from your semantic model (ontology)" />
+                </Label>
                 <BusinessConceptsDisplay
                   concepts={semanticConcepts}
                   onConceptsChange={(concepts) => {
@@ -766,7 +795,7 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
                     setAuthoritativeDefinitions(concepts.map(c => ({ url: c.iri, type: SEMANTIC_ASSIGNMENT_TYPE })))
                   }}
                   entityType="data_contract_property"
-                  entityId="property"
+                  entityId={name || 'property'}
                   conceptType="property"
                 />
               </div>
@@ -915,6 +944,19 @@ export default function SchemaPropertyEditor({ properties, onChange, readOnly = 
           {readOnly ? 'No columns defined.' : 'No columns added yet. Add at least one column above.'}
         </p>
       )}
+
+      {/* Quality Rule Dialog */}
+      <QualityRuleFormDialog
+        isOpen={isQualityRuleDialogOpen}
+        onOpenChange={(open) => {
+          setIsQualityRuleDialogOpen(open)
+          if (!open) {
+            setEditingQualityCheckIndex(null)
+          }
+        }}
+        initial={editingQualityCheckIndex !== null ? qualityChecks[editingQualityCheckIndex] : undefined}
+        onSubmit={editingQualityCheckIndex !== null ? handleUpdateQualityCheck : handleAddQualityCheck}
+      />
     </div>
   )
 }

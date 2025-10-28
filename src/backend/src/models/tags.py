@@ -158,7 +158,16 @@ class AssignedTagCreate(BaseModel):
     assigned_value: Optional[str] = Field(None, description="Specific value assigned to the tag for this entity, if tag has predefined possible_values.")
 
     @model_validator(mode='before')
-    def check_tag_identifier(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+    def check_tag_identifier(cls, values: Any) -> Dict[str, Any]:
+        # If a string is provided, treat it as tag_fqn
+        if isinstance(values, str):
+            return {'tag_fqn': values}
+        # If it's already an AssignedTag object, pass it through (happens during serialization)
+        if hasattr(values, '__class__') and values.__class__.__name__ == 'AssignedTag':
+            return values
+        # Otherwise expect a dict
+        if not isinstance(values, dict):
+            raise ValueError("Invalid input: expected string (tag FQN), dict, or AssignedTag object")
         if not values.get('tag_fqn') and not values.get('tag_id'):
             raise ValueError("Either 'tag_fqn' or 'tag_id' must be provided.")
         return values

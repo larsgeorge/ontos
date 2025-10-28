@@ -31,6 +31,8 @@ import { CommentSidebar } from '@/components/comments';
 import { useDomains } from '@/hooks/use-domains';
 import RequestProductActionDialog from '@/components/data-products/request-product-action-dialog';
 import EntityCostsPanel from '@/components/costs/entity-costs-panel';
+import LinkContractToPortDialog from '@/components/data-products/link-contract-to-port-dialog';
+import { Link2, Unlink } from 'lucide-react';
 
 /**
  * ODPS v1.0.0 Data Product Details View
@@ -91,6 +93,11 @@ export default function DataProductDetails() {
   // Team member editing state
   const [editingTeamMemberIndex, setEditingTeamMemberIndex] = useState<number | null>(null);
 
+  // Contract linking states
+  const [isLinkContractDialogOpen, setIsLinkContractDialogOpen] = useState(false);
+  const [selectedPortForLinking, setSelectedPortForLinking] = useState<number | null>(null);
+  const [contractNames, setContractNames] = useState<Record<string, string>>({});
+
   // Owner team state
   const [ownerTeamName, setOwnerTeamName] = useState<string>('');
 
@@ -130,6 +137,24 @@ export default function DataProductDetails() {
     }
   };
 
+  const fetchContractNames = async (outputPorts: OutputPort[]) => {
+    const names: Record<string, string> = {};
+    for (const port of outputPorts) {
+      if (port.contractId && !names[port.contractId]) {
+        try {
+          const response = await fetch(`/api/data-contracts/${port.contractId}`);
+          if (response.ok) {
+            const contract = await response.json();
+            names[port.contractId] = contract.name || port.contractId;
+          }
+        } catch (e) {
+          console.warn(`Failed to fetch contract ${port.contractId}:`, e);
+        }
+      }
+    }
+    setContractNames(names);
+  };
+
   const fetchProductDetails = async () => {
     if (!productId) {
       setError('Product ID not found in URL.');
@@ -163,6 +188,11 @@ export default function DataProductDetails() {
         await fetchOwnerTeamName(productData.owner_team_id);
       } else {
         setOwnerTeamName('');
+      }
+
+      // Fetch contract names for output ports
+      if (productData.outputPorts && productData.outputPorts.length > 0) {
+        await fetchContractNames(productData.outputPorts);
       }
 
       // ODPS v1.0.0: name is at root level
@@ -419,6 +449,50 @@ export default function DataProductDetails() {
     }
   };
 
+  const handleLinkContract = (portIndex: number) => {
+    setSelectedPortForLinking(portIndex);
+    setIsLinkContractDialogOpen(true);
+  };
+
+  const handleUnlinkContract = async (portIndex: number) => {
+    if (!productId || !product) return;
+    if (!confirm('Unlink contract from this output port?')) return;
+    
+    try {
+      const updatedPorts = [...(product.outputPorts || [])];
+      updatedPorts[portIndex] = { ...updatedPorts[portIndex], contractId: undefined };
+      
+      // Normalize tags to string array (backend expects strings, not tag objects)
+      const normalizedTags = product.tags?.map((tag: any) => 
+        typeof tag === 'string' ? tag : tag.tag_id || tag.name || tag
+      );
+      
+      const res = await fetch(`/api/data-products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          ...product, 
+          tags: normalizedTags,
+          outputPorts: updatedPorts 
+        }),
+      });
+      
+      if (!res.ok) throw new Error(`Failed to unlink contract (${res.status})`);
+      
+      await fetchProductDetails();
+      toast({
+        title: 'Contract Unlinked',
+        description: 'Contract successfully unlinked from output port',
+      });
+    } catch (e: any) {
+      toast({
+        title: 'Error',
+        description: e?.message || 'Failed to unlink contract',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const addIri = async (iri: string) => {
     if (!productId) return;
     try {
@@ -603,7 +677,11 @@ export default function DataProductDetails() {
             </div>
             <div className="space-y-1">
               <Label>API Version:</Label>
-              <Badge variant="outline" className="ml-1">{product.apiVersion}</Badge>
+              {product.apiVersion ? (
+                <Badge variant="outline" className="ml-1">{product.apiVersion}</Badge>
+              ) : (
+                <span className="text-sm block">N/A</span>
+              )}
             </div>
             <div className="space-y-1">
               <Label>Created:</Label>
@@ -619,7 +697,7 @@ export default function DataProductDetails() {
             <Label>Tags:</Label>
             <div className="flex flex-wrap gap-1 mt-1">
               {(product.tags || []).length > 0 ? (
-                product.tags.map((tag, index) => (
+                (product.tags || []).map((tag, index) => (
                   <TagChip key={index} tag={tag} size="sm" />
                 ))
               ) : (
@@ -648,7 +726,7 @@ export default function DataProductDetails() {
                 <FileText className="mr-2 h-5 w-5" />
                 Structured Description (ODPS)
               </span>
-              {canWrite && <Button size="sm" variant="outline"><Pencil className="h-4 w-4" /></Button>}
+              {canWrite && <Button size="sm" variant="outline" onClick={handleEdit}><Pencil className="h-4 w-4" /></Button>}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -711,9 +789,46 @@ export default function DataProductDetails() {
             <div className="space-y-2">
               {product.outputPorts.map((port, idx) => (
                 <div key={idx} className="border rounded p-3">
-                  <div className="font-medium">{port.name} (v{port.version})</div>
-                  {port.description && <div className="text-sm">{port.description}</div>}
-                  {port.contractId && <div className="text-sm text-muted-foreground">Contract: {port.contractId}</div>}
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="font-medium">{port.name} (v{port.version})</div>
+                      {port.description && <div className="text-sm text-muted-foreground mt-1">{port.description}</div>}
+                      {port.contractId && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <Badge 
+                            variant="secondary" 
+                            className="cursor-pointer hover:bg-secondary/80"
+                            onClick={() => navigate(`/data-contracts/${port.contractId}`)}
+                          >
+                            Contract: {contractNames[port.contractId] || port.contractId}
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
+                    {canWrite && (
+                      <div className="flex gap-2 ml-3">
+                        {port.contractId ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleUnlinkContract(idx)}
+                            title="Unlink contract"
+                          >
+                            <Unlink className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleLinkContract(idx)}
+                            title="Link contract"
+                          >
+                            <Link2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -891,6 +1006,7 @@ export default function DataProductDetails() {
         isOpen={isOutputPortDialogOpen}
         onOpenChange={setIsOutputPortDialogOpen}
         onSubmit={handleAddOutputPort}
+        product={product || undefined}
       />
 
       <ManagementPortFormDialog
@@ -934,6 +1050,20 @@ export default function DataProductDetails() {
           onImport={handleImportTeamMembers}
         />
       )}
+
+      {/* Link Contract to Port Dialog */}
+      <LinkContractToPortDialog
+        isOpen={isLinkContractDialogOpen}
+        onOpenChange={setIsLinkContractDialogOpen}
+        productId={productId!}
+        portIndex={selectedPortForLinking!}
+        currentPort={selectedPortForLinking !== null ? product?.outputPorts?.[selectedPortForLinking] : undefined}
+        onSuccess={() => {
+          fetchProductDetails();
+          setIsLinkContractDialogOpen(false);
+          setSelectedPortForLinking(null);
+        }}
+      />
     </div>
   );
 }

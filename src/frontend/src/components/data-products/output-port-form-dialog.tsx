@@ -5,17 +5,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import type { OutputPort } from '@/types/data-product';
+import { Loader2, Plus } from 'lucide-react';
+import type { OutputPort, DataProduct } from '@/types/data-product';
+import type { DataContractListItem } from '@/types/data-contract';
+import CreateContractInlineDialog from '@/components/data-contracts/create-contract-inline-dialog';
 
 type OutputPortFormProps = {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (port: OutputPort) => Promise<void>;
   initial?: OutputPort;
+  product?: DataProduct;
 };
 
-export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, initial }: OutputPortFormProps) {
+export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, initial, product }: OutputPortFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -29,6 +36,14 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
   const [status, setStatus] = useState('');
   const [containsPii, setContainsPii] = useState(false);
   const [autoApprove, setAutoApprove] = useState(false);
+  
+  // Contract selection states
+  const [contractSelectionMode, setContractSelectionMode] = useState<'none' | 'existing' | 'create'>('none');
+  const [contracts, setContracts] = useState<DataContractListItem[]>([]);
+  const [isLoadingContracts, setIsLoadingContracts] = useState(false);
+  const [isCreateContractOpen, setIsCreateContractOpen] = useState(false);
+
+  const activeStatuses = ['active', 'approved', 'certified'];
 
   useEffect(() => {
     if (isOpen && initial) {
@@ -42,6 +57,13 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
       setStatus(initial.status || '');
       setContainsPii(initial.containsPii || false);
       setAutoApprove(initial.autoApprove || false);
+      
+      // Set contract selection mode based on initial data
+      if (initial.contractId) {
+        setContractSelectionMode('existing');
+      } else {
+        setContractSelectionMode('none');
+      }
     } else if (isOpen && !initial) {
       setName('');
       setVersion('1.0.0');
@@ -53,8 +75,46 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
       setStatus('');
       setContainsPii(false);
       setAutoApprove(false);
+      setContractSelectionMode('none');
     }
   }, [isOpen, initial]);
+
+  useEffect(() => {
+    if (isOpen && contractSelectionMode === 'existing' && contracts.length === 0) {
+      fetchContracts();
+    }
+  }, [isOpen, contractSelectionMode]);
+
+  const fetchContracts = async () => {
+    setIsLoadingContracts(true);
+    try {
+      const response = await fetch('/api/data-contracts');
+      if (!response.ok) throw new Error('Failed to fetch contracts');
+      
+      const data: DataContractListItem[] = await response.json();
+      
+      // Filter to only show contracts with appropriate status
+      const filteredContracts = data.filter(c => 
+        activeStatuses.includes(c.status?.toLowerCase() || '')
+      );
+      
+      setContracts(filteredContracts);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to load contracts',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoadingContracts(false);
+    }
+  };
+
+  const handleContractCreated = (newContractId: string) => {
+    setContractId(newContractId);
+    setIsCreateContractOpen(false);
+    fetchContracts(); // Refresh contract list
+  };
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -100,6 +160,7 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -167,17 +228,81 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="contractId">Contract ID</Label>
-                <Input
-                  id="contractId"
-                  value={contractId}
-                  onChange={(e) => setContractId(e.target.value)}
-                  placeholder="e.g., customer-analytics-contract-v1"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Optional link to a data contract ID
-                </p>
+              <div className="space-y-3">
+                <Label>Contract Assignment</Label>
+                <RadioGroup value={contractSelectionMode} onValueChange={(value: 'none' | 'existing' | 'create') => {
+                  setContractSelectionMode(value);
+                  if (value === 'none') setContractId('');
+                }}>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="none" id="no-contract" />
+                    <Label htmlFor="no-contract">No Contract</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="existing" id="existing-contract" />
+                    <Label htmlFor="existing-contract">Select Existing Contract</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="create" id="create-contract" />
+                    <Label htmlFor="create-contract">Create New Contract</Label>
+                  </div>
+                </RadioGroup>
+
+                {contractSelectionMode === 'existing' && (
+                  <div className="ml-6 space-y-2">
+                    {isLoadingContracts ? (
+                      <div className="flex items-center justify-center p-4">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      </div>
+                    ) : (
+                      <>
+                        <Select value={contractId} onValueChange={setContractId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choose a contract..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {contracts.length === 0 ? (
+                              <div className="p-2 text-sm text-muted-foreground text-center">
+                                No active/approved contracts available
+                              </div>
+                            ) : (
+                              contracts.map((contract) => (
+                                <SelectItem key={contract.id} value={contract.id}>
+                                  <div className="flex items-center gap-2">
+                                    <span>{contract.name}</span>
+                                    <Badge variant="secondary" className="text-xs">v{contract.version}</Badge>
+                                  </div>
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Only showing active/approved/certified contracts
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {contractSelectionMode === 'create' && (
+                  <div className="ml-6">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsCreateContractOpen(true)}
+                      className="w-full"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create New Contract
+                    </Button>
+                    {contractId && (
+                      <div className="mt-2 p-2 bg-muted rounded text-sm">
+                        Contract created: <span className="font-mono text-xs">{contractId}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -270,5 +395,18 @@ export default function OutputPortFormDialog({ isOpen, onOpenChange, onSubmit, i
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <CreateContractInlineDialog
+      isOpen={isCreateContractOpen}
+      onOpenChange={setIsCreateContractOpen}
+      onSuccess={handleContractCreated}
+      prefillData={{
+        domain: product?.domain,
+        domainId: product?.domain,
+        tenant: product?.tenant,
+        owner_team_id: product?.owner_team_id
+      }}
+    />
+  </>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -20,6 +20,7 @@ import { Loader2 } from 'lucide-react';
 import { DataProduct, DataProductStatus } from '@/types/data-product';
 import { useDomains } from '@/hooks/use-domains';
 import { useTeams } from '@/hooks/use-teams';
+import TagSelector from '@/components/ui/tag-selector';
 
 /**
  * ODPS v1.0.0 Data Product Creation Dialog
@@ -32,7 +33,7 @@ const productTypes = ['source', 'source-aligned', 'aggregate', 'consumer-aligned
 
 const dataProductCreateSchema = z.object({
   name: z.string().min(1, 'Product name is required'),
-  version: z.string().min(1, 'Version is required').default('0.0.1'),
+  version: z.string().min(1, 'Version is required'),
   status: z.string().min(1, 'Status is required'),
   productType: z.enum(productTypes).optional(),
   ownerTeamId: z.string().optional(),
@@ -41,6 +42,7 @@ const dataProductCreateSchema = z.object({
   purpose: z.string().optional(),
   limitations: z.string().optional(),
   usage: z.string().optional(),
+  tags: z.array(z.union([z.string(), z.any()])).optional(),
 });
 
 type FormData = z.infer<typeof dataProductCreateSchema>;
@@ -49,12 +51,16 @@ interface DataProductCreateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: (product: DataProduct) => void;
+  product?: DataProduct;
+  mode?: 'create' | 'edit';
 }
 
 export default function DataProductCreateDialog({
   open,
   onOpenChange,
   onSuccess,
+  product,
+  mode = 'create',
 }: DataProductCreateDialogProps) {
   const { toast } = useToast();
   const { domains, loading: domainsLoading } = useDomains();
@@ -74,26 +80,47 @@ export default function DataProductCreateDialog({
       purpose: '',
       limitations: '',
       usage: '',
+      tags: [],
     },
   });
 
-  // Reset form when dialog opens
+  // Reset or populate form when dialog opens
   useEffect(() => {
     if (open) {
-      form.reset({
-        name: '',
-        version: '0.0.1',
-        status: DataProductStatus.DRAFT,
-        productType: undefined,
-        ownerTeamId: '',
-        domain: '',
-        tenant: '',
-        purpose: '',
-        limitations: '',
-        usage: '',
-      });
+      if (mode === 'edit' && product) {
+        // Populate form with existing product data
+        const productType = product.customProperties?.find(p => p.property === 'productType')?.value as any;
+        form.reset({
+          name: product.name || '',
+          version: product.version || '0.0.1',
+          status: product.status || DataProductStatus.DRAFT,
+          productType: productType || undefined,
+          ownerTeamId: product.owner_team_id || '',
+          domain: product.domain || '',
+          tenant: product.tenant || '',
+          purpose: product.description?.purpose || '',
+          limitations: product.description?.limitations || '',
+          usage: product.description?.usage || '',
+          tags: product.tags || [],
+        });
+      } else {
+        // Reset to defaults for create mode
+        form.reset({
+          name: '',
+          version: '0.0.1',
+          status: DataProductStatus.DRAFT,
+          productType: undefined,
+          ownerTeamId: '',
+          domain: '',
+          tenant: '',
+          purpose: '',
+          limitations: '',
+          usage: '',
+          tags: [],
+        });
+      }
     }
-  }, [open, form]);
+  }, [open, mode, product, form]);
 
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
@@ -102,65 +129,134 @@ export default function DataProductCreateDialog({
       // Get selected team name
       const selectedTeam = teams.find(t => t.id === data.ownerTeamId);
 
-      // Construct ODPS v1.0.0 product
-      const productData: Partial<DataProduct> = {
-        apiVersion: 'v1.0.0',
-        kind: 'DataProduct',
-        name: data.name,
-        version: data.version,
-        status: data.status,
-        domain: data.domain || undefined,
-        tenant: data.tenant || undefined,
-        owner_team_id: data.ownerTeamId || undefined,
-        description: {
-          purpose: data.purpose || undefined,
-          limitations: data.limitations || undefined,
-          usage: data.usage || undefined,
-        },
-        // Set team from selected team
-        team: selectedTeam ? {
-          name: selectedTeam.name,
-          description: selectedTeam.description,
-          members: [],
-        } : undefined,
-        // Initialize empty arrays for complex entities
-        inputPorts: [],
-        outputPorts: [],
-        managementPorts: [],
-        support: [],
-        authoritativeDefinitions: [],
-        customProperties: data.productType ? [{
-          property: 'productType',
-          value: data.productType,
-          description: 'Type of data product in the value chain',
-        }] : [],
-      };
+      if (mode === 'edit' && product) {
+        // Edit mode - prepare update payload
+        // Normalize tags to tag IDs (strings) for backend compatibility
+        const normalizedTags = (data.tags || []).map((tag: any) => {
+          if (typeof tag === 'string') return tag;
+          // If it's a rich tag object, extract the tag_id
+          return tag.tag_id || tag.fully_qualified_name || tag.tag_name || tag;
+        });
 
-      const response = await fetch('/api/data-products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(productData),
-      });
+        const updateData: Partial<DataProduct> = {
+          ...product,
+          name: data.name,
+          version: data.version,
+          status: data.status,
+          domain: data.domain || undefined,
+          tenant: data.tenant || undefined,
+          owner_team_id: data.ownerTeamId || undefined,
+          tags: normalizedTags, // Use normalized tags from form
+          description: {
+            purpose: data.purpose || undefined,
+            limitations: data.limitations || undefined,
+            usage: data.usage || undefined,
+          },
+          // Update team reference if owner changed
+          team: selectedTeam ? {
+            name: selectedTeam.name,
+            description: selectedTeam.description,
+            members: product.team?.members || [],
+          } : product.team,
+          // Update productType in customProperties
+          customProperties: [
+            ...(product.customProperties?.filter(p => p.property !== 'productType') || []),
+            ...(data.productType ? [{
+              property: 'productType',
+              value: data.productType,
+              description: 'Type of data product in the value chain',
+            }] : []),
+          ],
+        };
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to create data product');
+        const response = await fetch(`/api/data-products/${product.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updateData),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || 'Failed to update data product');
+        }
+
+        const updatedProduct: DataProduct = await response.json();
+
+        toast({
+          title: 'Success',
+          description: 'Data product updated successfully.',
+        });
+
+        onSuccess(updatedProduct);
+      } else {
+        // Create mode - construct new product
+        // Normalize tags to tag IDs (strings) for backend compatibility
+        const normalizedTags = (data.tags || []).map((tag: any) => {
+          if (typeof tag === 'string') return tag;
+          return tag.tag_id || tag.fully_qualified_name || tag.tag_name || tag;
+        });
+
+        const productData: Partial<DataProduct> = {
+          apiVersion: 'v1.0.0',
+          kind: 'DataProduct',
+          name: data.name,
+          version: data.version,
+          status: data.status,
+          domain: data.domain || undefined,
+          tenant: data.tenant || undefined,
+          owner_team_id: data.ownerTeamId || undefined,
+          tags: normalizedTags.length > 0 ? normalizedTags : undefined,
+          description: {
+            purpose: data.purpose || undefined,
+            limitations: data.limitations || undefined,
+            usage: data.usage || undefined,
+          },
+          // Set team from selected team
+          team: selectedTeam ? {
+            name: selectedTeam.name,
+            description: selectedTeam.description,
+            members: [],
+          } : undefined,
+          // Initialize empty arrays for complex entities
+          inputPorts: [],
+          outputPorts: [],
+          managementPorts: [],
+          support: [],
+          authoritativeDefinitions: [],
+          customProperties: data.productType ? [{
+            property: 'productType',
+            value: data.productType,
+            description: 'Type of data product in the value chain',
+          }] : [],
+        };
+
+        const response = await fetch('/api/data-products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(productData),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || 'Failed to create data product');
+        }
+
+        const createdProduct: DataProduct = await response.json();
+
+        toast({
+          title: 'Success',
+          description: 'Data product created successfully. Add ports and team in the details view.',
+        });
+
+        onSuccess(createdProduct);
       }
 
-      const createdProduct: DataProduct = await response.json();
-
-      toast({
-        title: 'Success',
-        description: 'Data product created successfully. Add ports and team in the details view.',
-      });
-
-      onSuccess(createdProduct);
       onOpenChange(false);
     } catch (error: any) {
-      console.error('Error creating data product:', error);
+      console.error(`Error ${mode === 'edit' ? 'updating' : 'creating'} data product:`, error);
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create data product',
+        description: error.message || `Failed to ${mode === 'edit' ? 'update' : 'create'} data product`,
         variant: 'destructive',
       });
     } finally {
@@ -172,10 +268,13 @@ export default function DataProductCreateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Data Product (ODPS v1.0.0)</DialogTitle>
+          <DialogTitle>
+            {mode === 'edit' ? 'Edit Data Product Metadata' : 'Create Data Product (ODPS v1.0.0)'}
+          </DialogTitle>
           <DialogDescription>
-            Create a new data product with essential information.
-            You can add ports, team members, and support channels in the details view.
+            {mode === 'edit'
+              ? 'Update the core metadata for this data product.'
+              : 'Create a new data product with essential information. You can add ports, team members, and support channels in the details view.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -240,14 +339,13 @@ export default function DataProductCreateDialog({
             <div className="space-y-2">
               <Label htmlFor="productType">Product Type</Label>
               <Select
-                value={form.watch('productType') || ''}
+                value={form.watch('productType') || undefined}
                 onValueChange={(value) => form.setValue('productType', value as any)}
               >
                 <SelectTrigger id="productType">
                   <SelectValue placeholder="Select product type..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
                   {productTypes.map((type) => (
                     <SelectItem key={type} value={type}>
                       {type.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
@@ -263,7 +361,7 @@ export default function DataProductCreateDialog({
             <div className="space-y-2">
               <Label htmlFor="ownerTeamId">Owner Team</Label>
               <Select
-                value={form.watch('ownerTeamId') || ''}
+                value={form.watch('ownerTeamId') || undefined}
                 onValueChange={(value) => form.setValue('ownerTeamId', value)}
                 disabled={teamsLoading}
               >
@@ -271,9 +369,8 @@ export default function DataProductCreateDialog({
                   <SelectValue placeholder="Select team..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
                   {teamsLoading ? (
-                    <SelectItem value="" disabled>
+                    <SelectItem value="loading" disabled>
                       Loading teams...
                     </SelectItem>
                   ) : (
@@ -296,16 +393,15 @@ export default function DataProductCreateDialog({
             <div className="space-y-2">
               <Label htmlFor="domain">Domain</Label>
               <Select
-                value={form.watch('domain') || ''}
+                value={form.watch('domain') || undefined}
                 onValueChange={(value) => form.setValue('domain', value)}
               >
                 <SelectTrigger id="domain">
                   <SelectValue placeholder="Select domain..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
                   {domainsLoading ? (
-                    <SelectItem value="" disabled>
+                    <SelectItem value="loading" disabled>
                       Loading...
                     </SelectItem>
                   ) : (
@@ -364,6 +460,26 @@ export default function DataProductCreateDialog({
             </div>
           </div>
 
+          {/* Tags Section */}
+          <div className="space-y-2 border-t pt-4">
+            <Label>Tags</Label>
+            <Controller
+              name="tags"
+              control={form.control}
+              render={({ field }) => (
+                <TagSelector
+                  value={field.value || []}
+                  onChange={field.onChange}
+                  placeholder="Search and select tags for this data product..."
+                  allowCreate={true}
+                />
+              )}
+            />
+            <p className="text-xs text-muted-foreground">
+              Add tags to categorize and organize this data product
+            </p>
+          </div>
+
           <DialogFooter>
             <Button
               type="button"
@@ -375,7 +491,7 @@ export default function DataProductCreateDialog({
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Product
+              {mode === 'edit' ? 'Save Changes' : 'Create Product'}
             </Button>
           </DialogFooter>
         </form>

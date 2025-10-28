@@ -778,6 +778,19 @@ def _build_contract_read_from_db(db, db_contract) -> DataContractRead:
                         must_be_between_max=check.must_be_between_max
                     ))
 
+    # Load tags for the contract
+    tags = []
+    try:
+        from src.repositories.tags_repository import entity_tag_repo
+        assigned_tags = entity_tag_repo.get_assigned_tags_for_entity(
+            db,
+            entity_id=db_contract.id,
+            entity_type="data_contract"
+        )
+        tags = assigned_tags
+    except Exception as e:
+        logger.warning(f"Failed to load tags for contract {db_contract.id}: {e}")
+    
     logger.info(f"[DEBUG SERIALIZE] Building response for contract {db_contract.id}")
     logger.info(f"[DEBUG SERIALIZE] db_contract.owner_team_id = {db_contract.owner_team_id}")
     
@@ -795,6 +808,7 @@ def _build_contract_read_from_db(db, db_contract) -> DataContractRead:
         domainId=db_contract.domain_id,  # Provide domain ID for frontend resolution
         dataProduct=db_contract.data_product,
         description=description,
+        tags=tags,  # Include tags in response
         schema=schema_objects,
         team=team,
         support=support,

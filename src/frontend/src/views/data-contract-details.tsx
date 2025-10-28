@@ -14,6 +14,7 @@ import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel'
 import { CommentSidebar } from '@/components/comments'
 import ConceptSelectDialog from '@/components/semantic/concept-select-dialog'
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips'
+import TagChip from '@/components/ui/tag-chip'
 import { useDomains } from '@/hooks/use-domains'
 import type { EntitySemanticLink } from '@/types/semantic-link'
 import type { DataContract, SchemaObject, QualityRule, TeamMember, ServerConfig, SLARequirements } from '@/types/data-contract'
@@ -32,6 +33,7 @@ import DqxSchemaSelectDialog from '@/components/data-contracts/dqx-schema-select
 import DqxSuggestionsDialog from '@/components/data-contracts/dqx-suggestions-dialog'
 import AuthoritativeDefinitionFormDialog from '@/components/data-contracts/authoritative-definition-form-dialog'
 import ImportTeamMembersDialog from '@/components/data-contracts/import-team-members-dialog'
+import LinkProductToContractDialog from '@/components/data-contracts/link-product-to-contract-dialog'
 import type { DataProduct } from '@/types/data-product'
 import type { DataProfilingRun } from '@/types/data-contract'
 
@@ -177,6 +179,9 @@ export default function DataContractDetails() {
   // Team import state
   const [isImportTeamMembersOpen, setIsImportTeamMembersOpen] = useState(false)
   const [ownerTeamName, setOwnerTeamName] = useState<string>('')
+
+  // Link product dialog state
+  const [isLinkProductDialogOpen, setIsLinkProductDialogOpen] = useState(false)
 
   // Authoritative Definitions state (contract-level)
   type AuthoritativeDefinition = { id: string; url: string; type: string }
@@ -583,6 +588,7 @@ export default function DataContractDetails() {
         descriptionUsage: payload.description?.usage,
         descriptionPurpose: payload.description?.purpose,
         descriptionLimitations: payload.description?.limitations,
+        tags: payload.tags || [],
       }
       console.log('[DEBUG] Update payload owner_team_id:', updatePayload.owner_team_id)
       console.log('[DEBUG] Sending update request:', JSON.stringify(updatePayload, null, 2))
@@ -1147,35 +1153,28 @@ export default function DataContractDetails() {
       <Card>
         <CardHeader>
           <CardTitle className="text-2xl font-bold flex items-center">
-            <FileText className="mr-3 h-7 w-7 text-primary" />{contract.name}
+            <FileText className="mr-3 h-7 w-7 text-primary" />
+            {contract.name}
           </CardTitle>
-          <CardDescription className="pt-1">Core contract metadata</CardDescription>
+          <CardDescription className="pt-1">
+            {contract.description?.purpose || 'No description provided'}
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           <div className="grid md:grid-cols-4 gap-4">
             <div className="space-y-1">
-              <Label>Owner:</Label>
-              {contract.owner_team_id && ownerTeamName ? (
-                <span
-                  className="text-sm block cursor-pointer text-primary hover:underline"
-                  onClick={() => navigate(`/teams/${contract.owner_team_id}`)}
-                  title={`Team ID: ${contract.owner_team_id}`}
-                >
-                  {ownerTeamName}
-                </span>
-              ) : (
-                <span className="text-sm block">{contract.owner_team_id || 'N/A'}</span>
-              )}
+              <Label>Status:</Label>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{contract.status}</Badge>
+                {contract.published && (
+                  <Badge variant="default" className="bg-green-600">Published</Badge>
+                )}
+              </div>
             </div>
             <div className="space-y-1">
-              <Label>Status:</Label> 
-              <Badge variant="secondary" className="ml-1">{contract.status}</Badge>
-              {contract.published && (
-                <Badge variant="default" className="ml-1 bg-green-600">Published</Badge>
-              )}
+              <Label>Version:</Label>
+              <Badge variant="outline" className="ml-1">{contract.version}</Badge>
             </div>
-            <div className="space-y-1"><Label>Version:</Label> <Badge variant="outline" className="ml-1">{contract.version}</Badge></div>
-            <div className="space-y-1"><Label>API Version:</Label> <span className="text-sm block">{contract.apiVersion}</span></div>
             <div className="space-y-1">
               <Label>Domain:</Label>
               {(() => {
@@ -1193,39 +1192,50 @@ export default function DataContractDetails() {
                 );
               })()}
             </div>
-            <div className="space-y-1"><Label>Tenant:</Label> <span className="text-sm block">{contract.tenant || 'N/A'}</span></div>
-            <div className="space-y-1"><Label>Data Product:</Label> <span className="text-sm block">{contract.dataProduct || 'N/A'}</span></div>
-            <div className="space-y-1"><Label>Kind:</Label> <span className="text-sm block">{contract.kind}</span></div>
-            <div className="space-y-1"><Label>Created:</Label> <span className="text-sm block">{contract.created || 'N/A'}</span></div>
-            <div className="space-y-1"><Label>Updated:</Label> <span className="text-sm block">{contract.updated || 'N/A'}</span></div>
+            <div className="space-y-1">
+              <Label>Tenant:</Label>
+              <span className="text-sm block">{contract.tenant || 'N/A'}</span>
+            </div>
+            <div className="space-y-1">
+              <Label>Owner:</Label>
+              {contract.owner_team_id && ownerTeamName ? (
+                <span
+                  className="text-sm block cursor-pointer text-primary hover:underline"
+                  onClick={() => navigate(`/teams/${contract.owner_team_id}`)}
+                  title={`Team ID: ${contract.owner_team_id}`}
+                >
+                  {ownerTeamName}
+                </span>
+              ) : (
+                <span className="text-sm block">{contract.owner_team_id || 'N/A'}</span>
+              )}
+            </div>
+            <div className="space-y-1">
+              <Label>API Version:</Label>
+              <Badge variant="outline" className="ml-1">{contract.apiVersion}</Badge>
+            </div>
+            <div className="space-y-1">
+              <Label>Created:</Label>
+              <span className="text-sm block">{contract.created || 'N/A'}</span>
+            </div>
+            <div className="space-y-1">
+              <Label>Updated:</Label>
+              <span className="text-sm block">{contract.updated || 'N/A'}</span>
+            </div>
           </div>
 
-          {/* Description */}
-          {contract.description && (
-            <div className="space-y-3">
-              <Label className="text-base font-semibold">Description</Label>
-              <div className="grid md:grid-cols-1 gap-3 pl-4">
-                {contract.description.purpose && (
-                  <div className="space-y-1">
-                    <Label>Purpose:</Label>
-                    <p className="text-sm text-muted-foreground">{contract.description.purpose}</p>
-                  </div>
-                )}
-                {contract.description.usage && (
-                  <div className="space-y-1">
-                    <Label>Usage:</Label>
-                    <p className="text-sm text-muted-foreground">{contract.description.usage}</p>
-                  </div>
-                )}
-                {contract.description.limitations && (
-                  <div className="space-y-1">
-                    <Label>Limitations:</Label>
-                    <p className="text-sm text-muted-foreground">{contract.description.limitations}</p>
-                  </div>
-                )}
-              </div>
+          <div className="space-y-1">
+            <Label>Tags:</Label>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {(contract.tags || []).length > 0 ? (
+                (contract.tags || []).map((tag, index) => (
+                  <TagChip key={index} tag={tag} size="sm" />
+                ))
+              ) : (
+                <span className="text-sm text-muted-foreground">No tags</span>
+              )}
             </div>
-          )}
+          </div>
 
           <div className="space-y-1">
             <Label>Linked Business Concepts:</Label>
@@ -1238,6 +1248,43 @@ export default function DataContractDetails() {
         </CardContent>
       </Card>
 
+      {/* Structured Description (ODCS) */}
+      {contract.description && (contract.description.purpose || contract.description.usage || contract.description.limitations) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center">
+                <FileText className="mr-2 h-5 w-5" />
+                Structured Description (ODCS)
+              </span>
+              <Button size="sm" variant="outline" onClick={() => setIsBasicFormOpen(true)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {contract.description.purpose && (
+              <div>
+                <Label>Purpose:</Label>
+                <p className="text-sm mt-1">{contract.description.purpose}</p>
+              </div>
+            )}
+            {contract.description.limitations && (
+              <div>
+                <Label>Limitations:</Label>
+                <p className="text-sm mt-1">{contract.description.limitations}</p>
+              </div>
+            )}
+            {contract.description.usage && (
+              <div>
+                <Label>Usage:</Label>
+                <p className="text-sm mt-1">{contract.description.usage}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Linked Data Products Section */}
       <Card>
         <CardHeader>
@@ -1249,14 +1296,25 @@ export default function DataContractDetails() {
               </CardTitle>
               <CardDescription>Data Products using this contract for output ports</CardDescription>
             </div>
-            <Button
-              size="sm"
-              onClick={() => setIsCreateProductDialogOpen(true)}
-              disabled={!contract || !['active', 'approved', 'certified'].includes((contract.status || '').toLowerCase())}
-            >
-              <Plus className="h-4 w-4 mr-1.5" />
-              Create Data Product
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsLinkProductDialogOpen(true)}
+                disabled={!contract || !['active', 'approved', 'certified'].includes((contract.status || '').toLowerCase())}
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                Link to Existing Product
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setIsCreateProductDialogOpen(true)}
+                disabled={!contract || !['active', 'approved', 'certified'].includes((contract.status || '').toLowerCase())}
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                Create Data Product
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -1284,35 +1342,39 @@ export default function DataContractDetails() {
             </div>
           ) : (
             <div className="space-y-3">
-              {linkedProducts.map((product) => (
-                <div
-                  key={product.id}
-                  className="p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                  onClick={() => navigate(`/data-products/${product.id}`)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="font-medium text-base">{product.info?.title || 'Untitled Product'}</div>
-                      {product.info?.description && (
-                        <p className="text-sm text-muted-foreground mt-1">{product.info.description}</p>
-                      )}
-                      <div className="flex items-center gap-3 mt-2">
-                        <Badge variant="secondary" className="text-xs">
-                          {product.productType || 'N/A'}
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {product.version}
-                        </Badge>
-                        {product.info?.status && (
-                          <Badge variant="secondary" className="text-xs">
-                            {product.info.status}
+              {linkedProducts.map((product) => {
+                // Find output ports that use this contract
+                const linkedPorts = product.outputPorts?.filter(port => port.contractId === contractId) || [];
+                return (
+                  <div
+                    key={product.id}
+                    className="p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                    onClick={() => navigate(`/data-products/${product.id}`)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="font-medium text-base">{product.name || 'Unnamed Product'}</div>
+                        {product.description?.purpose && (
+                          <p className="text-sm text-muted-foreground mt-1">{product.description.purpose}</p>
+                        )}
+                        <div className="flex items-center gap-3 mt-2">
+                          <Badge variant="outline" className="text-xs">
+                            v{product.version}
                           </Badge>
+                          <Badge variant="secondary" className="text-xs">
+                            {product.status}
+                          </Badge>
+                        </div>
+                        {linkedPorts.length > 0 && (
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            Output Port{linkedPorts.length > 1 ? 's' : ''}: {linkedPorts.map(port => `${port.name} (v${port.version})`).join(', ')}
+                          </div>
                         )}
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -2122,6 +2184,7 @@ export default function DataContractDetails() {
           descriptionUsage: contract.description?.usage,
           descriptionPurpose: contract.description?.purpose,
           descriptionLimitations: contract.description?.limitations,
+          tags: contract.tags || [],
         }}
         onSubmit={handleUpdateMetadata}
       />
@@ -2262,6 +2325,22 @@ export default function DataContractDetails() {
           onImport={handleImportTeamMembers}
         />
       )}
+
+      {/* Link Product to Contract Dialog */}
+      <LinkProductToContractDialog
+        isOpen={isLinkProductDialogOpen}
+        onOpenChange={setIsLinkProductDialogOpen}
+        contractId={contractId!}
+        contractName={contract?.name || 'this contract'}
+        onSuccess={() => {
+          fetchLinkedProducts();
+          setIsLinkProductDialogOpen(false);
+          toast({
+            title: 'Contract Linked',
+            description: 'Contract successfully linked to product output port.'
+          });
+        }}
+      />
     </div>
   )
 }
