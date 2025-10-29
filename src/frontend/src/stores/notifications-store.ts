@@ -30,7 +30,7 @@ const apiGet = async <T>(endpoint: string): Promise<{ data?: T, error?: string }
         const data: T = text ? JSON.parse(text) : []; // Default to empty array for lists
         return { data };
     } catch (error: any) {
-         console.error(`[Store] API Error fetching ${API_BASE_URL}${endpoint}:`, error);
+         console.error("[Store] API Error fetching", API_BASE_URL, endpoint, ":", error);
          return { error: error.message || 'Failed to fetch' };
     }
 };
@@ -43,7 +43,7 @@ const apiPut = async (endpoint: string): Promise<{ error?: string }> => {
         }
         return {}; // Success
     } catch (error: any) {
-         console.error(`[Store] API Error PUT ${API_BASE_URL}${endpoint}:`, error);
+         console.error("[Store] API Error PUT", API_BASE_URL, endpoint, ":", error);
          return { error: error.message || 'Failed to update' };
     }
 };
@@ -56,7 +56,7 @@ const apiDelete = async (endpoint: string): Promise<{ error?: string }> => {
         }
         return {}; // Success
     } catch (error: any) {
-         console.error(`[Store] API Error DELETE ${API_BASE_URL}${endpoint}:`, error);
+         console.error("[Store] API Error DELETE", API_BASE_URL, endpoint, ":", error);
          return { error: error.message || 'Failed to delete' };
     }
 };
@@ -132,7 +132,7 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
             throw new Error(response.error);
        }
     } catch (error: any) {
-       console.error(`Error marking notification ${notificationId} as read:`, error);
+       console.error("Error marking notification", notificationId, "as read:", error);
        // Revert optimistic update on error
        set({
             notifications: originalNotifications,
@@ -163,7 +163,7 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
         }
        // Successfully deleted on backend
     } catch (error: any) {
-        console.error(`Error deleting notification ${notificationId}:`, error);
+        console.error("Error deleting notification", notificationId, ":", error);
         // Revert optimistic update on error
         set({
             notifications: originalNotifications,

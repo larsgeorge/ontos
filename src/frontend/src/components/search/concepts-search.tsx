@@ -295,7 +295,7 @@ export default function ConceptsSearch({
 
         enrichedLinks.push({ ...link, entity_name: entityName });
       } catch (error) {
-        console.error(`Error fetching details for ${link.entity_type}:${link.entity_id}`, error);
+        console.error("Error fetching details for", link.entity_type, ":", link.entity_id, error);
         enrichedLinks.push({ ...link, entity_name: link.entity_id });
       }
     }

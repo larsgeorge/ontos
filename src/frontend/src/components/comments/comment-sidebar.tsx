@@ -96,7 +96,13 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
     );
 
     if (response.error) {
-      console.warn(`CommentSidebar: Failed to load comment count for ${entityType}/${entityId}:`, response.error);
+      console.warn(
+        "CommentSidebar: Failed to load comment count for entity",
+        entityType,
+        entityId,
+        ":", 
+        response.error
+      );
       return;
     }
 

@@ -16,6 +16,7 @@ from databricks.sdk.errors import PermissionDenied
 
 from src.common.authorization import PermissionChecker, ApprovalChecker
 from src.common.features import FeatureAccessLevel
+from src.common.file_security import sanitize_filename
 
 from src.common.dependencies import (
     CurrentUserDep,
@@ -83,8 +84,8 @@ async def submit_product_certification(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Submit product certification failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Submit product certification failed for product_id=%s", product_id)
+        raise HTTPException(status_code=500, detail="Failed to submit product certification")
 
 
 @router.post('/data-products/{product_id}/certify')
@@ -120,8 +121,8 @@ async def certify_product(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Certify product failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Certify product failed for product_id=%s", product_id)
+        raise HTTPException(status_code=500, detail="Failed to certify product")
 
 
 @router.post('/data-products/{product_id}/reject-certification')
@@ -157,8 +158,8 @@ async def reject_product_certification(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Reject product certification failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Reject product certification failed for product_id=%s", product_id)
+        raise HTTPException(status_code=500, detail="Failed to reject product certification")
 
 
 @router.post('/data-products/{product_id}/publish')
@@ -218,8 +219,8 @@ async def publish_product(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Publish product failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Publish product failed for product_id=%s", product_id)
+        raise HTTPException(status_code=500, detail="Failed to publish product")
 
 
 @router.post('/data-products/{product_id}/deprecate')
@@ -265,8 +266,8 @@ async def deprecate_product(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Deprecate product failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Deprecate product failed for product_id=%s", product_id)
+        raise HTTPException(status_code=500, detail="Failed to deprecate product")
 
 # --- Contract-Product Integration Endpoints ---
 
@@ -331,8 +332,8 @@ async def create_product_from_contract(
         return created_product
 
     except ValueError as e:
-        logger.error(f"Validation error creating product from contract: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error creating product from contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail="Invalid contract data for product creation")
     except HTTPException:
         raise
     except Exception as e:
@@ -376,8 +377,8 @@ async def get_contracts_for_product(
         logger.info(f"Found {len(contract_ids)} contracts for product {product_id}")
         return contract_ids
     except ValueError as e:
-        logger.error(f"Product not found: {e}")
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Product not found %s: %s", product_id, e)
+        raise HTTPException(status_code=404, detail="Product not found")
     except Exception as e:
         logger.exception(f"Error getting contracts for product {product_id}")
         raise HTTPException(status_code=500, detail=f"Failed to get contracts for product: {str(e)}")
@@ -466,7 +467,12 @@ async def upload_data_products(
     manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
-    if not (file.filename.endswith('.yaml') or file.filename.endswith('.json')):
+    # SECURITY: Sanitize filename for safe logging and validation
+    raw_filename = file.filename or "upload.bin"
+    safe_filename = sanitize_filename(raw_filename, default="upload.bin")
+    
+    # Validate file extension using sanitized filename
+    if not (safe_filename.lower().endswith('.yaml') or safe_filename.lower().endswith('.json')):
         audit_manager.log_action(
             db=db,
             username=current_user.username,
@@ -475,9 +481,9 @@ async def upload_data_products(
             action="UPLOAD",
             success=False,
             details={
-                "filename": file.filename,
+                "filename": safe_filename,
                 "error": "Invalid file type",
-                "params": { "filename_in_request": file.filename },
+                "params": { "filename_in_request": safe_filename },
                 "response_status_code": 400
             }
         )
@@ -490,13 +496,13 @@ async def upload_data_products(
     created_ids_for_audit: List[str] = []
 
     details_for_audit = {
-        "filename": file.filename,
-        "params": { "filename_in_request": file.filename },
+        "filename": safe_filename,
+        "params": { "filename_in_request": safe_filename },
     }
 
     try:
         content = await file.read()
-        if file.filename.endswith('.yaml'):
+        if safe_filename.lower().endswith('.yaml'):
             data = yaml.safe_load(content)
         else:
             import json
@@ -567,7 +573,7 @@ async def upload_data_products(
         
         success = True
         response_status_code = 201
-        logger.info(f"Successfully created {len(created_products_for_response)} data products from uploaded file {file.filename}")
+        logger.info(f"Successfully created {len(created_products_for_response)} data products from uploaded file {safe_filename}")
         return created_products_for_response
 
     except yaml.YAMLError as e_yaml:
@@ -967,7 +973,8 @@ async def get_data_product(
             raise HTTPException(status_code=404, detail="Data product not found")
         return product.model_dump(by_alias=False, exclude={'created_at', 'updated_at'}, exclude_none=True, exclude_unset=True)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error fetching product %s: %s", product_id, e)
+        raise HTTPException(status_code=404, detail="Data product not found")
     except Exception as e:
         logger.exception(f"Unexpected error fetching product {product_id}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -987,8 +994,8 @@ async def create_genie_space_from_products(
         await manager.initiate_genie_space_creation(request_body, current_user, db=db)
         return {"message": "Genie Space creation process initiated. You will be notified upon completion."}
     except RuntimeError as e:
-        logger.error(f"Runtime error initiating Genie Space creation: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Runtime error initiating Genie Space creation", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to initiate Genie Space creation")
     except Exception as e:
         logger.error(f"Unexpected error initiating Genie Space creation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to initiate Genie Space creation.")
@@ -1023,10 +1030,11 @@ async def get_team_members_for_import(
         return members
         
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error fetching team members for product %s: %s", product_id, e)
+        raise HTTPException(status_code=404, detail="Product or team not found")
     except Exception as e:
-        logger.error(f"Error fetching team members for import: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching team members for import for product %s", product_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch team members for import")
     finally:
         # Audit the action
         audit_manager.log_action(

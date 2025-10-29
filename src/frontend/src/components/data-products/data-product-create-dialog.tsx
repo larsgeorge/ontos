@@ -253,7 +253,7 @@ export default function DataProductCreateDialog({
 
       onOpenChange(false);
     } catch (error: any) {
-      console.error(`Error ${mode === 'edit' ? 'updating' : 'creating'} data product:`, error);
+      console.error("Error", mode === 'edit' ? 'updating' : 'creating', "data product:", error);
       toast({
         title: 'Error',
         description: error.message || `Failed to ${mode === 'edit' ? 'update' : 'create'} data product`,

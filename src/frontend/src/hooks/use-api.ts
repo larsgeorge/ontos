@@ -28,7 +28,7 @@ export const useApi = () => {
           errorBody = response.statusText; // Fallback
         }
         const errorMsg = errorBody?.detail || (typeof errorBody === 'string' ? errorBody : JSON.stringify(errorBody)) || `HTTP error! status: ${response.status}`;
-        console.error(`[useApi] GET error response from ${url} (${response.status}):`, errorBody);
+        console.error("[useApi] GET error response from", url, "(", response.status, "):", errorBody);
         return { data: {} as T, error: errorMsg };
       }
 
@@ -62,7 +62,7 @@ export const useApi = () => {
           // If JSON.parse fails, or it doesn't look like JSON, return as plain text wrapped in a way T might expect.
           // This part is tricky as T is generic. For now, we'll log a warning and return it as is,
           // which might require the caller to handle non-object/array types if T expects them.
-          console.warn(`[useApi] GET response from ${url} was text/plain but not directly parsable as JSON. Returning as raw text. Caller needs to handle this if T expects an object/array. Text:`, textData.substring(0,100)); 
+          console.warn("[useApi] GET response from", url, "was text/plain but not directly parsable as JSON. Returning as raw text. Caller needs to handle this if T expects an object/array. Text:", textData.substring(0,100)); 
           return { data: textData as any as T }; // This cast is risky, caller must be aware
         }
         // If it didn't look like JSON initially, return as text.
@@ -76,7 +76,7 @@ export const useApi = () => {
       return { data: fallbackData };
 
     } catch (error) {
-      console.error(`[useApi] GET error from ${url}:`, error);
+      console.error("[useApi] GET error from", url, ":", error);
       return { data: {} as T, error: (error as Error).message };
     } finally {
       setLoading(false);
@@ -125,7 +125,7 @@ export const useApi = () => {
                            (typeof errorBody === 'string' ? errorBody : JSON.stringify(errorBody)) || // Raw body or stringified obj
                            `HTTP error! status: ${response.status}`;         // Fallback
 
-          console.error(`[useApi] POST error response from ${url} (${response.status}):`, errorBody);
+          console.error("[useApi] POST error response from", url, "(", response.status, "):", errorBody);
           return { data: {} as T, error: errorMsg };
       }
 
@@ -143,13 +143,13 @@ export const useApi = () => {
           return { data: data as T };
           
       } catch (parseError) {
-           console.error(`[useApi] Error parsing successful response from ${url}:`, parseError);
+           console.error("[useApi] Error parsing successful response from", url, ":", parseError);
            return { data: {} as T, error: `Failed to parse response: ${(parseError as Error).message}` };
       }
       
     } catch (error) {
       // Network errors or errors before fetch response
-      console.error(`[useApi] Network or other error during POST to ${url}:`, error);
+      console.error("[useApi] Network or other error during POST to", url, ":", error);
       return { data: {} as T, error: (error as Error).message };
     } finally {
       setLoading(false);
@@ -181,7 +181,7 @@ export const useApi = () => {
           errorBody = response.statusText; // Fallback
         }
         const errorMsg = errorBody?.detail || (typeof errorBody === 'string' ? errorBody : JSON.stringify(errorBody)) || `HTTP error! status: ${response.status}`;
-        console.error(`[useApi] PUT error response from ${url} (${response.status}):`, errorBody);
+        console.error("[useApi] PUT error response from", url, "(", response.status, "):", errorBody);
         return { data: {} as T, error: errorMsg };
       }
       
@@ -189,7 +189,7 @@ export const useApi = () => {
       const data = await response.json();
       return { data };
     } catch (error) {
-      console.error(`[useApi] PUT error from ${url}:`, error);
+      console.error("[useApi] PUT error from", url, ":", error);
       return { data: {} as T, error: (error as Error).message };
     } finally {
       setLoading(false);
@@ -217,7 +217,7 @@ export const useApi = () => {
               errorBody = response.statusText; // Fallback
           }
           errorMsg = errorBody?.detail || (typeof errorBody === 'string' ? errorBody : JSON.stringify(errorBody)) || `HTTP error! status: ${response.status}`;
-          console.error(`[useApi] DELETE error response from ${url} (${response.status}):`, errorBody);
+          console.error("[useApi] DELETE error response from", url, "(", response.status, "):", errorBody);
       } else {
           // Success (usually 204 No Content for DELETE)
           // No data expected for successful delete, but structure requires data field
@@ -227,7 +227,7 @@ export const useApi = () => {
     } catch (error) {
       // Network errors
       errorMsg = (error as Error).message;
-      console.error(`[useApi] Network or other error during DELETE to ${url}:`, error);
+      console.error("[useApi] Network or other error during DELETE to", url, ":", error);
     } finally {
       setLoading(false);
     }

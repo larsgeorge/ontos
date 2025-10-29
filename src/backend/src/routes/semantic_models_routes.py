@@ -11,6 +11,9 @@ from src.models.ontology import (
     TaxonomyStats,
     ConceptSearchResult
 )
+from src.common.dependencies import CurrentUserDep, AuditManagerDep, DBSessionDep
+from src.common.authorization import PermissionChecker
+from src.common.features import FeatureAccessLevel
 
 # Configure logging
 from src.common.logging import get_logger
@@ -40,8 +43,8 @@ async def get_semantic_models(manager: SemanticModelsManager = Depends(get_seman
         # New key name for the list endpoint
         return {'semantic_models': [m.model_dump() for m in models]}
     except Exception as e:
-        logger.error(f"Error retrieving semantic models: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error retrieving semantic models", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve semantic models")
 
 @router.get('/semantic-models/concepts')
 async def list_simple_concepts(
@@ -57,8 +60,8 @@ async def list_simple_concepts(
         results = manager.search_concepts(q or "", limit=limit)
         return results
     except Exception as e:
-        logger.error(f"Error retrieving simple concepts: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error retrieving simple concepts", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve concepts")
 
 @router.get('/semantic-models/concepts/suggestions')
 async def list_concept_suggestions(
@@ -76,8 +79,8 @@ async def list_concept_suggestions(
         data = manager.search_concepts_with_suggestions(text_filter=(q or ""), parent_iris=parents_list, limit=limit)
         return data
     except Exception as e:
-        logger.error(f"Error retrieving concept suggestions: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error retrieving concept suggestions", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve concept suggestions")
 
 @router.get('/semantic-models/properties')
 async def list_simple_properties(
@@ -93,8 +96,8 @@ async def list_simple_properties(
         results = manager.search_properties(q or "", limit=limit)
         return results
     except Exception as e:
-        logger.error(f"Error retrieving simple properties: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error retrieving simple properties", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve properties")
 
 @router.get('/semantic-models/properties/suggestions')
 async def list_property_suggestions(
@@ -112,8 +115,8 @@ async def list_property_suggestions(
         data = manager.search_properties_with_suggestions(text_filter=(q or ""), parent_iris=parents_list, limit=limit)
         return data
     except Exception as e:
-        logger.error(f"Error retrieving property suggestions: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error retrieving property suggestions", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve property suggestions")
 
 @router.get('/semantic-models/concepts-grouped')
 async def get_concepts_grouped(
@@ -131,8 +134,8 @@ async def get_concepts_grouped(
         
         return {'grouped_concepts': result}
     except Exception as e:
-        logger.error(f"Error retrieving grouped concepts: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error retrieving grouped concepts", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve grouped concepts")
 
 @router.get('/semantic-models/concepts/{concept_iri:path}/hierarchy')
 async def get_concept_hierarchy(
@@ -151,8 +154,8 @@ async def get_concept_hierarchy(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error retrieving concept hierarchy for {concept_iri}: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error retrieving concept hierarchy for %s", concept_iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve concept hierarchy")
 
 @router.get('/semantic-models/concepts/{concept_iri:path}')
 async def get_concept_details(
@@ -171,8 +174,8 @@ async def get_concept_details(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error retrieving concept details for {concept_iri}: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error retrieving concept details for %s", concept_iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve concept details")
 
 @router.get('/semantic-models/stats')
 async def get_taxonomy_stats(
@@ -184,8 +187,8 @@ async def get_taxonomy_stats(
         stats = manager.get_taxonomy_stats()
         return {'stats': stats.model_dump()}
     except Exception as e:
-        logger.error(f"Error retrieving taxonomy stats: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error retrieving taxonomy stats", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve taxonomy stats")
 
 @router.get('/semantic-models/search')
 async def search_concepts(
@@ -204,8 +207,8 @@ async def search_concepts(
             'results': [result.model_dump() for result in results]
         }
     except Exception as e:
-        logger.error(f"Error searching concepts: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error searching concepts", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to search concepts")
 
 @router.get('/semantic-models/neighbors')
 async def get_neighbors(
@@ -223,8 +226,8 @@ async def get_neighbors(
         neighbors = manager.neighbors(iri, limit)
         return neighbors
     except Exception as e:
-        logger.error(f"Error retrieving neighbors for {iri}: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error retrieving neighbors for %s", iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve neighbors")
 
 @router.get('/semantic-models/prefix')
 async def prefix_search(
@@ -241,32 +244,94 @@ async def prefix_search(
         results = manager.prefix_search(q, limit)
         return results
     except Exception as e:
-        logger.error(f"Error in prefix search for '{q}': {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error in prefix search for '%s'", q, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to perform prefix search")
 
 @router.post('/semantic-models/query')
 async def sparql_query(
+    http_request: Request,
     request: dict,
+    db: DBSessionDep,
+    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    _: bool = Depends(PermissionChecker("semantic-models", FeatureAccessLevel.READ_WRITE)),
     manager: SemanticModelsManager = Depends(get_semantic_models_manager)
 ) -> List[dict]:
     """Execute a SPARQL query against the loaded semantic graph.
 
     Request body should contain a 'sparql' field with the SPARQL query string.
     Returns a list of result bindings as dictionaries.
+    
+    Security: Requires authentication and READ_WRITE permission.
+    Only read-only SPARQL queries (SELECT, ASK, DESCRIBE, CONSTRUCT) are allowed.
+    Queries are validated for safety and subject to resource limits.
     """
     try:
         sparql = request.get('sparql', '')
         if not sparql:
             raise HTTPException(status_code=400, detail="Missing 'sparql' field in request body")
 
-        logger.info(f"Executing SPARQL query (length: {len(sparql)} chars)")
-        results = manager.query(sparql)
+        # Log security event - query attempt
+        logger.warning(
+            f"SPARQL query execution attempt by user '{current_user.email}': "
+            f"query_length={len(sparql)}"
+        )
+        
+        # Execute query with validation and safety limits
+        # The manager will validate and enforce timeout/result limits
+        try:
+            results = manager.query(sparql, max_results=1000, timeout_seconds=30)
+        except ValueError as ve:
+            # Validation or execution error
+            logger.error(f"SPARQL query validation/execution failed for user '{current_user.email}': {ve}")
+            audit_manager.log_action(
+                db=db,
+                username=current_user.email,
+                ip_address=http_request.client.host if http_request.client else None,
+                feature="semantic-models",
+                action="SPARQL_QUERY_FAILED",
+                success=False,
+                details={"error": str(ve), "query_length": len(sparql)}
+            )
+            raise HTTPException(status_code=400, detail=str(ve))
+        
+        # Audit log successful execution
+        audit_manager.log_action(
+            db=db,
+            username=current_user.email,
+            ip_address=http_request.client.host if http_request.client else None,
+            feature="semantic-models",
+            action="SPARQL_QUERY",
+            success=True,
+            details={
+                "query_length": len(sparql),
+                "result_count": len(results),
+                "status": "success"
+            }
+        )
+        
+        logger.info(
+            f"SPARQL query executed successfully by '{current_user.email}': "
+            f"{len(results)} results returned"
+        )
+        
         return results
+        
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error executing SPARQL query: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Unexpected error executing SPARQL query: {e!s}", exc_info=True)
+        # Audit log the failure
+        audit_manager.log_action(
+            db=db,
+            username=current_user.email,
+            ip_address=http_request.client.host if http_request.client else None,
+            feature="semantic-models",
+            action="SPARQL_QUERY_ERROR",
+            success=False,
+            details={"error": str(e), "query_length": len(sparql) if sparql else 0}
+        )
+        raise HTTPException(status_code=500, detail="Internal server error executing query")
 
 """Legacy Business Glossary endpoints removed during rename to Semantic Models."""
 

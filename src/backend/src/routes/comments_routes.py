@@ -6,13 +6,13 @@ from sqlalchemy.orm import Session
 from src.common.dependencies import DBSessionDep, CurrentUserDep
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker, get_user_groups, is_user_admin
-from src.common.logging import get_logger
 from src.common.config import get_settings, Settings
 from src.controller.comments_manager import CommentsManager
 from src.controller.change_log_manager import change_log_manager
 from src.common.manager_dependencies import get_comments_manager
 from src.models.comments import Comment, CommentCreate, CommentUpdate, CommentListResponse
 
+from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Comments"])
@@ -44,8 +44,8 @@ async def create_comment(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed creating comment")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed creating comment for %s/%s", entity_type, entity_id)
+        raise HTTPException(status_code=500, detail="Failed to create comment")
 
 
 @router.get("/entities/{entity_type}/{entity_id}/comments", response_model=CommentListResponse)
@@ -80,8 +80,8 @@ async def list_comments(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed listing comments")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed listing comments for %s/%s", entity_type, entity_id)
+        raise HTTPException(status_code=500, detail="Failed to list comments")
 
 
 @router.get("/entities/{entity_type}/{entity_id}/timeline/count")
@@ -135,8 +135,8 @@ async def get_entity_timeline_count(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed getting entity timeline count")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed getting entity timeline count for %s/%s", entity_type, entity_id)
+        raise HTTPException(status_code=500, detail="Failed to get timeline count")
 
 
 @router.get("/entities/{entity_type}/{entity_id}/timeline")
@@ -238,8 +238,8 @@ async def get_entity_timeline(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed getting entity timeline")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed getting entity timeline for %s/%s", entity_type, entity_id)
+        raise HTTPException(status_code=500, detail="Failed to get timeline")
 
 
 @router.get("/comments/{comment_id}", response_model=Comment)
@@ -289,8 +289,8 @@ async def update_comment(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed updating comment")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed updating comment %s", comment_id)
+        raise HTTPException(status_code=500, detail="Failed to update comment")
 
 
 @router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -330,8 +330,8 @@ async def delete_comment(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed deleting comment")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed deleting comment %s", comment_id)
+        raise HTTPException(status_code=500, detail="Failed to delete comment")
 
 
 @router.get("/comments/{comment_id}/permissions")
@@ -360,8 +360,8 @@ async def check_comment_permissions(
             "is_admin": is_admin
         }
     except Exception as e:
-        logger.exception("Failed checking comment permissions")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed checking comment permissions for %s", comment_id)
+        raise HTTPException(status_code=500, detail="Failed to check comment permissions")
 
 
 def register_routes(app):

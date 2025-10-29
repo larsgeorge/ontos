@@ -78,8 +78,8 @@ async def create_security_feature(feature: SecurityFeatureCreate) -> SecurityFea
         created_feature = manager.create_feature(new_feature)
         return SecurityFeatureResponse.from_orm(created_feature)
     except Exception as e:
-        logging.exception(f"Error creating security feature: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.exception("Error creating security feature")
+        raise HTTPException(status_code=500, detail="Failed to create security feature")
 
 @router.get("/security-features", response_model=List[SecurityFeatureResponse])
 async def list_security_features():
@@ -100,11 +100,8 @@ async def list_security_features():
                 raise
         return [SecurityFeatureResponse.from_orm(feature) for feature in features]
     except Exception as e:
-        logger.error(f"Error listing security features: {e!s}")
-        logger.error(f"Error type: {type(e)}")
-        import traceback
-        logger.error(f"Stack trace: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error listing security features", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list security features")
 
 @router.get("/security-features/{feature_id}", response_model=SecurityFeatureResponse)
 async def get_security_feature(feature_id: str) -> SecurityFeatureResponse:
@@ -118,8 +115,8 @@ async def get_security_feature(feature_id: str) -> SecurityFeatureResponse:
     except HTTPException:
         raise
     except Exception as e:
-        logging.exception(f"Error getting security feature: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.exception("Error getting security feature %s", feature_id)
+        raise HTTPException(status_code=500, detail="Failed to get security feature")
 
 @router.put("/security-features/{feature_id}", response_model=SecurityFeatureResponse)
 async def update_security_feature(feature_id: str, feature_update: SecurityFeatureUpdate) -> SecurityFeatureResponse:
@@ -149,8 +146,8 @@ async def update_security_feature(feature_id: str, feature_update: SecurityFeatu
     except HTTPException:
         raise
     except Exception as e:
-        logging.exception(f"Error updating security feature: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.exception("Error updating security feature %s", feature_id)
+        raise HTTPException(status_code=500, detail="Failed to update security feature")
 
 @router.delete("/security-features/{feature_id}")
 async def delete_security_feature(feature_id: str):
@@ -163,8 +160,8 @@ async def delete_security_feature(feature_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logging.exception(f"Error deleting security feature: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.exception("Error deleting security feature %s", feature_id)
+        raise HTTPException(status_code=500, detail="Failed to delete security feature")
 
 def register_routes(app):
     """Register security features routes with the app"""

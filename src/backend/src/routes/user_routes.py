@@ -133,7 +133,8 @@ async def set_role_override(
         settings_manager.set_applied_role_override_for_user(user_details.email, role_id)
         return {"status": "ok"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Invalid role override request for user %s: %s", user_details.email, e)
+        raise HTTPException(status_code=400, detail="Invalid role override request")
 
 @router.get("/user/role-override")
 async def get_role_override(

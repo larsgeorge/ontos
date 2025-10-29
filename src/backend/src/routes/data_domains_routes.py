@@ -61,13 +61,14 @@ def create_data_domain(
         return created_domain
     except ConflictError as e:
         db.rollback()
+        logger.error("Data domain creation conflict for '%s': %s", domain_in.name, e)
         details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Data domain already exists")
     except Exception as e:
         db.rollback()
-        logger.exception(f"Failed to create data domain '{domain_in.name}': {e}")
+        logger.exception("Failed to create data domain '%s'", domain_in.name)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create data domain: {e!s}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create data domain")
     finally:
         if created_domain_id:
             details_for_audit["created_resource_id"] = created_domain_id
@@ -152,17 +153,19 @@ def update_data_domain(
         return updated_domain
     except NotFoundError as e:
         db.rollback()
+        logger.error("Data domain not found for update %s: %s", domain_id, e)
         details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Data domain not found")
     except ConflictError as e:
         db.rollback()
+        logger.error("Data domain update conflict %s: %s", domain_id, e)
         details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Data domain conflict")
     except Exception as e:
         db.rollback()
-        logger.exception(f"Failed to update data domain {domain_id}: {e}")
+        logger.exception("Failed to update data domain %s", domain_id)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update data domain: {e!s}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update data domain")
     finally:
         if success:
             details_for_audit["updated_resource_id"] = str(domain_id)
@@ -204,13 +207,14 @@ def delete_data_domain(
         return deleted_domain
     except NotFoundError as e:
         db.rollback()
+        logger.error("Data domain not found for deletion %s: %s", domain_id, e)
         details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Data domain not found")
     except Exception as e:
         db.rollback()
-        logger.exception(f"Failed to delete data domain {domain_id}: {e}")
+        logger.exception("Failed to delete data domain %s", domain_id)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete data domain: {e!s}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete data domain")
     finally:
         if success:
             details_for_audit["deleted_resource_id"] = str(domain_id)

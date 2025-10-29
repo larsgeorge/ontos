@@ -49,6 +49,7 @@ from src.models.data_contracts_api import (
 from src.common.odcs_validation import validate_odcs_contract, ODCSValidationError
 from src.common.authorization import PermissionChecker, ApprovalChecker
 from src.common.features import FeatureAccessLevel
+from src.common.file_security import sanitize_filename, sanitize_filename_for_header
 from src.controller.change_log_manager import change_log_manager
 from src.models.notifications import NotificationType, Notification
 from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
@@ -170,8 +171,8 @@ async def submit_contract(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Submit contract failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Submit contract failed for contract_id=%s", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to submit contract")
 
 
 @router.post('/data-contracts/{contract_id}/approve')
@@ -216,8 +217,8 @@ async def approve_contract(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Approve contract failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Approve contract failed for contract_id=%s", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to approve contract")
 
 
 @router.post('/data-contracts/{contract_id}/reject')
@@ -262,8 +263,8 @@ async def reject_contract(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Reject contract failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Reject contract failed for contract_id=%s", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to reject contract")
 
 
 # --- Request Endpoints (for review, publish, deploy) ---
@@ -321,13 +322,14 @@ async def request_steward_review(
         return result
         
     except ValueError as e:
+        logger.error("Request review validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else 409
-        raise HTTPException(status_code=error_status, detail=str(e))
+        raise HTTPException(status_code=error_status, detail="Invalid review request")
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Request review failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Request review failed for contract_id=%s", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to request review")
 
 
 @router.post('/data-contracts/{contract_id}/request-publish')
@@ -368,13 +370,14 @@ async def request_publish_to_marketplace(
         return result
         
     except ValueError as e:
+        logger.error("Request publish validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else 409
-        raise HTTPException(status_code=error_status, detail=str(e))
+        raise HTTPException(status_code=error_status, detail="Invalid publish request")
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Request publish failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Request publish failed for contract_id=%s", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to request publish")
 
 
 @router.post('/data-contracts/{contract_id}/request-deploy')
@@ -420,13 +423,14 @@ async def request_deploy_to_catalog(
         return result
         
     except ValueError as e:
+        logger.error("Request deploy validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (403 if "denied" in str(e).lower() or "permission" in str(e).lower() else 409)
-        raise HTTPException(status_code=error_status, detail=str(e))
+        raise HTTPException(status_code=error_status, detail="Invalid deploy request")
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Request deploy failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Request deploy failed for contract_id=%s", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to request deploy")
 
 
 # --- Handle Request Endpoints (for approvers to respond) ---
@@ -484,13 +488,14 @@ async def handle_steward_review_response(
         return result
         
     except ValueError as e:
+        logger.error("Handle review validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (400 if "must be" in str(e).lower() else 409)
-        raise HTTPException(status_code=error_status, detail=str(e))
+        raise HTTPException(status_code=error_status, detail="Invalid review response")
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Handle review failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Handle review failed for contract_id=%s", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to handle review")
 
 
 @router.post('/data-contracts/{contract_id}/handle-publish')
@@ -538,13 +543,14 @@ async def handle_publish_request_response(
         return result
         
     except ValueError as e:
+        logger.error("Handle publish validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (400 if "must be" in str(e).lower() else 409)
-        raise HTTPException(status_code=error_status, detail=str(e))
+        raise HTTPException(status_code=error_status, detail="Invalid publish response")
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Handle publish failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Handle publish failed for contract_id=%s", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to handle publish")
 
 
 @router.post('/data-contracts/{contract_id}/handle-deploy')
@@ -596,13 +602,14 @@ async def handle_deploy_request_response(
         return result
         
     except ValueError as e:
+        logger.error("Handle deploy validation error for contract_id=%s: %s", contract_id, e)
         error_status = 404 if "not found" in str(e).lower() else (400 if "must be" in str(e).lower() else 409)
-        raise HTTPException(status_code=error_status, detail=str(e))
+        raise HTTPException(status_code=error_status, detail="Invalid deploy response")
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Handle deploy failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Handle deploy failed for contract_id=%s", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to handle deploy")
 
 
 def _build_contract_read_from_db(db, db_contract) -> DataContractRead:
@@ -860,14 +867,16 @@ async def create_contract(
         return _build_contract_read_from_db(db, created_with_relations)
 
     except ValueError as e:
+        logger.error("Validation error creating contract: %s", e)
         details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Invalid contract data")
     except HTTPException as http_exc:
         details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
         raise
     except Exception as e:
+        logger.exception("Failed to create contract")
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to create contract")
     finally:
         if created_contract_id:
             details_for_audit["created_resource_id"] = created_contract_id
@@ -940,8 +949,9 @@ async def update_contract(
         return _build_contract_read_from_db(db, updated_with_relations)
 
     except ValueError as e:
+        logger.error("Validation error updating contract %s: %s", contract_id, e)
         details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Invalid contract data")
     except HTTPException as http_exc:
         details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
         raise
@@ -1025,9 +1035,13 @@ async def upload_contract(
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_WRITE)),
 ):
     """Upload a contract file and parse it into normalized ODCS structure"""
+    # SECURITY: Sanitize filename for safe logging and processing
+    raw_filename = file.filename or "uploaded_contract"
+    safe_filename = sanitize_filename(raw_filename, default="uploaded_contract")
+    
     success = False
     details_for_audit = {
-        "params": {"filename": file.filename if file.filename else "N/A"},
+        "params": {"filename": safe_filename},
     }
     created_contract_id = None
 
@@ -1035,10 +1049,10 @@ async def upload_contract(
         # Read file content
         contract_text = (await file.read()).decode('utf-8')
         
-        # Parse file using manager
+        # Parse file using manager (use sanitized filename)
         parsed = manager.parse_uploaded_file(
             file_content=contract_text,
-            filename=file.filename or 'uploaded_contract',
+            filename=safe_filename,
             content_type=file.content_type or 'application/json'
         )
         
@@ -1062,14 +1076,16 @@ async def upload_contract(
         return _build_contract_read_from_db(db, created_with_relations)
 
     except ValueError as e:
+        logger.error("Validation error uploading contract: %s", e)
         details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Invalid contract data")
     except HTTPException as http_exc:
         details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
         raise
     except Exception as e:
+        logger.exception("Upload failed")
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Upload failed")
     finally:
         if created_contract_id:
             details_for_audit["created_resource_id"] = created_contract_id
@@ -1095,7 +1111,8 @@ async def get_odcs_schema(_perm: bool = Depends(PermissionChecker('data-contract
             data = json.load(f)
         return data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to load schema file")
+        raise HTTPException(status_code=500, detail="Failed to load schema file")
 
 
 # ODCS import functionality now handled by /data-contracts/upload endpoint
@@ -1113,18 +1130,22 @@ async def export_odcs(contract_id: str, db: DBSessionDep, manager: DataContracts
 
         # Convert to YAML format for ODCS compliance
         yaml_content = yaml.dump(odcs, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        filename = f"{(db_obj.name or 'contract').lower().replace(' ', '_')}-odcs.yaml"
+        
+        # SECURITY: Sanitize filename for header to prevent injection
+        raw_filename = f"{(db_obj.name or 'contract').lower().replace(' ', '_')}-odcs.yaml"
+        safe_filename = sanitize_filename_for_header(raw_filename, default="contract-odcs.yaml")
 
         return Response(
             content=yaml_content,
             media_type='application/x-yaml',
             headers={
-                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Content-Disposition': f'attachment; filename="{safe_filename}"',
                 'Content-Type': 'application/x-yaml; charset=utf-8'
             }
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to list versions for contract %s", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to list versions")
 
 @router.post('/data-contracts/{contract_id}/comments', response_model=dict)
 async def add_comment(
@@ -1163,8 +1184,9 @@ async def add_comment(
     except Exception as e:
         success = False
         response_status_code = 500
+        logger.exception("Failed to add comment to contract %s", contract_id)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to add comment")
     finally:
         if "exception" not in details_for_audit:
             details_for_audit["response_status_code"] = response_status_code
@@ -1193,7 +1215,8 @@ async def list_comments(contract_id: str, db: DBSessionDep, _: bool = Depends(Pe
             for c in comments
         ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to list comments for contract %s", contract_id)
+        raise HTTPException(status_code=500, detail="Failed to list comments")
 
 
 @router.post('/data-contracts/{contract_id}/versions')
@@ -1237,14 +1260,16 @@ async def create_version(
         }
     except ValueError as e:
         response_status_code = 404 if "not found" in str(e).lower() else 400
+        logger.error("Validation error creating version for contract %s: %s", contract_id, e)
         details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
-        raise HTTPException(status_code=response_status_code, detail=str(e))
+        raise HTTPException(status_code=response_status_code, detail="Invalid version data")
     except HTTPException:
         raise
     except Exception as e:
         response_status_code = 500
+        logger.exception("Failed to create version for contract %s", contract_id)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to create version")
     finally:
         if "exception" not in details_for_audit:
             details_for_audit["response_status_code"] = response_status_code
@@ -1284,10 +1309,11 @@ async def start_profiling(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error starting profiling for contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail="Invalid profiling request")
     except Exception as e:
-        logger.error(f"Failed to start profiling: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed to start profiling for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to start profiling")
 
 
 @router.get('/data-contracts/{contract_id}/profile-runs')
@@ -1307,10 +1333,11 @@ async def get_profile_runs(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error getting profile runs for contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=404, detail="Contract not found")
     except Exception as e:
-        logger.error(f"Failed to get profile runs: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed to get profile runs for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get profile runs")
 
 
 @router.get('/data-contracts/{contract_id}/profile-runs/{run_id}/suggestions')
@@ -1330,10 +1357,11 @@ async def get_suggestions(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error getting suggestions for contract %s run %s: %s", contract_id, run_id, e)
+        raise HTTPException(status_code=404, detail="Profile run not found")
     except Exception as e:
-        logger.error(f"Failed to get suggestions: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed to get suggestions for contract %s run %s", contract_id, run_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get suggestions")
 
 
 @router.post('/data-contracts/{contract_id}/suggestions/accept')
@@ -1365,10 +1393,11 @@ async def accept_suggestions(
         
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error accepting suggestions for contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail="Invalid suggestion request")
     except Exception as e:
-        logger.error(f"Failed to accept suggestions: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed to accept suggestions for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to accept suggestions")
 
 
 @router.put('/data-contracts/{contract_id}/suggestions/{suggestion_id}')
@@ -1390,10 +1419,11 @@ async def update_suggestion(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error updating suggestion %s for contract %s: %s", suggestion_id, contract_id, e)
+        raise HTTPException(status_code=404, detail="Suggestion not found")
     except Exception as e:
-        logger.error(f"Failed to update suggestion: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed to update suggestion %s for contract %s", suggestion_id, contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update suggestion")
 
 
 @router.post('/data-contracts/{contract_id}/suggestions/reject')
@@ -1418,10 +1448,11 @@ async def reject_suggestions(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error rejecting suggestions for contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail="Invalid rejection request")
     except Exception as e:
-        logger.error(f"Failed to reject suggestions: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed to reject suggestions for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to reject suggestions")
 
 
 # ===== Custom Properties CRUD Endpoints =====
@@ -1444,8 +1475,8 @@ async def get_custom_properties(
         properties = custom_property_repo.get_by_contract(db=db, contract_id=contract_id)
         return [CustomPropertyRead.model_validate(prop).model_dump() for prop in properties]
     except Exception as e:
-        logger.error(f"Error fetching custom properties: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching custom properties for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch custom properties")
 
 
 @router.post('/data-contracts/{contract_id}/custom-properties', response_model=dict, status_code=201)
@@ -1484,10 +1515,11 @@ async def create_custom_property(
 
         return CustomPropertyRead.model_validate(new_prop).model_dump()
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error creating custom property for contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=404, detail="Contract not found")
     except Exception as e:
-        logger.error(f"Error creating custom property: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating custom property for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create custom property")
 
 
 @router.put('/data-contracts/{contract_id}/custom-properties/{property_id}', response_model=dict)
@@ -1526,12 +1558,13 @@ async def update_custom_property(
 
         return CustomPropertyRead.model_validate(updated_prop).model_dump()
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error updating custom property %s for contract %s: %s", property_id, contract_id, e)
+        raise HTTPException(status_code=404, detail="Property not found")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating custom property: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error updating custom property %s for contract %s", property_id, contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update custom property")
 
 
 @router.delete('/data-contracts/{contract_id}/custom-properties/{property_id}', status_code=204)
@@ -1566,12 +1599,13 @@ async def delete_custom_property(
 
         return None
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error deleting custom property %s for contract %s: %s", property_id, contract_id, e)
+        raise HTTPException(status_code=404, detail="Property not found")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting custom property: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error deleting custom property %s for contract %s", property_id, contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete custom property")
 
 
 # ===== Support Channels CRUD Endpoints (ODCS support[]) =====
@@ -1594,8 +1628,8 @@ async def get_support_channels(
         channels = support_channel_repo.get_by_contract(db=db, contract_id=contract_id)
         return [SupportChannelRead.model_validate(ch).model_dump() for ch in channels]
     except Exception as e:
-        logger.error(f"Error fetching support channels: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching support channels for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch support channels")
 
 
 @router.post('/data-contracts/{contract_id}/support', response_model=dict, status_code=201)
@@ -1633,12 +1667,13 @@ async def create_support_channel(
 
         return SupportChannelRead.model_validate(new_channel).model_dump()
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error creating support channel for contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=404, detail="Contract not found or invalid data")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating support channel: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating support channel for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create support channel")
 
 
 @router.put('/data-contracts/{contract_id}/support/{channel_id}', response_model=dict)
@@ -1678,12 +1713,13 @@ async def update_support_channel(
 
         return SupportChannelRead.model_validate(updated_channel).model_dump()
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error updating support channel %s for contract %s: %s", channel_id, contract_id, e)
+        raise HTTPException(status_code=404, detail="Contract or channel not found")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating support channel: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error updating support channel %s for contract %s", channel_id, contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update support channel")
 
 
 @router.delete('/data-contracts/{contract_id}/support/{channel_id}', status_code=204)
@@ -1719,12 +1755,13 @@ async def delete_support_channel(
 
         return None
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error deleting support channel %s for contract %s: %s", channel_id, contract_id, e)
+        raise HTTPException(status_code=404, detail="Contract or channel not found")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting support channel: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error deleting support channel %s for contract %s", channel_id, contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete support channel")
 
 
 # ===== Pricing Endpoints (ODCS price) - Singleton Pattern =====
@@ -1757,8 +1794,8 @@ async def get_pricing(
                 "price_unit": None
             }
     except Exception as e:
-        logger.error(f"Error fetching pricing: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching pricing for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch pricing")
 
 
 @router.put('/data-contracts/{contract_id}/pricing', response_model=dict)
@@ -1800,12 +1837,13 @@ async def update_pricing(
 
         return PricingRead.model_validate(updated_pricing).model_dump()
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error updating pricing for contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=404, detail="Contract not found")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating pricing: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error updating pricing for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update pricing")
 
 
 # ===== Roles CRUD Endpoints (ODCS roles[]) - With Nested Properties =====
@@ -1828,8 +1866,8 @@ async def get_roles(
         roles = role_repo.get_by_contract(db=db, contract_id=contract_id)
         return [RoleRead.model_validate(r).model_dump() for r in roles]
     except Exception as e:
-        logger.error(f"Error fetching roles: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching roles for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch roles")
 
 
 @router.post('/data-contracts/{contract_id}/roles', response_model=dict, status_code=201)
@@ -1888,11 +1926,12 @@ async def create_role(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error creating role for contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail="Invalid role data")
     except Exception as e:
         db.rollback()
-        logger.error(f"Error creating role: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating role for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create role")
 
 
 @router.put('/data-contracts/{contract_id}/roles/{role_id}', response_model=dict)
@@ -1955,11 +1994,12 @@ async def update_role(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error updating role %s for contract %s: %s", role_id, contract_id, e)
+        raise HTTPException(status_code=400, detail="Invalid role data")
     except Exception as e:
         db.rollback()
-        logger.error(f"Error updating role: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error updating role %s for contract %s", role_id, contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update role")
 
 
 @router.delete('/data-contracts/{contract_id}/roles/{role_id}', status_code=204)
@@ -2003,8 +2043,8 @@ async def delete_role(
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deleting role: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error deleting role %s for contract %s", role_id, contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete role")
 
 
 # ===== Contract-Level Authoritative Definitions CRUD (ODCS authoritativeDefinitions[]) =====
@@ -2027,8 +2067,8 @@ async def get_contract_authoritative_definitions(
         definitions = contract_authoritative_definition_repo.get_by_contract(db=db, contract_id=contract_id)
         return [AuthoritativeDefinitionRead.model_validate(d).model_dump() for d in definitions]
     except Exception as e:
-        logger.error(f"Error fetching contract authoritative definitions: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching contract authoritative definitions for %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch authoritative definitions")
 
 
 @router.post('/data-contracts/{contract_id}/authoritative-definitions', response_model=dict, status_code=201)
@@ -2066,11 +2106,12 @@ async def create_contract_authoritative_definition(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error creating authoritative definition for contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail="Invalid definition data")
     except Exception as e:
         db.rollback()
-        logger.error(f"Error creating contract authoritative definition: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating contract authoritative definition for %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create authoritative definition")
 
 
 @router.put('/data-contracts/{contract_id}/authoritative-definitions/{definition_id}', response_model=dict)
@@ -2113,11 +2154,12 @@ async def update_contract_authoritative_definition(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error updating authoritative definition %s for contract %s: %s", definition_id, contract_id, e)
+        raise HTTPException(status_code=400, detail="Invalid definition data")
     except Exception as e:
         db.rollback()
-        logger.error(f"Error updating contract authoritative definition: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error updating contract authoritative definition %s for %s", definition_id, contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update authoritative definition")
 
 
 @router.delete('/data-contracts/{contract_id}/authoritative-definitions/{definition_id}', status_code=204)
@@ -2156,8 +2198,8 @@ async def delete_contract_authoritative_definition(
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deleting contract authoritative definition: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error deleting contract authoritative definition %s for %s", definition_id, contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete authoritative definition")
 
 
 # ===== Schema-Level Authoritative Definitions CRUD =====
@@ -2181,8 +2223,8 @@ async def get_schema_authoritative_definitions(
         definitions = schema_authoritative_definition_repo.get_by_schema(db=db, schema_id=schema_id)
         return [AuthoritativeDefinitionRead.model_validate(d).model_dump() for d in definitions]
     except Exception as e:
-        logger.error(f"Error fetching schema authoritative definitions: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching schema authoritative definitions for schema %s", schema_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch schema authoritative definitions")
 
 
 @router.post('/data-contracts/{contract_id}/schemas/{schema_id}/authoritative-definitions', response_model=dict, status_code=201)
@@ -2221,11 +2263,12 @@ async def create_schema_authoritative_definition(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error creating schema authoritative definition for schema %s: %s", schema_id, e)
+        raise HTTPException(status_code=400, detail="Invalid definition data")
     except Exception as e:
         db.rollback()
-        logger.error(f"Error creating schema authoritative definition: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating schema authoritative definition for schema %s", schema_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create schema authoritative definition")
 
 
 @router.put('/data-contracts/{contract_id}/schemas/{schema_id}/authoritative-definitions/{definition_id}', response_model=dict)
@@ -2269,11 +2312,12 @@ async def update_schema_authoritative_definition(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error updating schema authoritative definition %s for schema %s: %s", definition_id, schema_id, e)
+        raise HTTPException(status_code=400, detail="Invalid definition data")
     except Exception as e:
         db.rollback()
-        logger.error(f"Error updating schema authoritative definition: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error updating schema authoritative definition %s for schema %s", definition_id, schema_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update schema authoritative definition")
 
 
 @router.delete('/data-contracts/{contract_id}/schemas/{schema_id}/authoritative-definitions/{definition_id}', status_code=204)
@@ -2313,8 +2357,8 @@ async def delete_schema_authoritative_definition(
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deleting schema authoritative definition: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error deleting schema authoritative definition %s for schema %s", definition_id, schema_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete schema authoritative definition")
 
 
 # ===== Property-Level Authoritative Definitions CRUD =====
@@ -2339,8 +2383,8 @@ async def get_property_authoritative_definitions(
         definitions = property_authoritative_definition_repo.get_by_property(db=db, property_id=property_id)
         return [AuthoritativeDefinitionRead.model_validate(d).model_dump() for d in definitions]
     except Exception as e:
-        logger.error(f"Error fetching property authoritative definitions: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching property authoritative definitions for property %s", property_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch property authoritative definitions")
 
 
 @router.post('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{property_id}/authoritative-definitions', response_model=dict, status_code=201)
@@ -2380,11 +2424,12 @@ async def create_property_authoritative_definition(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error creating property authoritative definition for property %s: %s", property_id, e)
+        raise HTTPException(status_code=400, detail="Invalid definition data")
     except Exception as e:
         db.rollback()
-        logger.error(f"Error creating property authoritative definition: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating property authoritative definition for property %s", property_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create property authoritative definition")
 
 
 @router.put('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{property_id}/authoritative-definitions/{definition_id}', response_model=dict)
@@ -2429,11 +2474,12 @@ async def update_property_authoritative_definition(
     except HTTPException:
         raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error updating property authoritative definition %s for property %s: %s", definition_id, property_id, e)
+        raise HTTPException(status_code=400, detail="Invalid definition data")
     except Exception as e:
         db.rollback()
-        logger.error(f"Error updating property authoritative definition: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error updating property authoritative definition %s for property %s", definition_id, property_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update property authoritative definition")
 
 
 @router.delete('/data-contracts/{contract_id}/schemas/{schema_id}/properties/{property_id}/authoritative-definitions/{definition_id}', status_code=204)
@@ -2474,8 +2520,8 @@ async def delete_property_authoritative_definition(
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deleting property authoritative definition: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error deleting property authoritative definition %s for property %s", definition_id, property_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete property authoritative definition")
 
 
 # ===== Contract Tags CRUD Endpoints =====
@@ -2499,8 +2545,8 @@ async def get_contract_tags(
         tags = contract_tag_repo.get_by_contract(db=db, contract_id=contract_id)
         return [ContractTagRead.model_validate(tag).model_dump() for tag in tags]
     except Exception as e:
-        logger.error(f"Error fetching tags for contract {contract_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching tags for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch contract tags")
 
 
 @router.post('/data-contracts/{contract_id}/tags', response_model=dict, status_code=201)
@@ -2544,11 +2590,12 @@ async def create_contract_tag(
         return ContractTagRead.model_validate(new_tag).model_dump()
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error creating tag for contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail="Invalid tag data")
     except Exception as e:
         db.rollback()
-        logger.error(f"Error creating tag for contract {contract_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating tag for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create contract tag")
 
 
 @router.put('/data-contracts/{contract_id}/tags/{tag_id}', response_model=dict)
@@ -2603,13 +2650,14 @@ async def update_contract_tag(
         return ContractTagRead.model_validate(updated_tag).model_dump()
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error updating tag %s for contract %s: %s", tag_id, contract_id, e)
+        raise HTTPException(status_code=400, detail="Invalid tag data")
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error updating tag {tag_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error updating tag %s for contract %s", tag_id, contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update contract tag")
 
 
 @router.delete('/data-contracts/{contract_id}/tags/{tag_id}', status_code=204)
@@ -2663,8 +2711,8 @@ async def delete_contract_tag(
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Error deleting tag {tag_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error deleting tag %s for contract %s", tag_id, contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete contract tag")
 
 
 # ===== Semantic Versioning Endpoints =====
@@ -2685,10 +2733,11 @@ async def get_contract_versions(
         from src.models.data_contracts_api import DataContractRead
         return [DataContractRead.model_validate(c).model_dump() for c in contracts]
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error fetching contract versions for %s: %s", contract_id, e)
+        raise HTTPException(status_code=404, detail="Contract not found")
     except Exception as e:
-        logger.error(f"Error fetching contract versions: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching contract versions for %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch contract versions")
 
 
 @router.post('/data-contracts/{contract_id}/clone', response_model=dict, status_code=201)
@@ -2740,12 +2789,13 @@ async def clone_contract_for_new_version(
         return DataContractRead.model_validate(new_contract).model_dump()
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error cloning contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=400, detail="Invalid contract data")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error cloning contract: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error cloning contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to clone contract")
 
 
 @router.post('/data-contracts/compare', response_model=dict)
@@ -2768,10 +2818,11 @@ async def compare_contract_versions(
             new_contract=new_contract
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Validation error comparing contracts: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid contract data for comparison")
     except Exception as e:
-        logger.error(f"Error comparing contracts: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error comparing contracts", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to compare contracts")
 
 
 @router.get('/data-contracts/{contract_id}/version-history', response_model=dict)
@@ -2796,10 +2847,11 @@ async def get_contract_version_history(
             "siblings": [DataContractRead.model_validate(s).model_dump() for s in history["siblings"]]
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error fetching version history for %s: %s", contract_id, e)
+        raise HTTPException(status_code=404, detail="Contract not found")
     except Exception as e:
-        logger.error(f"Error fetching version history: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching version history for %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch version history")
 
 
 @router.get('/data-contracts/{contract_id}/import-team-members', response_model=list)
@@ -2833,10 +2885,11 @@ async def get_team_members_for_import(
         return members
         
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.error("Validation error fetching team members for contract %s: %s", contract_id, e)
+        raise HTTPException(status_code=404, detail="Contract or team not found")
     except Exception as e:
-        logger.error(f"Error fetching team members for import: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching team members for import for contract %s", contract_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch team members for import")
     finally:
         # Audit the action
         audit_manager.log_action(

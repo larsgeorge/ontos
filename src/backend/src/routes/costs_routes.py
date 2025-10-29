@@ -40,8 +40,8 @@ async def create_cost_item(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed creating cost item")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed creating cost item for %s/%s", entity_type, entity_id)
+        raise HTTPException(status_code=500, detail="Failed to create cost item")
 
 
 @router.get("/entities/{entity_type}/{entity_id}/cost-items", response_model=List[CostItem])

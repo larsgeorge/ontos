@@ -38,8 +38,8 @@ async def get_settings_route(manager: SettingsManager = Depends(get_settings_man
         settings_data = manager.get_settings() # Renamed variable to avoid conflict
         return settings_data
     except Exception as e:
-        logger.error(f"Error getting settings: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error getting settings", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get settings")
 
 @router.put('/settings')
 async def update_settings(
@@ -72,9 +72,9 @@ async def update_settings(
         success = True
         return updated.to_dict()
     except Exception as e:
-        logger.error(f"Error updating settings: {e!s}")
+        logger.error("Error updating settings", exc_info=True)
         details['exception'] = str(e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to update settings")
     finally:
         background_tasks.add_task(
             audit_manager.log_action_background,
@@ -98,8 +98,8 @@ async def get_llm_config():
             # Do not expose system_prompt or injection_check_prompt to frontend
         }
     except Exception as e:
-        logger.error(f"Error getting LLM config: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error getting LLM config", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get LLM config")
 
 @router.get('/settings/health')
 async def health_check(manager: SettingsManager = Depends(get_settings_manager)):
@@ -127,8 +127,8 @@ async def list_job_clusters(manager: SettingsManager = Depends(get_settings_mana
             'max_workers': cluster.max_workers
         } for cluster in clusters]
     except Exception as e:
-        logger.error(f"Error fetching job clusters: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error fetching job clusters", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch job clusters")
 
 # --- RBAC Routes ---
 
@@ -139,8 +139,8 @@ async def get_features_config(manager: SettingsManager = Depends(get_settings_ma
         features = manager.get_features_with_access_levels()
         return features
     except Exception as e:
-        logger.error(f"Error getting features configuration: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error getting features configuration", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get features configuration")
 
 @router.get("/settings/roles", response_model=List[AppRole])
 async def list_roles(manager: SettingsManager = Depends(get_settings_manager)):
@@ -149,8 +149,8 @@ async def list_roles(manager: SettingsManager = Depends(get_settings_manager)):
         roles = manager.list_app_roles()
         return roles
     except Exception as e:
-        logger.error(f"Error listing roles: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error listing roles", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list roles")
 
 @router.post("/settings/roles", response_model=AppRole, status_code=status.HTTP_201_CREATED)
 async def create_role(
@@ -172,13 +172,13 @@ async def create_role(
             details["created_role_id"] = str(created_role.id)
         return created_role
     except ValueError as e:
-        logger.warning(f"Validation error creating role '{role_data.name}': {e!s}")
+        logger.warning("Validation error creating role '%s': %s", role_data.name, e)
         details["exception"] = str(e)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role data")
     except Exception as e:
-        logger.error(f"Error creating role '{role_data.name}': {e!s}")
+        logger.error("Error creating role '%s'", role_data.name, exc_info=True)
         details["exception"] = str(e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to create role")
     finally:
         background_tasks.add_task(
             audit_manager.log_action_background,
@@ -202,8 +202,8 @@ async def get_role(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
         return role
     except Exception as e:
-        logger.error(f"Error getting role '{role_id}': {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error getting role %s", role_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get role")
 
 @router.put("/settings/roles/{role_id}", response_model=AppRole)
 async def update_role(
@@ -227,15 +227,15 @@ async def update_role(
         success = True
         return updated_role
     except ValueError as e:
-        logger.warning(f"Validation error updating role '{role_id}': {e!s}")
+        logger.warning("Validation error updating role %s: %s", role_id, e)
         details["exception"] = str(e)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role data")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating role '{role_id}': {e!s}")
+        logger.error("Error updating role %s", role_id, exc_info=True)
         details["exception"] = str(e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to update role")
     finally:
         background_tasks.add_task(
             audit_manager.log_action_background,
@@ -268,15 +268,15 @@ async def delete_role(
         success = True
         return None # Return None for 204
     except ValueError as e: # Catch potential error like deleting admin role
-        logger.warning(f"Error deleting role '{role_id}': {e!s}")
+        logger.warning("Error deleting role %s: %s", role_id, e)
         details["exception"] = str(e)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete role")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting role '{role_id}': {e!s}")
+        logger.error("Error deleting role %s", role_id, exc_info=True)
         details["exception"] = str(e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to delete role")
     finally:
         background_tasks.add_task(
             audit_manager.log_action_background,
@@ -403,8 +403,8 @@ async def get_compliance_mapping():
     except FileNotFoundError:
         return {}
     except Exception as e:
-        logger.error(f"Error loading compliance mapping: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error loading compliance mapping", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to load compliance mapping")
 
 
 @router.put('/settings/compliance-mapping')
@@ -419,8 +419,8 @@ async def save_compliance_mapping(
         cfg.save_yaml('compliance_mapping.yaml', payload)
         return {"status": "ok"}
     except Exception as e:
-        logger.error(f"Error saving compliance mapping: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error saving compliance mapping", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to save compliance mapping")
 
 
 # --- Documentation System ---
@@ -493,8 +493,8 @@ async def list_available_docs():
             result[doc_key] = entry
         return result
     except Exception as e:
-        logger.error(f"Error listing documentation: {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error listing documentation", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list documentation")
 
 @router.get('/user-docs/{doc_name}')
 async def get_documentation(doc_name: str):
@@ -532,8 +532,8 @@ async def get_documentation(doc_name: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error reading documentation '{doc_name}': {e!s}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error reading documentation '%s'", doc_name, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to read documentation")
 
 @router.get('/user-guide')
 async def get_user_guide():
@@ -602,5 +602,5 @@ async def get_database_schema():
             'relationships': relationships
         }
     except Exception as e:
-        logger.error(f"Error extracting database schema: {e!s}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error extracting database schema", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to extract database schema")

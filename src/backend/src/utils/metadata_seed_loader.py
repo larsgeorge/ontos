@@ -14,6 +14,7 @@ from databricks.sdk.service.catalog import VolumeType
 
 from src.controller.metadata_manager import MetadataManager
 from src.models.metadata import RichTextCreate, LinkCreate, DocumentCreate
+from src.common.file_security import sanitize_filename
 
 logger = get_logger(__name__)
 
@@ -91,6 +92,9 @@ def _upload_document(
             logger.warning(f"Document source not found, skipping: {source_path}")
             return False
 
+        # SECURITY: Sanitize filename to prevent path traversal
+        safe_filename = sanitize_filename(original_filename, default="document.bin")
+
         base_dir = f"uploads/{entity_type}/{entity_id}"
         volume_fs_base = _ensure_volume_and_path(ws, settings, base_dir)
 
@@ -98,7 +102,7 @@ def _upload_document(
             content = f.read()
 
         dest_dir = f"{volume_fs_base}/{base_dir}"
-        dest_path = f"{dest_dir}/{original_filename}"
+        dest_path = f"{dest_dir}/{safe_filename}"
 
         try:
             ws.files.create_directory(dest_dir)
@@ -107,8 +111,8 @@ def _upload_document(
 
         ws.files.upload(dest_path, content)
 
-        # Infer content type from filename if possible
-        guessed_type, _ = mimetypes.guess_type(original_filename)
+        # Infer content type from sanitized filename
+        guessed_type, _ = mimetypes.guess_type(safe_filename)
 
         payload = DocumentCreate(
             entity_type=entity_type,
@@ -119,15 +123,15 @@ def _upload_document(
         metadata_manager.create_document_record(
             db,
             data=payload,
-            filename=original_filename,
-            content_type=guessed_type or ("image/svg+xml" if original_filename.lower().endswith(".svg") else None),
+            filename=safe_filename,
+            content_type=guessed_type or ("image/svg+xml" if safe_filename.lower().endswith(".svg") else None),
             size_bytes=len(content) if content else 0,
             storage_path=dest_path,
             user_email=user_email,
         )
         return True
     except Exception as e:
-        logger.error(f"Failed uploading document {original_filename} for {entity_type}:{entity_id}: {e!s}")
+        logger.error(f"Failed uploading document {safe_filename} for {entity_type}:{entity_id}: {e!s}")
         return False
 
 

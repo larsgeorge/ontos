@@ -287,7 +287,7 @@ export default function DataContractDetails() {
         setSchemaAuthDefs(prev => ({ ...prev, [schemaId]: [] }))
       }
     } catch (e) {
-      console.warn(`Failed to fetch schema authoritative definitions for ${schemaId}:`, e)
+      console.warn("Failed to fetch schema authoritative definitions for", schemaId, ":", e)
       setSchemaAuthDefs(prev => ({ ...prev, [schemaId]: [] }))
     }
   }
@@ -357,7 +357,7 @@ export default function DataContractDetails() {
               schemaLinksMap[schema.name] = Array.isArray(schemaLinksData) ? schemaLinksData : []
             }
           } catch (e) {
-            console.warn(`Failed to fetch schema links for ${schema.name}:`, e)
+            console.warn("Failed to fetch schema links for", schema.name, ":", e)
           }
 
           // Fetch property-level semantic links
@@ -372,7 +372,7 @@ export default function DataContractDetails() {
                   propertyLinksMap[propertyKey] = Array.isArray(propertyLinksData) ? propertyLinksData : []
                 }
               } catch (e) {
-                console.warn(`Failed to fetch property links for ${propertyKey}:`, e)
+                console.warn("Failed to fetch property links for", propertyKey, ":", e)
               }
             }
           }
@@ -843,7 +843,7 @@ export default function DataContractDetails() {
         setPropertyAuthDefs(prev => ({ ...prev, [propertyId]: [] }))
       }
     } catch (e) {
-      console.warn(`Failed to fetch property authoritative definitions for ${propertyId}:`, e)
+      console.warn("Failed to fetch property authoritative definitions for", propertyId, ":", e)
       setPropertyAuthDefs(prev => ({ ...prev, [propertyId]: [] }))
     }
   }

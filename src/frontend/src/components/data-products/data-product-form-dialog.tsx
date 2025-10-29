@@ -371,7 +371,9 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
   // Initialize Ajv
   useEffect(() => {
     if (!ajv.current) {
-      const ajvInstance = new Ajv({ allErrors: true, strict: "log" });
+      // Security: allErrors is set to false (default) to prevent DoS attacks
+      // This means validation will stop at the first error instead of collecting all errors
+      const ajvInstance = new Ajv({ strict: "log" });
       addFormats(ajvInstance);
       ajv.current = ajvInstance;
     }

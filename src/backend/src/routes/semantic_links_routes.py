@@ -2,10 +2,12 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Body, Request
 
 from src.common.dependencies import DBSessionDep, AuditCurrentUserDep
+from src.common.logging import get_logger
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.controller.semantic_models_manager import SemanticModelsManager
 from src.models.semantic_links import EntitySemanticLink, EntitySemanticLinkCreate
 
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/semantic-links", tags=["semantic-links"])
 
@@ -20,7 +22,8 @@ async def list_links(entity_type: str, entity_id: str, manager: SemanticLinksMan
     try:
         return manager.list_for_entity(entity_id=entity_id, entity_type=entity_type)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed listing semantic links for %s/%s", entity_type, entity_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list semantic links")
 
 
 @router.get("/iri/{iri:path}", response_model=List[EntitySemanticLink])
@@ -28,7 +31,8 @@ async def list_links_by_iri(iri: str, manager: SemanticLinksManager = Depends(ge
     try:
         return manager.list_for_iri(iri=iri)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed listing semantic links for IRI %s", iri, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list semantic links for IRI")
 
 
 @router.post("/", response_model=EntitySemanticLink)
@@ -39,7 +43,8 @@ async def add_link(current_user: AuditCurrentUserDep, payload: EntitySemanticLin
             db.commit()
         return created
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Failed adding semantic link", exc_info=True)
+        raise HTTPException(status_code=400, detail="Failed to add semantic link")
 
 
 @router.delete("/{link_id}")
@@ -54,7 +59,8 @@ async def delete_link(link_id: str, current_user: AuditCurrentUserDep, db: DBSes
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed deleting semantic link %s", link_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete semantic link")
 
 
 def register_routes(app):

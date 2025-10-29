@@ -70,13 +70,14 @@ def create_team(
         return created_team
     except ConflictError as e:
         db.rollback()
+        logger.error("Team creation conflict for '%s': %s", team_in.name, e)
         details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Team already exists")
     except Exception as e:
         db.rollback()
-        logger.exception(f"Failed to create team '{team_in.name}': {e}")
+        logger.exception("Failed to create team '%s'", team_in.name)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create team: {e!s}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create team")
     finally:
         if created_team_id:
             details_for_audit["created_resource_id"] = created_team_id
@@ -205,17 +206,19 @@ def update_team(
         return updated_team
     except NotFoundError as e:
         db.rollback()
+        logger.error("Team not found for update %s: %s", team_id, e)
         details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
     except ConflictError as e:
         db.rollback()
+        logger.error("Team update conflict %s: %s", team_id, e)
         details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Team conflict")
     except Exception as e:
         db.rollback()
-        logger.exception(f"Failed to update team {team_id}: {e}")
+        logger.exception("Failed to update team %s", team_id)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update team: {e!s}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update team")
     finally:
         if success:
             details_for_audit["updated_resource_id"] = team_id
@@ -258,13 +261,14 @@ def delete_team(
         return deleted_team
     except NotFoundError as e:
         db.rollback()
+        logger.error("Team not found for deletion %s: %s", team_id, e)
         details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
     except Exception as e:
         db.rollback()
-        logger.exception(f"Failed to delete team {team_id}: {e}")
+        logger.exception("Failed to delete team %s", team_id)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete team: {e!s}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete team")
     finally:
         if success:
             details_for_audit["deleted_resource_id"] = team_id
@@ -316,17 +320,19 @@ def add_team_member(
         return member
     except NotFoundError as e:
         db.rollback()
+        logger.error("Team not found for adding member %s: %s", team_id, e)
         details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
     except ConflictError as e:
         db.rollback()
+        logger.error("Member already exists in team %s: %s", team_id, e)
         details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Member already exists in team")
     except Exception as e:
         db.rollback()
-        logger.exception(f"Failed to add member to team: {e}")
+        logger.exception("Failed to add member to team %s", team_id)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to add team member: {e!s}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to add team member")
     finally:
         if created_member_id:
             details_for_audit["created_resource_id"] = created_member_id
@@ -395,13 +401,14 @@ def update_team_member(
         return updated_member
     except NotFoundError as e:
         db.rollback()
+        logger.error("Team or member not found for update %s/%s: %s", team_id, member_id, e)
         details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team or member not found")
     except Exception as e:
         db.rollback()
-        logger.exception(f"Failed to update team member: {e}")
+        logger.exception("Failed to update team member %s/%s", team_id, member_id)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update team member: {e!s}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update team member")
     finally:
         if success:
             details_for_audit["updated_resource_id"] = member_id

@@ -59,10 +59,10 @@ def create_review_request(
         created_request = manager.create_review_request(request_data=request_data)
         return created_request
     except ValueError as e:
-        logger.warning(f"Value error creating review request: {e}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.warning("Value error creating review request: %s", e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid review request")
     except Exception as e:
-        logger.exception(f"Unexpected error creating review request: {e}")
+        logger.exception("Unexpected error creating review request")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error creating review request.")
 
 @router.get("/data-asset-reviews")
@@ -129,10 +129,10 @@ def update_review_request_status(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review request not found")
         return updated_request
     except ValueError as e:
-        logger.warning(f"Value error updating status for request {request_id}: {e}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.warning("Value error updating status for request %s: %s", request_id, e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status update")
     except Exception as e:
-        logger.exception(f"Error updating status for request {request_id}: {e}")
+        logger.exception("Error updating status for request %s", request_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error updating request status.")
 
 @router.put("/data-asset-reviews/{request_id}/assets/{asset_id}/status", response_model=ReviewedAssetApi)
@@ -158,10 +158,10 @@ def update_reviewed_asset_status(
                  
         return updated_asset
     except ValueError as e:
-        logger.warning(f"Value error updating status for asset {asset_id}: {e}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        logger.warning("Value error updating status for asset %s: %s", asset_id, e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status update")
     except Exception as e:
-        logger.exception(f"Error updating status for asset {asset_id}: {e}")
+        logger.exception("Error updating status for asset %s", asset_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error updating asset status.")
 
 @router.delete("/data-asset-reviews/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
