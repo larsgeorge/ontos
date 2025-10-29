@@ -340,4 +340,5 @@ async def validate_inline(
         passed, msg = eval_dsl(rule, obj)
         return {"passed": passed, "message": msg}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("DSL evaluation failed", exc_info=True)
+        raise HTTPException(status_code=400, detail="DSL evaluation failed")

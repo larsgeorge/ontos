@@ -19,7 +19,7 @@ const apiGet = async <T>(endpoint: string): Promise<{ data?: T, error?: string }
         const data: T = await response.json();
         return { data };
     } catch (error: any) {
-         console.error(`[UserStore] API Error fetching ${endpoint}:`, error);
+         console.error("[UserStore] API Error fetching", endpoint, ":", error);
          // Return null data and error message
          return { data: undefined, error: error.message || 'Failed to fetch user info' };
     }

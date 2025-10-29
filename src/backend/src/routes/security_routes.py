@@ -3,8 +3,11 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from src.common.logging import get_logger
 from src.controller.security_manager import SecurityManager
 from src.models.security import SecurityType
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/security", tags=["security"])
 
@@ -57,7 +60,8 @@ async def create_rule(
         )
         return SecurityRuleResponse.from_orm(new_rule)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Failed to create security rule", exc_info=True)
+        raise HTTPException(status_code=400, detail="Failed to create security rule")
 
 @router.get("/rules", response_model=List[SecurityRuleResponse])
 async def list_rules(

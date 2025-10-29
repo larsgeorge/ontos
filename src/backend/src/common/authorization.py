@@ -46,7 +46,7 @@ def is_user_admin(user_groups: Optional[List[str]], settings: Settings) -> bool:
         
         return any(ug in admin_groups_lower for ug in user_groups_lower)
     except (json.JSONDecodeError, Exception) as e:
-        logger.error(f"Error parsing APP_ADMIN_DEFAULT_GROUPS: {e}")
+        logger.error("Error parsing APP_ADMIN_DEFAULT_GROUPS: %s", e)
         # Fallback to simple check
         return "admins" in [g.lower() for g in user_groups]
 
@@ -123,19 +123,19 @@ async def get_user_details_from_sdk(
         return user_info_response
 
     except NotFound as e:
-        logger.warning(f"User not found via manager for email {user_email}: {e}")
-        raise HTTPException(status_code=404, detail=str(e))
+        logger.warning("User not found via manager for email %s: %s", user_email, e)
+        raise HTTPException(status_code=404, detail="User not found")
     except ValueError as e:
-        logger.error(f"Configuration error in UsersManager: {e}")
-        raise HTTPException(status_code=500, detail="Server configuration error retrieving user details.")
+        logger.error("Configuration error in UsersManager: %s", e)
+        raise HTTPException(status_code=500, detail="Server configuration error")
     except RuntimeError as e:
-        logger.error(f"Runtime error from UsersManager for {user_email}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve user details: {e}")
+        logger.error("Runtime error from UsersManager for %s", user_email, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve user details")
     except HTTPException:
         raise # Re-raise potential 400 from header check above
     except Exception as e:
-        logger.error(f"Unexpected error in get_user_details_from_sdk dependency for {user_email}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An unexpected error occurred processing the user details request.")
+        logger.error("Unexpected error in get_user_details_from_sdk dependency for %s", user_email, exc_info=True)
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
 async def get_user_groups(user_email: str) -> List[str]:
@@ -195,13 +195,13 @@ async def get_user_team_role_overrides(user_identifier: str, user_groups: List[s
 
             # Return the highest role override (assuming role names have hierarchical order)
             # For now, just return the first one found - in practice you'd need proper role hierarchy
-            logger.debug(f"Found team role overrides for user {user_identifier}: {role_overrides}")
+            logger.debug("Found team role overrides for user %s: %s", user_identifier, role_overrides)
             return role_overrides[0]
 
         finally:
             db.close()
     except Exception as e:
-        logger.warning(f"Error checking team role overrides for user {user_identifier}: {e}")
+        logger.warning("Error checking team role overrides for user %s: %s", user_identifier, e)
         return None
 
 
@@ -222,7 +222,7 @@ async def check_user_project_access(user_identifier: str, user_groups: List[str]
         finally:
             db.close()
     except Exception as e:
-        logger.warning(f"Error checking project access for user {user_identifier} to project {project_id}: {e}")
+        logger.warning("Error checking project access for user %s to project %s: %s", user_identifier, project_id, e)
         return False
 
 
@@ -230,7 +230,7 @@ class ProjectAccessChecker:
     """FastAPI Dependency to check user access to a specific project."""
     def __init__(self, project_id_param: str = "project_id"):
         self.project_id_param = project_id_param
-        logger.debug(f"ProjectAccessChecker initialized for parameter '{self.project_id_param}'")
+        logger.debug("ProjectAccessChecker initialized for parameter '%s'", self.project_id_param)
 
     async def __call__(
         self,
@@ -241,13 +241,13 @@ class ProjectAccessChecker:
         # Extract project_id from path parameters
         project_id = request.path_params.get(self.project_id_param)
         if not project_id:
-            logger.warning(f"Project ID parameter '{self.project_id_param}' not found in request")
+            logger.warning("Project ID parameter '%s' not found in request", self.project_id_param)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Project ID parameter '{self.project_id_param}' not found"
             )
 
-        logger.debug(f"Checking project access for user '{user_details.email}' to project '{project_id}'")
+        logger.debug("Checking project access for user '%s' to project '%s'", user_details.email, project_id)
 
         user_groups = user_details.groups or []
         has_access = await check_user_project_access(
@@ -266,7 +266,7 @@ class ProjectAccessChecker:
                 detail=f"Access denied to project '{project_id}'"
             )
 
-        logger.debug(f"Project access granted for user '{user_details.email}' to project '{project_id}'")
+        logger.debug("Project access granted for user '%s' to project '%s'", user_details.email, project_id)
         return
 
 
@@ -275,7 +275,7 @@ class PermissionChecker:
     def __init__(self, feature_id: str, required_level: FeatureAccessLevel):
         self.feature_id = feature_id
         self.required_level = required_level
-        logger.debug(f"PermissionChecker initialized for feature '{self.feature_id}' requiring level '{self.required_level.value}'")
+        logger.debug("PermissionChecker initialized for feature '%s' requiring level '%s'", self.feature_id, self.required_level.value)
 
     async def __call__(
         self,
@@ -284,10 +284,10 @@ class PermissionChecker:
         auth_manager: AuthorizationManager = Depends(get_auth_manager)
     ):
         """Performs the permission check when the dependency is called."""
-        logger.debug(f"Checking permission for feature '{self.feature_id}' (level: '{self.required_level.value}') for user '{user_details.user or user_details.email}'")
+        logger.debug("Checking permission for feature '%s' (level: '%s') for user '%s'", self.feature_id, self.required_level.value, user_details.user or user_details.email)
 
         if not user_details.groups:
-            logger.warning(f"User '{user_details.user or user_details.email}' has no groups. Denying access for '{self.feature_id}'.")
+            logger.warning("User '%s' has no groups. Denying access for '%s'", user_details.user or user_details.email, self.feature_id)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User has no assigned groups, cannot determine permissions."
@@ -335,14 +335,14 @@ class PermissionChecker:
                     detail=f"Insufficient permissions for feature '{self.feature_id}'. Required level: {self.required_level.value}."
                 )
 
-            logger.debug(f"Permission granted for user '{user_details.user or user_details.email}' on feature '{self.feature_id}'")
+            logger.debug("Permission granted for user '%s' on feature '%s'", user_details.user or user_details.email, self.feature_id)
             # If permission is granted, the dependency resolves successfully (returns None implicitly)
             return
 
         except HTTPException:
             raise # Re-raise exceptions from dependencies (like 503 from get_auth_manager)
         except Exception as e:
-            logger.error(f"Unexpected error during permission check for feature '{self.feature_id}': {e}", exc_info=True)
+            logger.error("Unexpected error during permission check for feature '%s'", self.feature_id, exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Error checking user permissions."
@@ -376,7 +376,7 @@ class ApprovalChecker:
     """
     def __init__(self, entity: ApprovalEntity | str):
         self.entity = ApprovalEntity(entity) if not isinstance(entity, ApprovalEntity) else entity
-        logger.debug(f"ApprovalChecker initialized for entity '{self.entity.value}'")
+        logger.debug("ApprovalChecker initialized for entity '%s'", self.entity.value)
 
     async def __call__(
         self,
@@ -420,5 +420,5 @@ class ApprovalChecker:
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Unexpected error during approval check for '{self.entity.value}': {e}", exc_info=True)
+            logger.error("Unexpected error during approval check for '%s'", self.entity.value, exc_info=True)
             raise HTTPException(status_code=500, detail="Error checking approval privileges")

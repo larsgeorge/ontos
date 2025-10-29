@@ -11,6 +11,13 @@ from src.common.authorization import PermissionChecker
 from src.common.config import get_settings, get_config_manager
 from src.common.workspace_client import get_workspace_client
 from src.common.logging import get_logger
+from src.common.unity_catalog_utils import (
+    sanitize_uc_identifier,
+    ensure_catalog_exists,
+    ensure_schema_exists,
+    create_table_safe,
+    ensure_catalog_and_schema_exist,
+)
 from src.db_models.compliance import CompliancePolicyDb
 from src.repositories.teams_repository import team_repo
 from src.repositories.projects_repository import project_repo
@@ -191,7 +198,7 @@ async def bootstrap_self_service(
         }
     except Exception as e:
         logger.exception("Failed bootstrapping self-service")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to bootstrap self-service")
 
 
 @router.post('/self-service/create')
@@ -244,6 +251,12 @@ async def self_service_create(
         compliance_results: List[Dict[str, Any]] = []
 
         if obj_type == 'catalog':
+            # Sanitize catalog name
+            try:
+                requested_catalog = sanitize_uc_identifier(requested_catalog)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"Invalid catalog name: {e}")
+            
             obj: Dict[str, Any] = {'type': 'catalog', 'name': requested_catalog, 'tags': payload.get('tags') or {}}
             if auto_fix:
                 obj = _apply_autofix('catalog', obj, mapping, getattr(current_user, 'email', None), project)
@@ -252,16 +265,25 @@ async def self_service_create(
             # Enforce sandbox allowlist for catalog creation
             if not _is_sandbox_allowed(get_settings(), requested_catalog, requested_schema or (get_settings().sandbox_default_schema or 'sandbox')):
                 raise HTTPException(status_code=403, detail="Catalog not allowed by sandbox policy")
-            # Create catalog (idempotent)
-            try:
-                ws.catalogs.get(requested_catalog)
-            except Exception:
-                ws.catalogs.create(name=requested_catalog, comment=obj.get('tags', {}).get('description'))
+            # Create catalog (idempotent) using shared utility
+            requested_catalog = ensure_catalog_exists(
+                ws=ws,
+                catalog_name=requested_catalog,
+                comment=obj.get('tags', {}).get('description')
+            )
             return { 'created': {'catalog': requested_catalog}, 'compliance': compliance_results }
 
         if obj_type == 'schema':
             if not requested_catalog:
                 raise HTTPException(status_code=400, detail="catalog is required for schema creation")
+            
+            # Sanitize catalog and schema names
+            try:
+                requested_catalog = sanitize_uc_identifier(requested_catalog)
+                requested_schema = sanitize_uc_identifier(requested_schema)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"Invalid identifier: {e}")
+            
             obj = {'type': 'schema', 'name': requested_schema, 'catalog': requested_catalog, 'tags': payload.get('tags') or {}}
             if auto_fix:
                 obj = _apply_autofix('schema', obj, mapping, getattr(current_user, 'email', None), project)
@@ -270,18 +292,12 @@ async def self_service_create(
             # Enforce sandbox allowlist for schema creation
             if not _is_sandbox_allowed(get_settings(), requested_catalog, requested_schema):
                 raise HTTPException(status_code=403, detail="Schema not allowed by sandbox policy")
-            # Ensure catalog then schema
-            try:
-                try:
-                    ws.catalogs.get(requested_catalog)
-                except Exception:
-                    ws.catalogs.create(name=requested_catalog)
-                try:
-                    ws.schemas.get(f"{requested_catalog}.{requested_schema}")
-                except Exception:
-                    ws.schemas.create(name=requested_schema, catalog_name=requested_catalog)
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=f"Schema creation failed: {e}")
+            # Ensure catalog and schema exist using shared utility
+            requested_catalog, full_schema_name = ensure_catalog_and_schema_exist(
+                ws=ws,
+                catalog_name=requested_catalog,
+                schema_name=requested_schema
+            )
             return { 'created': {'catalog': requested_catalog, 'schema': requested_schema}, 'compliance': compliance_results }
 
         # table
@@ -290,6 +306,14 @@ async def self_service_create(
         if not requested_catalog or not requested_schema or not table_name:
             raise HTTPException(status_code=400, detail="catalog, schema, and table.name are required for table creation")
 
+        # Sanitize all identifiers
+        try:
+            requested_catalog = sanitize_uc_identifier(requested_catalog)
+            requested_schema = sanitize_uc_identifier(requested_schema)
+            table_name = sanitize_uc_identifier(table_name)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid identifier: {e}")
+
         # Compliance for table
         obj = {'type': 'table', 'name': table_name, 'catalog': requested_catalog, 'schema': requested_schema, 'tags': (table_spec.get('tags') or {})}
         if auto_fix:
@@ -297,48 +321,26 @@ async def self_service_create(
         all_passed, res = _eval_policies(db, obj, list(mapping.get('table', {}).get('policies', [])) if isinstance(mapping.get('table'), dict) else [])
         compliance_results.extend(res)
 
-        # Ensure parents
-        try:
-            # Enforce sandbox allowlist for table creation
-            if not _is_sandbox_allowed(get_settings(), requested_catalog, requested_schema):
-                raise HTTPException(status_code=403, detail="Table location not allowed by sandbox policy")
-            try:
-                ws.catalogs.get(requested_catalog)
-            except Exception:
-                ws.catalogs.create(name=requested_catalog)
-            try:
-                ws.schemas.get(f"{requested_catalog}.{requested_schema}")
-            except Exception:
-                ws.schemas.create(name=requested_schema, catalog_name=requested_catalog)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Parent creation failed: {e}")
+        # Enforce sandbox allowlist for table creation
+        if not _is_sandbox_allowed(get_settings(), requested_catalog, requested_schema):
+            raise HTTPException(status_code=403, detail="Table location not allowed by sandbox policy")
 
-        # Create table via SQL (map logicalType -> DB type)
+        # Ensure parent catalog and schema exist using shared utility
+        requested_catalog, full_schema_name = ensure_catalog_and_schema_exist(
+            ws=ws,
+            catalog_name=requested_catalog,
+            schema_name=requested_schema
+        )
+
+        # Create table using shared utility (prevents SQL injection)
         columns: List[Dict[str, Any]] = table_spec.get('columns') or []
-        def map_type(logical: str) -> str:
-            l = (logical or '').lower()
-            if l in ('integer', 'int', 'long', 'smallint', 'tinyint'): return 'BIGINT'
-            if l in ('number', 'double', 'float', 'decimal', 'numeric'): return 'DOUBLE'
-            if l in ('string', 'text'): return 'STRING'
-            if l in ('boolean', 'bool'): return 'BOOLEAN'
-            if l in ('date', 'datetime', 'timestamp', 'time'): return 'TIMESTAMP'
-            if l in ('array',): return 'ARRAY<STRING>'
-            if l in ('object', 'struct', 'map'): return 'STRING'
-            return 'STRING'
-        column_sql_parts: List[str] = []
-        for c in columns:
-            cname = c.get('name')
-            ltype = c.get('logicalType') or c.get('logical_type') or 'string'
-            if not cname:
-                continue
-            column_sql_parts.append(f"`{cname}` {map_type(ltype)}")
-        columns_sql = ', '.join(column_sql_parts) or '`id` STRING'
-        full_name = f"{requested_catalog}.{requested_schema}.{table_name}"
-        try:
-            # Use SQL endpoint for creation
-            ws.sql.execute(f"CREATE TABLE IF NOT EXISTS {full_name} ({columns_sql})")
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Table creation failed: {e}")
+        full_name = create_table_safe(
+            ws=ws,
+            catalog_name=requested_catalog,
+            schema_name=requested_schema,
+            table_name=table_name,
+            columns=columns
+        )
 
         created_contract_id: Optional[str] = None
         if bool(payload.get('createContract', True)):
@@ -392,7 +394,7 @@ async def self_service_create(
         raise
     except Exception as e:
         logger.exception("Self-service create failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to create self-service resource")
 
 
 def register_routes(app):
@@ -438,46 +440,54 @@ async def deploy_contract(
                 raise HTTPException(status_code=400, detail=f"Invalid physical name: {physical_name}")
             catalog_name, schema_name, table_name = parts
 
-            # Ensure parents
+            # Sanitize all identifiers
             try:
-                try:
-                    ws.catalogs.get(catalog_name)
-                except Exception:
-                    ws.catalogs.create(name=catalog_name)
-                try:
-                    ws.schemas.get(f"{catalog_name}.{schema_name}")
-                except Exception:
-                    ws.schemas.create(name=schema_name, catalog_name=catalog_name)
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=f"Failed ensuring parents: {e}")
+                catalog_name = sanitize_uc_identifier(catalog_name)
+                schema_name = sanitize_uc_identifier(schema_name)
+                table_name = sanitize_uc_identifier(table_name)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"Invalid identifier in physical name: {e}")
 
-            # Prepare column DDL from properties
+            # Ensure parent catalog and schema exist using shared utility
+            catalog_name, full_schema_name = ensure_catalog_and_schema_exist(
+                ws=ws,
+                catalog_name=catalog_name,
+                schema_name=schema_name
+            )
+
+            # Prepare column definitions from properties
             props = getattr(sobj, 'properties', []) or []
-            def map_type(logical: str) -> str:
-                l = (logical or '').lower()
-                if l in ('integer', 'int', 'long', 'smallint', 'tinyint'): return 'BIGINT'
-                if l in ('number', 'double', 'float', 'decimal', 'numeric'): return 'DOUBLE'
-                if l in ('string', 'text'): return 'STRING'
-                if l in ('boolean', 'bool'): return 'BOOLEAN'
-                if l in ('date', 'datetime', 'timestamp', 'time'): return 'TIMESTAMP'
-                if l in ('array',): return 'ARRAY<STRING>'
-                if l in ('object', 'struct', 'map'): return 'STRING'
-                return 'STRING'
-            cols = []
+            columns_for_create: List[Dict[str, Any]] = []
             for p in props:
                 try:
-                    pname = getattr(p, 'name', None) or p.get('name')
-                    ltype = getattr(p, 'logical_type', None) or getattr(p, 'logicalType', None) or p.get('logicalType') or 'string'
+                    pname = getattr(p, 'name', None) or (p.get('name') if hasattr(p, 'get') else None)
+                    ltype = (
+                        getattr(p, 'logical_type', None) or 
+                        getattr(p, 'logicalType', None) or 
+                        (p.get('logicalType') if hasattr(p, 'get') else None) or 
+                        'string'
+                    )
                 except Exception:
                     pname = None
                     ltype = 'string'
                 if pname:
-                    cols.append(f"`{pname}` {map_type(str(ltype))}")
-            cols_sql = ', '.join(cols) or '`id` STRING'
+                    columns_for_create.append({
+                        'name': str(pname),
+                        'logicalType': str(ltype)
+                    })
 
+            # Create table using shared utility (prevents SQL injection)
             try:
-                ws.sql.execute(f"CREATE TABLE IF NOT EXISTS {catalog_name}.{schema_name}.{table_name} ({cols_sql})")
-                created.append(f"{catalog_name}.{schema_name}.{table_name}")
+                table_full_name = create_table_safe(
+                    ws=ws,
+                    catalog_name=catalog_name,
+                    schema_name=schema_name,
+                    table_name=table_name,
+                    columns=columns_for_create
+                )
+                created.append(table_full_name)
+            except HTTPException:
+                raise
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Failed creating table {table_name}: {e}")
 
@@ -486,6 +496,6 @@ async def deploy_contract(
         raise
     except Exception as e:
         logger.exception("Deploy contract failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to deploy contract")
 
 

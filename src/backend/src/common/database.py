@@ -20,6 +20,11 @@ from alembic.runtime.migration import MigrationContext
 from .config import get_settings, Settings
 from .logging import get_logger
 from src.common.workspace_client import get_workspace_client
+from src.common.unity_catalog_utils import (
+    ensure_catalog_exists,
+    ensure_schema_exists,
+    sanitize_postgres_identifier,
+)
 # Import SDK components
 from databricks.sdk.errors import NotFound, DatabricksError
 from databricks.sdk.core import Config, oauth_service_principal
@@ -328,8 +333,16 @@ def get_db_url(settings: Settings) -> str:
     # Build URL with schema options
     query_params = {}
     if settings.POSTGRES_DB_SCHEMA:
-        query_params["options"] = f"-csearch_path={settings.POSTGRES_DB_SCHEMA}"
-        logger.info(f"PostgreSQL schema will be set via options: {settings.POSTGRES_DB_SCHEMA}")
+        # Validate schema name for connection options to prevent injection
+        try:
+            validated_schema = sanitize_postgres_identifier(settings.POSTGRES_DB_SCHEMA)
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid PostgreSQL schema identifier in POSTGRES_DB_SCHEMA: {e}. "
+                "Please check configuration."
+            ) from e
+        query_params["options"] = f"-csearch_path={validated_schema}"
+        logger.info(f"PostgreSQL schema will be set via options: {validated_schema}")
     else:
         logger.info("No specific PostgreSQL schema configured, using default (public).")
     
@@ -358,13 +371,12 @@ def ensure_database_and_schema_exist(settings: Settings):
     
     The app (as service principal) becomes the owner of what it creates,
     eliminating permission issues.
+    
+    Security: All PostgreSQL identifiers are validated to prevent SQL injection.
     """
     if settings.ENV.upper().startswith("LOCAL"):
         logger.debug("LOCAL mode: Skipping database auto-creation (assuming pre-existing)")
         return
-    
-    target_db = settings.POSTGRES_DB
-    target_schema = settings.POSTGRES_DB_SCHEMA
     
     logger.info("Checking if database and schema need to be created...")
     
@@ -378,7 +390,20 @@ def ensure_database_and_schema_exist(settings: Settings):
     if not username:
         raise ValueError("Could not determine service principal username")
     
+    # Validate all PostgreSQL identifiers to prevent SQL injection
+    # These come from configuration but defense-in-depth is important
+    try:
+        target_db = sanitize_postgres_identifier(settings.POSTGRES_DB)
+        target_schema = sanitize_postgres_identifier(settings.POSTGRES_DB_SCHEMA) if settings.POSTGRES_DB_SCHEMA else None
+        username = sanitize_postgres_identifier(username)
+    except ValueError as e:
+        raise ValueError(
+            f"Invalid PostgreSQL identifier in configuration or service principal: {e}. "
+            "Please check POSTGRES_DB, POSTGRES_DB_SCHEMA, and service principal name."
+        ) from e
+    
     logger.info(f"Service Principal: {username}")
+    logger.debug(f"Target database: {target_db}, schema: {target_schema}")
     
     # Generate initial OAuth token
     refresh_oauth_token(settings)
@@ -408,15 +433,17 @@ def ensure_database_and_schema_exist(settings: Settings):
     
     try:
         with temp_engine.connect() as conn:
-            # Check if target database exists
-            result = conn.execute(text(
-                f"SELECT 1 FROM pg_database WHERE datname = '{target_db}'"
-            ))
+            # Check if target database exists (using parameterized query)
+            result = conn.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :dbname"),
+                {"dbname": target_db}
+            )
             db_exists = result.scalar() is not None
             
             if not db_exists:
                 logger.info(f"Database does not exist, attempting to create: {target_db}")
                 try:
+                    # CREATE DATABASE cannot be parameterized, but identifier is validated
                     conn.execute(text(f'CREATE DATABASE "{target_db}"'))
                     logger.info(f"✓ Database created: {target_db} (owner: {username})")
                 except Exception as e:
@@ -454,18 +481,21 @@ def ensure_database_and_schema_exist(settings: Settings):
         try:
             with target_engine.connect() as conn:
                 if target_schema and target_schema != "public":
-                    # Check if schema exists
-                    result = conn.execute(text(
-                        f"SELECT 1 FROM information_schema.schemata WHERE schema_name = '{target_schema}'"
-                    ))
+                    # Check if schema exists (using parameterized query)
+                    result = conn.execute(
+                        text("SELECT 1 FROM information_schema.schemata WHERE schema_name = :schemaname"),
+                        {"schemaname": target_schema}
+                    )
                     schema_exists = result.scalar() is not None
                     
                     if not schema_exists:
                         logger.info(f"Creating schema: {target_schema}")
+                        # CREATE SCHEMA cannot be parameterized, but identifier is validated
                         conn.execute(text(f'CREATE SCHEMA "{target_schema}"'))
                         logger.info(f"✓ Schema created: {target_schema} (owner: {username})")
                         
                         # Set default privileges for future objects
+                        # ALTER statements cannot be parameterized, but identifiers are validated
                         logger.info(f"Setting default privileges in schema: {target_schema}")
                         conn.execute(text(
                             f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{target_schema}" '
@@ -519,67 +549,70 @@ def ensure_database_and_schema_exist(settings: Settings):
 
 
 def ensure_catalog_schema_exists(settings: Settings):
-    """Checks if the configured catalog and schema exist, creates them if not."""
+    """Checks if the configured catalog and schema exist, creates them if not.
+    
+    Uses shared Unity Catalog utilities for secure, idempotent catalog/schema creation.
+    """
     logger.info("Ensuring required catalog and schema exist...")
     try:
-        # Get a workspace client instance (use the underlying client to bypass caching)
-        caching_ws_client = get_workspace_client(settings)
-        ws_client = caching_ws_client._client  # Access raw client
+        # Get a workspace client instance
+        # Note: Using the caching client is fine; shared utilities handle idempotency
+        ws_client = get_workspace_client(settings)
 
         catalog_name = settings.DATABRICKS_CATALOG
         schema_name = settings.DATABRICKS_SCHEMA
         full_schema_name = f"{catalog_name}.{schema_name}"
 
-        # 1. Check/Create Catalog
+        # Use shared utilities for secure, idempotent creation
         try:
-            logger.debug(f"Checking existence of catalog: {catalog_name}")
-            ws_client.catalogs.get(catalog_name)
-            logger.info(f"Catalog '{catalog_name}' already exists.")
-        except NotFound:
-            logger.warning(
-                f"Catalog '{catalog_name}' not found. Attempting to create...")
-            try:
-                ws_client.catalogs.create(name=catalog_name)
-                logger.info(f"Successfully created catalog: {catalog_name}")
-            except DatabricksError as e:
-                logger.critical(
-                    f"Failed to create catalog '{catalog_name}': {e}. Check permissions.", exc_info=True)
-                raise ConnectionError(
-                    f"Failed to create required catalog '{catalog_name}': {e}") from e
-        except DatabricksError as e:
-            logger.error(
-                f"Error checking catalog '{catalog_name}': {e}", exc_info=True)
+            logger.debug(f"Ensuring catalog exists: {catalog_name}")
+            ensure_catalog_exists(
+                ws=ws_client,
+                catalog_name=catalog_name,
+                comment=f"System catalog for {settings.APP_NAME}"
+            )
+            logger.info(f"Catalog '{catalog_name}' is ready.")
+        except Exception as e:
+            # Map HTTPException or other errors to ConnectionError for consistency
+            logger.critical(
+                f"Failed to ensure catalog '{catalog_name}': {e}. Check permissions.", 
+                exc_info=True
+            )
             raise ConnectionError(
-                f"Failed to check catalog '{catalog_name}': {e}") from e
+                f"Failed to create required catalog '{catalog_name}': {e}"
+            ) from e
 
-        # 2. Check/Create Schema
         try:
-            logger.debug(f"Checking existence of schema: {full_schema_name}")
-            ws_client.schemas.get(full_schema_name)
-            logger.info(f"Schema '{full_schema_name}' already exists.")
-        except NotFound:
-            logger.warning(
-                f"Schema '{full_schema_name}' not found. Attempting to create...")
-            try:
-                ws_client.schemas.create(
-                    name=schema_name, catalog_name=catalog_name)
-                logger.info(f"Successfully created schema: {full_schema_name}")
-            except DatabricksError as e:
-                logger.critical(
-                    f"Failed to create schema '{full_schema_name}': {e}. Check permissions.", exc_info=True)
-                raise ConnectionError(
-                    f"Failed to create required schema '{full_schema_name}': {e}") from e
-        except DatabricksError as e:
-            logger.error(
-                f"Error checking schema '{full_schema_name}': {e}", exc_info=True)
+            logger.debug(f"Ensuring schema exists: {full_schema_name}")
+            ensure_schema_exists(
+                ws=ws_client,
+                catalog_name=catalog_name,
+                schema_name=schema_name,
+                comment=f"System schema for {settings.APP_NAME}"
+            )
+            logger.info(f"Schema '{full_schema_name}' is ready.")
+        except Exception as e:
+            logger.critical(
+                f"Failed to ensure schema '{full_schema_name}': {e}. Check permissions.", 
+                exc_info=True
+            )
             raise ConnectionError(
-                f"Failed to check schema '{full_schema_name}': {e}") from e
+                f"Failed to create required schema '{full_schema_name}': {e}"
+            ) from e
 
+        logger.info(f"✓ Unity Catalog namespace ready: {full_schema_name}")
+
+    except ConnectionError:
+        # Re-raise ConnectionError as-is
+        raise
     except Exception as e:
         logger.critical(
-            f"An unexpected error occurred during catalog/schema check/creation: {e}", exc_info=True)
+            f"An unexpected error occurred during catalog/schema check/creation: {e}", 
+            exc_info=True
+        )
         raise ConnectionError(
-            f"Failed during catalog/schema setup: {e}") from e
+            f"Failed during catalog/schema setup: {e}"
+        ) from e
 
 
 def get_current_db_revision(engine_connection: Connection, alembic_cfg: AlembicConfig) -> str | None:
@@ -650,12 +683,21 @@ def init_db() -> None:
         # Explicitly enforce search_path at connection time to ensure correct schema usage in environments
         # where connection options may be ignored.
         if settings.POSTGRES_DB_SCHEMA:
-            target_schema = settings.POSTGRES_DB_SCHEMA
+            # Validate schema name to prevent SQL injection in SET command
+            try:
+                target_schema = sanitize_postgres_identifier(settings.POSTGRES_DB_SCHEMA)
+            except ValueError as e:
+                logger.error(f"Invalid PostgreSQL schema name in POSTGRES_DB_SCHEMA: {e}")
+                raise ValueError(
+                    f"Invalid PostgreSQL schema identifier in POSTGRES_DB_SCHEMA: {e}. "
+                    "Please check configuration."
+                ) from e
 
             @event.listens_for(_engine, "connect")
             def set_search_path(dbapi_connection, connection_record):
                 try:
                     with dbapi_connection.cursor() as cursor:
+                        # SET command cannot be parameterized, but identifier is validated
                         cursor.execute(f'SET search_path TO "{target_schema}"')
                 except Exception as e:
                     # Log and continue; the app can still operate using default schema if necessary
@@ -736,7 +778,19 @@ def init_db() -> None:
             with _engine.connect() as connection:
                 # Use raw SQL to drop schema and recreate it
                 schema_name = settings.POSTGRES_DB_SCHEMA or 'public'
+                
+                # Validate schema name to prevent SQL injection in DROP/CREATE commands
+                try:
+                    schema_name = sanitize_postgres_identifier(schema_name)
+                except ValueError as e:
+                    logger.error(f"Invalid PostgreSQL schema name for drop/create: {e}")
+                    raise ValueError(
+                        f"Invalid PostgreSQL schema identifier in POSTGRES_DB_SCHEMA: {e}. "
+                        "Please check configuration."
+                    ) from e
+                
                 logger.warning(f"Dropping schema '{schema_name}' CASCADE and recreating...")
+                # DROP/CREATE SCHEMA cannot be parameterized, but identifier is validated
                 connection.execute(text(f"DROP SCHEMA IF EXISTS {schema_name} CASCADE"))
                 connection.execute(text(f"CREATE SCHEMA {schema_name}"))
                 connection.commit()

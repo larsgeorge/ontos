@@ -148,7 +148,7 @@ export default function DataProductDetails() {
             names[port.contractId] = contract.name || port.contractId;
           }
         } catch (e) {
-          console.warn(`Failed to fetch contract ${port.contractId}:`, e);
+          console.warn("Failed to fetch contract", port.contractId, ":", e);
         }
       }
     }

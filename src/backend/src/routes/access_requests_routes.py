@@ -9,6 +9,7 @@ from src.common.dependencies import (
     CurrentUserDep,
     NotificationsManagerDep,
 )
+from src.common.logging import get_logger
 from src.controller.change_log_manager import change_log_manager
 from src.models.notifications import NotificationType, Notification
 from src.models.comments import CommentCreate
@@ -16,6 +17,7 @@ from src.controller.comments_manager import CommentsManager
 from src.common.manager_dependencies import get_comments_manager
 from pydantic import BaseModel, Field
 
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["access-requests"])
 
@@ -111,7 +113,8 @@ async def create_access_request(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed creating access request", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create access request")
 
 
 @router.post("/access-requests/handle", status_code=status.HTTP_200_OK)
@@ -202,7 +205,8 @@ async def handle_access_request(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed handling access request", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to handle access request")
 
 
 def register_routes(app):

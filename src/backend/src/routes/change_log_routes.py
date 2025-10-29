@@ -6,7 +6,10 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from src.common.dependencies import DBSessionDep, CurrentUserDep
 from src.common.authorization import require_read_only, require_read_write
 from src.common.features import FeatureAccessLevel
+from src.common.logging import get_logger
 from src.controller.change_log_manager import change_log_manager
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Change Log"]) 
 
@@ -38,7 +41,8 @@ async def create_change_log(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed creating change log entry for %s/%s", entity_type, entity_id, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create change log entry")
 
 
 @router.get(
@@ -81,7 +85,8 @@ async def list_change_log(
             for r in rows
         ]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Failed listing change log", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list change log")
 
 
 def register_routes(app):

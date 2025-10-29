@@ -5,6 +5,8 @@ from rdflib import Graph, ConjunctiveGraph, Dataset
 from rdflib.namespace import RDF, RDFS, SKOS
 from rdflib import URIRef, Literal, Namespace
 from sqlalchemy.orm import Session
+import signal
+from contextlib import contextmanager
 
 from src.db_models.semantic_models import SemanticModelDb
 from src.models.semantic_models import (
@@ -23,9 +25,35 @@ from src.models.ontology import (
 )
 from src.repositories.semantic_models_repository import semantic_models_repo
 from src.common.logging import get_logger
+from src.common.sparql_validator import SPARQLQueryValidator
 
 
 logger = get_logger(__name__)
+
+
+@contextmanager
+def timeout(seconds: int):
+    """Context manager for query timeout using signals.
+    
+    Note: This only works on Unix-like systems. On Windows, this will
+    not enforce a timeout but will still allow the query to execute.
+    """
+    def timeout_handler(signum, frame):
+        raise TimeoutError("Query execution timeout")
+    
+    # Only set up signal handler on Unix-like systems
+    if hasattr(signal, 'SIGALRM'):
+        original_handler = signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(seconds)
+        try:
+            yield
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, original_handler)
+    else:
+        # On Windows or systems without SIGALRM, just yield without timeout
+        logger.warning("Query timeout not available on this platform")
+        yield
 
 
 class CachedResult:
@@ -318,18 +346,59 @@ class SemanticModelsManager:
         self._cache[key] = CachedResult(value, ttl_seconds)
         logger.debug(f"Cached value for key: {key} (TTL: {ttl_seconds}s)")
 
-    def query(self, sparql: str) -> List[dict]:
-        # Return a simplified list of dicts for rows
+    def query(self, sparql: str, max_results: int = 1000, timeout_seconds: int = 30) -> List[dict]:
+        """Execute a SPARQL query with security and safety constraints.
+        
+        Args:
+            sparql: The SPARQL query string
+            max_results: Maximum number of results to return (default: 1000)
+            timeout_seconds: Query execution timeout in seconds (default: 30)
+            
+        Returns:
+            List of result dictionaries
+            
+        Raises:
+            ValueError: If query validation fails or execution times out
+        """
+        # Validate query first
+        validation_error = SPARQLQueryValidator.validate(sparql)
+        if validation_error:
+            logger.warning(f"SPARQL query validation failed: {validation_error}")
+            raise ValueError(f"Invalid SPARQL query: {validation_error}")
+        
+        # Log sanitized query for security auditing
+        sanitized = SPARQLQueryValidator.sanitize_for_logging(sparql)
+        logger.info(f"Executing validated SPARQL query: {sanitized}")
+        
         results = []
-        qres = self._graph.query(sparql)
-        for row in qres:
-            # rdflib QueryResult rows are tuple-like
-            result_row = {}
-            for idx, var in enumerate(qres.vars):
-                key = str(var)
-                val = row[idx]
-                result_row[key] = str(val) if val is not None else None
-            results.append(result_row)
+        try:
+            # Execute with timeout (Unix-like systems only)
+            with timeout(timeout_seconds):
+                qres = self._graph.query(sparql)
+                
+                # Limit results to prevent memory exhaustion
+                for idx, row in enumerate(qres):
+                    if idx >= max_results:
+                        logger.warning(f"Query results truncated at {max_results} rows")
+                        break
+                    
+                    # rdflib QueryResult rows are tuple-like
+                    result_row = {}
+                    for var_idx, var in enumerate(qres.vars):
+                        key = str(var)
+                        val = row[var_idx]
+                        result_row[key] = str(val) if val is not None else None
+                    results.append(result_row)
+                
+                logger.info(f"SPARQL query completed successfully, returned {len(results)} results")
+                
+        except TimeoutError:
+            logger.error(f"SPARQL query timeout after {timeout_seconds} seconds")
+            raise ValueError(f"Query execution timeout - query too expensive (limit: {timeout_seconds}s)")
+        except Exception as e:
+            logger.error(f"SPARQL query execution error: {e}", exc_info=True)
+            raise ValueError(f"Query execution failed: {str(e)}")
+        
         return results
 
     # Simple prefix search over resources and properties (case-insensitive contains)

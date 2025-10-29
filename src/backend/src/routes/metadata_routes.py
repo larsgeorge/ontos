@@ -9,6 +9,7 @@ from src.common.dependencies import DBSessionDep, CurrentUserDep
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker
 from src.common.logging import get_logger
+from src.common.file_security import sanitize_filename, sanitize_filename_for_header, is_safe_path_component
 from src.controller.metadata_manager import MetadataManager
 from src.common.manager_dependencies import get_metadata_manager
 from src.models.metadata import (
@@ -69,8 +70,8 @@ async def create_rich_text(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed creating rich text")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed creating rich text for %s/%s", entity_type, entity_id)
+        raise HTTPException(status_code=500, detail="Failed to create rich text")
 
 
 @router.get("/entities/{entity_type}/{entity_id}/rich-texts", response_model=List[RichText])
@@ -131,8 +132,8 @@ async def create_link(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed creating link")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed creating link for %s/%s", entity_type, entity_id)
+        raise HTTPException(status_code=500, detail="Failed to create link")
 
 
 @router.get("/entities/{entity_type}/{entity_id}/links", response_model=List[Link])
@@ -192,17 +193,25 @@ async def upload_document(
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     try:
+        # Validate path components to prevent directory traversal
+        if not is_safe_path_component(entity_type) or not is_safe_path_component(entity_id):
+            raise HTTPException(status_code=400, detail="Invalid entity_type or entity_id")
+        
         # Ensure volume/path
         base_dir = f"uploads/{entity_type}/{entity_id}"
         volume_fs_base = _ensure_volume_and_path(ws, settings, base_dir)
 
         # Read file content
         content = await file.read()
-        filename = file.filename or "document.bin"
+        
+        # SECURITY: Sanitize filename to prevent path traversal and other exploits
+        raw_filename = file.filename or "document.bin"
+        filename = sanitize_filename(raw_filename, default="document.bin")
+        
         content_type = file.content_type
         size_bytes = len(content) if content else 0
 
-        # Destination path
+        # Destination path (filename is now sanitized)
         dest_path = f"{volume_fs_base}/{base_dir}/{filename}"
 
         # Ensure directory exists in UC Volumes filesystem
@@ -232,8 +241,8 @@ async def upload_document(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed uploading document")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed uploading document for %s/%s", entity_type, entity_id)
+        raise HTTPException(status_code=500, detail="Failed to upload document")
 
 
 @router.get("/entities/{entity_type}/{entity_id}/documents", response_model=List[Document])
@@ -300,8 +309,11 @@ async def get_document_content(
         except Exception:
             pass
 
+        # SECURITY: Sanitize filename for header to prevent header injection
+        safe_filename = sanitize_filename_for_header(doc.original_filename, default="document.bin")
+        
         media_type = doc.content_type or "application/octet-stream"
-        headers = {"Content-Disposition": f"inline; filename=\"{doc.original_filename}\""}
+        headers = {"Content-Disposition": f"inline; filename=\"{safe_filename}\""}
 
         # Preferred path: DownloadResponse.contents is a BinaryIO stream we can read in chunks
         try:
@@ -314,14 +326,14 @@ async def get_document_content(
                             break
                         yield chunk
                 media_type = doc.content_type or getattr(downloaded, "content_type", None) or "application/octet-stream"
-                headers = {"Content-Disposition": f"inline; filename=\"{doc.original_filename}\""}
+                headers = {"Content-Disposition": f"inline; filename=\"{safe_filename}\""}
                 return StreamingResponse(chunk_iter(), media_type=media_type, headers=headers)
         except Exception:
             pass
 
-        # Fallbacks
+        # Fallbacks (safe_filename already defined above)
         media_type = doc.content_type or getattr(downloaded, "content_type", None) or "application/octet-stream"
-        headers = {"Content-Disposition": f"inline; filename=\"{doc.original_filename}\""}
+        headers = {"Content-Disposition": f"inline; filename=\"{safe_filename}\""}
 
         if hasattr(downloaded, "read"):
             try:
@@ -336,5 +348,5 @@ async def get_document_content(
         # If all else fails, error with clear message
         raise HTTPException(status_code=500, detail="Unsupported Databricks download response; missing BinaryIO 'contents'")
     except Exception as e:
-        logger.exception("Failed streaming document content")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed streaming document content for document %s", id)
+        raise HTTPException(status_code=500, detail="Failed to stream document content")

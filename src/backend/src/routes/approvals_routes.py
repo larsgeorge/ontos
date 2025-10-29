@@ -44,7 +44,7 @@ async def get_approvals_queue(
         return items
     except Exception as e:
         logger.exception("Failed to build approvals queue")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to build approvals queue")
 
 
 def register_routes(app):

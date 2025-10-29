@@ -479,7 +479,7 @@ export default function DataProductWizardDialog({
 
     } catch (err: any) {
       const errorMsg = err.message || 'An unexpected error occurred.';
-      console.error(`API Error (${isEditing ? 'PUT' : 'POST'} /api/data-products/${isEditing ? productId : ''}):`, errorMsg);
+      console.error("API Error", isEditing ? 'PUT' : 'POST', "/api/data-products/", isEditing ? productId : '', ":", errorMsg);
       setError(errorMsg); // Display error in the dialog if needed
       toast({ title: 'Error', description: errorMsg, variant: 'destructive' });
     } finally {

@@ -74,13 +74,14 @@ def create_project(
         return created_project
     except ConflictError as e:
         db.rollback()
+        logger.error("Project creation conflict for '%s': %s", project_in.name, e)
         details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Project already exists")
     except Exception as e:
         db.rollback()
-        logger.exception(f"Failed to create project '{project_in.name}': {e}")
+        logger.exception("Failed to create project '%s'", project_in.name)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create project: {e!s}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create project")
     finally:
         if created_project_id:
             details_for_audit["created_resource_id"] = created_project_id
@@ -197,17 +198,19 @@ def update_project(
         return updated_project
     except NotFoundError as e:
         db.rollback()
+        logger.error("Project not found for update %s: %s", project_id, e)
         details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     except ConflictError as e:
         db.rollback()
+        logger.error("Project update conflict %s: %s", project_id, e)
         details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Project conflict")
     except Exception as e:
         db.rollback()
-        logger.exception(f"Failed to update project {project_id}: {e}")
+        logger.exception("Failed to update project %s", project_id)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update project: {e!s}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update project")
     finally:
         if success:
             details_for_audit["updated_resource_id"] = project_id
@@ -250,8 +253,9 @@ def delete_project(
         return deleted_project
     except NotFoundError as e:
         db.rollback()
+        logger.error("Project not found for deletion %s: %s", project_id, e)
         details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     except Exception as e:
         db.rollback()
         logger.exception(f"Failed to delete project {project_id}: {e}")
@@ -297,10 +301,12 @@ def assign_team_to_project(
         return {"message": "Team assigned to project successfully"}
     except NotFoundError as e:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        logger.error("Project team member not found %s: %s", project_id, e)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project or member not found")
     except ConflictError as e:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        logger.error("Project team member conflict %s: %s", project_id, e)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Member conflict")
     except Exception as e:
         db.rollback()
         logger.exception(f"Failed to assign team to project: {e}")
@@ -350,7 +356,8 @@ def get_project_teams(
     try:
         return manager.get_project_teams(db=db, project_id=project_id)
     except NotFoundError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        logger.error("Project team member not found for removal %s: %s", project_id, e)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project or member not found")
     except Exception as e:
         logger.exception(f"Failed to fetch project teams: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch project teams")
@@ -451,15 +458,17 @@ async def request_project_access(
         return response
     except NotFoundError as e:
         db.rollback()
+        logger.error("Project not found for access request %s: %s", project_id, e)
         details_for_audit["exception"] = {"type": "NotFoundError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     except ConflictError as e:
         db.rollback()
+        logger.error("Project access request conflict %s: %s", project_id, e)
         details_for_audit["exception"] = {"type": "ConflictError", "message": str(e)}
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Access request conflict")
     except Exception as e:
         db.rollback()
-        logger.exception(f"Failed to request project access: {e}")
+        logger.exception("Failed to request project access for %s", project_id)
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to request project access: {e!s}")
     finally:

@@ -181,7 +181,7 @@ export default function CreateReviewRequestDialog({ isOpen, onOpenChange, api, o
                     }
                 } catch (err: any) {
                     // Log individual fetch errors but continue combining results from others
-                    console.error(`Error fetching children from ${urls[index]}:`, err);
+                    console.error("Error fetching children from", urls[index], ":", err);
                     toast({ title: 'Partial Load Error', description: `Could not load some children for ${nodeId}: ${err.message}`, variant: 'default' });
                 }
             });
