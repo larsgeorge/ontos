@@ -1,7 +1,3 @@
-
-import os
-from pathlib import Path
-
 from fastapi import APIRouter, HTTPException
 
 from src.controller.entitlements_manager import EntitlementsManager
@@ -12,47 +8,14 @@ logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["entitlements"])
 
-# Create a single instance of the manager
+# Create a single instance of the manager (YAML loaded automatically in __init__)
 entitlements_manager = EntitlementsManager()
-
-# Check for YAML file in data directory
-yaml_path = Path(__file__).parent.parent / 'data' / 'entitlements.yaml'
-if os.path.exists(yaml_path):
-    try:
-        # Load data from YAML file
-        success = entitlements_manager.load_from_yaml(str(yaml_path))
-        if success:
-            logger.info(f"Successfully loaded entitlements data from {yaml_path}")
-        else:
-            logger.warning(f"Failed to load entitlements data from {yaml_path}")
-    except Exception as e:
-        logger.error(f"Error loading entitlements data: {e!s}")
 
 @router.get('/entitlements/personas')
 async def get_personas():
     """Get all personas"""
     try:
-        personas = entitlements_manager.list_personas()
-
-        # Format the response
-        formatted_personas = []
-        for p in personas:
-            formatted_personas.append({
-                'id': p.id,
-                'name': p.name,
-                'description': p.description,
-                'groups': p.groups,
-                'created_at': p.created_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-                'updated_at': p.updated_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-                'privileges': [
-                    {
-                        'securable_id': priv.securable_id,
-                        'securable_type': priv.securable_type,
-                        'permission': priv.permission
-                    } for priv in p.privileges
-                ]
-            })
-
+        formatted_personas = entitlements_manager.get_personas_formatted()
         logger.info(f"Retrieved {len(formatted_personas)} personas")
         return formatted_personas
     except Exception as e:
@@ -64,29 +27,15 @@ async def get_personas():
 async def get_persona(persona_id: str):
     """Get a specific persona"""
     try:
-        persona = entitlements_manager.get_persona(persona_id)
-        if not persona:
+        formatted_persona = entitlements_manager.get_persona_formatted(persona_id)
+        if not formatted_persona:
             logger.warning(f"Persona not found with ID: {persona_id}")
             raise HTTPException(status_code=404, detail="Persona not found")
 
-        # Format the response
-        formatted_persona = {
-            'id': persona.id,
-            'name': persona.name,
-            'description': persona.description,
-            'created_at': persona.created_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'updated_at': persona.updated_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'privileges': [
-                {
-                    'securable_id': priv.securable_id,
-                    'securable_type': priv.securable_type,
-                    'permission': priv.permission
-                } for priv in persona.privileges
-            ]
-        }
-
         logger.info(f"Retrieved persona with ID: {persona_id}")
         return formatted_persona
+    except HTTPException:
+        raise
     except Exception as e:
         error_msg = f"Error retrieving persona {persona_id}: {e!s}"
         logger.error(error_msg)
@@ -98,37 +47,15 @@ async def create_persona(persona_data: dict):
     try:
         logger.info(f"Creating new persona: {persona_data.get('name', '')}")
 
-        # Create persona
+        # Create persona (auto-persists to YAML)
         persona = entitlements_manager.create_persona(
             name=persona_data.get('name', ''),
             description=persona_data.get('description', ''),
             privileges=persona_data.get('privileges', [])
         )
 
-        # Save changes to YAML
-        try:
-            yaml_path = Path(__file__).parent.parent / 'data' / 'entitlements.yaml'
-            entitlements_manager.save_to_yaml(str(yaml_path))
-            logger.info(f"Saved updated entitlements data to {yaml_path}")
-        except Exception as e:
-            logger.warning(f"Could not save updated data to YAML: {e!s}")
-
-        # Format the response
-        response = {
-            'id': persona.id,
-            'name': persona.name,
-            'description': persona.description,
-            'created_at': persona.created_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'updated_at': persona.updated_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'privileges': [
-                {
-                    'securable_id': priv.securable_id,
-                    'securable_type': priv.securable_type,
-                    'permission': priv.permission
-                } for priv in persona.privileges
-            ]
-        }
-
+        # Format and return
+        response = entitlements_manager._format_persona(persona)
         logger.info(f"Successfully created persona with ID: {persona.id}")
         return response
     except Exception as e:
@@ -140,14 +67,7 @@ async def create_persona(persona_data: dict):
 async def update_persona(persona_id: str, persona_data: dict):
     """Update a persona"""
     try:
-        persona = entitlements_manager.get_persona(persona_id)
-        if not persona:
-            logger.warning(f"Persona not found with ID: {persona_id}")
-            raise HTTPException(status_code=404, detail="Persona not found")
-
-        logger.info(f"Updating persona with ID: {persona_id}")
-
-        # Update persona
+        # Update persona (auto-persists to YAML)
         updated_persona = entitlements_manager.update_persona(
             persona_id=persona_id,
             name=persona_data.get('name'),
@@ -155,32 +75,14 @@ async def update_persona(persona_id: str, persona_data: dict):
             privileges=persona_data.get('privileges')
         )
 
-        # Save changes to YAML
-        try:
-            yaml_path = Path(__file__).parent.parent / 'data' / 'entitlements.yaml'
-            entitlements_manager.save_to_yaml(str(yaml_path))
-            logger.info(f"Saved updated entitlements data to {yaml_path}")
-        except Exception as e:
-            logger.warning(f"Could not save updated data to YAML: {e!s}")
-
-        # Format the response
-        response = {
-            'id': updated_persona.id,
-            'name': updated_persona.name,
-            'description': updated_persona.description,
-            'created_at': updated_persona.created_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'updated_at': updated_persona.updated_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'privileges': [
-                {
-                    'securable_id': priv.securable_id,
-                    'securable_type': priv.securable_type,
-                    'permission': priv.permission
-                } for priv in updated_persona.privileges
-            ]
-        }
+        if not updated_persona:
+            logger.warning(f"Persona not found with ID: {persona_id}")
+            raise HTTPException(status_code=404, detail="Persona not found")
 
         logger.info(f"Successfully updated persona with ID: {persona_id}")
-        return response
+        return entitlements_manager._format_persona(updated_persona)
+    except HTTPException:
+        raise
     except Exception as e:
         error_msg = f"Error updating persona {persona_id}: {e!s}"
         logger.error(error_msg)
@@ -195,15 +97,7 @@ async def delete_persona(persona_id: str):
             raise HTTPException(status_code=404, detail="Persona not found")
 
         logger.info(f"Deleting persona with ID: {persona_id}")
-        entitlements_manager.delete_persona(persona_id)
-
-        # Save changes to YAML
-        try:
-            yaml_path = Path(__file__).parent.parent / 'data' / 'entitlements.yaml'
-            entitlements_manager.save_to_yaml(str(yaml_path))
-            logger.info(f"Saved updated entitlements data to {yaml_path}")
-        except Exception as e:
-            logger.warning(f"Could not save updated data to YAML: {e!s}")
+        entitlements_manager.delete_persona(persona_id)  # Auto-persists to YAML
 
         logger.info(f"Successfully deleted persona with ID: {persona_id}")
         return None
@@ -216,14 +110,7 @@ async def delete_persona(persona_id: str):
 async def add_privilege(persona_id: str, privilege_data: dict):
     """Add a privilege to a persona"""
     try:
-        persona = entitlements_manager.get_persona(persona_id)
-        if not persona:
-            logger.warning(f"Persona not found with ID: {persona_id}")
-            raise HTTPException(status_code=404, detail="Persona not found")
-
-        logger.info(f"Adding privilege to persona with ID: {persona_id}")
-
-        # Add privilege
+        # Add privilege (auto-persists to YAML)
         updated_persona = entitlements_manager.add_privilege(
             persona_id=persona_id,
             securable_id=privilege_data.get('securable_id', ''),
@@ -231,32 +118,14 @@ async def add_privilege(persona_id: str, privilege_data: dict):
             permission=privilege_data.get('permission', 'READ')
         )
 
-        # Save changes to YAML
-        try:
-            yaml_path = Path(__file__).parent.parent / 'data' / 'entitlements.yaml'
-            entitlements_manager.save_to_yaml(str(yaml_path))
-            logger.info(f"Saved updated entitlements data to {yaml_path}")
-        except Exception as e:
-            logger.warning(f"Could not save updated data to YAML: {e!s}")
-
-        # Format the response
-        response = {
-            'id': updated_persona.id,
-            'name': updated_persona.name,
-            'description': updated_persona.description,
-            'created_at': updated_persona.created_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'updated_at': updated_persona.updated_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'privileges': [
-                {
-                    'securable_id': priv.securable_id,
-                    'securable_type': priv.securable_type,
-                    'permission': priv.permission
-                } for priv in updated_persona.privileges
-            ]
-        }
+        if not updated_persona:
+            logger.warning(f"Persona not found with ID: {persona_id}")
+            raise HTTPException(status_code=404, detail="Persona not found")
 
         logger.info(f"Successfully added privilege to persona with ID: {persona_id}")
-        return response
+        return entitlements_manager._format_persona(updated_persona)
+    except HTTPException:
+        raise
     except Exception as e:
         error_msg = f"Error adding privilege to persona {persona_id}: {e!s}"
         logger.error(error_msg)
@@ -266,45 +135,22 @@ async def add_privilege(persona_id: str, privilege_data: dict):
 async def remove_privilege(persona_id: str, securable_id: str):
     """Remove a privilege from a persona"""
     try:
-        persona = entitlements_manager.get_persona(persona_id)
-        if not persona:
-            logger.warning(f"Persona not found with ID: {persona_id}")
-            raise HTTPException(status_code=404, detail="Persona not found")
-
         logger.info(f"Removing privilege {securable_id} from persona with ID: {persona_id}")
 
-        # Remove privilege
+        # Remove privilege (auto-persists to YAML)
         updated_persona = entitlements_manager.remove_privilege(
             persona_id=persona_id,
             securable_id=securable_id
         )
 
-        # Save changes to YAML
-        try:
-            yaml_path = Path(__file__).parent.parent / 'data' / 'entitlements.yaml'
-            entitlements_manager.save_to_yaml(str(yaml_path))
-            logger.info(f"Saved updated entitlements data to {yaml_path}")
-        except Exception as e:
-            logger.warning(f"Could not save updated data to YAML: {e!s}")
-
-        # Format the response
-        response = {
-            'id': updated_persona.id,
-            'name': updated_persona.name,
-            'description': updated_persona.description,
-            'created_at': updated_persona.created_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'updated_at': updated_persona.updated_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'privileges': [
-                {
-                    'securable_id': priv.securable_id,
-                    'securable_type': priv.securable_type,
-                    'permission': priv.permission
-                } for priv in updated_persona.privileges
-            ]
-        }
+        if not updated_persona:
+            logger.warning(f"Persona not found with ID: {persona_id}")
+            raise HTTPException(status_code=404, detail="Persona not found")
 
         logger.info(f"Successfully removed privilege from persona with ID: {persona_id}")
-        return response
+        return entitlements_manager._format_persona(updated_persona)
+    except HTTPException:
+        raise
     except Exception as e:
         error_msg = f"Error removing privilege from persona {persona_id}: {e!s}"
         logger.error(error_msg)
@@ -314,46 +160,23 @@ async def remove_privilege(persona_id: str, securable_id: str):
 async def update_persona_groups(persona_id: str, groups_data: dict):
     """Update groups for a persona"""
     try:
-        persona = entitlements_manager.get_persona(persona_id)
-        if not persona:
-            logger.warning(f"Persona not found with ID: {persona_id}")
-            raise HTTPException(status_code=404, detail="Persona not found")
-
         if not isinstance(groups_data.get('groups'), list):
             raise HTTPException(status_code=400, detail="Invalid groups data")
 
+        # Update groups (auto-persists to YAML)
         updated_persona = entitlements_manager.update_persona_groups(
             persona_id=persona_id,
             groups=groups_data['groups']
         )
 
-        # Save changes to YAML
-        try:
-            yaml_path = Path(__file__).parent.parent / 'data' / 'entitlements.yaml'
-            entitlements_manager.save_to_yaml(str(yaml_path))
-            logger.info(f"Saved updated entitlements data to {yaml_path}")
-        except Exception as e:
-            logger.warning(f"Could not save updated data to YAML: {e!s}")
-
-        # Format the response
-        response = {
-            'id': updated_persona.id,
-            'name': updated_persona.name,
-            'description': updated_persona.description,
-            'groups': updated_persona.groups,
-            'created_at': updated_persona.created_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'updated_at': updated_persona.updated_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'privileges': [
-                {
-                    'securable_id': priv.securable_id,
-                    'securable_type': priv.securable_type,
-                    'permission': priv.permission
-                } for priv in updated_persona.privileges
-            ]
-        }
-
         logger.info(f"Successfully updated groups for persona with ID: {persona_id}")
-        return response
+        return entitlements_manager._format_persona(updated_persona)
+    except ValueError as e:
+        # Persona not found
+        logger.warning(f"Persona not found: {e}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         error_msg = f"Error updating groups for persona {persona_id}: {e!s}"
         logger.error(error_msg)

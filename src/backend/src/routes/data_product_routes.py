@@ -57,20 +57,15 @@ async def submit_product_certification(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
+    """Submit a draft product for certification (draft → proposed)."""
     try:
-        from src.db_models.data_products import DataProductDb
-        product = db.query(DataProductDb).filter(DataProductDb.id == product_id).first()
-        if not product:
-            raise HTTPException(status_code=404, detail="Data product not found")
-        # ODPS v1.0.0: Use status field directly (proposed, draft, active, deprecated, retired)
-        cur = (product.status or '').lower()
-        if cur != 'draft':
-            raise HTTPException(status_code=409, detail=f"Invalid transition from {product.status} to active (certification)")
-        product.status = 'active'  # ODPS: certification moves draft to active
-        db.add(product)
-        db.flush()
+        # Delegate to manager
+        updated_product = manager.submit_for_certification(product_id)
+
+        # Audit logging
         audit_manager.log_action(
             db=db,
             username=current_user.username,
@@ -78,9 +73,13 @@ async def submit_product_certification(
             feature=DATA_PRODUCTS_FEATURE_ID,
             action='SUBMIT_CERTIFICATION',
             success=True,
-            details={ 'product_id': product_id, 'from': cur, 'to': product.status }
+            details={'product_id': product_id, 'status': updated_product.status}
         )
-        return { 'status': product.status }
+
+        return {'status': updated_product.status}
+    except ValueError as e:
+        logger.error("Validation error submitting product %s: %s", product_id, e)
+        raise HTTPException(status_code=409, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -169,42 +168,20 @@ async def publish_product(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
     """
-    Publish a certified product to make it active and available in the marketplace.
+    Publish a proposed product to make it active and available in the marketplace.
 
     Validates that all output ports have dataContractId set before allowing publication.
+    ODPS v1.0.0: proposed → active
     """
     try:
-        from src.db_models.data_products import DataProductDb
-        product = db.query(DataProductDb).filter(DataProductDb.id == product_id).first()
-        if not product or not product.info:
-            raise HTTPException(status_code=404, detail="Data product not found")
+        # Delegate to manager
+        updated_product = manager.publish_product(product_id)
 
-        cur = (product.info.status or '').upper()
-        if cur != 'CERTIFIED':
-            raise HTTPException(
-                status_code=409,
-                detail=f"Invalid transition from {product.info.status} to ACTIVE. Product must be CERTIFIED first."
-            )
-
-        # Validate that all output ports have contracts
-        if product.outputPorts:
-            ports_without_contracts = [
-                port.name for port in product.outputPorts
-                if not port.dataContractId
-            ]
-            if ports_without_contracts:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Cannot publish product: Output ports {', '.join(ports_without_contracts)} must have data contracts assigned"
-                )
-
-        product.info.status = 'ACTIVE'
-        db.add(product.info)
-        db.flush()
-
+        # Audit logging
         audit_manager.log_action(
             db=db,
             username=current_user.username,
@@ -212,10 +189,14 @@ async def publish_product(
             feature=DATA_PRODUCTS_FEATURE_ID,
             action='PUBLISH',
             success=True,
-            details={'product_id': product_id, 'from': cur, 'to': product.info.status}
+            details={'product_id': product_id, 'status': updated_product.status}
         )
 
-        return {'status': product.info.status}
+        return {'status': updated_product.status}
+    except ValueError as e:
+        logger.error("Validation error publishing product %s: %s", product_id, e)
+        error_status = 409 if "Invalid transition" in str(e) else 400
+        raise HTTPException(status_code=error_status, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -230,28 +211,18 @@ async def deprecate_product(
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
     """
     Deprecate an active product to signal it will be retired soon.
+    ODPS v1.0.0: active → deprecated
     """
     try:
-        from src.db_models.data_products import DataProductDb
-        product = db.query(DataProductDb).filter(DataProductDb.id == product_id).first()
-        if not product or not product.info:
-            raise HTTPException(status_code=404, detail="Data product not found")
+        # Delegate to manager
+        updated_product = manager.deprecate_product(product_id)
 
-        cur = (product.info.status or '').upper()
-        if cur != 'ACTIVE':
-            raise HTTPException(
-                status_code=409,
-                detail=f"Invalid transition from {product.info.status} to DEPRECATED. Only ACTIVE products can be deprecated."
-            )
-
-        product.info.status = 'DEPRECATED'
-        db.add(product.info)
-        db.flush()
-
+        # Audit logging
         audit_manager.log_action(
             db=db,
             username=current_user.username,
@@ -259,10 +230,13 @@ async def deprecate_product(
             feature=DATA_PRODUCTS_FEATURE_ID,
             action='DEPRECATE',
             success=True,
-            details={'product_id': product_id, 'from': cur, 'to': product.info.status}
+            details={'product_id': product_id, 'status': updated_product.status}
         )
 
-        return {'status': product.info.status}
+        return {'status': updated_product.status}
+    except ValueError as e:
+        logger.error("Validation error deprecating product %s: %s", product_id, e)
+        raise HTTPException(status_code=409, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -433,24 +407,20 @@ async def get_published_products(
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
 ):
     """
-    Get all published (ACTIVE status) data products for marketplace/discovery.
+    Get all published (active status) data products for marketplace/discovery.
 
-    Returns only products that are in ACTIVE status, meaning they have been:
-    - Certified
+    Returns only products that are in 'active' status, meaning they have been:
+    - Proposed for certification
     - Published (all output ports have contracts)
     - Made available for consumption
+
+    ODPS v1.0.0: Returns products with status='active'
     """
     try:
-        # Get all products
-        all_products = manager.list_products(limit=10000)
+        # Delegate to manager
+        published_products = manager.get_published_products(limit=10000)
 
-        # Filter to only ACTIVE products
-        published_products = [
-            product for product in all_products
-            if product.info and product.info.status and product.info.status.upper() == 'ACTIVE'
-        ]
-
-        logger.info(f"Retrieved {len(published_products)} published data products (ACTIVE status)")
+        logger.info(f"Retrieved {len(published_products)} published data products (active status)")
         return published_products
     except Exception as e:
         error_msg = f"Error retrieving published data products: {e!s}"
@@ -459,7 +429,7 @@ async def get_published_products(
 
 @router.post("/data-products/upload", response_model=List[DataProduct], status_code=201)
 async def upload_data_products(
-    request: Request, 
+    request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
@@ -478,7 +448,7 @@ async def upload_data_products(
             username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=DATA_PRODUCTS_FEATURE_ID,
-            action="UPLOAD",
+            action="UPLOAD_BATCH",
             success=False,
             details={
                 "filename": safe_filename,
@@ -489,6 +459,7 @@ async def upload_data_products(
         )
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload a YAML or JSON file.")
 
+    # Tracking for audit
     success = False
     response_status_code = 500
     created_products_for_response: List[DataProduct] = []
@@ -501,6 +472,7 @@ async def upload_data_products(
     }
 
     try:
+        # Read file content
         content = await file.read()
         if safe_filename.lower().endswith('.yaml'):
             data = yaml.safe_load(content)
@@ -519,98 +491,74 @@ async def upload_data_products(
             details_for_audit["exception"] = {"type": "HTTPException", "status_code": exc.status_code, "detail": exc.detail}
             raise exc
 
-        errors_for_response_detail = [] 
-        for product_data in data_list:
-             if not isinstance(product_data, dict):
-                 err_detail = {"error": "Skipping non-dictionary item within list/array.", "item_preview": str(product_data)[:100]}
-                 errors_for_response_detail.append(err_detail)
-                 processing_errors_for_audit.append(err_detail)
-                 continue
-             
-             product_id_in_data = product_data.get('id')
-             
-             try:
-                 if not product_id_in_data:
-                     generated_id = str(uuid.uuid4())
-                     product_data['id'] = generated_id
-                     logger.info(f"Generated ID {generated_id} for uploaded product lacking one.")
-                     product_id_in_data = generated_id 
-                 
-                 if product_id_in_data and manager.get_product(product_id_in_data):
-                     err_detail = {"id": product_id_in_data, "error": "Product with this ID already exists. Skipping."}
-                     errors_for_response_detail.append(err_detail)
-                     processing_errors_for_audit.append(err_detail)
-                     continue
-                 
-                 try:
-                    _ = DataProduct(**product_data)
-                 except ValidationError as e_val:
-                     logger.error(f"Validation failed for uploaded product (ID: {product_id_in_data}): {e_val}")
-                     err_detail = {"id": product_id_in_data, "error": f"Validation failed: {e_val.errors() if hasattr(e_val, 'errors') else str(e_val)}"}
-                     errors_for_response_detail.append(err_detail)
-                     processing_errors_for_audit.append(err_detail)
-                     continue 
+        # Delegate to manager
+        created_products, errors_list = manager.upload_products_batch(content, file.filename)
 
-                 created_product = manager.create_product(product_data)
-                 created_products_for_response.append(created_product)
-                 if created_product and hasattr(created_product, 'id'):
-                    created_ids_for_audit.append(str(created_product.id))
-                 
-             except Exception as e_item:
-                 error_id_for_log = product_id_in_data if product_id_in_data else 'N/A_CreationFailure'
-                 err_detail = {"id": error_id_for_log, "error": f"Creation failed: {e_item!s}"}
-                 errors_for_response_detail.append(err_detail)
-                 processing_errors_for_audit.append(err_detail)
+        # Extract created IDs for audit
+        created_ids = [p.id for p in created_products if p and hasattr(p, 'id')]
 
-        if errors_for_response_detail:
-            success = False
-            response_status_code = 422 
-            logger.warning(f"Encountered {len(errors_for_response_detail)} errors during file upload processing.")
-            raise HTTPException(
-                status_code=response_status_code, 
-                detail={"message": "Validation or creation errors occurred during upload.", "errors": errors_for_response_detail}
-            )
-        
+        # Determine response status
+        if errors_list:
+            if created_products:
+                # Partial success
+                success = True
+                response_status_code = 422
+                logger.warning(
+                    f"Partial success: {len(created_products)} created, "
+                    f"{len(errors_list)} errors from file {file.filename}"
+                )
+                raise HTTPException(
+                    status_code=response_status_code,
+                    detail={
+                        "message": "Validation or creation errors occurred during upload.",
+                        "errors": errors_list,
+                        "created_count": len(created_products)
+                    }
+                )
+            else:
+                # Total failure
+                success = False
+                response_status_code = 422
+                raise HTTPException(
+                    status_code=response_status_code,
+                    detail={
+                        "message": "All items failed validation or creation.",
+                        "errors": errors_list
+                    }
+                )
+
+        # Complete success
         success = True
         response_status_code = 201
         logger.info(f"Successfully created {len(created_products_for_response)} data products from uploaded file {safe_filename}")
         return created_products_for_response
 
-    except yaml.YAMLError as e_yaml:
+    except ValueError as e:
+        # File parsing or format errors
         success = False
         response_status_code = 400
-        details_for_audit["exception"] = {"type": "YAMLError", "message": str(e_yaml)}
-        raise HTTPException(status_code=response_status_code, detail=f"Invalid YAML format: {e_yaml}")
-    except json.JSONDecodeError as e_json:
-        success = False
-        response_status_code = 400
-        details_for_audit["exception"] = {"type": "JSONDecodeError", "message": str(e_json)}
-        raise HTTPException(status_code=response_status_code, detail=f"Invalid JSON format: {e_json}")
-    except HTTPException as http_exc:
-        if response_status_code != 422 and response_status_code != 400 :
-            success = False
-        response_status_code = http_exc.status_code
-        if "exception" not in details_for_audit:
-            details_for_audit["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
+        details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
+        logger.error(f"File processing error for {file.filename}: {e}")
+        raise HTTPException(status_code=response_status_code, detail=str(e))
+    except HTTPException:
+        # Re-raise HTTP exceptions (from partial success handling above)
         raise
-    except Exception as e_general:
+    except Exception as e:
+        # Unexpected errors
         success = False
-        response_status_code = 500 
-        error_msg = f"Unexpected error processing uploaded file: {e_general!s}"
-        details_for_audit["exception"] = {"type": type(e_general).__name__, "message": str(e_general)}
+        response_status_code = 500
+        error_msg = f"Unexpected error processing uploaded file: {e!s}"
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         logger.exception(error_msg)
         raise HTTPException(status_code=response_status_code, detail=error_msg)
     finally:
-        if "exception" not in details_for_audit and not success:
-             details_for_audit["processing_summary"] = "One or more items failed processing but no overarching exception was raised."
-        elif "exception" not in details_for_audit and success:
-             details_for_audit["response_status_code"] = response_status_code
+        # Audit logging
+        details_for_audit["response_status_code"] = response_status_code
+        if created_ids:
+            details_for_audit["created_resource_ids"] = created_ids
+        if errors_list:
+            details_for_audit["item_processing_errors"] = errors_list
 
-        if created_ids_for_audit:
-            details_for_audit["created_resource_ids"] = created_ids_for_audit
-        if processing_errors_for_audit:
-            details_for_audit["item_processing_errors"] = processing_errors_for_audit
-        
         audit_manager.log_action(
             db=db,
             username=current_user.username,
@@ -779,7 +727,13 @@ async def update_data_product(
     manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
-    # --- Manually read and validate body ---
+    """
+    Update a data product with project membership authorization.
+
+    Validates that users can only update products belonging to projects
+    they are members of (if the product has a project_id).
+    """
+    # Parse and validate JSON body
     try:
         body_dict = await request.json()
         product_update = DataProduct(**body_dict)
@@ -788,104 +742,77 @@ async def update_data_product(
     except ValidationError as e:
         logger.error(f"Validation failed for PUT request body (ID: {product_id}): {e}")
         raise HTTPException(status_code=422, detail=e.errors())
-    # --------------------------------------
 
+    # Validate path ID matches body ID
     if product_id != product_update.id:
-        exc = HTTPException(status_code=400, detail="Product ID in path does not match ID in request body.")
         audit_manager.log_action(
             db=db,
             username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=DATA_PRODUCTS_FEATURE_ID,
             action="UPDATE",
-            success=False, 
-            details={"error": "mismatch id"}
+            success=False,
+            details={"error": "ID mismatch", "product_id": product_id}
         )
-        raise exc
+        raise HTTPException(status_code=400, detail="Product ID in path does not match ID in request body.")
 
+    # Tracking for audit
     success = False
-    response_status_code = 500 
-    details_for_audit = {
-        "params": {"product_id": product_id},
-    }
+    response_status_code = 500
+    details_for_audit = {"params": {"product_id": product_id}}
     updated_product_response = None
-    exception_details = None
 
     try:
-        logger.info(f"Received request to update data product ID: {product_id}")
-        
-        # Get existing product to check project membership
-        from src.repositories.data_products_repository import data_product_repo
-        existing_product = data_product_repo.get(db, id=product_id)
-        if not existing_product:
-            response_status_code = 404
-            exc = HTTPException(status_code=response_status_code, detail="Data product not found")
-            details_for_audit["exception"] = {"type": "HTTPException", "status_code": exc.status_code, "detail": exc.detail}
-            logger.warning(f"Update failed: Data product not found with ID: {product_id}")
-            raise exc
-        
-        # Check project membership if product belongs to a project
-        if existing_product.project_id:
-            from src.controller.projects_manager import projects_manager
-            from src.common.config import get_settings
-            user_groups = current_user.groups or []
-            settings = get_settings()
-            is_member = projects_manager.is_user_project_member(
-                db=db,
-                user_identifier=current_user.email,
-                user_groups=user_groups,
-                project_id=existing_product.project_id,
-                settings=settings
-            )
-            if not is_member:
-                response_status_code = 403
-                exc = HTTPException(
-                    status_code=response_status_code,
-                    detail="You must be a member of the project to edit this data product"
-                )
-                details_for_audit["exception"] = {"type": "HTTPException", "status_code": exc.status_code, "detail": exc.detail}
-                raise exc
-        
-        # Use the manually validated model 
+        logger.info(f"Updating data product ID: {product_id}")
+
+        # Delegate to manager (includes auth check)
+        user_groups = current_user.groups or []
         product_dict = product_update.model_dump(by_alias=True)
-        
-        updated_product_response = manager.update_product(product_id, product_dict)
+
+        updated_product_response = manager.update_product_with_auth(
+            product_id=product_id,
+            product_data_dict=product_dict,
+            user_email=current_user.email,
+            user_groups=user_groups
+        )
 
         if not updated_product_response:
             response_status_code = 404
-            exc = HTTPException(status_code=response_status_code, detail="Data product not found")
-            details_for_audit["exception"] = {"type": "HTTPException", "status_code": exc.status_code, "detail": exc.detail}
-            logger.warning(f"Update failed: Data product not found with ID: {product_id}")
-            raise exc
+            raise HTTPException(status_code=404, detail="Data product not found")
 
         success = True
-        response_status_code = 200 
+        response_status_code = 200
         logger.info(f"Successfully updated data product with ID: {product_id}")
         return updated_product_response
 
-    except HTTPException as http_exc:
+    except PermissionError as e:
+        # Project membership check failed
         success = False
-        response_status_code = http_exc.status_code
-        exception_details = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
-        raise
-    except ValueError as ve:
+        response_status_code = 403
+        details_for_audit["exception"] = {"type": "PermissionError", "message": str(e)}
+        logger.warning(f"Permission denied updating product {product_id}: {e}")
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        # Validation errors from manager
         success = False
         response_status_code = 400
-        exception_details = {"type": "ValueError", "message": str(ve)}
-        raise HTTPException(status_code=response_status_code, detail=str(ve))
+        details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
+        logger.error(f"Validation error updating product {product_id}: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
+        # Unexpected errors
         success = False
         response_status_code = 500
         error_msg = f"Unexpected error updating data product {product_id}: {e!s}"
-        exception_details = {"type": type(e).__name__, "message": str(e)}
+        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         logger.exception(error_msg)
-        raise HTTPException(status_code=response_status_code, detail=error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
     finally:
-        if exception_details:
-            details_for_audit["exception"] = exception_details
-        else:
-             details_for_audit["response_status_code"] = response_status_code
-        
+        # Audit logging
+        details_for_audit["response_status_code"] = response_status_code
         if success and updated_product_response and hasattr(updated_product_response, 'id'):
             details_for_audit["updated_resource_id"] = str(updated_product_response.id)
 

@@ -4964,3 +4964,255 @@ class DataContractsManager(SearchableAsset):
         
         logger.info(f"Retrieved {len(result)} team members from team {team_id} for contract {contract_id} import")
         return result
+
+    # --- Contract Listing and API Model Building ---
+    
+    def list_contracts_from_db(self, db, domain_id: Optional[str] = None):
+        """List data contracts from database with optional domain filtering.
+        
+        Args:
+            db: Database session
+            domain_id: Optional domain ID filter
+            
+        Returns:
+            List of DataContractRead API models
+        """
+        if domain_id:
+            # Filter by domain ID
+            contracts = db.query(DataContractDb).filter(DataContractDb.domain_id == domain_id).all()
+        else:
+            # Get all contracts
+            contracts = data_contract_repo.get_multi(db)
+        
+        # Build API models for each contract
+        return [self._build_contract_api_model(db, c) for c in contracts]
+    
+    def _build_contract_api_model(self, db, db_contract) -> 'DataContractRead':
+        """Build DataContractRead API model from normalized database models.
+        
+        Args:
+            db: Database session
+            db_contract: DataContractDb instance
+            
+        Returns:
+            DataContractRead API model
+        """
+        from src.models.data_contracts_api import (
+            ContractDescription,
+            SchemaObject,
+            ColumnProperty,
+            ServerConfig,
+            AuthoritativeDefinition,
+            QualityRule,
+            DataContractRead,
+        )
+        from src.repositories.data_domain_repository import data_domain_repo
+        from src.repositories.tags_repository import entity_tag_repo
+        
+        # Resolve domain name from domain_id if available
+        domain_name = None
+        if db_contract.domain_id:
+            try:
+                domain = data_domain_repo.get(db, id=db_contract.domain_id)
+                if domain:
+                    domain_name = domain.name
+            except Exception as e:
+                logger.warning(f"Failed to resolve domain name for domain_id {db_contract.domain_id}: {e}")
+        
+        # Build description
+        description = None
+        if db_contract.description_usage or db_contract.description_purpose or db_contract.description_limitations:
+            description = ContractDescription(
+                usage=db_contract.description_usage,
+                purpose=db_contract.description_purpose,
+                limitations=db_contract.description_limitations
+            )
+        
+        # Build schema objects
+        schema_objects = []
+        for schema_obj in db_contract.schema_objects:
+            properties = []
+            for prop in schema_obj.properties:
+                # Parse logical type options if available
+                options = {}
+                if prop.logical_type_options_json:
+                    try:
+                        options = json.loads(prop.logical_type_options_json)
+                    except:
+                        pass
+                
+                prop_dict = {
+                    'name': prop.name,
+                    'logicalType': prop.logical_type or 'string',
+                    'required': prop.required,
+                    'unique': prop.unique,
+                    'description': prop.transform_description,
+                    'primaryKeyPosition': prop.primary_key_position,
+                    'partitionKeyPosition': prop.partition_key_position,
+                }
+                
+                # Add logical type options to property
+                prop_dict.update(options)
+                
+                properties.append(ColumnProperty(**prop_dict))
+            
+            schema_objects.append(SchemaObject(
+                name=schema_obj.name,
+                physicalName=schema_obj.physical_name,
+                properties=properties
+            ))
+        
+        # Build team (ODCS v3.0.2 compliant)
+        team = []
+        if getattr(db_contract, 'team', None):
+            for member in db_contract.team:
+                entry = {
+                    'username': member.username,
+                    'role': member.role or 'member',
+                }
+                # Add optional fields if present
+                if getattr(member, 'description', None):
+                    entry['description'] = member.description
+                if getattr(member, 'date_in', None):
+                    entry['dateIn'] = member.date_in
+                if getattr(member, 'date_out', None):
+                    entry['dateOut'] = member.date_out
+                if getattr(member, 'replaced_by_username', None):
+                    entry['replacedByUsername'] = member.replaced_by_username
+                team.append(entry)
+        
+        # Build support channels (legacy minimal)
+        support = None
+        if getattr(db_contract, 'support', None):
+            support = {}
+            for ch in db_contract.support:
+                if ch.channel and ch.url:
+                    support[ch.channel] = ch.url
+        
+        # Custom properties
+        custom_properties = {}
+        if getattr(db_contract, 'custom_properties', None):
+            for cp in db_contract.custom_properties:
+                custom_properties[cp.property] = cp.value
+        
+        # SLA properties (flatten basic key/value)
+        sla = None
+        if getattr(db_contract, 'sla_properties', None):
+            sla = {}
+            for sp in db_contract.sla_properties:
+                if sp.property and sp.value is not None:
+                    sla[sp.property] = sp.value
+        
+        # Servers (full ODCS mapping)
+        servers = []
+        if getattr(db_contract, 'servers', None):
+            for s in db_contract.servers:
+                # Build properties dict from server properties
+                properties = {}
+                if getattr(s, 'properties', None):
+                    for prop in s.properties:
+                        properties[prop.key] = prop.value
+                
+                # Create ServerConfig object
+                server_config = ServerConfig(
+                    server=s.server,
+                    type=s.type,
+                    description=s.description,
+                    environment=s.environment,
+                    host=properties.get('host'),
+                    port=int(properties.get('port')) if properties.get('port') else None,
+                    database=properties.get('database'),
+                    schema=properties.get('schema'),
+                    catalog=properties.get('catalog'),
+                    project=properties.get('project'),
+                    account=properties.get('account'),
+                    region=properties.get('region'),
+                    location=properties.get('location'),
+                    properties={k: v for k, v in properties.items() if k not in [
+                        'host', 'port', 'database', 'schema', 'catalog', 'project', 'account', 'region', 'location'
+                    ]}
+                )
+                servers.append(server_config)
+        
+        # Authoritative definitions
+        authoritative_definitions = []
+        if getattr(db_contract, 'authoritative_defs', None):
+            for auth_def in db_contract.authoritative_defs:
+                authoritative_definitions.append(AuthoritativeDefinition(
+                    url=auth_def.url,
+                    type=auth_def.type
+                ))
+        
+        # Quality rules
+        quality_rules = []
+        if hasattr(db_contract, 'schema_objects') and db_contract.schema_objects:
+            for schema_obj in db_contract.schema_objects:
+                if hasattr(schema_obj, 'quality_checks') and schema_obj.quality_checks:
+                    for check in schema_obj.quality_checks:
+                        quality_rules.append(QualityRule(
+                            name=check.name,
+                            description=check.description,
+                            level=check.level,
+                            dimension=check.dimension,
+                            business_impact=check.business_impact,
+                            severity=check.severity,
+                            type=check.type,
+                            method=check.method,
+                            schedule=check.schedule,
+                            scheduler=check.scheduler,
+                            unit=check.unit,
+                            tags=check.tags,
+                            rule=check.rule,
+                            query=check.query,
+                            engine=check.engine,
+                            implementation=check.implementation,
+                            must_be=check.must_be,
+                            must_not_be=check.must_not_be,
+                            must_be_gt=check.must_be_gt,
+                            must_be_ge=check.must_be_ge,
+                            must_be_lt=check.must_be_lt,
+                            must_be_le=check.must_be_le,
+                            must_be_between_min=check.must_be_between_min,
+                            must_be_between_max=check.must_be_between_max
+                        ))
+        
+        # Load tags for the contract
+        tags = []
+        try:
+            assigned_tags = entity_tag_repo.get_assigned_tags_for_entity(
+                db,
+                entity_id=db_contract.id,
+                entity_type="data_contract"
+            )
+            tags = assigned_tags
+        except Exception as e:
+            logger.warning(f"Failed to load tags for contract {db_contract.id}: {e}")
+        
+        logger.debug(f"Building API model for contract {db_contract.id}")
+        
+        return DataContractRead(
+            id=db_contract.id,
+            name=db_contract.name,
+            version=db_contract.version,
+            status=db_contract.status,
+            published=db_contract.published if hasattr(db_contract, 'published') else False,
+            owner_team_id=db_contract.owner_team_id,
+            kind=db_contract.kind,
+            apiVersion=db_contract.api_version,
+            tenant=db_contract.tenant,
+            domain=domain_name,  # Resolved domain name
+            domainId=db_contract.domain_id,  # Provide domain ID for frontend resolution
+            dataProduct=db_contract.data_product,
+            description=description,
+            tags=tags,  # Include tags in response
+            schema=schema_objects,
+            team=team,
+            support=support,
+            customProperties=custom_properties,
+            sla=sla,
+            servers=servers,
+            authoritativeDefinitions=authoritative_definitions,
+            qualityRules=quality_rules,
+            created=db_contract.created_at.isoformat() if db_contract.created_at else None,
+            updated=db_contract.updated_at.isoformat() if db_contract.updated_at else None,
+        )

@@ -12,8 +12,31 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 class EstateManager:
-    def __init__(self, client: WorkspaceClient, settings: Settings):
+    def __init__(self, client: WorkspaceClient, settings: Settings, yaml_path: Optional[Path] = None):
+        """Initialize EstateManager.
+        
+        Args:
+            client: WorkspaceClient for SDK operations
+            settings: Application settings
+            yaml_path: Optional path to YAML file to load estates from.
+                      If not provided, attempts to load from default location
+                      (data/estates.yaml relative to controller directory).
+        """
         self.estates: List[Estate] = []
+        
+        # Auto-load from YAML if path provided or default exists
+        if yaml_path is None:
+            # Try default location
+            default_path = Path(__file__).parent.parent / 'data' / 'estates.yaml'
+            if default_path.exists():
+                yaml_path = default_path
+        
+        if yaml_path and yaml_path.exists():
+            try:
+                self.load_from_yaml(yaml_path)
+                logger.info(f"Successfully loaded estates from {yaml_path}")
+            except Exception as e:
+                logger.exception(f"Error loading estates from YAML: {e!s}")
 
     def _parse_sharing_policies(self, policies_data: Optional[List[dict]]) -> List[SharingPolicy]:
         if not policies_data:

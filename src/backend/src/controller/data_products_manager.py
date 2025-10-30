@@ -204,6 +204,67 @@ class DataProductsManager(SearchableAsset):
             logger.error(f"Value error updating ODPS product {product_id}: {e}")
             raise
 
+    def update_product_with_auth(
+        self,
+        product_id: str,
+        product_data_dict: Dict[str, Any],
+        user_email: str,
+        user_groups: List[str]
+    ) -> Optional[DataProductApi]:
+        """
+        Update a data product with project membership authorization check.
+
+        If the product belongs to a project, verifies that the user is a member
+        of that project before allowing the update.
+
+        Args:
+            product_id: ID of product to update
+            product_data_dict: Updated product data
+            user_email: Email of user making the update
+            user_groups: List of groups the user belongs to
+
+        Returns:
+            Updated product if successful, None if not found
+
+        Raises:
+            PermissionError: If user is not a project member (when product has project_id)
+            ValueError: If validation fails
+            SQLAlchemyError: If database operation fails
+        """
+        logger.debug(f"Updating product {product_id} with auth check for user {user_email}")
+
+        # Get existing product to check project membership
+        existing_product_db = self._repo.get(db=self._db, id=product_id)
+        if not existing_product_db:
+            logger.warning(f"Product not found for update: {product_id}")
+            return None
+
+        # Check project membership if product belongs to a project
+        if existing_product_db.project_id:
+            from src.controller.projects_manager import projects_manager
+            from src.common.config import get_settings
+
+            settings = get_settings()
+            is_member = projects_manager.is_user_project_member(
+                db=self._db,
+                user_identifier=user_email,
+                user_groups=user_groups,
+                project_id=existing_product_db.project_id,
+                settings=settings
+            )
+
+            if not is_member:
+                logger.warning(
+                    f"User {user_email} denied update access to product {product_id} "
+                    f"(project: {existing_product_db.project_id}) - not a project member"
+                )
+                raise PermissionError(
+                    "You must be a member of the project to edit this data product"
+                )
+
+        # Perform update
+        return self.update_product(product_id, product_data_dict)
+
     def delete_product(self, product_id: str) -> bool:
         """Delete an ODPS v1.0.0 data product."""
         try:
@@ -215,6 +276,302 @@ class DataProductsManager(SearchableAsset):
         except Exception as e:
             logger.error(f"Unexpected error deleting product {product_id}: {e}")
             raise
+
+    # ==================== Lifecycle Transition Methods ====================
+
+    def submit_for_certification(self, product_id: str) -> DataProductApi:
+        """
+        Submit a draft product for certification (draft → proposed).
+
+        ODPS v1.0.0 lifecycle: This moves a product from 'draft' to 'proposed' status,
+        indicating it's ready for review/approval.
+
+        Args:
+            product_id: ID of the product to submit
+
+        Returns:
+            Updated product with 'proposed' status
+
+        Raises:
+            ValueError: If product not found or invalid status transition
+            SQLAlchemyError: If database operation fails
+        """
+        try:
+            product_db = self._repo.get(db=self._db, id=product_id)
+            if not product_db:
+                raise ValueError(f"Data product with ID {product_id} not found")
+
+            # Validate current status
+            current_status = (product_db.status or '').lower()
+            if current_status != 'draft':
+                raise ValueError(
+                    f"Invalid transition: cannot submit product with status '{product_db.status}' "
+                    f"for certification. Status must be 'draft'."
+                )
+
+            # Update status to proposed
+            product_db.status = 'proposed'
+            self._db.add(product_db)
+            self._db.flush()
+
+            logger.info(f"Product {product_id} submitted for certification: draft → proposed")
+            return self._load_product_with_tags(product_db)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Database error submitting product {product_id} for certification: {e}")
+            raise
+        except ValueError as e:
+            logger.error(f"Validation error submitting product {product_id}: {e}")
+            raise
+
+    def publish_product(self, product_id: str) -> DataProductApi:
+        """
+        Publish a proposed product (proposed → active).
+
+        ODPS v1.0.0 lifecycle: Publishes a product to make it active and available
+        in the marketplace. Validates that all output ports have data contracts assigned.
+
+        Args:
+            product_id: ID of the product to publish
+
+        Returns:
+            Updated product with 'active' status
+
+        Raises:
+            ValueError: If product not found, invalid status, or validation fails
+            SQLAlchemyError: If database operation fails
+        """
+        try:
+            product_db = self._repo.get(db=self._db, id=product_id)
+            if not product_db:
+                raise ValueError(f"Data product with ID {product_id} not found")
+
+            # Validate current status
+            current_status = (product_db.status or '').lower()
+            if current_status != 'proposed':
+                raise ValueError(
+                    f"Invalid transition: cannot publish product with status '{product_db.status}'. "
+                    f"Status must be 'proposed'."
+                )
+
+            # Validate that all output ports have data contracts
+            if product_db.output_ports:
+                ports_without_contracts = [
+                    port.name for port in product_db.output_ports
+                    if not port.data_contract_id
+                ]
+                if ports_without_contracts:
+                    raise ValueError(
+                        f"Cannot publish product: Output ports {', '.join(ports_without_contracts)} "
+                        f"must have data contracts assigned"
+                    )
+
+            # Update status to active
+            product_db.status = 'active'
+            self._db.add(product_db)
+            self._db.flush()
+
+            logger.info(f"Product {product_id} published: proposed → active")
+            return self._load_product_with_tags(product_db)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Database error publishing product {product_id}: {e}")
+            raise
+        except ValueError as e:
+            logger.error(f"Validation error publishing product {product_id}: {e}")
+            raise
+
+    def deprecate_product(self, product_id: str) -> DataProductApi:
+        """
+        Deprecate an active product (active → deprecated).
+
+        ODPS v1.0.0 lifecycle: Marks an active product as deprecated, signaling
+        it will be retired soon and consumers should migrate.
+
+        Args:
+            product_id: ID of the product to deprecate
+
+        Returns:
+            Updated product with 'deprecated' status
+
+        Raises:
+            ValueError: If product not found or invalid status transition
+            SQLAlchemyError: If database operation fails
+        """
+        try:
+            product_db = self._repo.get(db=self._db, id=product_id)
+            if not product_db:
+                raise ValueError(f"Data product with ID {product_id} not found")
+
+            # Validate current status
+            current_status = (product_db.status or '').lower()
+            if current_status != 'active':
+                raise ValueError(
+                    f"Invalid transition: cannot deprecate product with status '{product_db.status}'. "
+                    f"Only 'active' products can be deprecated."
+                )
+
+            # Update status to deprecated
+            product_db.status = 'deprecated'
+            self._db.add(product_db)
+            self._db.flush()
+
+            logger.info(f"Product {product_id} deprecated: active → deprecated")
+            return self._load_product_with_tags(product_db)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Database error deprecating product {product_id}: {e}")
+            raise
+        except ValueError as e:
+            logger.error(f"Validation error deprecating product {product_id}: {e}")
+            raise
+
+    def get_published_products(self, skip: int = 0, limit: int = 100) -> List[DataProductApi]:
+        """
+        Get all published (active status) data products for marketplace/discovery.
+
+        Returns only products that are in 'active' status, meaning they have been
+        certified, published, and are available for consumption.
+
+        Args:
+            skip: Number of products to skip (for pagination)
+            limit: Maximum number of products to return
+
+        Returns:
+            List of active data products
+
+        Raises:
+            SQLAlchemyError: If database operation fails
+        """
+        try:
+            all_products = self.list_products(skip=skip, limit=limit)
+            published_products = [
+                product for product in all_products
+                if product.status and product.status.lower() == 'active'
+            ]
+            logger.info(f"Retrieved {len(published_products)} published products (active status)")
+            return published_products
+        except SQLAlchemyError as e:
+            logger.error(f"Database error retrieving published products: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error retrieving published products: {e}")
+            raise
+
+    def upload_products_batch(
+        self,
+        file_content: bytes,
+        filename: str
+    ) -> tuple[List[DataProductApi], List[Dict[str, Any]]]:
+        """
+        Process and create multiple data products from uploaded YAML/JSON file.
+
+        Handles:
+        - File format detection and parsing (YAML/JSON)
+        - ID generation for products without IDs
+        - Duplicate detection
+        - Validation
+        - Batch creation with error collection
+
+        Args:
+            file_content: Raw file bytes
+            filename: Original filename (used to detect format)
+
+        Returns:
+            Tuple of (created_products, errors_list)
+            - created_products: List of successfully created products
+            - errors_list: List of error dicts with 'id' and 'error' keys
+
+        Raises:
+            ValueError: If file format is invalid or parsing fails
+        """
+        logger.info(f"Processing batch upload from file: {filename}")
+
+        # Parse file content
+        try:
+            if filename.endswith('.yaml') or filename.endswith('.yml'):
+                import yaml
+                data = yaml.safe_load(file_content)
+            elif filename.endswith('.json'):
+                import json
+                data = json.loads(file_content)
+            else:
+                raise ValueError(f"Unsupported file type: {filename}. Must be .yaml, .yml, or .json")
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML format: {e}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON format: {e}")
+
+        # Normalize to list
+        if isinstance(data, dict):
+            data_list = [data]
+        elif isinstance(data, list):
+            data_list = data
+        else:
+            raise ValueError("File must contain a JSON object/array or YAML mapping/list of data products")
+
+        # Process each product
+        created_products: List[DataProductApi] = []
+        errors: List[Dict[str, Any]] = []
+
+        for idx, product_data in enumerate(data_list):
+            if not isinstance(product_data, dict):
+                errors.append({
+                    "index": idx,
+                    "error": "Item is not a dictionary/object",
+                    "item_preview": str(product_data)[:100]
+                })
+                continue
+
+            product_id = product_data.get('id')
+
+            try:
+                # Generate ID if missing
+                if not product_id:
+                    product_id = str(uuid.uuid4())
+                    product_data['id'] = product_id
+                    logger.info(f"Generated ID {product_id} for product at index {idx}")
+
+                # Check for duplicates
+                existing = self.get_product(product_id)
+                if existing:
+                    errors.append({
+                        "id": product_id,
+                        "index": idx,
+                        "error": "Product with this ID already exists"
+                    })
+                    continue
+
+                # Validate structure
+                try:
+                    DataProductApi(**product_data)
+                except ValidationError as e:
+                    errors.append({
+                        "id": product_id,
+                        "index": idx,
+                        "error": f"Validation failed: {e.errors() if hasattr(e, 'errors') else str(e)}"
+                    })
+                    continue
+
+                # Create product
+                created_product = self.create_product(product_data)
+                created_products.append(created_product)
+                logger.info(f"Successfully created product {product_id} from batch upload")
+
+            except Exception as e:
+                error_id = product_id if product_id else f"index_{idx}"
+                errors.append({
+                    "id": error_id,
+                    "index": idx,
+                    "error": f"Creation failed: {str(e)}"
+                })
+                logger.error(f"Failed to create product at index {idx}: {e}")
+
+        logger.info(
+            f"Batch upload complete: {len(created_products)} created, "
+            f"{len(errors)} errors from {len(data_list)} total items"
+        )
+        return created_products, errors
 
     def create_new_version(self, original_product_id: str, request: NewVersionRequest) -> DataProductApi:
         """Creates a new version of an ODPS v1.0.0 data product."""

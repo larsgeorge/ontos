@@ -21,6 +21,7 @@ from src.controller.semantic_models_manager import SemanticModelsManager
 from src.controller.metadata_manager import MetadataManager
 from src.controller.comments_manager import CommentsManager
 from src.controller.jobs_manager import JobsManager
+from src.controller.workspace_manager import WorkspaceManager
 
 # Import other dependencies needed by these providers
 from src.common.database import get_db
@@ -108,6 +109,13 @@ def get_search_manager(request: Request) -> SearchManager:
     if not manager:
         logger.critical("SearchManager not found in application state during request!")
         raise HTTPException(status_code=503, detail="Search service not configured.")
+    return manager
+
+def get_workspace_manager(request: Request) -> WorkspaceManager:
+    manager = getattr(request.app.state, 'workspace_manager', None)
+    if not manager:
+        logger.critical("WorkspaceManager not found in application state during request!")
+        raise HTTPException(status_code=503, detail="Workspace service not configured.")
     return manager
 
 def get_semantic_models_manager(request: Request) -> SemanticModelsManager:

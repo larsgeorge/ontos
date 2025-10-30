@@ -20,36 +20,12 @@ from src.models.metadata import (
 from src.common.config import get_settings, Settings
 from src.common.workspace_client import get_workspace_client
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.catalog import VolumeType
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Metadata"])
 
 FEATURE_ID = "data-domains"  # Use domain feature for now; can widen later
-
-
-def _ensure_volume_and_path(ws: WorkspaceClient, settings: Settings, base_dir: str) -> str:
-    # Unity Catalog volume name (catalog.schema.volume)
-    volume_name = f"{settings.DATABRICKS_CATALOG}.{settings.DATABRICKS_SCHEMA}.{settings.DATABRICKS_VOLUME}"
-    # Filesystem mount path for the volume
-    volume_fs_base = f"/Volumes/{settings.DATABRICKS_CATALOG}/{settings.DATABRICKS_SCHEMA}/{settings.DATABRICKS_VOLUME}"
-    try:
-        try:
-            # Ensure volume exists
-            ws.volumes.read(volume_name)
-        except Exception:
-            ws.volumes.create(
-                catalog_name=settings.DATABRICKS_CATALOG,
-                schema_name=settings.DATABRICKS_SCHEMA,
-                name=settings.DATABRICKS_VOLUME,
-                volume_type=VolumeType.MANAGED,
-            )
-    except Exception as e:
-        logger.error(f"Failed ensuring volume/path: {e!s}")
-        raise
-    # Return FS base path; caller appends base_dir/filename
-    return volume_fs_base
 
 
 # --- Rich Text ---
@@ -199,7 +175,7 @@ async def upload_document(
         
         # Ensure volume/path
         base_dir = f"uploads/{entity_type}/{entity_id}"
-        volume_fs_base = _ensure_volume_and_path(ws, settings, base_dir)
+        volume_fs_base = manager.ensure_volume_path(ws, settings, base_dir)
 
         # Read file content
         content = await file.read()

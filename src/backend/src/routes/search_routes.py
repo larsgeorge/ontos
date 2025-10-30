@@ -48,20 +48,10 @@ async def search_items(
     if not search_term:
         raise HTTPException(status_code=400, detail="Query parameter (search_term) is required")
     try:
-        # Determine team role override (applied impersonation) if any
-        try:
-            applied_override_id = settings_manager.get_applied_role_override_for_user(current_user.email)
-        except Exception:
-            applied_override_id = None
-        # Map override id to role NAME because AuthorizationManager expects role name for override
-        override_role_name = None
-        if applied_override_id:
-            try:
-                role = settings_manager.get_app_role(applied_override_id)
-                override_role_name = role.name if role else None
-            except Exception:
-                override_role_name = None
-        # Pass auth_manager, current_user and override role name to the search method
+        # Get role override name for user (if impersonation is active)
+        override_role_name = settings_manager.get_role_override_name_for_user(current_user.email)
+        
+        # Perform search with authorization filtering
         results = manager.search(search_term, auth_manager, current_user, team_role_override=override_role_name)
         return results
     except Exception as e:

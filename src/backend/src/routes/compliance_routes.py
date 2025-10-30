@@ -44,38 +44,9 @@ async def get_policies(
     db: DBSessionDep,
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
-    # Lazy-load YAML into DB if DB has no policies yet
+    """Get all compliance policies with stats and scores."""
     yaml_path = Path(__file__).parent.parent / 'data' / 'compliance.yaml'
-    try:
-        from sqlalchemy import func
-        count = db.query(CompliancePolicyDb).count()
-        if count == 0 and os.path.exists(yaml_path):
-            manager.load_from_yaml(db, str(yaml_path))
-    except Exception:
-        logger.exception("Failed preloading compliance YAML")
-
-    rows = manager.list_policies(db)
-    stats = manager.get_compliance_stats(db)
-    # No heavy projection here; return minimal fields akin to Pydantic model
-    return {
-        "policies": [
-            {
-                'id': r.id,
-                'name': r.name,
-                'description': r.description,
-                'rule': r.rule,
-                'created_at': r.created_at,
-                'updated_at': r.updated_at,
-                'is_active': r.is_active,
-                'severity': r.severity,
-                'category': r.category,
-                # compliance field resolved from latest run if present
-                'compliance': (manager.list_runs(db, policy_id=r.id, limit=1)[0].score if manager.list_runs(db, policy_id=r.id, limit=1) else 0.0),
-                'history': [],
-            } for r in rows
-        ],
-        "stats": stats
-    }
+    return manager.get_policies_with_stats(db, yaml_path=str(yaml_path))
 
 
 @router.get("/compliance/policies/{policy_id}")
@@ -84,39 +55,12 @@ async def get_policy(
     db: DBSessionDep,
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
-    r = manager.get_policy(db, policy_id)
-    if not r:
+    """Get a specific compliance policy with examples."""
+    yaml_path = Path(__file__).parent.parent / 'data' / 'compliance.yaml'
+    policy = manager.get_policy_with_examples(db, policy_id, yaml_path=str(yaml_path))
+    if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
-    # Try reading examples from YAML for this policy
-    examples = None
-    try:
-        yaml_path = Path(__file__).parent.parent / 'data' / 'compliance.yaml'
-        if os.path.exists(yaml_path):
-            import yaml as _yaml
-            with open(yaml_path) as _f:
-                _data = _yaml.safe_load(_f) or []
-                if isinstance(_data, list):
-                    for _item in _data:
-                        if isinstance(_item, dict) and str(_item.get('id')) == r.id:
-                            ex = _item.get('examples')
-                            if isinstance(ex, dict):
-                                examples = ex
-                            break
-    except Exception:
-        # Non-fatal; just omit examples on error
-        pass
-    return {
-        'id': r.id,
-        'name': r.name,
-        'description': r.description,
-        'rule': r.rule,
-        'created_at': r.created_at,
-        'updated_at': r.updated_at,
-        'is_active': r.is_active,
-        'severity': r.severity,
-        'category': r.category,
-        'examples': examples,
-    }
+    return policy
 
 
 @router.post("/compliance/policies")

@@ -86,47 +86,30 @@ def get_jobs_manager(request: Request):
 async def get_contracts(
     db: DBSessionDep,
     domain_id: Optional[str] = None,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
 ):
     """Get all data contracts with basic ODCS structure"""
     try:
-        if domain_id:
-            # Filter by domain ID
-            contracts = db.query(DataContractDb).filter(DataContractDb.domain_id == domain_id).all()
-        else:
-            # Get all contracts
-            contracts = data_contract_repo.get_multi(db)
-
-        return [
-            DataContractRead(
-                id=c.id,
-                name=c.name,
-                version=c.version,
-                status=c.status,
-                owner_team_id=c.owner_team_id,
-                kind=c.kind,
-                apiVersion=c.api_version,
-                tenant=c.tenant,
-                domainId=c.domain_id,  # Include domainId for frontend resolution
-                dataProduct=c.data_product,
-                created=c.created_at.isoformat() if c.created_at else None,
-                updated=c.updated_at.isoformat() if c.updated_at else None,
-            )
-            for c in contracts
-        ]
+        return manager.list_contracts_from_db(db, domain_id=domain_id)
     except Exception as e:
         error_msg = f"Error retrieving data contracts: {e!s}"
         logger.error(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
 
 @router.get('/data-contracts/{contract_id}', response_model=DataContractRead)
-async def get_contract(contract_id: str, db: DBSessionDep, _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))):
+async def get_contract(
+    contract_id: str,
+    db: DBSessionDep,
+    manager: DataContractsManager = Depends(get_data_contracts_manager),
+    _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
+):
     """Get a specific data contract with full ODCS structure"""
     contract = data_contract_repo.get_with_all(db, id=contract_id)
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
 
-    return _build_contract_read_from_db(db, contract)
+    return manager._build_contract_api_model(db, contract)
 
 
 # --- Lifecycle Transition Endpoints (minimal) ---
@@ -612,228 +595,6 @@ async def handle_deploy_request_response(
         raise HTTPException(status_code=500, detail="Failed to handle deploy")
 
 
-def _build_contract_read_from_db(db, db_contract) -> DataContractRead:
-    """Build DataContractRead from normalized database models"""
-    from src.models.data_contracts_api import ContractDescription, SchemaObject, ColumnProperty
-
-    # Resolve domain name from domain_id if available
-    domain_name = None
-    if db_contract.domain_id:
-        try:
-            from src.repositories.data_domain_repository import data_domain_repo
-            domain = data_domain_repo.get(db, id=db_contract.domain_id)
-            if domain:
-                domain_name = domain.name
-        except Exception as e:
-            logger.warning(f"Failed to resolve domain name for domain_id {db_contract.domain_id}: {e}")
-
-    # Build description
-    description = None
-    if db_contract.description_usage or db_contract.description_purpose or db_contract.description_limitations:
-        description = ContractDescription(
-            usage=db_contract.description_usage,
-            purpose=db_contract.description_purpose,
-            limitations=db_contract.description_limitations
-        )
-    
-    # Build schema objects
-    schema_objects = []
-    for schema_obj in db_contract.schema_objects:
-        properties = []
-        for prop in schema_obj.properties:
-            # Parse logical type options if available
-            options = {}
-            if prop.logical_type_options_json:
-                try:
-                    options = json.loads(prop.logical_type_options_json)
-                except:
-                    pass
-
-            prop_dict = {
-                'name': prop.name,
-                'logicalType': prop.logical_type or 'string',
-                'required': prop.required,
-                'unique': prop.unique,
-                'description': prop.transform_description,
-                'primaryKeyPosition': prop.primary_key_position,
-                'partitionKeyPosition': prop.partition_key_position,
-            }
-
-            # Add logical type options to property
-            prop_dict.update(options)
-
-            properties.append(ColumnProperty(**prop_dict))
-
-        schema_objects.append(SchemaObject(
-            name=schema_obj.name,
-            physicalName=schema_obj.physical_name,
-            properties=properties
-        ))
-
-    # Build team (ODCS v3.0.2 compliant)
-    team = []
-    if getattr(db_contract, 'team', None):
-        for member in db_contract.team:
-            entry = {
-                'username': member.username,
-                'role': member.role or 'member',
-            }
-            # Add optional fields if present
-            if getattr(member, 'description', None):
-                entry['description'] = member.description
-            if getattr(member, 'date_in', None):
-                entry['dateIn'] = member.date_in
-            if getattr(member, 'date_out', None):
-                entry['dateOut'] = member.date_out
-            if getattr(member, 'replaced_by_username', None):
-                entry['replacedByUsername'] = member.replaced_by_username
-            team.append(entry)
-
-    # Build support channels (legacy minimal)
-    support = None
-    if getattr(db_contract, 'support', None):
-        support = {}
-        for ch in db_contract.support:
-            if ch.channel and ch.url:
-                support[ch.channel] = ch.url
-
-    # Custom properties
-    custom_properties = {}
-    if getattr(db_contract, 'custom_properties', None):
-        for cp in db_contract.custom_properties:
-            custom_properties[cp.property] = cp.value
-
-    # SLA properties (flatten basic key/value)
-    sla = None
-    if getattr(db_contract, 'sla_properties', None):
-        sla = {}
-        for sp in db_contract.sla_properties:
-            if sp.property and sp.value is not None:
-                sla[sp.property] = sp.value
-
-    # Servers (full ODCS mapping)
-    servers = []
-    if getattr(db_contract, 'servers', None):
-        from src.models.data_contracts_api import ServerConfig
-        for s in db_contract.servers:
-            # Build properties dict from server properties
-            properties = {}
-            if getattr(s, 'properties', None):
-                for prop in s.properties:
-                    properties[prop.key] = prop.value
-
-            # Create ServerConfig object
-            server_config = ServerConfig(
-                server=s.server,
-                type=s.type,
-                description=s.description,
-                environment=s.environment,
-                host=properties.get('host'),
-                port=int(properties.get('port')) if properties.get('port') else None,
-                database=properties.get('database'),
-                schema=properties.get('schema'),
-                catalog=properties.get('catalog'),
-                project=properties.get('project'),
-                account=properties.get('account'),
-                region=properties.get('region'),
-                location=properties.get('location'),
-                properties={k: v for k, v in properties.items() if k not in ['host', 'port', 'database', 'schema', 'catalog', 'project', 'account', 'region', 'location']}
-            )
-            servers.append(server_config)
-
-    # Authoritative definitions
-    authoritative_definitions = []
-    if getattr(db_contract, 'authoritative_defs', None):
-        from src.models.data_contracts_api import AuthoritativeDefinition
-        for auth_def in db_contract.authoritative_defs:
-            authoritative_definitions.append(AuthoritativeDefinition(
-                url=auth_def.url,
-                type=auth_def.type
-            ))
-
-    # Quality rules
-    quality_rules = []
-    if hasattr(db_contract, 'schema_objects') and db_contract.schema_objects:
-        from src.models.data_contracts_api import QualityRule
-        for schema_obj in db_contract.schema_objects:
-            if hasattr(schema_obj, 'quality_checks') and schema_obj.quality_checks:
-                for check in schema_obj.quality_checks:
-                    quality_rules.append(QualityRule(
-                        name=check.name,
-                        description=check.description,
-                        level=check.level,
-                        dimension=check.dimension,
-                        business_impact=check.business_impact,
-                        severity=check.severity,
-                        type=check.type,
-                        method=check.method,
-                        schedule=check.schedule,
-                        scheduler=check.scheduler,
-                        unit=check.unit,
-                        tags=check.tags,
-                        rule=check.rule,
-                        query=check.query,
-                        engine=check.engine,
-                        implementation=check.implementation,
-                        must_be=check.must_be,
-                        must_not_be=check.must_not_be,
-                        must_be_gt=check.must_be_gt,
-                        must_be_ge=check.must_be_ge,
-                        must_be_lt=check.must_be_lt,
-                        must_be_le=check.must_be_le,
-                        must_be_between_min=check.must_be_between_min,
-                        must_be_between_max=check.must_be_between_max
-                    ))
-
-    # Load tags for the contract
-    tags = []
-    try:
-        from src.repositories.tags_repository import entity_tag_repo
-        assigned_tags = entity_tag_repo.get_assigned_tags_for_entity(
-            db,
-            entity_id=db_contract.id,
-            entity_type="data_contract"
-        )
-        tags = assigned_tags
-    except Exception as e:
-        logger.warning(f"Failed to load tags for contract {db_contract.id}: {e}")
-    
-    logger.info(f"[DEBUG SERIALIZE] Building response for contract {db_contract.id}")
-    logger.info(f"[DEBUG SERIALIZE] db_contract.owner_team_id = {db_contract.owner_team_id}")
-    
-    result = DataContractRead(
-        id=db_contract.id,
-        name=db_contract.name,
-        version=db_contract.version,
-        status=db_contract.status,
-        published=db_contract.published if hasattr(db_contract, 'published') else False,
-        owner_team_id=db_contract.owner_team_id,
-        kind=db_contract.kind,
-        apiVersion=db_contract.api_version,
-        tenant=db_contract.tenant,
-        domain=domain_name,  # Resolved domain name
-        domainId=db_contract.domain_id,  # Provide domain ID for frontend resolution
-        dataProduct=db_contract.data_product,
-        description=description,
-        tags=tags,  # Include tags in response
-        schema=schema_objects,
-        team=team,
-        support=support,
-        customProperties=custom_properties,
-        sla=sla,
-        servers=servers,
-        authoritativeDefinitions=authoritative_definitions,
-        qualityRules=quality_rules,
-        created=db_contract.created_at.isoformat() if db_contract.created_at else None,
-        updated=db_contract.updated_at.isoformat() if db_contract.updated_at else None,
-    )
-    
-    logger.info(f"[DEBUG SERIALIZE] result.owner_team_id = {result.owner_team_id}")
-    logger.info(f"[DEBUG SERIALIZE] result.model_dump() owner_team_id = {result.model_dump().get('owner_team_id')}")
-    
-    return result
-
-
 @router.post('/data-contracts', response_model=DataContractRead)
 async def create_contract(
     request: Request,
@@ -864,7 +625,7 @@ async def create_contract(
 
         # Load with relationships for response
         created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
-        return _build_contract_read_from_db(db, created_with_relations)
+        return manager._build_contract_api_model(db, created_with_relations)
 
     except ValueError as e:
         logger.error("Validation error creating contract: %s", e)
@@ -946,7 +707,7 @@ async def update_contract(
 
         # Load with relationships for full response
         updated_with_relations = data_contract_repo.get_with_all(db, id=contract_id)
-        return _build_contract_read_from_db(db, updated_with_relations)
+        return manager._build_contract_api_model(db, updated_with_relations)
 
     except ValueError as e:
         logger.error("Validation error updating contract %s: %s", contract_id, e)
@@ -1073,7 +834,7 @@ async def upload_contract(
 
         # Load with relationships for response
         created_with_relations = data_contract_repo.get_with_all(db, id=created.id)
-        return _build_contract_read_from_db(db, created_with_relations)
+        return manager._build_contract_api_model(db, created_with_relations)
 
     except ValueError as e:
         logger.error("Validation error uploading contract: %s", e)

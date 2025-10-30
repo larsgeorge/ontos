@@ -10,8 +10,94 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 class EntitlementsManager:
-    def __init__(self):
+    def __init__(self, yaml_path: Optional[str] = None):
+        """Initialize the entitlements manager.
+
+        Args:
+            yaml_path: Optional path to YAML file to load. If None, attempts to load
+                      from default location (src/backend/src/data/entitlements.yaml)
+        """
         self._personas: Dict[str, Persona] = {}
+        self._yaml_path: Optional[str] = None
+
+        # Auto-load from YAML if path provided or default exists
+        if yaml_path:
+            self._yaml_path = yaml_path
+            self._load_yaml_file(yaml_path)
+        else:
+            # Try default location
+            from pathlib import Path
+            import os
+            default_path = Path(__file__).parent.parent / 'data' / 'entitlements.yaml'
+            if os.path.exists(default_path):
+                self._yaml_path = str(default_path)
+                self._load_yaml_file(str(default_path))
+
+    def _load_yaml_file(self, yaml_path: str):
+        """Internal helper to load YAML file during initialization."""
+        try:
+            success = self.load_from_yaml(yaml_path)
+            if success:
+                logger.info(f"Successfully loaded entitlements data from {yaml_path}")
+            else:
+                logger.warning(f"Failed to load entitlements data from {yaml_path}")
+        except Exception as e:
+            logger.error(f"Error loading entitlements data from {yaml_path}: {e}")
+
+    def _persist(self):
+        """Auto-persist to YAML if path is configured."""
+        if self._yaml_path:
+            try:
+                self.save_to_yaml(self._yaml_path)
+                logger.info(f"Saved updated entitlements data to {self._yaml_path}")
+            except Exception as e:
+                logger.warning(f"Could not save updated data to YAML: {e}")
+
+    def _format_persona(self, persona: Persona) -> Dict[str, Any]:
+        """Format a Persona object as an API-ready dict.
+
+        Args:
+            persona: Persona object to format
+
+        Returns:
+            Dict with formatted timestamps and serialized privileges
+        """
+        return {
+            'id': persona.id,
+            'name': persona.name,
+            'description': persona.description,
+            'groups': persona.groups,
+            'created_at': persona.created_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            'updated_at': persona.updated_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            'privileges': [
+                {
+                    'securable_id': priv.securable_id,
+                    'securable_type': priv.securable_type,
+                    'permission': priv.permission
+                } for priv in persona.privileges
+            ]
+        }
+
+    def get_personas_formatted(self) -> List[Dict[str, Any]]:
+        """Get all personas formatted for API response.
+
+        Returns:
+            List of formatted persona dicts
+        """
+        personas = self.list_personas()
+        return [self._format_persona(p) for p in personas]
+
+    def get_persona_formatted(self, persona_id: str) -> Optional[Dict[str, Any]]:
+        """Get a specific persona formatted for API response.
+
+        Args:
+            persona_id: Persona ID to retrieve
+
+        Returns:
+            Formatted persona dict or None if not found
+        """
+        persona = self.get_persona(persona_id)
+        return self._format_persona(persona) if persona else None
 
     def create_persona(self,
                       name: str,
@@ -43,6 +129,7 @@ class EntitlementsManager:
         )
 
         self._personas[persona_id] = persona
+        self._persist()  # Auto-save to YAML
         return persona
 
     def get_persona(self, persona_id: str) -> Optional[Persona]:
@@ -70,12 +157,14 @@ class EntitlementsManager:
             persona.groups = groups
 
         persona.updated_at = datetime.utcnow()
+        self._persist()  # Auto-save to YAML
         return persona
 
     def delete_persona(self, persona_id: str) -> bool:
         """Delete a persona"""
         if persona_id in self._personas:
             del self._personas[persona_id]
+            self._persist()  # Auto-save to YAML
             return True
         return False
 
@@ -90,6 +179,7 @@ class EntitlementsManager:
             if priv.securable_id == securable_id:
                 priv.permission = permission
                 persona.updated_at = datetime.utcnow()
+                self._persist()  # Auto-save to YAML
                 return persona
 
         # Add new privilege
@@ -100,6 +190,7 @@ class EntitlementsManager:
         ))
 
         persona.updated_at = datetime.utcnow()
+        self._persist()  # Auto-save to YAML
         return persona
 
     def remove_privilege(self, persona_id: str, securable_id: str) -> Optional[Persona]:
@@ -111,6 +202,7 @@ class EntitlementsManager:
         # Filter out the privilege to remove
         persona.privileges = [p for p in persona.privileges if p.securable_id != securable_id]
         persona.updated_at = datetime.utcnow()
+        self._persist()  # Auto-save to YAML
         return persona
 
     def update_persona_groups(self, persona_id: str, groups: List[str]) -> Persona:
@@ -121,6 +213,7 @@ class EntitlementsManager:
         persona = self._personas[persona_id]
         persona.groups = groups
         persona.updated_at = datetime.now()
+        self._persist()  # Auto-save to YAML
         return persona
 
     def load_from_yaml(self, file_path: str) -> bool:

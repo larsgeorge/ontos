@@ -3,10 +3,6 @@ from src.common.config import Settings, get_settings
 from src.common.workspace_client import get_workspace_client, WorkspaceClient
 from src.models.estate import Estate, CloudType, SyncStatus
 from src.controller.estate_manager import EstateManager
-import os
-from pathlib import Path
-import yaml
-from datetime import datetime
 
 # Configure logging
 from src.common.logging import get_logger
@@ -15,19 +11,11 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["estates"])
 
 def get_estate_manager(client: WorkspaceClient = Depends(get_workspace_client), settings: Settings = Depends(get_settings)) -> EstateManager:
-    logger.info("Getting estate manager")
-    manager = EstateManager(client, settings)
-
-    # Check for YAML file in data directory
-    yaml_path = Path(__file__).parent.parent / 'data' / 'estates.yaml'
-    if os.path.exists(yaml_path):
-        try:
-            manager.load_from_yaml(yaml_path)
-            logger.info(f"Successfully loaded estates from {yaml_path}")
-        except Exception as e:
-            logger.exception(f"Error loading estates from YAML: {e!s}")
-
-    return manager
+    """Dependency provider for EstateManager.
+    
+    Manager auto-loads estates from YAML if file exists in data/estates.yaml.
+    """
+    return EstateManager(client, settings)
 
 @router.get("/estates", response_model=list[Estate])
 async def list_estates(estate_manager: EstateManager = Depends(get_estate_manager)):

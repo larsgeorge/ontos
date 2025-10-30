@@ -18,6 +18,7 @@ from src.controller.data_contracts_manager import DataContractsManager
 from src.controller.semantic_models_manager import SemanticModelsManager
 from src.controller.search_manager import SearchManager
 from src.controller.tags_manager import TagsManager # Import TagsManager
+from src.controller.workspace_manager import WorkspaceManager # Import WorkspaceManager
 
 # Import base dependencies
 from src.common.database import get_session_factory # Import the factory function
@@ -41,6 +42,7 @@ from src.common.manager_dependencies import (
     get_data_contracts_manager,
     get_semantic_models_manager,
     get_search_manager,
+    get_workspace_manager,
 )
 # Import workspace client getter separately as it might be structured differently
 from src.common.workspace_client import get_workspace_client # Added
@@ -106,6 +108,7 @@ DataDomainManagerDep = Annotated[DataDomainManager, Depends(get_data_domain_mana
 DataContractsManagerDep = Annotated[DataContractsManager, Depends(get_data_contracts_manager)]
 SemanticModelsManagerDep = Annotated[SemanticModelsManager, Depends(get_semantic_models_manager)]
 SearchManagerDep = Annotated[SearchManager, Depends(get_search_manager)]
+WorkspaceManagerDep = Annotated[WorkspaceManager, Depends(get_workspace_manager)]
 
 # Permission Checker Dependency
 PermissionCheckerDep = AuthorizationManagerDep 

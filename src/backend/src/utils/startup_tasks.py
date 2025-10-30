@@ -142,6 +142,11 @@ def initialize_managers(app: FastAPI):
         app.state.authorization_manager = AuthorizationManager(
             settings_manager=app.state.settings_manager 
         )
+        
+        # Instantiate WorkspaceManager for workspace asset search
+        from src.controller.workspace_manager import WorkspaceManager
+        app.state.workspace_manager = WorkspaceManager(ws_client=ws_client)
+        logger.info("WorkspaceManager initialized.")
         app.state.notifications_manager = NotificationsManager(settings_manager=app.state.settings_manager)
         # Back-reference for progress notifications
         app.state.settings_manager.set_notifications_manager(app.state.notifications_manager)

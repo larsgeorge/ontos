@@ -225,6 +225,104 @@ class ComplianceManager:
             "critical_issues": critical_issues,
         }
 
+    def get_policies_with_stats(self, db: Session, yaml_path: Optional[str] = None) -> Dict:
+        """Get all policies with compliance stats and scores.
+        
+        Args:
+            db: Database session
+            yaml_path: Optional path to YAML file for lazy loading
+            
+        Returns:
+            Dict with 'policies' list and 'stats' dict
+        """
+        # Lazy-load YAML into DB if DB has no policies yet
+        if yaml_path:
+            try:
+                from pathlib import Path
+                import os
+                count = db.query(CompliancePolicyDb).count()
+                if count == 0 and os.path.exists(yaml_path):
+                    self.load_from_yaml(db, yaml_path)
+            except Exception as e:
+                logger.exception(f"Failed preloading compliance YAML: {e}")
+        
+        rows = self.list_policies(db)
+        stats = self.get_compliance_stats(db)
+        
+        # Format policies with compliance scores
+        policies = []
+        for r in rows:
+            # Get latest run score for this policy
+            runs = compliance_run_repo.list_for_policy(db, policy_id=r.id, limit=1)
+            compliance_score = runs[0].score if runs else 0.0
+            
+            policies.append({
+                'id': r.id,
+                'name': r.name,
+                'description': r.description,
+                'rule': r.rule,
+                'created_at': r.created_at,
+                'updated_at': r.updated_at,
+                'is_active': r.is_active,
+                'severity': r.severity,
+                'category': r.category,
+                'compliance': compliance_score,
+                'history': [],
+            })
+        
+        return {
+            "policies": policies,
+            "stats": stats
+        }
+    
+    def get_policy_with_examples(self, db: Session, policy_id: str, yaml_path: Optional[str] = None) -> Optional[Dict]:
+        """Get a specific policy with examples from YAML.
+        
+        Args:
+            db: Database session
+            policy_id: Policy ID to retrieve
+            yaml_path: Optional path to YAML file containing examples
+            
+        Returns:
+            Dict with policy details and examples, or None if not found
+        """
+        r = self.get_policy(db, policy_id)
+        if not r:
+            return None
+        
+        # Try reading examples from YAML for this policy
+        examples = None
+        if yaml_path:
+            try:
+                from pathlib import Path
+                import os
+                if os.path.exists(yaml_path):
+                    with open(yaml_path) as _f:
+                        _data = yaml.safe_load(_f) or []
+                        if isinstance(_data, list):
+                            for _item in _data:
+                                if isinstance(_item, dict) and str(_item.get('id')) == r.id:
+                                    ex = _item.get('examples')
+                                    if isinstance(ex, dict):
+                                        examples = ex
+                                    break
+            except Exception as e:
+                # Non-fatal; just omit examples on error
+                logger.debug(f"Could not load examples for policy {policy_id}: {e}")
+        
+        return {
+            'id': r.id,
+            'name': r.name,
+            'description': r.description,
+            'rule': r.rule,
+            'created_at': r.created_at,
+            'updated_at': r.updated_at,
+            'is_active': r.is_active,
+            'severity': r.severity,
+            'category': r.category,
+            'examples': examples,
+        }
+
     def get_compliance_trend(self, db: Session, days: int = 30) -> List[Dict[str, float]]:
         end = datetime.utcnow().date()
         start = end - timedelta(days=days - 1)

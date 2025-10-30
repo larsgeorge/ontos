@@ -18,6 +18,7 @@ from src.common.unity_catalog_utils import (
     create_table_safe,
     ensure_catalog_and_schema_exist,
 )
+from src.controller.self_service_manager import SelfServiceManager
 from src.db_models.compliance import CompliancePolicyDb
 from src.repositories.teams_repository import team_repo
 from src.repositories.projects_repository import project_repo
@@ -33,6 +34,9 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["self-service"])
 
 FEATURE_ID = "data-contracts"  # Reuse data-contracts feature for RW permission
+
+# Initialize manager
+self_service_manager = SelfServiceManager()
 
 
 def _username_slug(email: Optional[str]) -> str:
@@ -89,58 +93,6 @@ def _load_compliance_mapping() -> Dict[str, Any]:
         return {}
 
 
-def _apply_autofix(obj_type: str, obj: Dict[str, Any], mapping: Dict[str, Any], current_user_email: Optional[str], project: Optional[ProjectDb]) -> Dict[str, Any]:
-    rules = mapping.get(obj_type, {}) if isinstance(mapping, dict) else {}
-    required_tags = rules.get('required_tags', {}) if isinstance(rules, dict) else {}
-    if not required_tags:
-        return obj
-    tags = dict(obj.get('tags') or {})
-    for key, val in required_tags.items():
-        if val == 'from_user' and current_user_email:
-            tags.setdefault(key, current_user_email)
-        elif val == 'from_project' and project is not None:
-            tags.setdefault(key, getattr(project, 'name', None) or getattr(project, 'title', None) or project.id)
-        elif isinstance(val, str):
-            tags.setdefault(key, val)
-    if tags:
-        obj['tags'] = tags
-    return obj
-
-
-def _eval_policies(db, obj: Dict[str, Any], policy_ids_or_slugs: List[str]) -> Tuple[bool, List[Dict[str, Any]]]:
-    """Evaluate a list of policies against an object.
-    Returns (all_passed, results[])
-    """
-    from src.controller.compliance_manager import ComplianceManager
-    from src.common.compliance_dsl import evaluate_rule_on_object
-
-    results: List[Dict[str, Any]] = []
-    all_passed = True
-
-    # Map input identifiers to policies (try id first, then slug, then name)
-    for pid in policy_ids_or_slugs:
-        policy: Optional[CompliancePolicyDb] = None
-        if not pid:
-            continue
-        # Try by primary key id
-        policy = db.get(CompliancePolicyDb, pid)
-        if policy is None:
-            # Try by slug or name
-            try:
-                q = db.query(CompliancePolicyDb).filter((CompliancePolicyDb.slug == pid) | (CompliancePolicyDb.name == pid))
-                policy = q.first()
-            except Exception:
-                policy = None
-        if policy is None:
-            results.append({"policy": pid, "passed": False, "message": "Policy not found"})
-            all_passed = False
-            continue
-
-        passed, message = evaluate_rule_on_object(policy.rule, obj)  # type: ignore[name-defined]
-        results.append({"policy": policy.slug or policy.id, "name": policy.name, "passed": bool(passed), "message": message})
-        all_passed = all_passed and bool(passed)
-
-    return all_passed, results
 
 
 @router.post('/self-service/bootstrap')
@@ -259,8 +211,8 @@ async def self_service_create(
             
             obj: Dict[str, Any] = {'type': 'catalog', 'name': requested_catalog, 'tags': payload.get('tags') or {}}
             if auto_fix:
-                obj = _apply_autofix('catalog', obj, mapping, getattr(current_user, 'email', None), project)
-            all_passed, res = _eval_policies(db, obj, list(mapping.get('catalog', {}).get('policies', [])) if isinstance(mapping.get('catalog'), dict) else [])
+                obj = self_service_manager.apply_autofix('catalog', obj, mapping, getattr(current_user, 'email', None), project)
+            all_passed, res = self_service_manager.evaluate_policies(db, obj, list(mapping.get('catalog', {}).get('policies', [])) if isinstance(mapping.get('catalog'), dict) else [])
             compliance_results.extend(res)
             # Enforce sandbox allowlist for catalog creation
             if not _is_sandbox_allowed(get_settings(), requested_catalog, requested_schema or (get_settings().sandbox_default_schema or 'sandbox')):
@@ -286,8 +238,8 @@ async def self_service_create(
             
             obj = {'type': 'schema', 'name': requested_schema, 'catalog': requested_catalog, 'tags': payload.get('tags') or {}}
             if auto_fix:
-                obj = _apply_autofix('schema', obj, mapping, getattr(current_user, 'email', None), project)
-            all_passed, res = _eval_policies(db, obj, list(mapping.get('schema', {}).get('policies', [])) if isinstance(mapping.get('schema'), dict) else [])
+                obj = self_service_manager.apply_autofix('schema', obj, mapping, getattr(current_user, 'email', None), project)
+            all_passed, res = self_service_manager.evaluate_policies(db, obj, list(mapping.get('schema', {}).get('policies', [])) if isinstance(mapping.get('schema'), dict) else [])
             compliance_results.extend(res)
             # Enforce sandbox allowlist for schema creation
             if not _is_sandbox_allowed(get_settings(), requested_catalog, requested_schema):
@@ -317,8 +269,8 @@ async def self_service_create(
         # Compliance for table
         obj = {'type': 'table', 'name': table_name, 'catalog': requested_catalog, 'schema': requested_schema, 'tags': (table_spec.get('tags') or {})}
         if auto_fix:
-            obj = _apply_autofix('table', obj, mapping, getattr(current_user, 'email', None), project)
-        all_passed, res = _eval_policies(db, obj, list(mapping.get('table', {}).get('policies', [])) if isinstance(mapping.get('table'), dict) else [])
+            obj = self_service_manager.apply_autofix('table', obj, mapping, getattr(current_user, 'email', None), project)
+        all_passed, res = self_service_manager.evaluate_policies(db, obj, list(mapping.get('table', {}).get('policies', [])) if isinstance(mapping.get('table'), dict) else [])
         compliance_results.extend(res)
 
         # Enforce sandbox allowlist for table creation

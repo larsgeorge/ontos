@@ -1,8 +1,11 @@
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
+from databricks.sdk import WorkspaceClient
+from databricks.sdk.service.catalog import VolumeType
 
 from src.common.logging import get_logger
+from src.common.config import Settings
 from src.models.metadata import (
     RichText, RichTextCreate, RichTextUpdate,
     Link, LinkCreate, LinkUpdate,
@@ -39,6 +42,48 @@ class MetadataManager:
         )
         db.add(entry)
         db.commit()
+
+    # --- Volume Management ---
+    
+    def ensure_volume_path(self, ws: WorkspaceClient, settings: Settings, base_dir: str) -> str:
+        """Ensure Unity Catalog volume exists and return filesystem path.
+        
+        Args:
+            ws: WorkspaceClient for SDK calls
+            settings: Application settings with catalog/schema/volume config
+            base_dir: Base directory name within volume (not used in path construction)
+            
+        Returns:
+            Filesystem mount path for the volume (e.g., /Volumes/catalog/schema/volume)
+            
+        Raises:
+            Exception: If volume creation or access fails
+        """
+        # Unity Catalog volume name (catalog.schema.volume)
+        volume_name = f"{settings.DATABRICKS_CATALOG}.{settings.DATABRICKS_SCHEMA}.{settings.DATABRICKS_VOLUME}"
+        # Filesystem mount path for the volume
+        volume_fs_base = f"/Volumes/{settings.DATABRICKS_CATALOG}/{settings.DATABRICKS_SCHEMA}/{settings.DATABRICKS_VOLUME}"
+        
+        try:
+            try:
+                # Ensure volume exists
+                ws.volumes.read(volume_name)
+                logger.debug(f"Volume {volume_name} already exists")
+            except Exception as e:
+                logger.info(f"Creating volume {volume_name}")
+                ws.volumes.create(
+                    catalog_name=settings.DATABRICKS_CATALOG,
+                    schema_name=settings.DATABRICKS_SCHEMA,
+                    name=settings.DATABRICKS_VOLUME,
+                    volume_type=VolumeType.MANAGED,
+                )
+                logger.info(f"Successfully created volume {volume_name}")
+        except Exception as e:
+            logger.error(f"Failed ensuring volume/path {volume_name}: {e!s}")
+            raise
+        
+        # Return FS base path; caller appends base_dir/filename
+        return volume_fs_base
 
     # --- Rich Text ---
     def create_rich_text(self, db: Session, *, data: RichTextCreate, user_email: Optional[str]) -> RichText:

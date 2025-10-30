@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..common.workspace_client import get_workspace_client
 from ..controller.settings_manager import SettingsManager
-from ..models.settings import AppRole, AppRoleCreate
+from ..models.settings import AppRole, AppRoleCreate, JobCluster
 from ..common.database import get_db
 from ..common.dependencies import (
     get_settings_manager,
@@ -113,19 +113,11 @@ async def health_check(manager: SettingsManager = Depends(get_settings_manager))
         logger.error(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
 
-@router.get('/settings/job-clusters')
+@router.get('/settings/job-clusters', response_model=List[JobCluster])
 async def list_job_clusters(manager: SettingsManager = Depends(get_settings_manager)):
     """List all available job clusters"""
     try:
-        clusters = manager.get_job_clusters()
-        return [{
-            'id': cluster.id,
-            'name': cluster.name,
-            'node_type_id': cluster.node_type_id,
-            'autoscale': cluster.autoscale,
-            'min_workers': cluster.min_workers,
-            'max_workers': cluster.max_workers
-        } for cluster in clusters]
+        return manager.get_job_clusters()
     except Exception as e:
         logger.error("Error fetching job clusters", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to fetch job clusters")
@@ -288,96 +280,30 @@ async def delete_role(
             details=details
         )
 
-# --- Role Request Handling --- 
+# --- Role Request Handling ---
 @router.post("/settings/roles/handle-request", status_code=status.HTTP_200_OK)
 async def handle_role_request_decision(
     request_data: HandleRoleRequest = Body(...),
-    db: Session = Depends(get_db), # Inject DB Session
+    db: Session = Depends(get_db),
     settings_manager: SettingsManager = Depends(get_settings_manager),
     notifications_manager: NotificationsManager = Depends(get_notifications_manager)
 ):
     """Handles the admin decision (approve/deny) for a role access request."""
-    logger.info(f"Handling role request decision for user '{request_data.requester_email}' and role ID '{request_data.role_id}'. Approved: {request_data.approved}")
-
-    # 1. Get Role Name (for notification)
     try:
-        # Pass db session if settings_manager methods require it (assuming get_app_role does)
-        role = settings_manager.get_app_role(request_data.role_id)
-        if not role:
-             logger.error(f"Role ID '{request_data.role_id}' not found while handling decision.")
-             raise HTTPException(status_code=404, detail=f"Role with ID '{request_data.role_id}' not found.")
-        role_name = role.name
+        # Delegate to manager
+        result = settings_manager.handle_role_request_decision(
+            db=db,
+            request_data=request_data,
+            notifications_manager=notifications_manager
+        )
+        return result
+    except ValueError as e:
+        # Role not found
+        logger.error(f"Role validation error: {e}")
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f"Error retrieving role {request_data.role_id} during decision handling: {e}")
-        raise HTTPException(status_code=500, detail="Error retrieving role details.")
-
-    # 2. TODO: Implement actual access grant/modification logic here if needed
-    #    This might involve: 
-    #    - Calling SettingsManager to update AppRoleDb.assigned_groups (if groups are managed directly)
-    #    - Triggering an external workflow (e.g., ITSM ticket, Databricks SCIM API call)
-    #    - For now, we only send the notification.
-    if request_data.approved:
-        logger.info(f"Role request APPROVED for {request_data.requester_email} (Role: {role_name}). (Actual group assignment logic is currently skipped). ")
-        # Example (if managing groups directly):
-        # try:
-        #    settings_manager.add_user_group_to_role(request_data.role_id, request_data.requester_group) # Need user's group?
-        # except ValueError as e:
-        #    raise HTTPException(status_code=400, detail=str(e))
-    else:
-        logger.info(f"Role request DENIED for {request_data.requester_email} (Role: {role_name}).")
-
-    # 3. Create notification for the requester
-    try:
-        decision_title = f"Role Request { 'Approved' if request_data.approved else 'Denied' }"
-        decision_subtitle = f"Role: {role_name}"
-        decision_description = (
-            f"Your request for the role '{role_name}' has been { 'approved' if request_data.approved else 'denied' }."
-            + (f"\n\nAdmin Message: {request_data.message}" if request_data.message else "")
-        )
-        notification_type = NotificationType.SUCCESS if request_data.approved else NotificationType.WARNING
-
-        # Provide placeholder ID and created_at for Pydantic validation
-        placeholder_id = str(uuid.uuid4())
-        now = datetime.utcnow()
-        
-        requester_notification = Notification(
-            id=placeholder_id,
-            created_at=now,
-            type=notification_type,
-            title=decision_title,
-            subtitle=decision_subtitle,
-            description=decision_description,
-            recipient=request_data.requester_email,
-            can_delete=True
-        )
-        # Pass DB session to create_notification
-        notifications_manager.create_notification(db=db, notification=requester_notification)
-        logger.info(f"Sent decision notification to requester '{request_data.requester_email}'")
-
-        # 4. Mark the original admin notification as handled (read)
-        handled_payload = {
-            "requester_email": request_data.requester_email,
-            "role_id": request_data.role_id
-        }
-        # Pass DB session to handle_actionable_notification
-        handled = notifications_manager.handle_actionable_notification(
-            db=db, # Pass the session
-            action_type="handle_role_request",
-            action_payload=handled_payload
-        )
-        if handled:
-             logger.info("Marked original admin notification for role request as handled.")
-        else:
-             logger.warning("Could not find the original admin notification to mark as handled.")
-
-        # Commit happens within handle_actionable_notification now, no explicit commit needed here
-        # db.commit() # REMOVE this if commit is in handle_actionable_notification
-        return {"message": f"Role request decision processed successfully for {request_data.requester_email}."}
-
-    except Exception as e:
-        logger.error(f"Error during notification handling for role request (Role: {request_data.role_id}, User: {request_data.requester_email}): {e}", exc_info=True)
-        db.rollback() # Rollback on any exception during this block
-        raise HTTPException(status_code=500, detail="Failed to send decision notification due to an internal error.")
+        logger.error(f"Error handling role request decision: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to process role request decision due to an internal error.")
 
 # --- Registration --- 
 
@@ -425,60 +351,11 @@ async def save_compliance_mapping(
 
 # --- Documentation System ---
 
-def _get_docs_directory():
-    """Get the path to the documentation directory."""
-    from pathlib import Path
-    # Path navigates up from routes/settings_routes.py to src/docs
-    # __file__ = src/backend/src/routes/settings_routes.py
-    # .parent.parent.parent.parent = src/
-    return Path(__file__).parent.parent.parent.parent / "docs"
-
-def _load_docs_registry():
-    """Load the documentation registry from docs.yaml."""
-    import yaml
-    from pathlib import Path
-    
-    docs_dir = _get_docs_directory()
-    registry_path = docs_dir / "docs.yaml"
-    
-    if not registry_path.exists():
-        logger.error(f"Documentation registry not found at: {registry_path}")
-        return {}
-    
-    try:
-        with open(registry_path, 'r', encoding='utf-8') as f:
-            data = yaml.safe_load(f)
-            return data.get('documents', {})
-    except Exception as e:
-        logger.error(f"Error loading documentation registry: {e!s}")
-        return {}
-
-def _get_available_docs():
-    """Get all available markdown documentation files from registry."""
-    docs_dir = _get_docs_directory()
-    
-    # Load document definitions from YAML
-    available_docs = _load_docs_registry()
-    
-    # Validate that all files exist and add resolved paths
-    result = {}
-    for doc_key, doc_info in available_docs.items():
-        doc_path = docs_dir / doc_info["file"]
-        if doc_path.exists():
-            result[doc_key] = {
-                **doc_info,
-                "path": str(doc_path.resolve())
-            }
-        else:
-            logger.warning(f"Documentation file '{doc_info['file']}' not found at: {doc_path}")
-    
-    return result
-
 @router.get('/user-docs')
-async def list_available_docs():
+async def list_available_docs(manager: SettingsManager = Depends(get_settings_manager)):
     """List all available user documentation files"""
     try:
-        docs = _get_available_docs()
+        docs = manager.get_available_docs()
         # Return without the internal 'path' field
         result = {}
         for doc_key, doc_info in docs.items():
@@ -497,110 +374,31 @@ async def list_available_docs():
         raise HTTPException(status_code=500, detail="Failed to list documentation")
 
 @router.get('/user-docs/{doc_name}')
-async def get_documentation(doc_name: str):
+async def get_documentation(doc_name: str, manager: SettingsManager = Depends(get_settings_manager)):
     """Serve a specific user documentation file by name"""
-    from pathlib import Path
-    
     try:
-        available_docs = _get_available_docs()
-        
-        if doc_name not in available_docs:
-            logger.warning(f"Documentation '{doc_name}' not found. Available: {list(available_docs.keys())}")
-            raise HTTPException(
-                status_code=404, 
-                detail=f"Documentation '{doc_name}' not found. Available: {', '.join(available_docs.keys())}"
-            )
-        
-        doc_info = available_docs[doc_name]
-        doc_path = Path(doc_info["path"])
-        
-        logger.debug(f"Loading documentation '{doc_name}' from: {doc_path}")
-        
-        content = doc_path.read_text(encoding="utf-8")
-        logger.info(f"Successfully loaded '{doc_name}' ({len(content)} chars)")
-        
-        result = {
-            "name": doc_name,
-            "title": doc_info["title"],
-            "description": doc_info["description"],
-            "content": content
-        }
-        # Include optional category field if present
-        if "category" in doc_info:
-            result["category"] = doc_info["category"]
-        return result
-    except HTTPException:
-        raise
+        return manager.get_documentation_content(doc_name)
+    except ValueError as e:
+        # Doc not found in registry
+        logger.warning(f"Documentation not found: {e}")
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error("Error reading documentation '%s'", doc_name, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to read documentation")
 
 @router.get('/user-guide')
-async def get_user_guide():
+async def get_user_guide(manager: SettingsManager = Depends(get_settings_manager)):
     """Serve the USER-GUIDE.md content (alias for /user-docs/user-guide for backward compatibility)"""
-    return await get_documentation("user-guide")
+    return await get_documentation("user-guide", manager)
 
 
 # --- Database Schema ERD ---
 
 @router.get('/database-schema')
-async def get_database_schema():
+async def get_database_schema(manager: SettingsManager = Depends(get_settings_manager)):
     """Extract database schema from SQLAlchemy models for ERD visualization"""
     try:
-        from src.common.database import Base
-        
-        tables = []
-        relationships = []
-        
-        logger.info(f"Introspecting database schema. Found {len(Base.metadata.tables)} tables.")
-        
-        # Iterate through all tables in metadata
-        for table_name, table in Base.metadata.tables.items():
-            columns = []
-            
-            # Extract column information
-            for column in table.columns:
-                # Check if column has foreign keys
-                fk_info = None
-                if column.foreign_keys:
-                    fk = list(column.foreign_keys)[0]  # Get first FK if multiple
-                    fk_info = {
-                        'target_table': fk.column.table.name,
-                        'target_column': fk.column.name
-                    }
-                
-                columns.append({
-                    'name': column.name,
-                    'type': str(column.type),
-                    'primary_key': column.primary_key,
-                    'nullable': column.nullable,
-                    'foreign_key': fk_info
-                })
-            
-            tables.append({
-                'id': table_name,
-                'name': table_name,
-                'columns': columns
-            })
-            
-            # Extract foreign key relationships for edges
-            for fk_constraint in table.foreign_key_constraints:
-                # Get the referred table
-                referred_table = fk_constraint.referred_table.name
-                
-                relationships.append({
-                    'id': f"{table_name}_{referred_table}_{len(relationships)}",
-                    'source': table_name,
-                    'target': referred_table,
-                    'columns': list(fk_constraint.column_keys)
-                })
-        
-        logger.info(f"Schema introspection complete. Tables: {len(tables)}, Relationships: {len(relationships)}")
-        
-        return {
-            'tables': tables,
-            'relationships': relationships
-        }
+        return manager.extract_database_schema()
     except Exception as e:
         logger.error("Error extracting database schema", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to extract database schema")

@@ -172,6 +172,29 @@ class SettingsManager:
             return None
         return self._applied_role_overrides.get(user_email)
 
+    def get_role_override_name_for_user(self, user_email: Optional[str]) -> Optional[str]:
+        """Get the role name for a user's applied role override (impersonation).
+        
+        This combines getting the applied override ID and resolving it to a role name,
+        which is needed for authorization checks that expect role names.
+        
+        Args:
+            user_email: User's email address
+            
+        Returns:
+            Role name if user has an active override, None otherwise
+        """
+        try:
+            applied_override_id = self.get_applied_role_override_for_user(user_email)
+            if not applied_override_id:
+                return None
+                
+            role = self.get_app_role(applied_override_id)
+            return role.name if role else None
+        except Exception as e:
+            logger.warning(f"Error resolving role override for user {user_email}: {e}")
+            return None
+
     def get_feature_permissions_for_role_id(self, role_id: str) -> Dict[str, FeatureAccessLevel]:
         role = self.get_app_role(role_id)
         if not role:
@@ -626,6 +649,166 @@ class SettingsManager:
         #     )
         #     for cluster in clusters
         # ]
+
+    # --- Documentation Methods ---
+
+    def _get_docs_directory(self) -> 'Path':
+        """Get the path to the documentation directory."""
+        from pathlib import Path
+        # Navigate from settings_manager.py to docs/
+        # __file__ = src/backend/src/controller/settings_manager.py
+        # .parent.parent.parent.parent = src/
+        return Path(__file__).parent.parent.parent.parent / "docs"
+
+    def _load_docs_registry(self) -> Dict[str, Any]:
+        """Load the documentation registry from docs.yaml."""
+        import yaml
+
+        docs_dir = self._get_docs_directory()
+        registry_path = docs_dir / "docs.yaml"
+
+        if not registry_path.exists():
+            logger.error(f"Documentation registry not found at: {registry_path}")
+            return {}
+
+        try:
+            with open(registry_path, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+                return data.get('documents', {})
+        except Exception as e:
+            logger.error(f"Error loading documentation registry: {e}")
+            return {}
+
+    def get_available_docs(self) -> Dict[str, Dict[str, Any]]:
+        """Get all available markdown documentation files from registry.
+
+        Returns:
+            Dict mapping doc keys to metadata (title, description, file, path)
+        """
+        docs_dir = self._get_docs_directory()
+
+        # Load document definitions from YAML
+        available_docs = self._load_docs_registry()
+
+        # Validate that all files exist and add resolved paths
+        result = {}
+        for doc_key, doc_info in available_docs.items():
+            doc_path = docs_dir / doc_info["file"]
+            if doc_path.exists():
+                result[doc_key] = {
+                    **doc_info,
+                    "path": str(doc_path.resolve())
+                }
+            else:
+                logger.warning(f"Documentation file '{doc_info['file']}' not found at: {doc_path}")
+
+        return result
+
+    def get_documentation_content(self, doc_name: str) -> Dict[str, Any]:
+        """Get specific documentation file content by name.
+
+        Args:
+            doc_name: Documentation key from registry
+
+        Returns:
+            Dict with name, title, description, content, and optional category
+
+        Raises:
+            ValueError: If doc_name not found in registry
+            FileNotFoundError: If doc file doesn't exist
+        """
+        from pathlib import Path
+
+        available_docs = self.get_available_docs()
+
+        if doc_name not in available_docs:
+            raise ValueError(
+                f"Documentation '{doc_name}' not found. Available: {', '.join(available_docs.keys())}"
+            )
+
+        doc_info = available_docs[doc_name]
+        doc_path = Path(doc_info["path"])
+
+        logger.debug(f"Loading documentation '{doc_name}' from: {doc_path}")
+
+        try:
+            content = doc_path.read_text(encoding="utf-8")
+            logger.info(f"Successfully loaded '{doc_name}' ({len(content)} chars)")
+
+            result = {
+                "name": doc_name,
+                "title": doc_info["title"],
+                "description": doc_info["description"],
+                "content": content
+            }
+            # Include optional category field if present
+            if "category" in doc_info:
+                result["category"] = doc_info["category"]
+            return result
+        except Exception as e:
+            logger.error(f"Error reading documentation '{doc_name}': {e}")
+            raise
+
+    def extract_database_schema(self) -> Dict[str, Any]:
+        """Extract database schema from SQLAlchemy models for ERD visualization.
+
+        Returns:
+            Dict with 'tables' and 'relationships' keys for schema visualization
+        """
+        from src.common.database import Base
+
+        tables = []
+        relationships = []
+
+        logger.info(f"Introspecting database schema. Found {len(Base.metadata.tables)} tables.")
+
+        # Iterate through all tables in metadata
+        for table_name, table in Base.metadata.tables.items():
+            columns = []
+
+            # Extract column information
+            for column in table.columns:
+                # Check if column has foreign keys
+                fk_info = None
+                if column.foreign_keys:
+                    fk = list(column.foreign_keys)[0]  # Get first FK if multiple
+                    fk_info = {
+                        'target_table': fk.column.table.name,
+                        'target_column': fk.column.name
+                    }
+
+                columns.append({
+                    'name': column.name,
+                    'type': str(column.type),
+                    'primary_key': column.primary_key,
+                    'nullable': column.nullable,
+                    'foreign_key': fk_info
+                })
+
+            tables.append({
+                'id': table_name,
+                'name': table_name,
+                'columns': columns
+            })
+
+            # Extract foreign key relationships for edges
+            for fk_constraint in table.foreign_key_constraints:
+                # Get the referred table
+                referred_table = fk_constraint.referred_table.name
+
+                relationships.append({
+                    'id': f"{table_name}_{referred_table}_{len(relationships)}",
+                    'source': table_name,
+                    'target': referred_table,
+                    'columns': list(fk_constraint.column_keys)
+                })
+
+        logger.info(f"Schema introspection complete. Tables: {len(tables)}, Relationships: {len(relationships)}")
+
+        return {
+            'tables': tables,
+            'relationships': relationships
+        }
 
     def get_settings(self) -> dict:
         """Get current settings"""
@@ -1109,6 +1292,119 @@ class SettingsManager:
         except Exception as e:
             logger.error(f"Unexpected error deleting role {role_id}: {e}", exc_info=True)
             self._db.rollback()
+            raise
+
+    def handle_role_request_decision(
+        self,
+        db: Session,
+        request_data: 'HandleRoleRequest',
+        notifications_manager: 'NotificationsManager'
+    ) -> Dict[str, str]:
+        """Handle admin decision (approve/deny) for a role access request.
+
+        Manages the complete workflow:
+        - Validates role exists
+        - Logs approval/denial (TODO: actual group assignment logic)
+        - Creates notification for requester
+        - Marks original admin notification as handled
+
+        Args:
+            db: Database session
+            request_data: Request data with requester email, role_id, approved flag, optional message
+            notifications_manager: NotificationsManager instance for creating notifications
+
+        Returns:
+            Dict with success message
+
+        Raises:
+            ValueError: If role not found
+            Exception: For notification/database errors
+        """
+        from uuid import uuid4
+        from datetime import datetime
+        from ..models.notifications import Notification, NotificationType
+
+        # 1. Get Role Name (for notification)
+        role = self.get_app_role(request_data.role_id)
+        if not role:
+            raise ValueError(f"Role with ID '{request_data.role_id}' not found")
+
+        role_name = role.name
+        logger.info(
+            f"Handling role request decision for user '{request_data.requester_email}' "
+            f"and role '{role_name}'. Approved: {request_data.approved}"
+        )
+
+        # 2. TODO: Implement actual access grant/modification logic here if needed
+        #    This might involve:
+        #    - Updating AppRoleDb.assigned_groups (if groups are managed directly)
+        #    - Triggering an external workflow (e.g., ITSM ticket, Databricks SCIM API call)
+        #    - For now, we only send the notification.
+        if request_data.approved:
+            logger.info(
+                f"Role request APPROVED for {request_data.requester_email} (Role: {role_name}). "
+                f"(Actual group assignment logic is currently skipped)."
+            )
+            # Example (if managing groups directly):
+            # self.add_user_group_to_role(request_data.role_id, request_data.requester_group)
+        else:
+            logger.info(f"Role request DENIED for {request_data.requester_email} (Role: {role_name}).")
+
+        try:
+            # 3. Create notification for the requester
+            decision_title = f"Role Request {'Approved' if request_data.approved else 'Denied'}"
+            decision_subtitle = f"Role: {role_name}"
+            decision_description = (
+                f"Your request for the role '{role_name}' has been "
+                f"{'approved' if request_data.approved else 'denied'}."
+                + (f"\n\nAdmin Message: {request_data.message}" if request_data.message else "")
+            )
+            notification_type = NotificationType.SUCCESS if request_data.approved else NotificationType.WARNING
+
+            # Provide placeholder ID and created_at for Pydantic validation
+            placeholder_id = str(uuid4())
+            now = datetime.utcnow()
+
+            requester_notification = Notification(
+                id=placeholder_id,
+                created_at=now,
+                type=notification_type,
+                title=decision_title,
+                subtitle=decision_subtitle,
+                description=decision_description,
+                recipient=request_data.requester_email,
+                can_delete=True
+            )
+
+            notifications_manager.create_notification(db=db, notification=requester_notification)
+            logger.info(f"Sent decision notification to requester '{request_data.requester_email}'")
+
+            # 4. Mark the original admin notification as handled (read)
+            handled_payload = {
+                "requester_email": request_data.requester_email,
+                "role_id": request_data.role_id
+            }
+
+            handled = notifications_manager.handle_actionable_notification(
+                db=db,
+                action_type="handle_role_request",
+                action_payload=handled_payload
+            )
+
+            if handled:
+                logger.info("Marked original admin notification for role request as handled.")
+            else:
+                logger.warning("Could not find the original admin notification to mark as handled.")
+
+            return {"message": f"Role request decision processed successfully for {request_data.requester_email}."}
+
+        except Exception as e:
+            logger.error(
+                f"Error during notification handling for role request "
+                f"(Role: {request_data.role_id}, User: {request_data.requester_email}): {e}",
+                exc_info=True
+            )
+            db.rollback()
             raise
 
     # --- Methods related to workflows and jobs remain unchanged --- 
