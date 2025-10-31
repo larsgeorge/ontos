@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, Requ
 from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
-from src.common.dependencies import DBSessionDep, CurrentUserDep, get_tags_manager
+from src.common.dependencies import DBSessionDep, CurrentUserDep, get_tags_manager, AuditManagerDep, AuditCurrentUserDep
 from src.controller.tags_manager import TagsManager
 from src.models.users import UserInfo # For CurrentUserDep
 from src.models.tags import (
@@ -24,12 +24,43 @@ router = APIRouter(prefix="/api", tags=["Tags"])
 @router.post("/tags/namespaces", response_model=TagNamespace, status_code=status.HTTP_201_CREATED)
 async def create_tag_namespace(
     namespace_in: TagNamespaceCreate,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager)
 ):
-    logger.info(f"User '{current_user.email}' creating tag namespace: {namespace_in.name}")
-    return manager.create_namespace(db, namespace_in=namespace_in, user_email=current_user.email)
+    success = False
+    details = {
+        "params": {
+            "namespace_name": namespace_in.name,
+            "description": namespace_in.description
+        }
+    }
+
+    try:
+        logger.info(f"User '{current_user.email}' creating tag namespace: {namespace_in.name}")
+        result = manager.create_namespace(db, namespace_in=namespace_in, user_email=current_user.email)
+        success = True
+        details["namespace_id"] = str(result.id)
+        return result
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="tags",
+            action="CREATE",
+            success=success,
+            details=details
+        )
 
 @router.get("/tags/namespaces", response_model=List[TagNamespace])
 async def list_tag_namespaces(
@@ -55,38 +86,127 @@ async def get_tag_namespace(
 async def update_tag_namespace(
     namespace_id: UUID,
     namespace_in: TagNamespaceUpdate,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager)
 ):
-    logger.info(f"User '{current_user.email}' updating tag namespace ID: {namespace_id}")
-    updated_namespace = manager.update_namespace(db, namespace_id=namespace_id, namespace_in=namespace_in, user_email=current_user.email)
-    if not updated_namespace:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag namespace not found")
-    return updated_namespace
+    success = False
+    details = {
+        "params": {
+            "namespace_id": str(namespace_id),
+            "updates": namespace_in.dict(exclude_unset=True)
+        }
+    }
+
+    try:
+        logger.info(f"User '{current_user.email}' updating tag namespace ID: {namespace_id}")
+        updated_namespace = manager.update_namespace(db, namespace_id=namespace_id, namespace_in=namespace_in, user_email=current_user.email)
+        if not updated_namespace:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag namespace not found")
+        success = True
+        return updated_namespace
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="tags",
+            action="UPDATE",
+            success=success,
+            details=details
+        )
 
 @router.delete("/tags/namespaces/{namespace_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_tag_namespace(
     namespace_id: UUID,
+    request: Request,
     db: DBSessionDep,
-    current_user: CurrentUserDep, # For logging/audit
+    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager)
 ):
-    logger.info(f"User '{current_user.email}' deleting tag namespace ID: {namespace_id}")
-    if not manager.delete_namespace(db, namespace_id=namespace_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag namespace not found or could not be deleted")
-    return
+    success = False
+    details = {
+        "params": {
+            "namespace_id": str(namespace_id)
+        }
+    }
+
+    try:
+        logger.info(f"User '{current_user.email}' deleting tag namespace ID: {namespace_id}")
+        if not manager.delete_namespace(db, namespace_id=namespace_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag namespace not found or could not be deleted")
+        success = True
+        return
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="tags",
+            action="DELETE",
+            success=success,
+            details=details
+        )
 
 # --- Tag Routes ---
 @router.post("/tags", response_model=Tag, status_code=status.HTTP_201_CREATED)
 async def create_tag(
     tag_in: TagCreate,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager)
 ):
-    logger.info(f"User '{current_user.email}' creating tag: {tag_in.name} in namespace {tag_in.namespace_name or tag_in.namespace_id or 'default'}")
-    return manager.create_tag(db, tag_in=tag_in, user_email=current_user.email)
+    success = False
+    details = {
+        "params": {
+            "tag_name": tag_in.name,
+            "namespace": tag_in.namespace_name or str(tag_in.namespace_id) if tag_in.namespace_id else "default",
+            "parent_id": str(tag_in.parent_id) if tag_in.parent_id else None
+        }
+    }
+
+    try:
+        logger.info(f"User '{current_user.email}' creating tag: {tag_in.name} in namespace {tag_in.namespace_name or tag_in.namespace_id or 'default'}")
+        result = manager.create_tag(db, tag_in=tag_in, user_email=current_user.email)
+        success = True
+        details["tag_id"] = str(result.id)
+        return result
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="tags",
+            action="CREATE",
+            success=success,
+            details=details
+        )
 
 @router.get("/tags", response_model=List[Tag])
 async def list_tags(
@@ -131,40 +251,128 @@ async def get_tag_by_fully_qualified_name_route(
 async def update_tag(
     tag_id: UUID,
     tag_in: TagUpdate,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager)
 ):
-    logger.info(f"User '{current_user.email}' updating tag ID: {tag_id}")
-    updated_tag = manager.update_tag(db, tag_id=tag_id, tag_in=tag_in, user_email=current_user.email)
-    if not updated_tag:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
-    return updated_tag
+    success = False
+    details = {
+        "params": {
+            "tag_id": str(tag_id),
+            "updates": tag_in.dict(exclude_unset=True)
+        }
+    }
+
+    try:
+        logger.info(f"User '{current_user.email}' updating tag ID: {tag_id}")
+        updated_tag = manager.update_tag(db, tag_id=tag_id, tag_in=tag_in, user_email=current_user.email)
+        if not updated_tag:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
+        success = True
+        return updated_tag
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="tags",
+            action="UPDATE",
+            success=success,
+            details=details
+        )
 
 @router.delete("/tags/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_tag(
     tag_id: UUID,
+    request: Request,
     db: DBSessionDep,
-    current_user: CurrentUserDep, # For logging/audit
+    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager)
 ):
-    logger.info(f"User '{current_user.email}' deleting tag ID: {tag_id}")
-    if not manager.delete_tag(db, tag_id=tag_id):
-        # Manager raises HTTPException for specific cases like not found or conflicts
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found or could not be deleted") # Fallback
-    return
+    success = False
+    details = {
+        "params": {
+            "tag_id": str(tag_id)
+        }
+    }
+
+    try:
+        logger.info(f"User '{current_user.email}' deleting tag ID: {tag_id}")
+        if not manager.delete_tag(db, tag_id=tag_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found or could not be deleted")
+        success = True
+        return
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="tags",
+            action="DELETE",
+            success=success,
+            details=details
+        )
 
 # --- Tag Namespace Permission Routes ---
 @router.post("/tags/namespaces/{namespace_id}/permissions", response_model=TagNamespacePermission, status_code=status.HTTP_201_CREATED)
 async def add_namespace_permission(
     namespace_id: UUID,
     permission_in: TagNamespacePermissionCreate,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager)
 ):
-    logger.info(f"User '{current_user.email}' adding permission to namespace {namespace_id} for group {permission_in.group_id}")
-    return manager.add_permission_to_namespace(db, namespace_id=namespace_id, perm_in=permission_in, user_email=current_user.email)
+    success = False
+    details = {
+        "params": {
+            "namespace_id": str(namespace_id),
+            "group_id": permission_in.group_id,
+            "permission_level": permission_in.permission_level
+        }
+    }
+
+    try:
+        logger.info(f"User '{current_user.email}' adding permission to namespace {namespace_id} for group {permission_in.group_id}")
+        result = manager.add_permission_to_namespace(db, namespace_id=namespace_id, perm_in=permission_in, user_email=current_user.email)
+        success = True
+        details["permission_id"] = str(result.id)
+        return result
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="tags",
+            action="CREATE",
+            success=success,
+            details=details
+        )
 
 @router.get("/tags/namespaces/{namespace_id}/permissions", response_model=List[TagNamespacePermission])
 async def list_namespace_permissions(
@@ -197,39 +405,97 @@ async def update_namespace_permission(
     namespace_id: UUID,
     permission_id: UUID,
     permission_in: TagNamespacePermissionUpdate,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager)
 ):
-    logger.info(f"User '{current_user.email}' updating permission ID {permission_id} for namespace {namespace_id}")
-    # First, check if the permission belongs to the given namespace_id to ensure path integrity
-    existing_perm_check = manager.get_namespace_permission(db, perm_id=permission_id)
-    if not existing_perm_check or existing_perm_check.namespace_id != namespace_id:
-         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found or does not belong to the specified namespace.")
+    success = False
+    details = {
+        "params": {
+            "namespace_id": str(namespace_id),
+            "permission_id": str(permission_id),
+            "updates": permission_in.dict(exclude_unset=True)
+        }
+    }
 
-    updated_permission = manager.update_namespace_permission(db, perm_id=permission_id, perm_in=permission_in, user_email=current_user.email)
-    if not updated_permission:
-        # This specific check might be redundant if the above check passes and manager.update handles not found for perm_id itself.
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found for update")
-    return updated_permission
+    try:
+        logger.info(f"User '{current_user.email}' updating permission ID {permission_id} for namespace {namespace_id}")
+        # First, check if the permission belongs to the given namespace_id to ensure path integrity
+        existing_perm_check = manager.get_namespace_permission(db, perm_id=permission_id)
+        if not existing_perm_check or existing_perm_check.namespace_id != namespace_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found or does not belong to the specified namespace.")
+
+        updated_permission = manager.update_namespace_permission(db, perm_id=permission_id, perm_in=permission_in, user_email=current_user.email)
+        if not updated_permission:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found for update")
+        success = True
+        return updated_permission
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="tags",
+            action="UPDATE",
+            success=success,
+            details=details
+        )
 
 @router.delete("/tags/namespaces/{namespace_id}/permissions/{permission_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_namespace_permission(
     namespace_id: UUID,
     permission_id: UUID,
+    request: Request,
     db: DBSessionDep,
-    current_user: CurrentUserDep, # For logging/audit
+    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager)
 ):
-    logger.info(f"User '{current_user.email}' deleting permission ID {permission_id} from namespace {namespace_id}")
-    # Optional: Check if permission belongs to namespace before deleting
-    perm_to_delete = manager.get_namespace_permission(db, perm_id=permission_id)
-    if not perm_to_delete or perm_to_delete.namespace_id != namespace_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found or does not belong to specified namespace.")
+    success = False
+    details = {
+        "params": {
+            "namespace_id": str(namespace_id),
+            "permission_id": str(permission_id)
+        }
+    }
 
-    if not manager.remove_permission_from_namespace(db, perm_id=permission_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found or could not be deleted") # Fallback
-    return
+    try:
+        logger.info(f"User '{current_user.email}' deleting permission ID {permission_id} from namespace {namespace_id}")
+        # Optional: Check if permission belongs to namespace before deleting
+        perm_to_delete = manager.get_namespace_permission(db, perm_id=permission_id)
+        if not perm_to_delete or perm_to_delete.namespace_id != namespace_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found or does not belong to specified namespace.")
+
+        if not manager.remove_permission_from_namespace(db, perm_id=permission_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Permission not found or could not be deleted")
+        success = True
+        return
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="tags",
+            action="DELETE",
+            success=success,
+            details=details
+        )
 
 # --- Generic Entity Tagging Routes ---
 @router.get("/entities/{entity_type}/{entity_id}/tags", response_model=List[AssignedTag])
@@ -246,36 +512,131 @@ async def set_entity_tags(
     entity_type: str,
     entity_id: str,
     tags: List[AssignedTagCreate],
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager)
 ):
-    return manager.set_tags_for_entity(db, entity_id=entity_id, entity_type=entity_type, tags=tags, user_email=current_user.email)
+    success = False
+    details = {
+        "params": {
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "tags_count": len(tags)
+        }
+    }
+
+    try:
+        result = manager.set_tags_for_entity(db, entity_id=entity_id, entity_type=entity_type, tags=tags, user_email=current_user.email)
+        success = True
+        details["assigned_tags"] = [str(t.tag_id) for t in result]
+        return result
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="tags",
+            action="UPDATE",
+            success=success,
+            details=details
+        )
 
 @router.post("/entities/{entity_type}/{entity_id}/tags:add", response_model=AssignedTag)
 async def add_tag_to_entity_route(
     entity_type: str,
     entity_id: str,
     tag_id: UUID,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     assigned_value: Optional[str] = None,
     manager: TagsManager = Depends(get_tags_manager)
 ):
-    return manager.add_tag_to_entity(db, entity_id=entity_id, entity_type=entity_type, tag_id=tag_id, assigned_value=assigned_value, user_email=current_user.email)
+    success = False
+    details = {
+        "params": {
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "tag_id": str(tag_id),
+            "assigned_value": assigned_value
+        }
+    }
+
+    try:
+        result = manager.add_tag_to_entity(db, entity_id=entity_id, entity_type=entity_type, tag_id=tag_id, assigned_value=assigned_value, user_email=current_user.email)
+        success = True
+        return result
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="tags",
+            action="CREATE",
+            success=success,
+            details=details
+        )
 
 @router.delete("/entities/{entity_type}/{entity_id}/tags:remove", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_tag_from_entity_route(
     entity_type: str,
     entity_id: str,
     tag_id: UUID,
+    request: Request,
     db: DBSessionDep,
+    current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: TagsManager = Depends(get_tags_manager)
 ):
-    ok = manager.remove_tag_from_entity(db, entity_id=entity_id, entity_type=entity_type, tag_id=tag_id)
-    if not ok:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag association not found")
-    return
+    success = False
+    details = {
+        "params": {
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "tag_id": str(tag_id)
+        }
+    }
+
+    try:
+        ok = manager.remove_tag_from_entity(db, entity_id=entity_id, entity_type=entity_type, tag_id=tag_id)
+        if not ok:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag association not found")
+        success = True
+        return
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="tags",
+            action="DELETE",
+            success=success,
+            details=details
+        )
 
 
 def register_routes(app):

@@ -1,10 +1,12 @@
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Request
 
 from src.common.dependencies import (
     DBSessionDep,
     CurrentUserDep,
+    AuditManagerDep,
+    AuditCurrentUserDep,
 )
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker
@@ -155,8 +157,11 @@ async def bootstrap_self_service(
 
 @router.post('/self-service/create')
 async def self_service_create(
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     payload: Dict[str, Any] = Body(...),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
@@ -172,12 +177,23 @@ async def self_service_create(
       createContract: boolean (default true when type='table')
       defaultToUserCatalog: boolean (default true)
     """
+    success = False
+    obj_type = (payload.get('type') or '').lower()
+    details = {
+        "params": {
+            "type": obj_type,
+            "catalog": payload.get('catalog'),
+            "schema": payload.get('schema'),
+            "autoFix": payload.get('autoFix', True),
+            "createContract": payload.get('createContract', True)
+        }
+    }
+
     try:
         ws = get_workspace_client()
         catalog_manager = CatalogCommanderManager(ws)
         dc_manager = DataContractsManager()
 
-        obj_type = (payload.get('type') or '').lower()
         if obj_type not in ('catalog', 'schema', 'table'):
             raise HTTPException(status_code=400, detail="Invalid type; expected catalog|schema|table")
 
@@ -223,6 +239,9 @@ async def self_service_create(
                 catalog_name=requested_catalog,
                 comment=obj.get('tags', {}).get('description')
             )
+            success = True
+            details["created_catalog"] = requested_catalog
+            details["compliance_count"] = len(compliance_results)
             return { 'created': {'catalog': requested_catalog}, 'compliance': compliance_results }
 
         if obj_type == 'schema':
@@ -250,6 +269,10 @@ async def self_service_create(
                 catalog_name=requested_catalog,
                 schema_name=requested_schema
             )
+            success = True
+            details["created_catalog"] = requested_catalog
+            details["created_schema"] = requested_schema
+            details["compliance_count"] = len(compliance_results)
             return { 'created': {'catalog': requested_catalog, 'schema': requested_schema}, 'compliance': compliance_results }
 
         # table
@@ -332,6 +355,14 @@ async def self_service_create(
             except Exception as e:
                 logger.warning(f"Failed to create data contract for table: {e}", exc_info=True)
 
+        success = True
+        details["created_catalog"] = requested_catalog
+        details["created_schema"] = requested_schema
+        details["created_table"] = table_name
+        details["full_name"] = full_name
+        details["contract_id"] = created_contract_id
+        details["compliance_count"] = len(compliance_results)
+
         return {
             'created': {
                 'catalog': requested_catalog,
@@ -342,11 +373,23 @@ async def self_service_create(
             'contractId': created_contract_id,
             'compliance': compliance_results,
         }
-    except HTTPException:
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
         raise
     except Exception as e:
         logger.exception("Self-service create failed")
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail="Failed to create self-service resource")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="self-service",
+            action="CREATE",
+            success=success,
+            details=details
+        )
 
 
 def register_routes(app):
@@ -357,8 +400,11 @@ def register_routes(app):
 @router.post('/self-service/deploy/{contract_id}')
 async def deploy_contract(
     contract_id: str,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     body: Dict[str, Any] = Body(default={}),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
@@ -368,6 +414,15 @@ async def deploy_contract(
       defaultCatalog: string
       defaultSchema: string
     """
+    success = False
+    details = {
+        "params": {
+            "contract_id": contract_id,
+            "defaultCatalog": body.get('defaultCatalog'),
+            "defaultSchema": body.get('defaultSchema')
+        }
+    }
+
     try:
         ws = get_workspace_client()
         contract = data_contract_repo.get_with_all(db, id=contract_id)
@@ -443,11 +498,26 @@ async def deploy_contract(
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Failed creating table {table_name}: {e}")
 
+        success = True
+        details["created_tables"] = created
+        details["table_count"] = len(created)
         return { 'created': created }
-    except HTTPException:
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
         raise
     except Exception as e:
         logger.exception("Deploy contract failed")
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail="Failed to deploy contract")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="self-service",
+            action="DEPLOY",
+            success=success,
+            details=details
+        )
 
 

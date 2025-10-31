@@ -2,12 +2,14 @@ import uuid
 from datetime import datetime
 from typing import List, Optional, Literal
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status, Request
 
 from src.common.dependencies import (
     DBSessionDep,
     CurrentUserDep,
     NotificationsManagerDep,
+    AuditManagerDep,
+    AuditCurrentUserDep,
 )
 from src.common.logging import get_logger
 from src.controller.change_log_manager import change_log_manager
@@ -38,8 +40,11 @@ class HandleAccessRequest(BaseModel):
 
 @router.post("/access-requests", status_code=status.HTTP_202_ACCEPTED)
 async def create_access_request(
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     notifications: NotificationsManagerDep,
     payload: CreateAccessRequest = Body(...),
 ):
@@ -47,6 +52,17 @@ async def create_access_request(
     Emits actionable notifications to Admin role and a receipt to the requester.
     Also records a change log entry per entity.
     """
+    success = False
+    details = {
+        "params": {
+            "entity_type": payload.entity_type,
+            "entity_ids": payload.entity_ids,
+            "entity_count": len(payload.entity_ids),
+            "message": payload.message,
+            "requester": current_user.email
+        }
+    }
+
     try:
         requester_email = current_user.email
         if not requester_email:
@@ -108,24 +124,52 @@ async def create_access_request(
                 },
             )
 
+        success = True
         return {"message": "Access request submitted."}
 
-    except HTTPException:
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
         raise
     except Exception as e:
         logger.error("Failed creating access request", exc_info=True)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail="Failed to create access request")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="access-requests",
+            action="CREATE",
+            success=success,
+            details=details
+        )
 
 
 @router.post("/access-requests/handle", status_code=status.HTTP_200_OK)
 async def handle_access_request(
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     notifications: NotificationsManagerDep,
     request_data: HandleAccessRequest = Body(...),
     comments_manager: CommentsManager = Depends(get_comments_manager),
 ):
     """Handle an access request decision by approvers (approve/deny/clarify)."""
+    success = False
+    details = {
+        "params": {
+            "entity_type": request_data.entity_type,
+            "entity_id": request_data.entity_id,
+            "requester_email": request_data.requester_email,
+            "decision": request_data.decision,
+            "message": request_data.message,
+            "approver": current_user.email
+        }
+    }
+
     try:
         decision = request_data.decision
         requester = request_data.requester_email
@@ -201,12 +245,25 @@ async def handle_access_request(
             )
             comments_manager.create_comment(db, data=comment_payload, user_email=current_user.email or current_user.username or "system")
 
+        success = True
         return {"message": "Decision recorded."}
-    except HTTPException:
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
         raise
     except Exception as e:
         logger.error("Failed handling access request", exc_info=True)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail="Failed to handle access request")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="access-requests",
+            action="HANDLE_REQUEST",
+            success=success,
+            details=details
+        )
 
 
 def register_routes(app):

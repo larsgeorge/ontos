@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from src.common.config import Settings, get_settings
 from src.common.workspace_client import get_workspace_client, WorkspaceClient
+from src.common.dependencies import DBSessionDep, AuditManagerDep, AuditCurrentUserDep
 from src.models.estate import Estate, CloudType, SyncStatus
 from src.controller.estate_manager import EstateManager
 
@@ -32,33 +33,165 @@ async def get_estate(estate_id: str, estate_manager: EstateManager = Depends(get
     return estate
 
 @router.post("/estates", response_model=Estate)
-async def create_estate(estate: Estate, estate_manager: EstateManager = Depends(get_estate_manager)):
+async def create_estate(
+    estate: Estate,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
+    estate_manager: EstateManager = Depends(get_estate_manager)
+):
     """Create a new estate"""
-    return await estate_manager.create_estate(estate)
+    success = False
+    details = {
+        "params": {
+            "estate_id": estate.id,
+            "name": estate.name,
+            "cloud_type": estate.cloud.value if estate.cloud else None,
+            "enabled": estate.enabled
+        }
+    }
+
+    try:
+        result = await estate_manager.create_estate(estate)
+        success = True
+        return result
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        logger.exception("Failed creating estate %s", estate.id)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=500, detail="Failed to create estate")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="estates",
+            action="CREATE",
+            success=success,
+            details=details
+        )
 
 @router.put("/estates/{estate_id}", response_model=Estate)
-async def update_estate(estate_id: str, estate: Estate, estate_manager: EstateManager = Depends(get_estate_manager)):
+async def update_estate(
+    estate_id: str,
+    estate: Estate,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
+    estate_manager: EstateManager = Depends(get_estate_manager)
+):
     """Update an existing estate"""
-    updated_estate = await estate_manager.update_estate(estate_id, estate)
-    if not updated_estate:
-        raise HTTPException(status_code=404, detail="Estate not found")
-    return updated_estate
+    success = False
+    details = {
+        "params": {
+            "estate_id": estate_id,
+            "name": estate.name,
+            "enabled": estate.enabled
+        }
+    }
+
+    try:
+        updated_estate = await estate_manager.update_estate(estate_id, estate)
+        if not updated_estate:
+            raise HTTPException(status_code=404, detail="Estate not found")
+        success = True
+        return updated_estate
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        logger.exception("Failed updating estate %s", estate_id)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=500, detail="Failed to update estate")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="estates",
+            action="UPDATE",
+            success=success,
+            details=details
+        )
 
 @router.delete("/estates/{estate_id}")
-async def delete_estate(estate_id: str, estate_manager: EstateManager = Depends(get_estate_manager)):
+async def delete_estate(
+    estate_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
+    estate_manager: EstateManager = Depends(get_estate_manager)
+):
     """Delete an estate"""
-    success = await estate_manager.delete_estate(estate_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Estate not found")
-    return {"message": "Estate deleted successfully"}
+    success = False
+    details = {"params": {"estate_id": estate_id}}
+
+    try:
+        ok = await estate_manager.delete_estate(estate_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Estate not found")
+        success = True
+        return {"message": "Estate deleted successfully"}
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        logger.exception("Failed deleting estate %s", estate_id)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=500, detail="Failed to delete estate")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="estates",
+            action="DELETE",
+            success=success,
+            details=details
+        )
 
 @router.post("/estates/{estate_id}/sync")
-async def sync_estate(estate_id: str, estate_manager: EstateManager = Depends(get_estate_manager)):
+async def sync_estate(
+    estate_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
+    estate_manager: EstateManager = Depends(get_estate_manager)
+):
     """Trigger a sync for a specific estate"""
-    success = await estate_manager.sync_estate(estate_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Estate not found or sync disabled")
-    return {"message": "Estate sync triggered successfully"} 
+    success = False
+    details = {"params": {"estate_id": estate_id}}
+
+    try:
+        ok = await estate_manager.sync_estate(estate_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Estate not found or sync disabled")
+        success = True
+        details["sync_triggered"] = True
+        return {"message": "Estate sync triggered successfully"}
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        logger.exception("Failed syncing estate %s", estate_id)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=500, detail="Failed to sync estate")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="estates",
+            action="SYNC",
+            success=success,
+            details=details
+        ) 
 
 def register_routes(app):
     """Register routes with the app"""

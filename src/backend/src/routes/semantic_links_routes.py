@@ -1,7 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Body, Request
 
-from src.common.dependencies import DBSessionDep, AuditCurrentUserDep
+from src.common.dependencies import DBSessionDep, AuditCurrentUserDep, AuditManagerDep
 from src.common.logging import get_logger
 from src.controller.semantic_links_manager import SemanticLinksManager
 from src.controller.semantic_models_manager import SemanticModelsManager
@@ -36,31 +36,93 @@ async def list_links_by_iri(iri: str, manager: SemanticLinksManager = Depends(ge
 
 
 @router.post("/", response_model=EntitySemanticLink)
-async def add_link(current_user: AuditCurrentUserDep, payload: EntitySemanticLinkCreate = Body(...), db: DBSessionDep = None, manager: SemanticLinksManager = Depends(get_manager)):
+async def add_link(
+    payload: EntitySemanticLinkCreate,
+    request: Request,
+    current_user: AuditCurrentUserDep,
+    audit_manager: AuditManagerDep,
+    db: DBSessionDep = None,
+    manager: SemanticLinksManager = Depends(get_manager)
+):
+    success = False
+    details = {
+        "params": {
+            "entity_type": payload.entity_type,
+            "entity_id": payload.entity_id,
+            "iri": payload.iri,
+            "link_type": payload.link_type
+        }
+    }
+
     try:
         created = manager.add(payload, created_by=(current_user.username if current_user else None))
         if db is not None:
             db.commit()
+        success = True
+        details["link_id"] = created.id
         return created
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
     except Exception as e:
         logger.error("Failed adding semantic link", exc_info=True)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=400, detail="Failed to add semantic link")
+    finally:
+        if db is not None:
+            audit_manager.log_action(
+                db=db,
+                username=current_user.username,
+                ip_address=request.client.host if request.client else None,
+                feature="semantic-links",
+                action="CREATE",
+                success=success,
+                details=details
+            )
 
 
 @router.delete("/{link_id}")
-async def delete_link(link_id: str, current_user: AuditCurrentUserDep, db: DBSessionDep = None, manager: SemanticLinksManager = Depends(get_manager)):
+async def delete_link(
+    link_id: str,
+    request: Request,
+    current_user: AuditCurrentUserDep,
+    audit_manager: AuditManagerDep,
+    db: DBSessionDep = None,
+    manager: SemanticLinksManager = Depends(get_manager)
+):
+    success = False
+    details = {
+        "params": {
+            "link_id": link_id
+        }
+    }
+
     try:
         ok = manager.remove(link_id, removed_by=(current_user.username if current_user else None))
         if not ok:
             raise HTTPException(status_code=404, detail="Link not found")
         if db is not None:
             db.commit()
+        success = True
         return {"deleted": True}
-    except HTTPException:
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
         raise
     except Exception as e:
         logger.error("Failed deleting semantic link %s", link_id, exc_info=True)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail="Failed to delete semantic link")
+    finally:
+        if db is not None:
+            audit_manager.log_action(
+                db=db,
+                username=current_user.username,
+                ip_address=request.client.host if request.client else None,
+                feature="semantic-links",
+                action="DELETE",
+                success=success,
+                details=details
+            )
 
 
 def register_routes(app):

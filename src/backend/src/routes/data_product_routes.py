@@ -690,7 +690,7 @@ async def create_data_product(
             details_for_audit["validation_error"] = error_details
             raise HTTPException(status_code=422, detail=error_details)
 
-        created_product_response = manager.create_product(payload)
+        created_product_response = manager.create_product(payload, db=db)
         success = True
 
         if created_product_response and hasattr(created_product_response, 'id'):
@@ -859,7 +859,8 @@ async def update_data_product(
             product_id=product_id,
             product_data_dict=product_dict,
             user_email=current_user.email,
-            user_groups=user_groups
+            user_groups=user_groups,
+            db=db
         )
 
         updated_product_response = manager.update_product_with_auth(

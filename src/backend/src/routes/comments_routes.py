@@ -1,9 +1,9 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 
-from src.common.dependencies import DBSessionDep, CurrentUserDep
+from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker, get_user_groups, is_user_admin
 from src.common.config import get_settings, Settings
@@ -26,26 +26,54 @@ async def create_comment(
     entity_type: str,
     entity_id: str,
     payload: CommentCreate,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: CommentsManager = Depends(get_comments_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Create a comment on an entity."""
+    success = False
+    details = {
+        "params": {
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "title": payload.title,
+            "audience": payload.audience
+        }
+    }
+
     try:
         # Validate that path matches payload
         if payload.entity_type != entity_type or payload.entity_id != entity_id:
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail="Entity path does not match request body"
             )
-        
-        return manager.create_comment(db, data=payload, user_email=current_user.email)
-    except HTTPException:
+
+        result = manager.create_comment(db, data=payload, user_email=current_user.email)
+        success = True
+        details["comment_id"] = result.id
+        return result
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
         raise
     except Exception as e:
         logger.exception("Failed creating comment for %s/%s", entity_type, entity_id)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail="Failed to create comment")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="comments",
+            action="CREATE",
+            success=success,
+            details=details
+        )
 
 
 @router.get("/entities/{entity_type}/{entity_id}/comments", response_model=CommentListResponse)
@@ -260,17 +288,28 @@ async def get_comment(
 async def update_comment(
     comment_id: str,
     payload: CommentUpdate,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: CommentsManager = Depends(get_comments_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Update a comment. Only the comment author or admins can update."""
+    success = False
+    details = {
+        "params": {
+            "comment_id": comment_id,
+            "updates": payload.dict(exclude_unset=True)
+        }
+    }
+
     try:
         # Get user's groups to check for admin status
         user_groups = await get_user_groups(current_user.email)
         is_admin = is_user_admin(user_groups, get_settings())
-        
+
         updated = manager.update_comment(
             db,
             comment_id=comment_id,
@@ -278,40 +317,66 @@ async def update_comment(
             user_email=current_user.email,
             is_admin=is_admin
         )
-        
+
         if not updated:
             raise HTTPException(
-                status_code=404, 
+                status_code=404,
                 detail="Comment not found or you don't have permission to update it"
             )
-        
+
+        success = True
         return updated
-    except HTTPException:
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
         raise
     except Exception as e:
         logger.exception("Failed updating comment %s", comment_id)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail="Failed to update comment")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="comments",
+            action="UPDATE",
+            success=success,
+            details=details
+        )
 
 
 @router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_comment(
     comment_id: str,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     hard_delete: bool = Query(False, description="Permanently delete comment (admin only)"),
     manager: CommentsManager = Depends(get_comments_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
     """Delete a comment. Only the comment author or admins can delete."""
+    success_flag = False
+    details = {
+        "params": {
+            "comment_id": comment_id,
+            "hard_delete": hard_delete
+        }
+    }
+
     try:
         # Get user's groups to check for admin status
         user_groups = await get_user_groups(current_user.email)
         is_admin = is_user_admin(user_groups, get_settings())
-        
+
         # Only admins can hard delete
         if hard_delete and not is_admin:
             hard_delete = False
-        
+            details["params"]["hard_delete"] = False
+            details["note"] = "Hard delete denied - not admin"
+
         success = manager.delete_comment(
             db,
             comment_id=comment_id,
@@ -319,19 +384,32 @@ async def delete_comment(
             is_admin=is_admin,
             hard_delete=hard_delete
         )
-        
+
         if not success:
             raise HTTPException(
                 status_code=404,
                 detail="Comment not found or you don't have permission to delete it"
             )
-        
+
+        success_flag = True
         return  # 204 No Content
-    except HTTPException:
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
         raise
     except Exception as e:
         logger.exception("Failed deleting comment %s", comment_id)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail="Failed to delete comment")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="comments",
+            action="DELETE",
+            success=success_flag,
+            details=details
+        )
 
 
 @router.get("/comments/{comment_id}/permissions")

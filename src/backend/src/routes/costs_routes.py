@@ -2,9 +2,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from src.common.dependencies import DBSessionDep, CurrentUserDep
+from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
 from src.common.authorization import PermissionChecker
 from src.common.logging import get_logger
@@ -28,20 +28,49 @@ async def create_cost_item(
     entity_type: str,
     entity_id: str,
     payload: CostItemCreate,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: CostsManager = Depends(get_costs_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
+    success = False
+    details = {
+        "params": {
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "cost_type": payload.cost_type,
+            "amount": float(payload.amount) if payload.amount else None,
+            "recurring": payload.recurring
+        }
+    }
+
     try:
         if payload.entity_type != entity_type or payload.entity_id != entity_id:
             raise HTTPException(status_code=400, detail="Entity path does not match body")
-        return manager.create(db, data=payload, user_email=current_user.email)
-    except HTTPException:
+        result = manager.create(db, data=payload, user_email=current_user.email)
+        success = True
+        details["cost_item_id"] = result.id
+        return result
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
         raise
     except Exception as e:
         logger.exception("Failed creating cost item for %s/%s", entity_type, entity_id)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=500, detail="Failed to create cost item")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="costs",
+            action="CREATE",
+            success=success,
+            details=details
+        )
 
 
 @router.get("/entities/{entity_type}/{entity_id}/cost-items", response_model=List[CostItem])
@@ -82,29 +111,85 @@ async def summarize_cost_items(
 async def update_cost_item(
     id: str,
     payload: CostItemUpdate,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: CostsManager = Depends(get_costs_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
-    updated = manager.update(db, id=id, data=payload, user_email=current_user.email)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Cost item not found")
-    return updated
+    success = False
+    details = {
+        "params": {
+            "cost_item_id": id,
+            "has_amount_update": payload.amount is not None,
+            "has_notes_update": payload.notes is not None
+        }
+    }
+
+    try:
+        updated = manager.update(db, id=id, data=payload, user_email=current_user.email)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Cost item not found")
+        success = True
+        return updated
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        logger.exception("Failed updating cost item %s", id)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=500, detail="Failed to update cost item")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="costs",
+            action="UPDATE",
+            success=success,
+            details=details
+        )
 
 
 @router.delete("/cost-items/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_cost_item(
     id: str,
+    request: Request,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: CostsManager = Depends(get_costs_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_WRITE)),
 ):
-    ok = manager.delete(db, id=id, user_email=current_user.email)
-    if not ok:
-        raise HTTPException(status_code=404, detail="Cost item not found")
-    return
+    success = False
+    details = {"params": {"cost_item_id": id}}
+
+    try:
+        ok = manager.delete(db, id=id, user_email=current_user.email)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Cost item not found")
+        success = True
+        return
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
+    except Exception as e:
+        logger.exception("Failed deleting cost item %s", id)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
+        raise HTTPException(status_code=500, detail="Failed to delete cost item")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="costs",
+            action="DELETE",
+            success=success,
+            details=details
+        )
 
 
 def register_routes(app):

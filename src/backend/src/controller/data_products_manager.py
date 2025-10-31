@@ -87,9 +87,16 @@ class DataProductsManager(SearchableAsset):
         """Get all ODPS v1.0.0 status values."""
         return [s.value for s in DataProductStatus]
 
-    def create_product(self, product_data: Dict[str, Any]) -> DataProductApi:
-        """Creates a new ODPS v1.0.0 data product via the repository."""
+    def create_product(self, product_data: Dict[str, Any], db: Optional[Session] = None) -> DataProductApi:
+        """Creates a new ODPS v1.0.0 data product via the repository.
+        
+        Args:
+            product_data: Dictionary containing product data
+            db: Optional database session to use. If not provided, uses self._db (for backward compatibility)
+        """
         logger.debug(f"Manager creating ODPS product from data: {product_data}")
+        # Use provided session or fall back to instance session
+        db_session = db if db is not None else self._db
         try:
             # Generate ID if missing
             if not product_data.get('id'):
@@ -112,7 +119,7 @@ class DataProductsManager(SearchableAsset):
             tags_data = product_data.get('tags', [])
 
             # Create via repository
-            created_db_obj = self._repo.create(db=self._db, obj_in=product_api_model)
+            created_db_obj = self._repo.create(db=db_session, obj_in=product_api_model)
 
             # Handle tag assignments
             if tags_data and self._tags_manager:
@@ -161,11 +168,18 @@ class DataProductsManager(SearchableAsset):
             logger.error(f"Unexpected error listing products: {e}")
             raise
 
-    def update_product(self, product_id: str, product_data_dict: Dict[str, Any]) -> Optional[DataProductApi]:
-        """Update an existing ODPS v1.0.0 data product."""
+    def update_product(self, product_id: str, product_data_dict: Dict[str, Any], db: Optional[Session] = None) -> Optional[DataProductApi]:
+        """Update an existing ODPS v1.0.0 data product.
+        
+        Args:
+            product_id: ID of product to update
+            product_data_dict: Updated product data
+            db: Optional database session. If not provided, uses self._db
+        """
         logger.debug(f"Manager updating ODPS product {product_id}")
+        db_session = db if db is not None else self._db
         try:
-            db_obj = self._repo.get(db=self._db, id=product_id)
+            db_obj = self._repo.get(db=db_session, id=product_id)
             if not db_obj:
                 logger.warning(f"Attempted to update non-existent product: {product_id}")
                 return None
@@ -185,7 +199,7 @@ class DataProductsManager(SearchableAsset):
                 raise ValueError(f"Invalid ODPS update data: {e}") from e
 
             # Update via repository
-            updated_db_obj = self._repo.update(db=self._db, db_obj=db_obj, obj_in=product_update_model)
+            updated_db_obj = self._repo.update(db=db_session, db_obj=db_obj, obj_in=product_update_model)
 
             # Handle tag updates
             if tags_data is not None and self._tags_manager:
@@ -209,7 +223,8 @@ class DataProductsManager(SearchableAsset):
         product_id: str,
         product_data_dict: Dict[str, Any],
         user_email: str,
-        user_groups: List[str]
+        user_groups: List[str],
+        db: Optional[Session] = None
     ) -> Optional[DataProductApi]:
         """
         Update a data product with project membership authorization check.
@@ -222,6 +237,7 @@ class DataProductsManager(SearchableAsset):
             product_data_dict: Updated product data
             user_email: Email of user making the update
             user_groups: List of groups the user belongs to
+            db: Optional database session. If not provided, uses self._db
 
         Returns:
             Updated product if successful, None if not found
@@ -232,9 +248,10 @@ class DataProductsManager(SearchableAsset):
             SQLAlchemyError: If database operation fails
         """
         logger.debug(f"Updating product {product_id} with auth check for user {user_email}")
+        db_session = db if db is not None else self._db
 
         # Get existing product to check project membership
-        existing_product_db = self._repo.get(db=self._db, id=product_id)
+        existing_product_db = self._repo.get(db=db_session, id=product_id)
         if not existing_product_db:
             logger.warning(f"Product not found for update: {product_id}")
             return None
@@ -246,7 +263,7 @@ class DataProductsManager(SearchableAsset):
 
             settings = get_settings()
             is_member = projects_manager.is_user_project_member(
-                db=self._db,
+                db=db_session,
                 user_identifier=user_email,
                 user_groups=user_groups,
                 project_id=existing_product_db.project_id,
@@ -263,7 +280,7 @@ class DataProductsManager(SearchableAsset):
                 )
 
         # Perform update
-        return self.update_product(product_id, product_data_dict)
+        return self.update_product(product_id, product_data_dict, db=db_session)
 
     def delete_product(self, product_id: str) -> bool:
         """Delete an ODPS v1.0.0 data product."""

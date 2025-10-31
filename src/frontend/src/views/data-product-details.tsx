@@ -90,8 +90,12 @@ export default function DataProductDetails() {
   const [isImportExportDialogOpen, setIsImportExportDialogOpen] = useState(false);
   const [isImportTeamMembersOpen, setIsImportTeamMembersOpen] = useState(false);
 
-  // Team member editing state
+  // Editing state for nested entities
+  const [editingInputPortIndex, setEditingInputPortIndex] = useState<number | null>(null);
+  const [editingOutputPortIndex, setEditingOutputPortIndex] = useState<number | null>(null);
+  const [editingManagementPortIndex, setEditingManagementPortIndex] = useState<number | null>(null);
   const [editingTeamMemberIndex, setEditingTeamMemberIndex] = useState<number | null>(null);
+  const [editingSupportChannelIndex, setEditingSupportChannelIndex] = useState<number | null>(null);
 
   // Contract linking states
   const [isLinkContractDialogOpen, setIsLinkContractDialogOpen] = useState(false);
@@ -255,6 +259,44 @@ export default function DataProductDetails() {
     }
   };
 
+  const handleUpdateInputPort = async (port: InputPort) => {
+    if (!productId || !product || editingInputPortIndex === null) return;
+    try {
+      const updatedPorts = [...(product.inputPorts || [])];
+      updatedPorts[editingInputPortIndex] = port;
+      const res = await fetch(`/api/data-products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...product, inputPorts: updatedPorts }),
+      });
+      if (!res.ok) throw new Error(`Failed to update input port (${res.status})`);
+      await fetchProductDetails();
+      setEditingInputPortIndex(null);
+      toast({ title: 'Input Port Updated', description: 'Input port updated successfully.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to update input port', variant: 'destructive' });
+      throw e;
+    }
+  };
+
+  const handleDeleteInputPort = async (index: number) => {
+    if (!productId || !product) return;
+    if (!confirm('Delete this input port?')) return;
+    try {
+      const updatedPorts = (product.inputPorts || []).filter((_, i) => i !== index);
+      const res = await fetch(`/api/data-products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...product, inputPorts: updatedPorts }),
+      });
+      if (!res.ok) throw new Error(`Failed to delete input port (${res.status})`);
+      await fetchProductDetails();
+      toast({ title: 'Input Port Deleted', description: 'Input port deleted successfully.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to delete input port', variant: 'destructive' });
+    }
+  };
+
   const handleAddOutputPort = async (port: OutputPort) => {
     if (!productId || !product) return;
     try {
@@ -271,6 +313,44 @@ export default function DataProductDetails() {
     }
   };
 
+  const handleUpdateOutputPort = async (port: OutputPort) => {
+    if (!productId || !product || editingOutputPortIndex === null) return;
+    try {
+      const updatedPorts = [...(product.outputPorts || [])];
+      updatedPorts[editingOutputPortIndex] = port;
+      const res = await fetch(`/api/data-products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...product, outputPorts: updatedPorts }),
+      });
+      if (!res.ok) throw new Error(`Failed to update output port (${res.status})`);
+      await fetchProductDetails();
+      setEditingOutputPortIndex(null);
+      toast({ title: 'Output Port Updated', description: 'Output port updated successfully.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to update output port', variant: 'destructive' });
+      throw e;
+    }
+  };
+
+  const handleDeleteOutputPort = async (index: number) => {
+    if (!productId || !product) return;
+    if (!confirm('Delete this output port?')) return;
+    try {
+      const updatedPorts = (product.outputPorts || []).filter((_, i) => i !== index);
+      const res = await fetch(`/api/data-products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...product, outputPorts: updatedPorts }),
+      });
+      if (!res.ok) throw new Error(`Failed to delete output port (${res.status})`);
+      await fetchProductDetails();
+      toast({ title: 'Output Port Deleted', description: 'Output port deleted successfully.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to delete output port', variant: 'destructive' });
+    }
+  };
+
   const handleAddManagementPort = async (port: ManagementPort) => {
     if (!productId || !product) return;
     try {
@@ -284,6 +364,44 @@ export default function DataProductDetails() {
       await fetchProductDetails();
     } catch (e: any) {
       throw new Error(e?.message || 'Failed to add management port');
+    }
+  };
+
+  const handleUpdateManagementPort = async (port: ManagementPort) => {
+    if (!productId || !product || editingManagementPortIndex === null) return;
+    try {
+      const updatedPorts = [...(product.managementPorts || [])];
+      updatedPorts[editingManagementPortIndex] = port;
+      const res = await fetch(`/api/data-products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...product, managementPorts: updatedPorts }),
+      });
+      if (!res.ok) throw new Error(`Failed to update management port (${res.status})`);
+      await fetchProductDetails();
+      setEditingManagementPortIndex(null);
+      toast({ title: 'Management Port Updated', description: 'Management port updated successfully.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to update management port', variant: 'destructive' });
+      throw e;
+    }
+  };
+
+  const handleDeleteManagementPort = async (index: number) => {
+    if (!productId || !product) return;
+    if (!confirm('Delete this management port?')) return;
+    try {
+      const updatedPorts = (product.managementPorts || []).filter((_, i) => i !== index);
+      const res = await fetch(`/api/data-products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...product, managementPorts: updatedPorts }),
+      });
+      if (!res.ok) throw new Error(`Failed to delete management port (${res.status})`);
+      await fetchProductDetails();
+      toast({ title: 'Management Port Deleted', description: 'Management port deleted successfully.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to delete management port', variant: 'destructive' });
     }
   };
 
@@ -446,6 +564,44 @@ export default function DataProductDetails() {
       await fetchProductDetails();
     } catch (e: any) {
       throw new Error(e?.message || 'Failed to add support channel');
+    }
+  };
+
+  const handleUpdateSupportChannel = async (channel: Support) => {
+    if (!productId || !product || editingSupportChannelIndex === null) return;
+    try {
+      const updatedChannels = [...(product.support || [])];
+      updatedChannels[editingSupportChannelIndex] = channel;
+      const res = await fetch(`/api/data-products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...product, support: updatedChannels }),
+      });
+      if (!res.ok) throw new Error(`Failed to update support channel (${res.status})`);
+      await fetchProductDetails();
+      setEditingSupportChannelIndex(null);
+      toast({ title: 'Support Channel Updated', description: 'Support channel updated successfully.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to update support channel', variant: 'destructive' });
+      throw e;
+    }
+  };
+
+  const handleDeleteSupportChannel = async (index: number) => {
+    if (!productId || !product) return;
+    if (!confirm('Delete this support channel?')) return;
+    try {
+      const updatedChannels = (product.support || []).filter((_, i) => i !== index);
+      const res = await fetch(`/api/data-products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...product, support: updatedChannels }),
+      });
+      if (!res.ok) throw new Error(`Failed to delete support channel (${res.status})`);
+      await fetchProductDetails();
+      toast({ title: 'Support Channel Deleted', description: 'Support channel deleted successfully.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to delete support channel', variant: 'destructive' });
     }
   };
 
@@ -764,9 +920,33 @@ export default function DataProductDetails() {
           {product.inputPorts && product.inputPorts.length > 0 ? (
             <div className="space-y-2">
               {product.inputPorts.map((port, idx) => (
-                <div key={idx} className="border rounded p-3">
-                  <div className="font-medium">{port.name} (v{port.version})</div>
-                  <div className="text-sm text-muted-foreground">Contract: {port.contractId}</div>
+                <div key={idx} className="flex items-start justify-between border rounded p-3">
+                  <div className="flex-1">
+                    <div className="font-medium">{port.name} (v{port.version})</div>
+                    <div className="text-sm text-muted-foreground">Contract: {port.contractId}</div>
+                  </div>
+                  {canWrite && (
+                    <div className="flex gap-2 ml-3">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingInputPortIndex(idx);
+                          setIsInputPortDialogOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteInputPort(idx)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -807,6 +987,17 @@ export default function DataProductDetails() {
                     </div>
                     {canWrite && (
                       <div className="flex gap-2 ml-3">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setEditingOutputPortIndex(idx);
+                            setIsOutputPortDialogOpen(true);
+                          }}
+                          title="Edit port"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                         {port.contractId ? (
                           <Button
                             size="sm"
@@ -826,6 +1017,15 @@ export default function DataProductDetails() {
                             <Link2 className="h-4 w-4" />
                           </Button>
                         )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteOutputPort(idx)}
+                          className="text-destructive hover:text-destructive"
+                          title="Delete port"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -851,10 +1051,34 @@ export default function DataProductDetails() {
           {product.managementPorts && product.managementPorts.length > 0 ? (
             <div className="space-y-2">
               {product.managementPorts.map((port, idx) => (
-                <div key={idx} className="border rounded p-3">
-                  <div className="font-medium">{port.name}</div>
-                  <div className="text-sm">Content: {port.content}</div>
-                  {port.url && <div className="text-sm text-muted-foreground">URL: {port.url}</div>}
+                <div key={idx} className="flex items-start justify-between border rounded p-3">
+                  <div className="flex-1">
+                    <div className="font-medium">{port.name}</div>
+                    <div className="text-sm">Content: {port.content}</div>
+                    {port.url && <div className="text-sm text-muted-foreground">URL: {port.url}</div>}
+                  </div>
+                  {canWrite && (
+                    <div className="flex gap-2 ml-3">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingManagementPortIndex(idx);
+                          setIsManagementPortDialogOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteManagementPort(idx)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -941,10 +1165,34 @@ export default function DataProductDetails() {
           {product.support && product.support.length > 0 ? (
             <div className="space-y-2">
               {product.support.map((channel, idx) => (
-                <div key={idx} className="border rounded p-3">
-                  <div className="font-medium">{channel.channel}</div>
-                  <div className="text-sm">URL: <a href={channel.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{channel.url}</a></div>
-                  {channel.tool && <div className="text-sm text-muted-foreground">Tool: {channel.tool}</div>}
+                <div key={idx} className="flex items-start justify-between border rounded p-3">
+                  <div className="flex-1">
+                    <div className="font-medium">{channel.channel}</div>
+                    <div className="text-sm">URL: <a href={channel.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{channel.url}</a></div>
+                    {channel.tool && <div className="text-sm text-muted-foreground">Tool: {channel.tool}</div>}
+                  </div>
+                  {canWrite && (
+                    <div className="flex gap-2 ml-3">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingSupportChannelIndex(idx);
+                          setIsSupportChannelDialogOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteSupportChannel(idx)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -998,21 +1246,33 @@ export default function DataProductDetails() {
       {/* Nested Entity Form Dialogs */}
       <InputPortFormDialog
         isOpen={isInputPortDialogOpen}
-        onOpenChange={setIsInputPortDialogOpen}
-        onSubmit={handleAddInputPort}
+        onOpenChange={(open) => {
+          setIsInputPortDialogOpen(open);
+          if (!open) setEditingInputPortIndex(null);
+        }}
+        onSubmit={editingInputPortIndex !== null ? handleUpdateInputPort : handleAddInputPort}
+        initial={editingInputPortIndex !== null ? product?.inputPorts?.[editingInputPortIndex] : undefined}
       />
 
       <OutputPortFormDialog
         isOpen={isOutputPortDialogOpen}
-        onOpenChange={setIsOutputPortDialogOpen}
-        onSubmit={handleAddOutputPort}
+        onOpenChange={(open) => {
+          setIsOutputPortDialogOpen(open);
+          if (!open) setEditingOutputPortIndex(null);
+        }}
+        onSubmit={editingOutputPortIndex !== null ? handleUpdateOutputPort : handleAddOutputPort}
         product={product || undefined}
+        initial={editingOutputPortIndex !== null ? product?.outputPorts?.[editingOutputPortIndex] : undefined}
       />
 
       <ManagementPortFormDialog
         isOpen={isManagementPortDialogOpen}
-        onOpenChange={setIsManagementPortDialogOpen}
-        onSubmit={handleAddManagementPort}
+        onOpenChange={(open) => {
+          setIsManagementPortDialogOpen(open);
+          if (!open) setEditingManagementPortIndex(null);
+        }}
+        onSubmit={editingManagementPortIndex !== null ? handleUpdateManagementPort : handleAddManagementPort}
+        initial={editingManagementPortIndex !== null ? product?.managementPorts?.[editingManagementPortIndex] : undefined}
       />
 
       <TeamMemberFormDialog
@@ -1027,8 +1287,12 @@ export default function DataProductDetails() {
 
       <SupportChannelFormDialog
         isOpen={isSupportChannelDialogOpen}
-        onOpenChange={setIsSupportChannelDialogOpen}
-        onSubmit={handleAddSupportChannel}
+        onOpenChange={(open) => {
+          setIsSupportChannelDialogOpen(open);
+          if (!open) setEditingSupportChannelIndex(null);
+        }}
+        onSubmit={editingSupportChannelIndex !== null ? handleUpdateSupportChannel : handleAddSupportChannel}
+        initial={editingSupportChannelIndex !== null ? product?.support?.[editingSupportChannelIndex] : undefined}
       />
 
       {/* ODPS v1.0.0 Import/Export */}

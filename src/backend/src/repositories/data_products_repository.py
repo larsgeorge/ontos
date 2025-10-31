@@ -219,7 +219,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
 
         # Convert Pydantic model to dict if necessary
         if not isinstance(obj_in, dict):
-            update_data = obj_in.model_dump(exclude_unset=True)
+            update_data = obj_in.model_dump(exclude_unset=True, by_alias=True)
         else:
             update_data = obj_in
 
@@ -282,22 +282,22 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                     db_obj.custom_properties.append(prop_obj)
 
             # 5. Update Input Ports (replace all)
-            if 'inputPorts' in update_data:
+            if 'input_ports' in update_data:
                 db_obj.input_ports.clear()
-                for port_dict in update_data['inputPorts'] or []:
+                for port_dict in update_data['input_ports'] or []:
                     port_obj = InputPortDb(
                         name=port_dict['name'],
                         version=port_dict['version'],
-                        contract_id=port_dict['contractId'],
-                        asset_type=port_dict.get('assetType'),
-                        asset_identifier=port_dict.get('assetIdentifier')
+                        contract_id=port_dict['contract_id'],
+                        asset_type=port_dict.get('asset_type'),
+                        asset_identifier=port_dict.get('asset_identifier')
                     )
                     db_obj.input_ports.append(port_obj)
 
             # 6. Update Output Ports (replace all) with SBOM and InputContracts
-            if 'outputPorts' in update_data:
+            if 'output_ports' in update_data:
                 db_obj.output_ports.clear()
-                for port_dict in update_data['outputPorts'] or []:
+                for port_dict in update_data['output_ports'] or []:
                     # Serialize server
                     server_json = None
                     if port_dict.get('server'):
@@ -308,13 +308,13 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                         version=port_dict['version'],
                         description=port_dict.get('description'),
                         port_type=port_dict.get('type'),
-                        contract_id=port_dict.get('contractId'),
-                        asset_type=port_dict.get('assetType'),
-                        asset_identifier=port_dict.get('assetIdentifier'),
+                        contract_id=port_dict.get('contract_id'),
+                        asset_type=port_dict.get('asset_type'),
+                        asset_identifier=port_dict.get('asset_identifier'),
                         status=port_dict.get('status'),
                         server=server_json,
-                        contains_pii=port_dict.get('containsPii', False),
-                        auto_approve=port_dict.get('autoApprove', False)
+                        contains_pii=port_dict.get('contains_pii', False),
+                        auto_approve=port_dict.get('auto_approve', False)
                     )
 
                     # Add SBOM entries
@@ -327,8 +327,8 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                             port_obj.sbom.append(sbom_obj)
 
                     # Add InputContract entries
-                    if port_dict.get('inputContracts'):
-                        for contract_dict in port_dict['inputContracts']:
+                    if port_dict.get('input_contracts'):
+                        for contract_dict in port_dict['input_contracts']:
                             contract_obj = InputContractDb(
                                 contract_id=contract_dict['id'],
                                 contract_version=contract_dict['version']
@@ -338,9 +338,9 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                     db_obj.output_ports.append(port_obj)
 
             # 7. Update Management Ports (replace all)
-            if 'managementPorts' in update_data:
+            if 'management_ports' in update_data:
                 db_obj.management_ports.clear()
-                for mgmt_dict in update_data['managementPorts'] or []:
+                for mgmt_dict in update_data['management_ports'] or []:
                     mgmt_obj = ManagementPortDb(
                         name=mgmt_dict['name'],
                         content=mgmt_dict['content'],
@@ -352,62 +352,64 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                     db_obj.management_ports.append(mgmt_obj)
 
             # 8. Update Support Channels (replace all)
-            if 'support' in update_data:
+            if 'support_channels' in update_data:
                 db_obj.support_channels.clear()
-                for support_dict in update_data['support'] or []:
+                for support_dict in update_data['support_channels'] or []:
                     support_obj = SupportDb(
                         channel=support_dict['channel'],
                         url=support_dict['url'],
                         description=support_dict.get('description'),
                         tool=support_dict.get('tool'),
                         scope=support_dict.get('scope'),
-                        invitation_url=support_dict.get('invitationUrl')
+                        invitation_url=support_dict.get('invitation_url')
                     )
                     db_obj.support_channels.append(support_obj)
 
             # 9. Update Team with Members (replace all)
             if 'team' in update_data:
                 team_dict = update_data['team']
-                if db_obj.team:
-                    # Update existing team
-                    db_obj.team.name = team_dict.get('name', db_obj.team.name)
-                    db_obj.team.description = team_dict.get('description', db_obj.team.description)
+                # Only process team if team_dict is not None
+                if team_dict is not None:
+                    if db_obj.team:
+                        # Update existing team
+                        db_obj.team.name = team_dict.get('name', db_obj.team.name)
+                        db_obj.team.description = team_dict.get('description', db_obj.team.description)
 
-                    # Replace members
-                    db_obj.team.members.clear()
-                    if team_dict.get('members'):
-                        for member_dict in team_dict['members']:
-                            member_obj = DataProductTeamMemberDb(
-                                username=member_dict['username'],
-                                name=member_dict.get('name'),
-                                description=member_dict.get('description'),
-                                role=member_dict.get('role'),
-                                date_in=member_dict.get('dateIn'),
-                                date_out=member_dict.get('dateOut'),
-                                replaced_by_username=member_dict.get('replacedByUsername')
-                            )
-                            db_obj.team.members.append(member_obj)
-                else:
-                    # Create new team
-                    team_obj = DataProductTeamDb(
-                        name=team_dict.get('name'),
-                        description=team_dict.get('description')
-                    )
+                        # Replace members
+                        db_obj.team.members.clear()
+                        if team_dict.get('members'):
+                            for member_dict in team_dict['members']:
+                                member_obj = DataProductTeamMemberDb(
+                                    username=member_dict['username'],
+                                    name=member_dict.get('name'),
+                                    description=member_dict.get('description'),
+                                    role=member_dict.get('role'),
+                                    date_in=member_dict.get('date_in'),
+                                    date_out=member_dict.get('date_out'),
+                                    replaced_by_username=member_dict.get('replaced_by_username')
+                                )
+                                db_obj.team.members.append(member_obj)
+                    else:
+                        # Create new team
+                        team_obj = DataProductTeamDb(
+                            name=team_dict.get('name'),
+                            description=team_dict.get('description')
+                        )
 
-                    if team_dict.get('members'):
-                        for member_dict in team_dict['members']:
-                            member_obj = DataProductTeamMemberDb(
-                                username=member_dict['username'],
-                                name=member_dict.get('name'),
-                                description=member_dict.get('description'),
-                                role=member_dict.get('role'),
-                                date_in=member_dict.get('dateIn'),
-                                date_out=member_dict.get('dateOut'),
-                                replaced_by_username=member_dict.get('replacedByUsername')
-                            )
-                            team_obj.members.append(member_obj)
+                        if team_dict.get('members'):
+                            for member_dict in team_dict['members']:
+                                member_obj = DataProductTeamMemberDb(
+                                    username=member_dict['username'],
+                                    name=member_dict.get('name'),
+                                    description=member_dict.get('description'),
+                                    role=member_dict.get('role'),
+                                    date_in=member_dict.get('date_in'),
+                                    date_out=member_dict.get('date_out'),
+                                    replaced_by_username=member_dict.get('replaced_by_username')
+                                )
+                                team_obj.members.append(member_obj)
 
-                    db_obj.team = team_obj
+                        db_obj.team = team_obj
 
             # 10. Persist changes
             db.add(db_obj)

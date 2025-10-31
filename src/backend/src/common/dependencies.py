@@ -62,6 +62,11 @@ def get_db():
     db = session_factory() # Create a session instance from the factory
     try:
         yield db
+        db.commit()  # Commit the transaction on successful completion of the request
+    except Exception as e: # Catch all exceptions to ensure rollback
+        logger.error(f"Error during database session for request, rolling back: {e}", exc_info=True)
+        db.rollback()
+        raise
     finally:
         db.close()
 

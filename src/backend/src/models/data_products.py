@@ -364,10 +364,10 @@ class DataProductCreate(BaseModel):
     authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
     customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
     tags: Optional[List[str]] = Field(None, description="Tags")
-    inputPorts: Optional[List[InputPort]] = Field(None, description="Input ports")
-    outputPorts: Optional[List[OutputPort]] = Field(None, description="Output ports")
-    managementPorts: Optional[List[ManagementPort]] = Field(None, description="Management ports")
-    support: Optional[List[Support]] = Field(None, description="Support channels")
+    inputPorts: Optional[List[InputPort]] = Field(None, alias="input_ports", description="Input ports")
+    outputPorts: Optional[List[OutputPort]] = Field(None, alias="output_ports", description="Output ports")
+    managementPorts: Optional[List[ManagementPort]] = Field(None, alias="management_ports", description="Management ports")
+    support: Optional[List[Support]] = Field(None, alias="support_channels", description="Support channels")
     team: Optional[Team] = Field(None, description="Team")
 
     model_config = {
@@ -388,10 +388,10 @@ class DataProductUpdate(BaseModel):
     authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = None
     customProperties: Optional[List[CustomProperty]] = None
     tags: Optional[List[str]] = None
-    inputPorts: Optional[List[InputPort]] = None
-    outputPorts: Optional[List[OutputPort]] = None
-    managementPorts: Optional[List[ManagementPort]] = None
-    support: Optional[List[Support]] = None
+    inputPorts: Optional[List[InputPort]] = Field(None, alias="input_ports")
+    outputPorts: Optional[List[OutputPort]] = Field(None, alias="output_ports")
+    managementPorts: Optional[List[ManagementPort]] = Field(None, alias="management_ports")
+    support: Optional[List[Support]] = Field(None, alias="support_channels")
     team: Optional[Team] = None
 
     model_config = {

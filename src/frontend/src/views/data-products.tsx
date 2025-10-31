@@ -16,7 +16,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { RelativeDate } from '@/components/common/relative-date';
 import { useNavigate } from 'react-router-dom';
 import { DataTable } from "@/components/ui/data-table";
-import DataProductWizardDialog from '@/components/data-products/data-product-wizard-dialog';
+import DataProductCreateDialog from '@/components/data-products/data-product-create-dialog';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/settings';
 import { useNotificationsStore } from '@/stores/notifications-store';
@@ -52,7 +52,7 @@ const checkApiResponse: CheckApiResponseFn = (response, name) => {
 
 export default function DataProducts() {
   const [products, setProducts] = useState<DataProduct[]>([]);
-  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<DataProduct | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -175,8 +175,8 @@ export default function DataProducts() {
     }
   };
 
-  // --- Wizard Open Handler ---
-  const handleOpenWizard = (product?: DataProduct) => {
+  // --- Create Dialog Open Handler ---
+  const handleOpenCreateDialog = (product?: DataProduct) => {
       if (!canWrite && !product) { // Need write permission to create
           toast({ title: "Permission Denied", description: "You do not have permission to create data products.", variant: "destructive" });
           return;
@@ -186,12 +186,16 @@ export default function DataProducts() {
           return;
       }
       setProductToEdit(product || null);
-      setIsWizardOpen(true); // Use the new state variable
+      setIsCreateDialogOpen(true);
   };
 
-  // --- Wizard Submit Success Handler ---
-  const handleWizardSubmitSuccess = (_savedProduct: DataProduct) => {
+  // --- Create Dialog Success Handler ---
+  const handleCreateSuccess = (savedProduct: DataProduct) => {
     fetchProducts();
+    // Navigate to details view for newly created product
+    if (savedProduct.id && !productToEdit) {
+      navigate(`/data-products/${savedProduct.id}`);
+    }
   };
 
   // --- CRUD Handlers (Keep Delete and Upload here) ---
@@ -364,7 +368,7 @@ export default function DataProducts() {
 
   // --- Define these outside the columns definition --- 
   const handleEditClick = (product: DataProduct) => {
-      handleOpenWizard(product);
+      handleOpenCreateDialog(product);
   };
 
   const handleDeleteClick = (product: DataProduct) => {
@@ -529,7 +533,7 @@ export default function DataProducts() {
         );
       },
     },
-  ], [handleOpenWizard, handleDeleteProduct, getStatusColor, canWrite, canAdmin, permissionsLoading, navigate]);
+  ], [handleOpenCreateDialog, handleDeleteProduct, getStatusColor, canWrite, canAdmin, permissionsLoading, navigate]);
 
   // --- Button Variant Logic (Moved outside) ---
   // --- Render Logic ---
@@ -586,7 +590,7 @@ export default function DataProducts() {
                 <>
                   {/* Create Button - Conditionally enabled */}
                   <Button
-                      onClick={() => handleOpenWizard()}
+                      onClick={() => handleOpenCreateDialog()}
                       className="gap-2 h-9"
                       disabled={!canWrite || permissionsLoading}
                       title={canWrite ? "Create Data Product" : "Create (Permission Denied)"}
@@ -675,18 +679,14 @@ export default function DataProducts() {
         </div>
       )}
 
-      {/* Render the new Wizard Dialog Component */}
-      {isWizardOpen && (
-          <DataProductWizardDialog
-            isOpen={isWizardOpen}
-            onOpenChange={setIsWizardOpen}
-            initialProduct={productToEdit}
-            statuses={statuses}
-            owners={owners}
-            api={api}
-            onSubmitSuccess={handleWizardSubmitSuccess}
-          />
-       )}
+      {/* Render the Simple Create Dialog */}
+      <DataProductCreateDialog
+        open={isCreateDialogOpen}
+        onOpenChange={setIsCreateDialogOpen}
+        onSuccess={handleCreateSuccess}
+        product={productToEdit || undefined}
+        mode={productToEdit ? 'edit' : 'create'}
+      />
 
       {/* Render Toaster component (ideally place in root layout like App.tsx) */}
       <Toaster />

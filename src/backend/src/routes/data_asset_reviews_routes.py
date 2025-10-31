@@ -26,16 +26,12 @@ from databricks.sdk import WorkspaceClient
 from src.common.authorization import PermissionChecker
 from src.common.features import FeatureAccessLevel
 from src.common.dependencies import (
-    DBSessionDep, 
-    # Define annotated types for WorkspaceClient and NotificationsManager if not already done
-    # For now, assume they exist or need to be added to dependencies.py
-    # Let's use placeholder names WorkspaceClientDep, NotificationsManagerDep
-    # We need to define these properly in dependencies.py
-    # ---> Import DataAssetReviewManagerDep <--- (Assuming it's added to dependencies.py)
+    DBSessionDep,
     DataAssetReviewManagerDep,
-    # Import the newly defined types
     NotificationsManagerDep,
-    WorkspaceClientDep 
+    WorkspaceClientDep,
+    AuditManagerDep,
+    AuditCurrentUserDep,
 )
 
 from src.common.logging import get_logger
@@ -47,23 +43,51 @@ router = APIRouter(prefix="/api", tags=["data-asset-reviews"])
 
 @router.post("/data-asset-reviews", response_model=DataAssetReviewRequestApi, status_code=status.HTTP_201_CREATED)
 def create_review_request(
+    request: Request,
     request_data: DataAssetReviewRequestCreate,
-    # Inject manager directly using its Annotated type
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: DataAssetReviewManagerDep,
     _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_WRITE))
 ):
     """Create a new data asset review request."""
-    logger.info(f"Received request to create data asset review from {request_data.requester_email} for {request_data.reviewer_email}")
+    success = False
+    details = {
+        "params": {
+            "requester_email": request_data.requester_email,
+            "reviewer_email": request_data.reviewer_email,
+            "asset_count": len(request_data.assets)
+        }
+    }
+
     try:
-        # Pass db session if needed by the manager method
+        logger.info(f"Received request to create data asset review from {request_data.requester_email} for {request_data.reviewer_email}")
         created_request = manager.create_review_request(request_data=request_data)
+        success = True
+        details["request_id"] = created_request.id
         return created_request
     except ValueError as e:
         logger.warning("Value error creating review request: %s", e)
+        details["exception"] = {"type": "ValueError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid review request")
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
     except Exception as e:
         logger.exception("Unexpected error creating review request")
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error creating review request.")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="data-asset-reviews",
+            action="CREATE",
+            success=success,
+            details=details
+        )
 
 @router.get("/data-asset-reviews")
 def list_review_requests(
@@ -116,71 +140,153 @@ def get_review_request(
 
 @router.put("/data-asset-reviews/{request_id}/status", response_model=DataAssetReviewRequestApi)
 def update_review_request_status(
+    request: Request,
     request_id: str,
     status_update: DataAssetReviewRequestUpdateStatus,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: DataAssetReviewManagerDep,
     _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_WRITE))
 ):
     """Update the overall status of a data asset review request."""
-    logger.info(f"Updating status for review request ID: {request_id} to {status_update.status}")
+    success = False
+    details = {
+        "params": {
+            "request_id": request_id,
+            "new_status": status_update.status
+        }
+    }
+
     try:
+        logger.info(f"Updating status for review request ID: {request_id} to {status_update.status}")
         updated_request = manager.update_review_request_status(request_id=request_id, status_update=status_update)
         if updated_request is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review request not found")
+        success = True
         return updated_request
     except ValueError as e:
         logger.warning("Value error updating status for request %s: %s", request_id, e)
+        details["exception"] = {"type": "ValueError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status update")
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
     except Exception as e:
         logger.exception("Error updating status for request %s", request_id)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error updating request status.")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="data-asset-reviews",
+            action="UPDATE",
+            success=success,
+            details=details
+        )
 
 @router.put("/data-asset-reviews/{request_id}/assets/{asset_id}/status", response_model=ReviewedAssetApi)
 def update_reviewed_asset_status(
+    request: Request,
     request_id: str,
     asset_id: str,
     asset_update: ReviewedAssetUpdate,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: DataAssetReviewManagerDep,
     _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_WRITE))
 ):
     """Update the status and comments of a specific asset within a review request."""
-    logger.info(f"Updating status for asset ID: {asset_id} in request {request_id} to {asset_update.status}")
+    success = False
+    details = {
+        "params": {
+            "request_id": request_id,
+            "asset_id": asset_id,
+            "new_status": asset_update.status,
+            "comments": asset_update.comments
+        }
+    }
+
     try:
+        logger.info(f"Updating status for asset ID: {asset_id} in request {request_id} to {asset_update.status}")
         updated_asset = manager.update_reviewed_asset_status(request_id=request_id, asset_id=asset_id, asset_update=asset_update)
         if updated_asset is None:
             # Distinguish between request not found and asset not found in request
-            # Manager method should handle fetching request if needed
             request_exists = manager.get_review_request(request_id=request_id)
             if not request_exists:
                  raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review request not found")
             else:
                  raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found within the specified review request")
-                 
+
+        success = True
         return updated_asset
     except ValueError as e:
         logger.warning("Value error updating status for asset %s: %s", asset_id, e)
+        details["exception"] = {"type": "ValueError", "message": str(e)}
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status update")
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
     except Exception as e:
         logger.exception("Error updating status for asset %s", asset_id)
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error updating asset status.")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="data-asset-reviews",
+            action="UPDATE",
+            success=success,
+            details=details
+        )
 
 @router.delete("/data-asset-reviews/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_review_request(
+    request: Request,
     request_id: str,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: DataAssetReviewManagerDep,
     _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.ADMIN))
 ):
     """Delete a data asset review request."""
-    logger.info(f"Deleting review request ID: {request_id}")
+    success = False
+    details = {
+        "params": {
+            "request_id": request_id
+        }
+    }
+
     try:
+        logger.info(f"Deleting review request ID: {request_id}")
         deleted = manager.delete_review_request(request_id=request_id)
         if not deleted:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review request not found")
-        # Return No Content on success
+        success = True
         return
+    except HTTPException as e:
+        details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
+        raise
     except Exception as e:
         logger.exception(f"Error deleting review request {request_id}: {e}")
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error deleting review request.")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="data-asset-reviews",
+            action="DELETE",
+            success=success,
+            details=details
+        )
 
 # --- Routes for Asset Content/Preview --- #
 
@@ -258,16 +364,27 @@ async def get_table_preview(
 
 @router.post("/data-asset-reviews/{request_id}/assets/{asset_id}/analyze", response_model=AssetAnalysisResponse)
 async def analyze_asset_with_llm(
-    request: Request,  # Added to extract user token
+    request: Request,
     request_id: str,
     asset_id: str,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    audit_user: AuditCurrentUserDep,
     manager: DataAssetReviewManagerDep,
     _: bool = Depends(PermissionChecker('data-asset-reviews', FeatureAccessLevel.READ_ONLY))
 ):
     """Triggers LLM analysis for a specific asset's content."""
-    logger.info(f"Received request to analyze asset {asset_id} in request {request_id} with LLM.")
+    success = False
+    details = {
+        "params": {
+            "request_id": request_id,
+            "asset_id": asset_id
+        }
+    }
 
     try:
+        logger.info(f"Received request to analyze asset {asset_id} in request {request_id} with LLM.")
+
         # Extract user token from request headers (Databricks Apps context)
         user_token = request.headers.get("x-forwarded-access-token")
         if user_token:
@@ -276,10 +393,12 @@ async def analyze_asset_with_llm(
             logger.debug("No user token in headers, will use DATABRICKS_TOKEN")
 
         # 1. Fetch the reviewed asset to get its FQN and type
-        # get_reviewed_asset is synchronous, so it can be called directly.
         reviewed_asset_api = manager.get_reviewed_asset(request_id=request_id, asset_id=asset_id)
         if not reviewed_asset_api:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reviewed asset not found")
+
+        details["asset_fqn"] = reviewed_asset_api.asset_fqn
+        details["asset_type"] = reviewed_asset_api.asset_type.value
 
         # 2. Fetch the asset's definition (content) - this is an async call
         asset_content = await manager.get_asset_definition(
@@ -288,33 +407,44 @@ async def analyze_asset_with_llm(
         )
 
         if asset_content is None:
-            # Consider if asset_type is TABLE or MODEL, for which definition might be None
-            # but we might want to send schema or other metadata. For now, only code.
             if reviewed_asset_api.asset_type not in [AssetType.VIEW, AssetType.FUNCTION, AssetType.NOTEBOOK]:
                  raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"LLM content analysis currently only supports VIEW, FUNCTION, or NOTEBOOK types, not {reviewed_asset_api.asset_type.value}. Content could not be retrieved.")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset content not found or not available for analysis.")
 
-        # 3. Call the manager's analysis method with user token (synchronous)
-        # To call a synchronous method from an async route, FastAPI handles it by running it in a thread pool.
+        # 3. Call the manager's analysis method with user token
         analysis_result = manager.analyze_asset_content(
             request_id=request_id,
             asset_id=asset_id,
             asset_content=asset_content,
             asset_type=reviewed_asset_api.asset_type,
-            user_token=user_token  # Pass user token for Databricks Apps
+            user_token=user_token
         )
 
         if not analysis_result:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="LLM analysis failed or returned no result. Check server logs.")
 
+        success = True
+        details["analysis_completed"] = True
         return analysis_result
 
     except HTTPException as http_exc:
         logger.error(f"HTTPException during LLM analysis for asset {asset_id}: {http_exc.detail}")
+        details["exception"] = {"type": "HTTPException", "status_code": http_exc.status_code, "detail": http_exc.detail}
         raise http_exc
     except Exception as e:
         logger.exception(f"Unexpected error during LLM analysis for asset {asset_id} in request {request_id}: {e}")
+        details["exception"] = {"type": type(e).__name__, "message": str(e)}
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+    finally:
+        audit_manager.log_action(
+            db=db,
+            username=audit_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature="data-asset-reviews",
+            action="ANALYZE_ASSET",
+            success=success,
+            details=details
+        )
 
 # --- Register Routes (if using a central registration pattern) --- #
 def register_routes(app):
