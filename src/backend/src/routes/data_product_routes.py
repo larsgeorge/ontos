@@ -58,15 +58,8 @@ async def submit_product_certification(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: DataProductsManager = Depends(get_data_products_manager),
-    manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
-    """Submit a draft product for certification (draft → proposed)."""
-    try:
-        # Delegate to manager
-        updated_product = manager.submit_for_certification(product_id)
-
-        # Audit logging
     """Submit a draft product for certification (draft → proposed)."""
     try:
         # Delegate to manager
@@ -81,13 +74,7 @@ async def submit_product_certification(
             action='SUBMIT_CERTIFICATION',
             success=True,
             details={'product_id': product_id, 'status': updated_product.status}
-            details={'product_id': product_id, 'status': updated_product.status}
         )
-
-        return {'status': updated_product.status}
-    except ValueError as e:
-        logger.error("Validation error submitting product %s: %s", product_id, e)
-        raise HTTPException(status_code=409, detail=str(e))
 
         return {'status': updated_product.status}
     except ValueError as e:
@@ -182,22 +169,15 @@ async def publish_product(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: DataProductsManager = Depends(get_data_products_manager),
-    manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
     """
     Publish a proposed product to make it active and available in the marketplace.
-    Publish a proposed product to make it active and available in the marketplace.
 
     Validates that all output ports have dataContractId set before allowing publication.
     ODPS v1.0.0: proposed → active
-    ODPS v1.0.0: proposed → active
     """
     try:
-        # Delegate to manager
-        updated_product = manager.publish_product(product_id)
-
-        # Audit logging
         # Delegate to manager
         updated_product = manager.publish_product(product_id)
 
@@ -210,14 +190,8 @@ async def publish_product(
             action='PUBLISH',
             success=True,
             details={'product_id': product_id, 'status': updated_product.status}
-            details={'product_id': product_id, 'status': updated_product.status}
         )
 
-        return {'status': updated_product.status}
-    except ValueError as e:
-        logger.error("Validation error publishing product %s: %s", product_id, e)
-        error_status = 409 if "Invalid transition" in str(e) else 400
-        raise HTTPException(status_code=error_status, detail=str(e))
         return {'status': updated_product.status}
     except ValueError as e:
         logger.error("Validation error publishing product %s: %s", product_id, e)
@@ -238,19 +212,13 @@ async def deprecate_product(
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
     manager: DataProductsManager = Depends(get_data_products_manager),
-    manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
     """
     Deprecate an active product to signal it will be retired soon.
     ODPS v1.0.0: active → deprecated
-    ODPS v1.0.0: active → deprecated
     """
     try:
-        # Delegate to manager
-        updated_product = manager.deprecate_product(product_id)
-
-        # Audit logging
         # Delegate to manager
         updated_product = manager.deprecate_product(product_id)
 
@@ -263,13 +231,8 @@ async def deprecate_product(
             action='DEPRECATE',
             success=True,
             details={'product_id': product_id, 'status': updated_product.status}
-            details={'product_id': product_id, 'status': updated_product.status}
         )
 
-        return {'status': updated_product.status}
-    except ValueError as e:
-        logger.error("Validation error deprecating product %s: %s", product_id, e)
-        raise HTTPException(status_code=409, detail=str(e))
         return {'status': updated_product.status}
     except ValueError as e:
         logger.error("Validation error deprecating product %s: %s", product_id, e)
@@ -475,7 +438,6 @@ async def get_published_products(
 @router.post("/data-products/upload", response_model=List[DataProduct], status_code=201)
 async def upload_data_products(
     request: Request,
-    request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
@@ -495,7 +457,6 @@ async def upload_data_products(
             ip_address=request.client.host if request.client else None,
             feature=DATA_PRODUCTS_FEATURE_ID,
             action="UPLOAD_BATCH",
-            action="UPLOAD_BATCH",
             success=False,
             details={
                 "filename": safe_filename,
@@ -506,7 +467,6 @@ async def upload_data_products(
         )
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload a YAML or JSON file.")
 
-    # Tracking for audit
     # Tracking for audit
     success = False
     response_status_code = 500
@@ -584,15 +544,8 @@ async def upload_data_products(
 
     except ValueError as e:
         # File parsing or format errors
-    except ValueError as e:
-        # File parsing or format errors
         success = False
         response_status_code = 400
-        details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
-        logger.error(f"File processing error for {file.filename}: {e}")
-        raise HTTPException(status_code=response_status_code, detail=str(e))
-    except HTTPException:
-        # Re-raise HTTP exceptions (from partial success handling above)
         details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
         logger.error(f"File processing error for {file.filename}: {e}")
         raise HTTPException(status_code=response_status_code, detail=str(e))
@@ -601,25 +554,13 @@ async def upload_data_products(
         raise
     except Exception as e:
         # Unexpected errors
-    except Exception as e:
-        # Unexpected errors
         success = False
-        response_status_code = 500
-        error_msg = f"Unexpected error processing uploaded file: {e!s}"
-        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         response_status_code = 500
         error_msg = f"Unexpected error processing uploaded file: {e!s}"
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         logger.exception(error_msg)
         raise HTTPException(status_code=response_status_code, detail=error_msg)
     finally:
-        # Audit logging
-        details_for_audit["response_status_code"] = response_status_code
-        if created_ids:
-            details_for_audit["created_resource_ids"] = created_ids
-        if errors_list:
-            details_for_audit["item_processing_errors"] = errors_list
-
         # Audit logging
         details_for_audit["response_status_code"] = response_status_code
         if created_ids:
@@ -819,7 +760,6 @@ async def update_data_product(
         raise HTTPException(status_code=422, detail=e.errors())
 
     # Validate path ID matches body ID
-    # Validate path ID matches body ID
     if product_id != product_update.id:
         audit_manager.log_action(
             db=db,
@@ -829,17 +769,11 @@ async def update_data_product(
             action="UPDATE",
             success=False,
             details={"error": "ID mismatch", "product_id": product_id}
-            success=False,
-            details={"error": "ID mismatch", "product_id": product_id}
         )
-        raise HTTPException(status_code=400, detail="Product ID in path does not match ID in request body.")
         raise HTTPException(status_code=400, detail="Product ID in path does not match ID in request body.")
 
     # Tracking for audit
-    # Tracking for audit
     success = False
-    response_status_code = 500
-    details_for_audit = {"params": {"product_id": product_id}}
     response_status_code = 500
     details_for_audit = {"params": {"product_id": product_id}}
     updated_product_response = None
@@ -873,25 +807,15 @@ async def update_data_product(
         if not updated_product_response:
             response_status_code = 404
             raise HTTPException(status_code=404, detail="Data product not found")
-            raise HTTPException(status_code=404, detail="Data product not found")
 
         success = True
-        response_status_code = 200
         response_status_code = 200
         logger.info(f"Successfully updated data product with ID: {product_id}")
         return updated_product_response
 
     except PermissionError as e:
         # Project membership check failed
-    except PermissionError as e:
-        # Project membership check failed
         success = False
-        response_status_code = 403
-        details_for_audit["exception"] = {"type": "PermissionError", "message": str(e)}
-        logger.warning(f"Permission denied updating product {product_id}: {e}")
-        raise HTTPException(status_code=403, detail=str(e))
-    except ValueError as e:
-        # Validation errors from manager
         response_status_code = 403
         details_for_audit["exception"] = {"type": "PermissionError", "message": str(e)}
         logger.warning(f"Permission denied updating product {product_id}: {e}")
@@ -906,26 +830,15 @@ async def update_data_product(
     except HTTPException:
         # Re-raise HTTP exceptions
         raise
-        details_for_audit["exception"] = {"type": "ValueError", "message": str(e)}
-        logger.error(f"Validation error updating product {product_id}: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except HTTPException:
-        # Re-raise HTTP exceptions
-        raise
     except Exception as e:
-        # Unexpected errors
         # Unexpected errors
         success = False
         response_status_code = 500
         error_msg = f"Unexpected error updating data product {product_id}: {e!s}"
         details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
-        details_for_audit["exception"] = {"type": type(e).__name__, "message": str(e)}
         logger.exception(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
-        raise HTTPException(status_code=500, detail=error_msg)
     finally:
-        # Audit logging
-        details_for_audit["response_status_code"] = response_status_code
         # Audit logging
         details_for_audit["response_status_code"] = response_status_code
         if success and updated_product_response and hasattr(updated_product_response, 'id'):
