@@ -1,5 +1,110 @@
-Ontos
-Copyright 2025 Lars George
+Copyright (2025) Databricks, Inc.
 
-This product includes software developed at
-The Apache Software Foundation (http://www.apache.org/). 
+This Software includes software developed at Databricks (https://www.databricks.com/) and its use is subject to the included LICENSE file.
+
+________________
+This Software contains code from the following open source projects, licensed under the MIT license (https://opensource.org/license/mit):
+
+clauderic/dnd-kit - https://github.com/clauderic/dnd-kit
+Copyright (c) 2021, Claudéric Demers
+
+emotion-js/emotion - https://github.com/emotion-js/emotion
+Copyright (c) Emotion team and other contributors
+
+lukasbach/headless-tree - https://github.com/lukasbach/headless-tree
+Copyright (c) 2023 Lukas Bach
+
+react-hook-form/resolvers - https://github.com/react-hook-form/resolvers
+Copyright (c) 2019-present Beier(Bill) Luo
+
+radix-ui/primitives - https://github.com/radix-ui/primitives
+Copyright (c) 2022 WorkOS
+
+TanStack/table - https://github.com/TanStack/table
+Copyright (c) 2016 Tanner Linsley
+
+DefinitelyTyped/DefinitelyTyped - https://github.com/DefinitelyTyped/DefinitelyTyped
+Copyrights are respective of each contributor listed at the beginning of each definition file.
+
+react-dropzone/react-dropzone - https://github.com/react-dropzone/react-dropzone
+Copyright (c) 2018 Param Aggarwal
+
+ajv-validator/ajv-formats - https://github.com/ajv-validator/ajv-formats
+Copyright (c) 2020 Evgeny Poberezkin
+
+ajv-validator/ajv - https://github.com/ajv-validator/ajv
+Copyright (c) 2015-2021 Evgeny Poberezkin
+
+lukeed/clsx - https://github.com/lukeed/clsx
+Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)
+
+pacocoursey/cmdk - https://github.com/pacocoursey/cmdk
+Copyright (c) 2022 Paco Coursey
+
+date-fns/date-fns - https://github.com/date-fns/date-fns
+Copyright (c) 2021 Sasha Koss and Lesha Koss https://kossnocorp.mit-license.org
+
+motiondivision/motion - https://github.com/motiondivision/motion
+Copyright (c) 2024 Motion B.V.
+
+i18next/i18next-browser-languageDetector - https://github.com/i18next/i18next-browser-languageDetector
+Copyright (c) 2025 i18next
+
+i18next/i18next - https://github.com/i18next/i18next
+Copyright (c) 2025 i18next
+
+facebook/react - https://github.com/facebook/react
+Copyright (c) Meta Platforms, Inc. and affiliates.
+
+vasturiano/react-force-graph - https://github.com/vasturiano/react-force-graph
+Copyright (c) 2018 Vasco Asturiano
+
+react-hook-form/react-hook-form - https://github.com/react-hook-form/react-hook-form
+Copyright (c) 2019-present Beier(Bill) Luo
+
+i18next/react-i18next - https://github.com/i18next/react-i18next
+Copyright (c) 2025 i18next
+
+remarkjs/react-markdown - https://github.com/remarkjs/react-markdown
+Copyright (c) Espen Hovlandsdal
+
+remix-run/react-router - https://github.com/remix-run/react-router
+Copyright (c) React Training LLC 2015-2019 Copyright (c) Remix Software Inc. 2020-2021 Copyright (c) Shopify Inc. 2022-2023
+
+borisyankov/react-sparklines - https://github.com/borisyankov/react-sparklines
+Copyright (c) 2015 Boris Yankov
+
+react-syntax-highlighter/react-syntax-highlighter - https://github.com/react-syntax-highlighter/react-syntax-highlighter
+Copyright (c) 2019 Conor Hastings
+
+xyflow/xyflow - https://github.com/xyflow/xyflow
+Copyright (c) 2019-2025 webkid GmbH
+
+recharts/recharts - https://github.com/recharts/recharts
+Copyright (c) 2015-present recharts
+
+dcastil/tailwind-merge - https://github.com/dcastil/tailwind-merge
+Copyright (c) 2021 Dany Castillo
+
+tailwindcss-animate@1.0.7 - https://www.npmjs.com/package/tailwindcss-animate
+Copyright (c) 2020 Jamie Kyle
+
+colinhacks/zod - https://github.com/colinhacks/zod
+Copyright (c) 2025 Colin McDonnell
+
+pmndrs/zustand - https://github.com/pmndrs/zustand
+Copyright (c) 2019 Paul Henschel
+
+________________
+This Software contains code from the following open source projects, licensed under the Apache 2.0  license (https://www.apache.org/licenses/LICENSE-2.0):
+
+joe-bell/cva - https://github.com/joe-bell/cva
+Copyright 2022 Joe Bell
+
+________________
+This Software contains code from the following open source projects, licensed under the ISC  license (https://opensource.org/license/isc-license-txt):
+
+lucide-icons/lucide - https://github.com/lucide-icons/lucide
+Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2023 as part of Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributors 2025.
+
+
