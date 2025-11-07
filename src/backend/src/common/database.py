@@ -390,14 +390,6 @@ def ensure_database_and_schema_exist(settings: Settings):
     if not username:
         raise ValueError("Could not determine service principal username")
     
-    # Transform service principal UUID into valid PostgreSQL identifier
-    # UUIDs start with digits and contain hyphens, both invalid for PostgreSQL
-    if username and '-' in username and len(username) == 36:
-        # Likely a UUID (service principal ID) - make it PostgreSQL-safe
-        # Replace hyphens with underscores and prefix with 'sp_'
-        username = f"sp_{username.replace('-', '_')}"
-        logger.info(f"Transformed service principal UUID to PostgreSQL-safe identifier: {username}")
-    
     # Validate all PostgreSQL identifiers to prevent SQL injection
     # These come from configuration but defense-in-depth is important
     try:
