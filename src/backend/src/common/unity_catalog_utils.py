@@ -13,6 +13,7 @@ Key Features:
 """
 
 import re
+import uuid
 from typing import Any, Dict, List, Optional
 
 from databricks.sdk import WorkspaceClient
@@ -30,6 +31,32 @@ from fastapi import HTTPException
 from .logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def is_valid_uuid(identifier: str) -> bool:
+    """Check if a string is a valid UUID.
+    
+    This is used to identify Databricks service principal usernames, which are UUIDs.
+    UUIDs are inherently safe for use as database identifiers since they follow a
+    strict format and cannot contain SQL injection vectors.
+    
+    Args:
+        identifier: The string to check
+        
+    Returns:
+        True if the identifier is a valid UUID, False otherwise
+        
+    Example:
+        >>> is_valid_uuid("550e8400-e29b-41d4-a716-446655440000")
+        True
+        >>> is_valid_uuid("my_username")
+        False
+    """
+    try:
+        uuid.UUID(identifier)
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
 
 
 def sanitize_uc_identifier(identifier: str, max_length: int = 255) -> str:
@@ -85,6 +112,8 @@ def sanitize_postgres_identifier(identifier: str, max_length: int = 63) -> str:
     - Not exceed 63 characters (PostgreSQL NAMEDATALEN limit)
     - Not be a PostgreSQL reserved keyword
     
+    Special case: UUIDs are allowed as-is (for Databricks service principals).
+    
     This function provides SQL injection protection for PostgreSQL DDL operations
     that cannot use parameterized queries (like CREATE DATABASE).
     
@@ -103,6 +132,8 @@ def sanitize_postgres_identifier(identifier: str, max_length: int = 63) -> str:
         "my_database"
         >>> sanitize_postgres_identifier("select")
         ValueError: Invalid PostgreSQL identifier 'select': cannot use reserved keyword
+        >>> sanitize_postgres_identifier("550e8400-e29b-41d4-a716-446655440000")
+        "550e8400-e29b-41d4-a716-446655440000"
     """
     if not identifier or not isinstance(identifier, str):
         raise ValueError("PostgreSQL identifier must be a non-empty string")
@@ -114,6 +145,11 @@ def sanitize_postgres_identifier(identifier: str, max_length: int = 63) -> str:
         raise ValueError(
             f"PostgreSQL identifier exceeds maximum length of {max_length} characters"
         )
+    
+    # UUIDs are allowed as-is (Databricks service principals)
+    # UUIDs are inherently safe since they follow a strict format
+    if is_valid_uuid(identifier):
+        return identifier
     
     # PostgreSQL allows letters, digits, underscores, and dollar signs
     # Must start with letter or underscore

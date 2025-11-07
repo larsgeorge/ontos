@@ -772,29 +772,48 @@ def init_db() -> None:
 
         # No Databricks-specific metadata modifications required
 
-        # Check if we should drop all tables first (for development)
-        if settings.APP_DB_DROP_ON_START:
-            logger.warning("APP_DB_DROP_ON_START=true: Dropping all existing tables with CASCADE...")
-            with _engine.connect() as connection:
-                # Use raw SQL to drop schema and recreate it
-                schema_name = settings.POSTGRES_DB_SCHEMA or 'public'
-                
-                # Validate schema name to prevent SQL injection in DROP/CREATE commands
-                try:
-                    schema_name = sanitize_postgres_identifier(schema_name)
-                except ValueError as e:
-                    logger.error(f"Invalid PostgreSQL schema name for drop/create: {e}")
-                    raise ValueError(
-                        f"Invalid PostgreSQL schema identifier in POSTGRES_DB_SCHEMA: {e}. "
-                        "Please check configuration."
-                    ) from e
-                
+        # Ensure schema exists (always) and optionally drop/recreate if APP_DB_DROP_ON_START=true
+        schema_name = settings.POSTGRES_DB_SCHEMA or 'public'
+        
+        # Validate schema name to prevent SQL injection in DROP/CREATE commands
+        try:
+            schema_name = sanitize_postgres_identifier(schema_name)
+        except ValueError as e:
+            logger.error(f"Invalid PostgreSQL schema name for drop/create: {e}")
+            raise ValueError(
+                f"Invalid PostgreSQL schema identifier in POSTGRES_DB_SCHEMA: {e}. "
+                "Please check configuration."
+            ) from e
+        
+        with _engine.connect() as connection:
+            if settings.APP_DB_DROP_ON_START:
+                # Drop and recreate schema (for development)
+                logger.warning("APP_DB_DROP_ON_START=true: Dropping all existing tables with CASCADE...")
                 logger.warning(f"Dropping schema '{schema_name}' CASCADE and recreating...")
                 # DROP/CREATE SCHEMA cannot be parameterized, but identifier is validated
                 connection.execute(text(f"DROP SCHEMA IF EXISTS {schema_name} CASCADE"))
                 connection.execute(text(f"CREATE SCHEMA {schema_name}"))
                 connection.commit()
-            logger.warning("Schema dropped and recreated. This will recreate all tables from scratch.")
+                logger.warning("Schema dropped and recreated. This will recreate all tables from scratch.")
+            else:
+                # Ensure schema exists (don't drop if it already exists)
+                if schema_name != 'public':
+                    logger.info(f"Ensuring schema '{schema_name}' exists...")
+                    # Check if schema exists (using parameterized query)
+                    result = connection.execute(
+                        text("SELECT 1 FROM information_schema.schemata WHERE schema_name = :schemaname"),
+                        {"schemaname": schema_name}
+                    )
+                    schema_exists = result.scalar() is not None
+                    
+                    if not schema_exists:
+                        logger.info(f"Schema does not exist, creating: {schema_name}")
+                        # CREATE SCHEMA cannot be parameterized, but identifier is validated
+                        connection.execute(text(f"CREATE SCHEMA {schema_name}"))
+                        connection.commit()
+                        logger.info(f"✓ Schema created: {schema_name}")
+                    else:
+                        logger.info(f"✓ Schema already exists: {schema_name}")
 
         # Now, call create_all. It will operate on the potentially modified metadata.
         logger.info("Executing Base.metadata.create_all()...")
