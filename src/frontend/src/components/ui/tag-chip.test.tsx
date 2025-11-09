@@ -1,12 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderWithProviders } from '@/test/utils';
 import TagChip, { AssignedTag } from './tag-chip';
 
 describe('TagChip', () => {
   describe('Simple string tags', () => {
     it('renders simple string tag', () => {
-      render(<TagChip tag="simple-tag" />);
+      renderWithProviders(<TagChip tag="simple-tag" />);
 
       expect(screen.getByText('simple-tag')).toBeInTheDocument();
       expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
@@ -16,7 +17,7 @@ describe('TagChip', () => {
       const onRemove = vi.fn();
       const user = userEvent.setup();
 
-      render(
+      renderWithProviders(
         <TagChip
           tag="removable-tag"
           removable={true}
@@ -32,7 +33,7 @@ describe('TagChip', () => {
     });
 
     it('applies different sizes correctly', () => {
-      const { rerender } = render(<TagChip tag="test-tag" size="sm" />);
+      const { rerender } = renderWithProviders(<TagChip tag="test-tag" size="sm" />);
       const badge = screen.getByText('test-tag').closest('[class*="text-xs"]');
       expect(badge).toBeInTheDocument();
 
@@ -46,7 +47,7 @@ describe('TagChip', () => {
     });
 
     it('applies custom variant correctly', () => {
-      render(<TagChip tag="test-tag" variant="destructive" />);
+      renderWithProviders(<TagChip tag="test-tag" variant="destructive" />);
       // Badge component would apply the destructive variant styling
       expect(screen.getByText('test-tag')).toBeInTheDocument();
     });
@@ -66,7 +67,7 @@ describe('TagChip', () => {
     };
 
     it('renders rich tag with assigned value', () => {
-      render(<TagChip tag={mockAssignedTag} />);
+      renderWithProviders(<TagChip tag={mockAssignedTag} />);
 
       expect(screen.getByText('environment: production')).toBeInTheDocument();
 
@@ -84,7 +85,7 @@ describe('TagChip', () => {
         assigned_value: undefined
       };
 
-      render(<TagChip tag={tagWithoutValue} />);
+      renderWithProviders(<TagChip tag={tagWithoutValue} />);
 
       expect(screen.getByText('environment')).toBeInTheDocument();
       expect(screen.queryByText('environment: production')).not.toBeInTheDocument();
@@ -96,7 +97,7 @@ describe('TagChip', () => {
         status: 'deprecated'
       };
 
-      render(<TagChip tag={deprecatedTag} />);
+      renderWithProviders(<TagChip tag={deprecatedTag} />);
       // Component should apply destructive variant for deprecated status
       expect(screen.getByText('environment: production')).toBeInTheDocument();
     });
@@ -107,7 +108,7 @@ describe('TagChip', () => {
         status: 'draft'
       };
 
-      render(<TagChip tag={draftTag} />);
+      renderWithProviders(<TagChip tag={draftTag} />);
       // Component should apply secondary variant for draft status
       expect(screen.getByText('environment: production')).toBeInTheDocument();
     });
@@ -116,7 +117,7 @@ describe('TagChip', () => {
       const onRemove = vi.fn();
       const user = userEvent.setup();
 
-      render(
+      renderWithProviders(
         <TagChip
           tag={mockAssignedTag}
           removable={true}
@@ -135,7 +136,7 @@ describe('TagChip', () => {
       const onContainerClick = vi.fn();
       const user = userEvent.setup();
 
-      render(
+      renderWithProviders(
         <div onClick={onContainerClick}>
           <TagChip
             tag={mockAssignedTag}
@@ -155,7 +156,7 @@ describe('TagChip', () => {
 
   describe('Accessibility', () => {
     it('has proper ARIA labels for remove button', () => {
-      render(
+      renderWithProviders(
         <TagChip
           tag="accessibility-tag"
           removable={true}
@@ -178,7 +179,7 @@ describe('TagChip', () => {
         assigned_at: '2024-01-15T10:30:00Z'
       };
 
-      render(
+      renderWithProviders(
         <TagChip
           tag={richTag}
           removable={true}
@@ -193,14 +194,14 @@ describe('TagChip', () => {
 
   describe('Custom styling', () => {
     it('applies custom className', () => {
-      render(<TagChip tag="styled-tag" className="custom-class" />);
+      renderWithProviders(<TagChip tag="styled-tag" className="custom-class" />);
 
       const badge = screen.getByText('styled-tag').closest('.custom-class');
       expect(badge).toBeInTheDocument();
     });
 
     it('applies size classes correctly with removable', () => {
-      render(
+      renderWithProviders(
         <TagChip
           tag="removable-small"
           size="sm"

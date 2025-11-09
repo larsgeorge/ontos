@@ -84,3 +84,10 @@ personas:
   - securable_id: main.analytics
     securable_type: schema
     permission: READ
+- id: af3252b5-d74c-4166-8b68-36bbe4e45541
+  name: Data Analyst
+  description: Data analyst persona with read access
+  groups: []
+  created_at: '2025-11-05T13:43:41Z'
+  updated_at: '2025-11-05T13:43:41Z'
+  privileges: []

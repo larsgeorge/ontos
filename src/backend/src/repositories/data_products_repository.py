@@ -64,6 +64,7 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 version=obj_in.version,
                 domain=obj_in.domain,
                 tenant=obj_in.tenant,
+                owner_team_id=obj_in.owner_team_id,
                 project_id=None  # Set via manager if needed
             )
 

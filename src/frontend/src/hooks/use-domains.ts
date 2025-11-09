@@ -247,3 +247,18 @@ export const useDomains = () => {
     refetch: loadDomains,
   }
 }
+
+// Test utility to reset module-level cache
+export const __resetDomainsCache = () => {
+  globalDomainsCache = null
+  globalCachePromise = null
+  cachedServerVersion = null
+  try {
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(SERVER_VERSION_KEY)
+      window.localStorage.removeItem(DOMAINS_VERSION_KEY)
+    }
+  } catch {
+    // Ignore
+  }
+}

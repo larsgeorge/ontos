@@ -169,7 +169,7 @@ class ComplianceManager:
 
     def create_policy(self, db: Session, policy: CompliancePolicy) -> CompliancePolicyDb:
         db_obj = CompliancePolicyDb(
-            id=policy.id,
+            id=str(policy.id),  # Convert UUID to string for SQLite
             name=policy.name,
             description=policy.description,
             rule=policy.rule,

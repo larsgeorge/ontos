@@ -2,8 +2,9 @@
  * Tests for DataContractWizardDialog schema inference functionality
  */
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { renderWithProviders } from '@/test/utils'
 import DataContractWizardDialog from './data-contract-wizard-dialog'
 
 // Mock the hooks and components
@@ -18,9 +19,15 @@ vi.mock('@/hooks/use-domains', () => ({
   })
 }))
 
+// Create a shared mockToast function
+const mockToast = vi.fn()
+
 vi.mock('@/hooks/use-toast', () => ({
+  default: () => ({
+    toast: mockToast
+  }),
   useToast: () => ({
-    toast: vi.fn()
+    toast: mockToast
   })
 }))
 
@@ -98,7 +105,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
   })
 
   it('should render the wizard dialog', () => {
-    render(
+    renderWithProviders(
       <DataContractWizardDialog
         isOpen={true}
         onOpenChange={mockOnOpenChange}
@@ -106,16 +113,17 @@ describe('DataContractWizardDialog Schema Inference', () => {
       />
     )
 
-    expect(screen.getByText('Data Contract Wizard')).toBeInTheDocument()
+    expect(screen.getByText(/Data Contract Wizard/i)).toBeInTheDocument()
     expect(screen.getByText('Build a contract incrementally according to ODCS v3.0.2')).toBeInTheDocument()
   })
 
   it('should handle schema inference from UC dataset', async () => {
-    render(
+    renderWithProviders(
       <DataContractWizardDialog
         isOpen={true}
         onOpenChange={mockOnOpenChange}
         onSubmit={mockOnSubmit}
+        initial={{ name: 'Test Contract', version: '1.0.0', status: 'draft' }}
       />
     )
 
@@ -123,8 +131,13 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
+    // Wait for step 2 to appear - use getByText with partial match
+    await waitFor(() => {
+      expect(screen.getByText(/Infer from Dataset/i)).toBeInTheDocument()
+    }, { timeout: 5000 })
+
     // Click "Infer from Dataset" button
-    const inferButton = screen.getByText('🔍 Infer from Dataset')
+    const inferButton = screen.getByText(/Infer from Dataset/i)
     fireEvent.click(inferButton)
 
     // Click the dataset selection in the mocked dialog
@@ -146,11 +159,12 @@ describe('DataContractWizardDialog Schema Inference', () => {
   })
 
   it('should properly set physical and logical types from UC metadata', async () => {
-    render(
+    renderWithProviders(
       <DataContractWizardDialog
         isOpen={true}
         onOpenChange={mockOnOpenChange}
         onSubmit={mockOnSubmit}
+        initial={{ name: 'Test Contract', version: '1.0.0', status: 'draft' }}
       />
     )
 
@@ -158,7 +172,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    const inferButton = screen.getByText('🔍 Infer from Dataset')
+    const inferButton = screen.getByText(/Infer from Dataset/i)
     fireEvent.click(inferButton)
 
     const selectDatasetButton = screen.getByTestId('select-dataset')
@@ -179,11 +193,12 @@ describe('DataContractWizardDialog Schema Inference', () => {
   })
 
   it('should populate column descriptions from UC comments', async () => {
-    render(
+    renderWithProviders(
       <DataContractWizardDialog
         isOpen={true}
         onOpenChange={mockOnOpenChange}
         onSubmit={mockOnSubmit}
+        initial={{ name: 'Test Contract', version: '1.0.0', status: 'draft' }}
       />
     )
 
@@ -191,19 +206,19 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    const inferButton = screen.getByText('🔍 Infer from Dataset')
+    const inferButton = screen.getByText(/Infer from Dataset/i)
     fireEvent.click(inferButton)
 
     const selectDatasetButton = screen.getByTestId('select-dataset')
     fireEvent.click(selectDatasetButton)
 
-    // Wait for schema to be populated
+    // Wait for schema to be populated - use partial match since descriptions are long
     await waitFor(() => {
-      expect(screen.getByDisplayValue('A unique identifier for each entry in the table')).toBeInTheDocument()
+      expect(screen.getByDisplayValue(/A unique identifier for each entry/i)).toBeInTheDocument()
     })
 
     // Verify second column description
-    expect(screen.getByDisplayValue('Contains additional details related to each entry')).toBeInTheDocument()
+    expect(screen.getByDisplayValue(/Contains additional details related to each entry/i)).toBeInTheDocument()
   })
 
   it('should handle partition information correctly', async () => {
@@ -229,11 +244,12 @@ describe('DataContractWizardDialog Schema Inference', () => {
       json: () => Promise.resolve(partitionedResponse)
     })
 
-    render(
+    renderWithProviders(
       <DataContractWizardDialog
         isOpen={true}
         onOpenChange={mockOnOpenChange}
         onSubmit={mockOnSubmit}
+        initial={{ name: 'Test Contract', version: '1.0.0', status: 'draft' }}
       />
     )
 
@@ -241,7 +257,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    const inferButton = screen.getByText('🔍 Infer from Dataset')
+    const inferButton = screen.getByText(/Infer from Dataset/i)
     fireEvent.click(inferButton)
 
     const selectDatasetButton = screen.getByTestId('select-dataset')
@@ -259,16 +275,12 @@ describe('DataContractWizardDialog Schema Inference', () => {
   it('should handle fetch errors gracefully', async () => {
     mockFetch.mockRejectedValue(new Error('Network error'))
 
-    const mockToast = vi.fn()
-    vi.mocked(require('@/hooks/use-toast').useToast).mockReturnValue({
-      toast: mockToast
-    })
-
-    render(
+    renderWithProviders(
       <DataContractWizardDialog
         isOpen={true}
         onOpenChange={mockOnOpenChange}
         onSubmit={mockOnSubmit}
+        initial={{ name: 'Test Contract', version: '1.0.0', status: 'draft' }}
       />
     )
 
@@ -276,7 +288,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    const inferButton = screen.getByText('🔍 Infer from Dataset')
+    const inferButton = screen.getByText(/Infer from Dataset/i)
     fireEvent.click(inferButton)
 
     const selectDatasetButton = screen.getByTestId('select-dataset')
@@ -298,16 +310,12 @@ describe('DataContractWizardDialog Schema Inference', () => {
       status: 500
     })
 
-    const mockToast = vi.fn()
-    vi.mocked(require('@/hooks/use-toast').useToast).mockReturnValue({
-      toast: mockToast
-    })
-
-    render(
+    renderWithProviders(
       <DataContractWizardDialog
         isOpen={true}
         onOpenChange={mockOnOpenChange}
         onSubmit={mockOnSubmit}
+        initial={{ name: 'Test Contract', version: '1.0.0', status: 'draft' }}
       />
     )
 
@@ -315,7 +323,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    const inferButton = screen.getByText('🔍 Infer from Dataset')
+    const inferButton = screen.getByText(/Infer from Dataset/i)
     fireEvent.click(inferButton)
 
     const selectDatasetButton = screen.getByTestId('select-dataset')
@@ -332,16 +340,12 @@ describe('DataContractWizardDialog Schema Inference', () => {
   })
 
   it('should show enhanced success message with owner information', async () => {
-    const mockToast = vi.fn()
-    vi.mocked(require('@/hooks/use-toast').useToast).mockReturnValue({
-      toast: mockToast
-    })
-
-    render(
+    renderWithProviders(
       <DataContractWizardDialog
         isOpen={true}
         onOpenChange={mockOnOpenChange}
         onSubmit={mockOnSubmit}
+        initial={{ name: 'Test Contract', version: '1.0.0', status: 'draft' }}
       />
     )
 
@@ -349,7 +353,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    const inferButton = screen.getByText('🔍 Infer from Dataset')
+    const inferButton = screen.getByText(/Infer from Dataset/i)
     fireEvent.click(inferButton)
 
     const selectDatasetButton = screen.getByTestId('select-dataset')
@@ -383,11 +387,12 @@ describe('DataContractWizardDialog Schema Inference', () => {
       json: () => Promise.resolve(variedTypesResponse)
     })
 
-    render(
+    renderWithProviders(
       <DataContractWizardDialog
         isOpen={true}
         onOpenChange={mockOnOpenChange}
         onSubmit={mockOnSubmit}
+        initial={{ name: 'Test Contract', version: '1.0.0', status: 'draft' }}
       />
     )
 
@@ -395,7 +400,7 @@ describe('DataContractWizardDialog Schema Inference', () => {
     const nextButton = screen.getByRole('button', { name: /next/i })
     fireEvent.click(nextButton)
 
-    const inferButton = screen.getByText('🔍 Infer from Dataset')
+    const inferButton = screen.getByText(/Infer from Dataset/i)
     fireEvent.click(inferButton)
 
     const selectDatasetButton = screen.getByTestId('select-dataset')

@@ -49,6 +49,11 @@ deploy-and-run = [
   'databricks bundle deploy --var="catalog=app_data" --var="schema=app_ontos"',
   "databricks bundle run app_ontos",
 ]
+test = "pytest"
+test-cov = "pytest --cov=backend/src --cov-report=html --cov-report=term"
+test-unit = "pytest backend/src/tests/unit"
+test-integration = "pytest backend/src/tests/integration"
+test-cov-xml = "pytest --cov=backend/src --cov-report=xml --cov-report=term"
 
 [tool.hatch.envs.dev.env]
 PYTHONPATH = "./backend"
@@ -60,3 +65,39 @@ pythonpath = [
   "backend/src"
 ]
 testpaths = ["backend/src/tests"]
+addopts = [
+    "--cov=backend/src",
+    "--cov-report=html",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
+    "--cov-fail-under=80",
+    "-v"
+]
+
+[tool.coverage.run]
+source = ["backend/src"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+    "*/migrations/*",
+    "*/alembic/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "backend/htmlcov"

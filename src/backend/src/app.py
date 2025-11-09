@@ -88,6 +88,13 @@ STATIC_ASSETS_PATH = BASE_DIR.parent / "static"
 
 # Application Startup Event
 async def startup_event():
+    import os
+    
+    # Skip startup tasks if running tests
+    if os.getenv('SKIP_STARTUP_TASKS') == 'true':
+        logger.info("SKIP_STARTUP_TASKS=true detected - skipping startup tasks (test mode)")
+        return
+    
     logger.info("Running application startup event...")
     settings = get_settings()
     

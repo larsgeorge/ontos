@@ -1,0 +1,596 @@
+"""
+Unit tests for DataDomainManager
+
+Tests business logic for data domain operations including:
+- CRUD operations (create, read, update, delete)
+- Hierarchical relationships (parent-child)
+- Tag management integration
+- Search functionality
+"""
+import pytest
+from unittest.mock import Mock, MagicMock, patch
+import uuid
+from sqlalchemy.orm import Session
+
+from src.controller.data_domains_manager import DataDomainManager
+from src.repositories.data_domain_repository import DataDomainRepository
+from src.models.data_domains import DataDomainCreate, DataDomainUpdate, DataDomainRead
+from src.db_models.data_domains import DataDomain
+from src.common.errors import NotFoundError, ConflictError
+from src.tests.helpers import create_sample_domain_dict
+
+
+class TestDataDomainManager:
+    """Test suite for DataDomainManager"""
+
+    @pytest.fixture
+    def mock_tags_manager(self):
+        """Create a mocked TagsManager."""
+        mock = MagicMock()
+        mock.list_assigned_tags.return_value = []
+        return mock
+
+    @pytest.fixture
+    def repository(self, db_session: Session):
+        """Create DataDomainRepository instance for testing."""
+        return DataDomainRepository()
+
+    @pytest.fixture
+    def manager(self, repository, mock_tags_manager):
+        """Create DataDomainManager instance for testing."""
+        return DataDomainManager(
+            repository=repository,
+            tags_manager=mock_tags_manager
+        )
+
+    @pytest.fixture
+    def sample_domain_data(self):
+        """Sample data domain data for testing."""
+        return {
+            "name": "Test Data Domain",
+            "description": "Test domain for unit tests",
+            "tags": None,
+            "parent_id": None,
+        }
+
+    # =====================================================================
+    # Create Domain Tests
+    # =====================================================================
+
+    def test_create_domain_success(self, manager, db_session, sample_domain_data):
+        """Test successful domain creation with all required fields."""
+        # Arrange
+        domain_create = DataDomainCreate(**sample_domain_data)
+        current_user = "test@example.com"
+
+        # Act
+        result = manager.create_domain(
+            db=db_session,
+            domain_in=domain_create,
+            current_user_id=current_user
+        )
+
+        # Assert
+        assert result is not None
+        assert isinstance(result, DataDomainRead)
+        assert result.name == sample_domain_data["name"]
+        assert result.description == sample_domain_data["description"]
+        assert result.created_by == current_user
+        
+        # Verify DB persistence
+        db_domain = db_session.query(DataDomain).filter_by(name=result.name).first()
+        assert db_domain is not None
+
+    def test_create_domain_with_parent(self, manager, db_session, sample_domain_data):
+        """Test creating domain with parent relationship."""
+        # Arrange - Create parent domain first
+        parent_create = DataDomainCreate(
+            name="Parent Domain",
+            description="Parent domain",
+        )
+        parent = manager.create_domain(
+            db=db_session,
+            domain_in=parent_create,
+            current_user_id="test@example.com"
+        )
+        db_session.commit()
+
+        # Act - Create child domain
+        child_data = sample_domain_data.copy()
+        child_data["name"] = "Child Domain"
+        child_data["parent_id"] = parent.id  # parent.id is already a UUID object
+        child_create = DataDomainCreate(**child_data)
+        
+        result = manager.create_domain(
+            db=db_session,
+            domain_in=child_create,
+            current_user_id="test@example.com"
+        )
+
+        # Assert
+        assert result.parent_id == parent.id
+        assert result.parent_name == parent.name
+        assert result.parent_info is not None
+        assert result.parent_info.id == parent.id
+
+    def test_create_domain_with_nonexistent_parent_fails(
+        self, manager, db_session, sample_domain_data
+    ):
+        """Test that creating domain with non-existent parent fails."""
+        # Arrange
+        sample_domain_data["parent_id"] = uuid.uuid4()
+        domain_create = DataDomainCreate(**sample_domain_data)
+
+        # Act & Assert
+        with pytest.raises(NotFoundError) as exc_info:
+            manager.create_domain(
+                db=db_session,
+                domain_in=domain_create,
+                current_user_id="test@example.com"
+            )
+        
+        assert "not found" in str(exc_info.value).lower()
+
+    def test_create_domain_duplicate_name_fails(
+        self, manager, db_session, sample_domain_data
+    ):
+        """Test that creating domain with duplicate name fails."""
+        # Arrange - Create first domain
+        domain_create = DataDomainCreate(**sample_domain_data)
+        manager.create_domain(
+            db=db_session,
+            domain_in=domain_create,
+            current_user_id="test@example.com"
+        )
+        db_session.commit()
+
+        # Act & Assert - Try to create duplicate
+        with pytest.raises(ConflictError) as exc_info:
+            manager.create_domain(
+                db=db_session,
+                domain_in=domain_create,
+                current_user_id="test@example.com"
+            )
+        
+        assert "already exists" in str(exc_info.value).lower()
+
+    def test_create_domain_with_tags(
+        self, manager, db_session, sample_domain_data, mock_tags_manager
+    ):
+        """Test domain creation with tag assignments."""
+        # Arrange
+        sample_domain_data["tags"] = [
+            {"name": "tag1", "value": "value1"},
+            {"name": "tag2", "value": "value2"},
+        ]
+        domain_create = DataDomainCreate(**sample_domain_data)
+
+        # Act
+        result = manager.create_domain(
+            db=db_session,
+            domain_in=domain_create,
+            current_user_id="test@example.com"
+        )
+
+        # Assert
+        assert result is not None
+        # Verify tags were assigned via TagsManager
+        mock_tags_manager.assign_tags.assert_called_once()
+
+    # =====================================================================
+    # Get Domain Tests
+    # =====================================================================
+
+    def test_get_domain_by_id_exists(self, manager, db_session, sample_domain_data):
+        """Test retrieving existing domain by ID."""
+        # Arrange
+        domain_create = DataDomainCreate(**sample_domain_data)
+        created = manager.create_domain(
+            db=db_session,
+            domain_in=domain_create,
+            current_user_id="test@example.com"
+        )
+
+        # Act
+        # created.id is already a string UUID, we need to convert to UUID object for manager
+        result = manager.get_domain_by_id(db=db_session, domain_id=created.id)
+
+        # Assert
+        assert result is not None
+        assert str(result.id) == str(created.id)
+        assert result.name == created.name
+
+    def test_get_domain_by_id_not_found(self, manager, db_session):
+        """Test retrieving non-existent domain raises NotFoundError."""
+        # Act & Assert
+        with pytest.raises(NotFoundError):
+            manager.get_domain_by_id(db=db_session, domain_id=uuid.uuid4())
+
+    def test_get_domain_loads_parent_and_children_info(
+        self, manager, db_session
+    ):
+        """Test that get_domain loads parent and children information."""
+        # Arrange - Create hierarchy
+        parent_create = DataDomainCreate(name="Parent", description="Parent")
+        parent = manager.create_domain(
+            db=db_session,
+            domain_in=parent_create,
+            current_user_id="test@example.com"
+        )
+        
+        child1_create = DataDomainCreate(
+            name="Child 1",
+            parent_id=uuid.UUID(parent.id)
+        )
+        child1 = manager.create_domain(
+            db=db_session,
+            domain_in=child1_create,
+            current_user_id="test@example.com"
+        )
+        
+        child2_create = DataDomainCreate(
+            name="Child 2",
+            parent_id=uuid.UUID(parent.id)
+        )
+        manager.create_domain(
+            db=db_session,
+            domain_in=child2_create,
+            current_user_id="test@example.com"
+        )
+        db_session.commit()
+
+        # Act - Get parent
+        parent_result = manager.get_domain_by_id(
+            db=db_session,
+            domain_id=uuid.UUID(parent.id)
+        )
+
+        # Assert
+        assert parent_result.children_count == 2
+        assert len(parent_result.children_info) == 2
+        
+        # Act - Get child
+        child_result = manager.get_domain_by_id(
+            db=db_session,
+            domain_id=uuid.UUID(child1.id)
+        )
+        
+        # Assert
+        assert child_result.parent_name == "Parent"
+        assert child_result.parent_info is not None
+
+    # =====================================================================
+    # List Domains Tests
+    # =====================================================================
+
+    def test_get_all_domains_empty(self, manager, db_session):
+        """Test listing domains when none exist."""
+        # Act
+        result = manager.get_all_domains(db=db_session)
+
+        # Assert
+        assert isinstance(result, list)
+        assert len(result) == 0
+
+    def test_get_all_domains_multiple(self, manager, db_session):
+        """Test listing multiple domains."""
+        # Arrange
+        for i in range(3):
+            domain_create = DataDomainCreate(
+                name=f"Domain {i}",
+                description=f"Domain {i} description",
+            )
+            manager.create_domain(
+                db=db_session,
+                domain_in=domain_create,
+                current_user_id="test@example.com"
+            )
+
+        # Act
+        result = manager.get_all_domains(db=db_session)
+
+        # Assert
+        assert len(result) == 3
+        assert all(isinstance(d, DataDomainRead) for d in result)
+
+    def test_get_all_domains_pagination(self, manager, db_session):
+        """Test pagination with skip and limit."""
+        # Arrange
+        for i in range(10):
+            domain_create = DataDomainCreate(
+                name=f"Domain {i:02d}",
+                description=f"Domain {i} description",
+            )
+            manager.create_domain(
+                db=db_session,
+                domain_in=domain_create,
+                current_user_id="test@example.com"
+            )
+
+        # Act - Get second page
+        result = manager.get_all_domains(db=db_session, skip=5, limit=3)
+
+        # Assert
+        assert len(result) == 3
+
+    # =====================================================================
+    # Update Domain Tests
+    # =====================================================================
+
+    def test_update_domain_success(self, manager, db_session, sample_domain_data):
+        """Test successful domain update."""
+        # Arrange
+        domain_create = DataDomainCreate(**sample_domain_data)
+        created = manager.create_domain(
+            db=db_session,
+            domain_in=domain_create,
+            current_user_id="test@example.com"
+        )
+        db_session.commit()
+
+        update_data = DataDomainUpdate(
+            name="Updated Domain Name",
+            description="Updated description",
+        )
+
+        # Act
+        result = manager.update_domain(
+            db=db_session,
+            domain_id=uuid.UUID(created.id),
+            domain_in=update_data,
+            current_user_id="test@example.com"
+        )
+
+        # Assert
+        assert result is not None
+        assert result.name == "Updated Domain Name"
+        assert result.description == "Updated description"
+
+    def test_update_domain_not_found(self, manager, db_session):
+        """Test updating non-existent domain raises NotFoundError."""
+        # Arrange
+        update_data = DataDomainUpdate(name="Updated Name")
+
+        # Act & Assert
+        with pytest.raises(NotFoundError):
+            manager.update_domain(
+                db=db_session,
+                domain_id=uuid.uuid4(),
+                domain_in=update_data,
+                current_user_id="test@example.com"
+            )
+
+    def test_update_domain_duplicate_name_fails(self, manager, db_session):
+        """Test that updating to duplicate name fails."""
+        # Arrange - Create two domains
+        domain1 = manager.create_domain(
+            db=db_session,
+            domain_in=DataDomainCreate(name="Domain 1"),
+            current_user_id="test@example.com"
+        )
+        
+        domain2 = manager.create_domain(
+            db=db_session,
+            domain_in=DataDomainCreate(name="Domain 2"),
+            current_user_id="test@example.com"
+        )
+        db_session.commit()
+
+        # Act & Assert - Try to rename domain2 to domain1's name
+        with pytest.raises(ConflictError):
+            manager.update_domain(
+                db=db_session,
+                domain_id=uuid.UUID(domain2.id),
+                domain_in=DataDomainUpdate(name="Domain 1"),
+                current_user_id="test@example.com"
+            )
+
+    def test_update_domain_change_parent(self, manager, db_session):
+        """Test updating domain's parent relationship."""
+        # Arrange - Create two potential parents and a child
+        parent1 = manager.create_domain(
+            db=db_session,
+            domain_in=DataDomainCreate(name="Parent 1"),
+            current_user_id="test@example.com"
+        )
+        
+        parent2 = manager.create_domain(
+            db=db_session,
+            domain_in=DataDomainCreate(name="Parent 2"),
+            current_user_id="test@example.com"
+        )
+        
+        child = manager.create_domain(
+            db=db_session,
+            domain_in=DataDomainCreate(
+                name="Child",
+                parent_id=uuid.UUID(parent1.id)
+            ),
+            current_user_id="test@example.com"
+        )
+        db_session.commit()
+
+        # Act - Change parent
+        result = manager.update_domain(
+            db=db_session,
+            domain_id=uuid.UUID(child.id),
+            domain_in=DataDomainUpdate(parent_id=uuid.UUID(parent2.id)),
+            current_user_id="test@example.com"
+        )
+
+        # Assert
+        assert result.parent_id == parent2.id
+        assert result.parent_name == "Parent 2"
+
+    def test_update_domain_with_tags(
+        self, manager, db_session, sample_domain_data, mock_tags_manager
+    ):
+        """Test updating domain with new tags."""
+        # Arrange
+        domain_create = DataDomainCreate(**sample_domain_data)
+        created = manager.create_domain(
+            db=db_session,
+            domain_in=domain_create,
+            current_user_id="test@example.com"
+        )
+        db_session.commit()
+
+        from src.models.tags import AssignedTagCreate
+        update_data = DataDomainUpdate(
+            tags=[AssignedTagCreate(name="new-tag", value="new-value")]
+        )
+
+        # Act
+        result = manager.update_domain(
+            db=db_session,
+            domain_id=uuid.UUID(created.id),
+            domain_in=update_data,
+            current_user_id="test@example.com"
+        )
+
+        # Assert
+        assert result is not None
+        # Tag updates handled by tags manager
+        # (actual tag assignment verified in integration tests)
+
+    def test_update_domain_self_parent_prevention(
+        self, manager, db_session
+    ):
+        """Test that setting domain as its own parent is prevented."""
+        # Arrange - Create a domain
+        domain = manager.create_domain(
+            db=db_session,
+            domain_in=DataDomainCreate(name="Domain"),
+            current_user_id="test@example.com"
+        )
+        db_session.commit()
+        domain_id = uuid.UUID(domain.id)
+
+        # Act & Assert - Try to make domain its own parent
+        from src.common.errors import AppError
+        with pytest.raises(AppError) as exc_info:
+            manager.update_domain(
+                db=db_session,
+                domain_id=domain_id,
+                domain_in=DataDomainUpdate(parent_id=domain_id),
+                current_user_id="test@example.com"
+            )
+        
+        assert "own parent" in str(exc_info.value).lower()
+
+    # =====================================================================
+    # Delete Domain Tests
+    # =====================================================================
+
+    def test_delete_domain_success(self, manager, db_session, sample_domain_data):
+        """Test successful domain deletion."""
+        # Arrange
+        domain_create = DataDomainCreate(**sample_domain_data)
+        created = manager.create_domain(
+            db=db_session,
+            domain_in=domain_create,
+            current_user_id="test@example.com"
+        )
+        domain_id = uuid.UUID(created.id)
+
+        # Act
+        manager.delete_domain(db=db_session, domain_id=domain_id)
+
+        # Assert - Verify deletion
+        with pytest.raises(NotFoundError):
+            manager.get_domain_by_id(db=db_session, domain_id=domain_id)
+
+    def test_delete_domain_not_found(self, manager, db_session):
+        """Test deleting non-existent domain raises NotFoundError."""
+        # Act & Assert
+        with pytest.raises(NotFoundError):
+            manager.delete_domain(
+                db=db_session,
+                domain_id=uuid.uuid4(),
+                current_user_id="test@example.com"
+            )
+
+    def test_delete_domain_with_children_cascades(self, manager, db_session):
+        """Test that deleting domain with children cascades (based on DB model cascade setting)."""
+        # Arrange - Create parent with child
+        parent = manager.create_domain(
+            db=db_session,
+            domain_in=DataDomainCreate(name="Parent"),
+            current_user_id="test@example.com"
+        )
+        
+        child = manager.create_domain(
+            db=db_session,
+            domain_in=DataDomainCreate(
+                name="Child",
+                parent_id=uuid.UUID(parent.id)
+            ),
+            current_user_id="test@example.com"
+        )
+        child_id = uuid.UUID(child.id)
+        db_session.commit()
+
+        # Act - Delete parent (should cascade to children based on DB model)
+        result = manager.delete_domain(
+            db=db_session,
+            domain_id=uuid.UUID(parent.id),
+            current_user_id="test@example.com"
+        )
+        db_session.commit()
+
+        # Assert - Parent deleted successfully
+        assert result is not None
+        
+        # Child should also be deleted (cascade)
+        with pytest.raises(NotFoundError):
+            manager.get_domain_by_id(db=db_session, domain_id=child_id)
+
+    # =====================================================================
+    # Search Interface Tests
+    # =====================================================================
+
+    def test_get_search_index_items(self, manager, db_session):
+        """Test that manager provides search index items."""
+        # Arrange
+        for i in range(3):
+            domain_create = DataDomainCreate(
+                name=f"Searchable Domain {i}",
+                description=f"Description {i}",
+            )
+            manager.create_domain(
+                db=db_session,
+                domain_in=domain_create,
+                current_user_id="test@example.com"
+            )
+
+        # Act
+        result = manager.get_search_index_items()
+
+        # Assert
+        assert isinstance(result, list)
+        assert len(result) == 3
+        # Each item should have required search fields
+        for item in result:
+            assert hasattr(item, 'id')
+            assert hasattr(item, 'title')
+            assert hasattr(item, 'description')
+
+    # =====================================================================
+    # Error Handling Tests
+    # =====================================================================
+
+    def test_create_domain_db_error_handling(
+        self, manager, db_session, sample_domain_data
+    ):
+        """Test graceful handling of database errors during creation."""
+        # Arrange - Force DB error by closing session
+        domain_create = DataDomainCreate(**sample_domain_data)
+        db_session.close()
+
+        # Act & Assert
+        with pytest.raises(Exception):  # SQLAlchemy error
+            manager.create_domain(
+                db=db_session,
+                domain_in=domain_create,
+                current_user_id="test@example.com"
+            )

@@ -1,32 +1,50 @@
+# Set test environment variables BEFORE any app imports
+# This prevents the app from running startup tasks (database init, etc.) during import
+import os
+os.environ['TESTING'] = 'true'
+os.environ['SKIP_STARTUP_TASKS'] = 'true'
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool  # For in-memory SQLite persistence
 from unittest.mock import MagicMock
 import tempfile
 import shutil
 
-# Adjust the import path according to your project structure
-# This assumes your FastAPI app instance is named `app` in `api.app`
+# Now safe to import app - startup tasks will be skipped
 from src.app import app
-from src.common.database import Base, get_db # Removed engine import from here
+from src.common.database import Base, get_db, set_session_factory # Import setter
 from src.common.dependencies import get_settings_manager
 from src.common.config import Settings # Import the main Settings model
 from src.controller.settings_manager import SettingsManager
 from src.controller.authorization_manager import AuthorizationManager
+from src.controller.data_domains_manager import DataDomainManager  # Add this
+from src.repositories.data_domain_repository import DataDomainRepository  # Add this
 from databricks.sdk import WorkspaceClient # For mocking
 from src.common.authorization import get_user_details_from_sdk
+from src.common.manager_dependencies import get_data_domain_manager  # Add this
 from src.models.users import UserInfo
 from src.db_models.audit_log import AuditLogDb
 from src.common.manager_dependencies import get_auth_manager
+from src.db_models.data_products import DataProductDb
+from src.models.data_products import DataProduct
+# Import all DB models so SQLAlchemy knows about them when creating tables
+from src.db_models.data_domains import DataDomain  # Add this
+from src.db_models.settings import AppRoleDb  # Already created by settings fixture but good to be explicit
+import uuid
 
 
 # In-memory SQLite database for testing
+# IMPORTANT: Use a single shared connection to persist schema across test functions
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
 # Create a new engine for SQLite
 test_engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False} # check_same_thread is needed for SQLite
+    SQLALCHEMY_DATABASE_URL, 
+    connect_args={"check_same_thread": False}, # check_same_thread is needed for SQLite
+    poolclass=StaticPool  # Use a single connection for in-memory SQLite
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
@@ -44,34 +62,47 @@ def temp_audit_log_dir():
 def setup_test_database(temp_audit_log_dir): # Add temp_audit_log_dir dependency if needed for settings
     """
     Fixture to create all tables in the in-memory SQLite database once per test session.
+    Initializes the global session factory for use by get_db().
     """
+    # Initialize the global session factory so get_db() doesn't raise an error
+    # This allows the original get_db() to work, but we'll override it per-test for transaction isolation
+    set_session_factory(TestingSessionLocal)
+    
     Base.metadata.create_all(bind=test_engine)
     yield
     Base.metadata.drop_all(bind=test_engine) # Clean up after tests
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="function", autouse=True)
 def db_session(setup_test_database): # Depends on the session-scoped setup
     """
     Provides a database session for each test function, with transaction rollback.
+    This fixture is autouse=True so it runs for ALL tests, ensuring get_db() is overridden.
     """
     connection = test_engine.connect()
     transaction = connection.begin()
     db = TestingSessionLocal(bind=connection)
 
-    original_get_db = app.dependency_overrides.get(get_db)
-    app.dependency_overrides[get_db] = lambda: db
+    # Override get_db to return our test session
+    # Must be a generator function (context manager) to match the original get_db signature
+    def override_get_db():
+        try:
+            yield db
+        finally:
+            pass  # We manage the session lifecycle in the fixture itself
+
+    # Set the override BEFORE any test code runs
+    app.dependency_overrides[get_db] = override_get_db
 
     yield db
 
+    # Cleanup
     db.close()
     transaction.rollback()
     connection.close()
-
-    if original_get_db:
-        app.dependency_overrides[get_db] = original_get_db
-    else:
-        del app.dependency_overrides[get_db]
+    
+    # Remove the override after the test
+    app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.fixture(scope="function")
@@ -197,22 +228,33 @@ def client(db_session: Session, test_settings: Settings, mock_workspace_client: 
     authorization_manager_instance = AuthorizationManager(
         settings_manager=settings_manager_instance
     )
+    
+    # Create DataDomainManager instance for tests
+    data_domain_repository = DataDomainRepository()
+    data_domain_manager_instance = DataDomainManager(
+        repository=data_domain_repository
+    )
 
     def override_get_settings_manager():
         return settings_manager_instance
 
     def override_get_auth_manager():
         return authorization_manager_instance
+    
+    def override_get_data_domain_manager():
+        return data_domain_manager_instance
 
     async def override_get_user_details():
         return mock_test_user
 
     original_get_settings_manager = app.dependency_overrides.get(get_settings_manager)
     original_get_auth_manager = app.dependency_overrides.get(get_auth_manager)
+    original_get_data_domain_manager = app.dependency_overrides.get(get_data_domain_manager)
     original_get_user_details = app.dependency_overrides.get(get_user_details_from_sdk)
 
     app.dependency_overrides[get_settings_manager] = override_get_settings_manager
     app.dependency_overrides[get_auth_manager] = override_get_auth_manager
+    app.dependency_overrides[get_data_domain_manager] = override_get_data_domain_manager
     app.dependency_overrides[get_user_details_from_sdk] = override_get_user_details
 
     with TestClient(app) as c:
@@ -227,8 +269,74 @@ def client(db_session: Session, test_settings: Settings, mock_workspace_client: 
         app.dependency_overrides[get_auth_manager] = original_get_auth_manager
     else:
         app.dependency_overrides.pop(get_auth_manager, None)
+    
+    if original_get_data_domain_manager:
+        app.dependency_overrides[get_data_domain_manager] = original_get_data_domain_manager
+    else:
+        app.dependency_overrides.pop(get_data_domain_manager, None)
 
     if original_get_user_details:
         app.dependency_overrides[get_user_details_from_sdk] = original_get_user_details
     else:
-        app.dependency_overrides.pop(get_user_details_from_sdk, None) 
+        app.dependency_overrides.pop(get_user_details_from_sdk, None)
+
+
+# ============================================================================
+# Data Product Fixtures
+# ============================================================================
+
+@pytest.fixture
+def sample_data_product(db_session: Session):
+    """Create and return a sample data product in the database."""
+    product_data = DataProductDb(
+        id=str(uuid.uuid4()),
+        name="Sample Test Product",
+        version="1.0.0",
+        status="draft",
+        product_type="sourceAligned",
+        owner="test@example.com",
+        description='{"purpose": "Test product for fixtures"}',
+    )
+    db_session.add(product_data)
+    db_session.commit()
+    db_session.refresh(product_data)
+    return product_data
+
+
+@pytest.fixture
+def sample_data_product_dict():
+    """Return a dictionary representing a data product for API calls."""
+    return {
+        "id": str(uuid.uuid4()),
+        "name": "API Test Product",
+        "description": {"purpose": "Test product for API testing"},
+        "version": "1.0.0",
+        "productType": "sourceAligned",
+        "status": "draft",
+        "owner": "test@example.com",
+        "tags": ["test", "fixture"],
+    }
+
+
+@pytest.fixture
+def multiple_data_products(db_session: Session):
+    """Create multiple data products for list/pagination testing."""
+    products = []
+    for i in range(5):
+        product = DataProductDb(
+            id=str(uuid.uuid4()),
+            name=f"Test Product {i}",
+            version="1.0.0",
+            status="draft" if i < 2 else "active",
+            product_type="sourceAligned",
+            owner=f"owner{i}@example.com",
+            description=f'{{"purpose": "Test product {i}"}}',
+        )
+        db_session.add(product)
+        products.append(product)
+
+    db_session.commit()
+    for product in products:
+        db_session.refresh(product)
+
+    return products 
