@@ -1,42 +1,37 @@
 command: ['python', 'backend/src/app.py']
 
 env:
+  - name: "ENV"
+    value: "PROD"
+  - name: "APP_DEMO_MODE"
+    value: "false"
+  - name: "APP_DB_DROP_ON_START"
+    value: "false"
+
   - name: "PYTHONPATH"
     value: "./backend:${PYTHONPATH}"
   - name: "PYTHONUNBUFFERED"
     value: "1"
   - name: "FRONTEND_STATIC_DIR"
     value: "./static"
+
   - name: "POSTGRES_HOST"
-    valueFrom: "database_instance"
+    valueFrom: "database"
   - name: "POSTGRES_PORT"
     value: "5432"
-  # POSTGRES_USER is auto-detected from service principal in OAuth mode - not needed
-  # - name: "POSTGRES_USER"
-  #   value: "<app_svc_principal>"
   - name: "POSTGRES_DB"
     value: "app_ontos"
   - name: "POSTGRES_DB_SCHEMA"
     value: "app_ontos"
-  - name: "LAKEBASE_INSTANCE_NAME"
-    value: "ontos"
   
-  - name: "ENV"
-    value: "PROD"
-
   - name: "DATABRICKS_WAREHOUSE_ID"
-    valueFrom: "sql_warehouse"
+    valueFrom: "sql-warehouse"
   - name: "DATABRICKS_CATALOG"
     value: "app_data"
   - name: "DATABRICKS_SCHEMA"
     value: "app_ontos"
   - name: "DATABRICKS_VOLUME"
     value: "app_files"
-
-  - name: "APP_DEMO_MODE"
-    value: "true"
-  - name: "APP_DB_DROP_ON_START"
-    value: "true"
 
   - name: "APP_ADMIN_DEFAULT_GROUPS"
     value: '["admins"]'
@@ -45,6 +40,6 @@ env:
     #value: "/Volumes/${workspace.env.DATABRICKS_CATALOG}/${workspace.env.DATABRICKS_SCHEMA}/${workspace.env.DATABRICKS_VOLUME}/audit_logs"
   
   - name: "LLM_ENDPOINT"
-    valueFrom: "serving_endpoint"
+    valueFrom: "serving-endpoint"
   - name: "WORKSPACE_DEPLOYMENT_PATH"
     value: "/Workspace/Users/lars.george@databricks.com/ontos-jobs"
