@@ -11,6 +11,18 @@ export default defineConfig(({ command }) => ({
     },
     extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
   },
+  // Exclude test dependencies from Vite's dependency optimization
+  optimizeDeps: {
+    exclude: [
+      '@playwright/test',
+      'playwright',
+      'playwright-core',
+      '@testing-library/react',
+      '@testing-library/jest-dom',
+      '@testing-library/user-event',
+      'vitest',
+    ],
+  },
   test: {
     globals: true,
     environment: 'jsdom',
@@ -32,6 +44,18 @@ export default defineConfig(({ command }) => ({
   },
   server: {
     port: 3000,
+    // Exclude test files from file watching to prevent bundling errors
+    watch: {
+      ignored: [
+        '**/*.test.ts',
+        '**/*.test.tsx',
+        '**/*.spec.ts',
+        '**/*.spec.tsx',
+        '**/test/**',
+        '**/tests/**',
+        '**/__tests__/**',
+      ],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
