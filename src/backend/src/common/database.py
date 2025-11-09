@@ -83,6 +83,27 @@ _token_refresh_thread: Optional[threading.Thread] = None
 _token_refresh_stop_event = threading.Event()
 
 
+def get_lakebase_instance_name(app_name: str, ws_client) -> Optional[str]:
+    """Get the Lakebase instance name from the Databricks App resources.
+    
+    Args:
+        app_name: Name of the Databricks App
+        ws_client: Workspace client instance
+        
+    Returns:
+        The database instance name, or None if not found
+    """
+    try:
+        app_info = ws_client.apps.get(app_name)
+        if app_info.resources:
+            for resource in app_info.resources:
+                if resource.database is not None:
+                    return resource.database.instance_name
+    except Exception as e:
+        logger.error(f"Failed to get instance name for app {app_name}: {e}")
+    return None
+
+
 @dataclass
 class InMemorySession:
     """In-memory session for managing transactions."""
@@ -254,10 +275,10 @@ def refresh_oauth_token(settings: Settings) -> str:
     
     with _token_refresh_lock:
         ws_client = get_workspace_client(settings)
-        instance_name = settings.LAKEBASE_INSTANCE_NAME
+        instance_name = get_lakebase_instance_name(settings.DATABRICKS_APP_NAME, ws_client)
         
         if not instance_name:
-            raise ValueError("LAKEBASE_INSTANCE_NAME required for OAuth mode")
+            raise ValueError(f"Could not determine Lakebase instance name for app '{settings.DATABRICKS_APP_NAME}'")
         
         logger.info(f"Generating OAuth token for Lakebase instance: {instance_name}")
         cred = ws_client.database.generate_database_credential(

@@ -108,8 +108,6 @@ The application requires a `.env` file in the root directory for configuration. 
 | `POSTGRES_PASSWORD`        | Password for the PostgreSQL user (required for `ENV=LOCAL`, not needed for Lakebase OAuth)                    | `your_secure_password`                     | Cond.    |
 | `POSTGRES_DB`              | Name of the PostgreSQL database to use                                                                        | `app_ontos_db`                               | Cond.    |
 | `POSTGRES_DB_SCHEMA`       | Database schema to use for application tables (Optional, defaults to `public` for PostgreSQL)                 | `app_ontos`                                  | No       |
-| `LAKEBASE_INSTANCE_NAME`   | Lakebase instance name for OAuth authentication (required for production Lakebase deployments)                | `my-lakebase-instance`                       | Cond.    |
-| `LAKEBASE_DATABASE_NAME`   | Optional Lakebase database name (defaults to `POSTGRES_DB` if not set)                                        | `app_ontos`                                  | No       |
 | `DB_POOL_SIZE`             | Base database connection pool size                                                                            | `5`                                          | No       |
 | `DB_MAX_OVERFLOW`          | Additional database connections under load                                                                    | `10`                                         | No       |
 | `DB_POOL_TIMEOUT`          | Max seconds to wait for a database connection from the pool                                                   | `10`                                         | No       |
@@ -136,7 +134,7 @@ The application stores its metadata (settings, roles, reviews, etc.) in PostgreS
 
 **Authentication Modes:**
 - **Local Development (`ENV=LOCAL`)**: Uses password authentication with `POSTGRES_PASSWORD`
-- **Production (`ENV=DEV` or `ENV=PROD`)**: Uses OAuth token authentication for Lakebase with `LAKEBASE_INSTANCE_NAME`
+- **Production (`ENV=DEV` or `ENV=PROD`)**: Uses OAuth token authentication for Lakebase (instance name is fetched dynamically)
 
 **Required PostgreSQL variables:**
 
@@ -146,11 +144,6 @@ The application stores its metadata (settings, roles, reviews, etc.) in PostgreS
 - `POSTGRES_PASSWORD`: Password for the PostgreSQL user (required for `ENV=LOCAL` only).
 - `POSTGRES_DB`: Database name on the PostgreSQL server.
 - `POSTGRES_DB_SCHEMA`: Optional schema in the PostgreSQL database (defaults to `public`).
-
-**Lakebase-specific variables (for production):**
-
-- `LAKEBASE_INSTANCE_NAME`: The name of your Lakebase database instance (required when not using password auth).
-- `LAKEBASE_DATABASE_NAME`: Optional database name override (defaults to `POSTGRES_DB`).
 
 #### Connection Pool Settings
 
@@ -312,8 +305,8 @@ When deploying to production with Lakebase, the application uses **OAuth token a
         value: "app_ontos"
     - name: "POSTGRES_DB_SCHEMA"
         value: "app_ontos"
-    - name: "LAKEBASE_INSTANCE_NAME"
-        valueFrom: "database_instance"  # The readable instance name
+    - name: "DATABRICKS_APP_NAME"
+        value: "ontos"  # Used to fetch Lakebase instance name dynamically
     - name: "ENV"
         value: "PROD"  # Triggers OAuth mode (not LOCAL)
     ```
@@ -365,15 +358,6 @@ When deploying to production with Lakebase, the application uses **OAuth token a
 - **Token refresh:** Tokens refresh every 50 minutes in the background (before 60-minute expiry)
 - **Connection pooling:** Fresh tokens are automatically injected into database connections
 - **No hardcoding:** Service principal names are never hardcoded in configuration files
-
-**Note:** For background jobs, use `POSTGRES_PASSWORD_SECRET` to pass the secret reference:
-
-```yaml
-- name: "POSTGRES_PASSWORD_SECRET"
-    value: "ontos/db_password"  # Only needed for job workflows
-```
-
-This allows jobs to retrieve database credentials securely using the Databricks Secrets API. 
 
 ## Installation
 

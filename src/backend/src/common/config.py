@@ -37,13 +37,8 @@ class Settings(BaseSettings):
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: Optional[str] = None
     POSTGRES_PASSWORD: Optional[str] = None
-    POSTGRES_PASSWORD_SECRET: Optional[str] = None  # Databricks secret name (e.g., "ontos/postgres_password")
     POSTGRES_DB: Optional[str] = None
     POSTGRES_DB_SCHEMA: Optional[str] = "public" # Default schema for Postgres
-    
-    # Lakebase connection settings (for OAuth-based authentication in production)
-    LAKEBASE_INSTANCE_NAME: Optional[str] = None  # Lakebase instance name for OAuth
-    LAKEBASE_DATABASE_NAME: Optional[str] = None  # Optional, defaults to POSTGRES_DB
     
     # Database connection pool settings
     DB_POOL_SIZE: int = Field(5, env='DB_POOL_SIZE')  # Base connection pool size
@@ -60,6 +55,7 @@ class Settings(BaseSettings):
     DATABRICKS_VOLUME: str
     DATABRICKS_TOKEN: Optional[str] = None  # Optional since handled by SDK
     DATABRICKS_HTTP_PATH: Optional[str] = None # Will be computed by validator
+    DATABRICKS_APP_NAME: str = Field("ontos", env='DATABRICKS_APP_NAME')  # Name of the Databricks App
 
     # Environment
     ENV: str = "PROD"  # LOCAL, DEV, PROD
