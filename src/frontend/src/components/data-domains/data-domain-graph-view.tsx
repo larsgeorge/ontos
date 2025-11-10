@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useEffect } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import ReactFlow, {
     Node,
     Edge,
@@ -15,7 +15,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { useNavigate } from 'react-router-dom';
 import { DataDomain } from '@/types/data-domain';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ListTree } from 'lucide-react';
 import dagre from 'dagre'; // Import dagre

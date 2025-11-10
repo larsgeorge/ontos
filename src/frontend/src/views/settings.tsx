@@ -45,7 +45,7 @@ export default function Settings() {
   });
   // Local saving state for this view (not used for Jobs tab)
   // Keeping these in case we later add saving of general fields
-  const [isLoading, setIsLoading] = useState(false);
+  // const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {}, []);
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MessageSquare, X, Plus, Trash2, Edit, Send, Users, Filter, Clock, FileText } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, Edit, Send, Users, Filter, Clock, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
@@ -7,7 +7,6 @@ import {
   Comment,
   CommentCreate,
   CommentUpdate,
-  CommentListResponse,
   CommentSidebarProps,
 } from '@/types/comments';
 import {
@@ -25,7 +24,6 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar } from '@/components/ui/avatar';
 import { RelativeDate } from '@/components/common/relative-date';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface CommentFormData {
@@ -172,7 +170,9 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       const createData: CommentCreate = {
         entity_id: entityId,
         entity_type: entityType,
-        ...commentData,
+        title: formData.title || null,
+        comment: formData.comment,
+        audience: formData.audience.length > 0 ? formData.audience : null,
       };
       
       const response = await post<Comment>(

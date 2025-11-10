@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -10,7 +10,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useNavigate } from 'react-router-dom';
-import { DataDomain, DataDomainBasicInfo } from '@/types/data-domain';
+import { DataDomain } from '@/types/data-domain';
 import { Card } from '@/components/ui/card'; // Simple card for node
 
 interface DataDomainMiniGraphProps {

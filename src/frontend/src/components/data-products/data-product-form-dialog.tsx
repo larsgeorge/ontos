@@ -4,12 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Plus, AlertCircle, ChevronDown, X, Loader2, Check, ChevronsUpDown } from 'lucide-react';
+import { Plus, AlertCircle, X, Loader2, Check, ChevronsUpDown } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { DataProduct, Info, InputPort, OutputPort, Server, DataProductStatus, DataProductArchetype, DataProductOwner, MetastoreTableInfo, Link as DataProductLink, DataProductType } from '@/types/data-product';
+import { DataProduct, DataProductStatus, DataProductOwner, MetastoreTableInfo, Link as DataProductLink, DataProductType } from '@/types/data-product';
 import { useForm, useFieldArray, Controller, SubmitHandler } from 'react-hook-form';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from "@/lib/utils"

@@ -33,9 +33,8 @@ import {
   Loader2,
   ExternalLink,
 } from 'lucide-react';
-import ReactFlow, { Node, Edge, Background, MarkerType, Controls, ConnectionMode, MiniMap, Position } from 'reactflow';
+import ReactFlow, { Node, Edge, Background, MarkerType, Controls, ConnectionMode } from 'reactflow';
 import ForceGraph2D from 'react-force-graph-2d';
-import dagre from 'dagre';
 import 'reactflow/dist/style.css';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
 import { cn } from '@/lib/utils';
@@ -136,31 +135,31 @@ const UnifiedConceptTree: React.FC<UnifiedConceptTreeProps> = ({
   onShowKnowledgeGraph
 }) => {
   // Helper function to find the path from root to a specific concept
-  const findPathToConcept = useCallback((targetIri: string, conceptMap: Map<string, OntologyConcept>, hierarchy: Map<string, string[]>): string[] => {
-    const visited = new Set<string>();
-    
-    const findPath = (currentIri: string, path: string[]): string[] | null => {
-      if (visited.has(currentIri)) return null;
-      visited.add(currentIri);
-      
-      if (currentIri === targetIri) {
-        return [...path, currentIri];
-      }
-      
-      // Check children
-      const children = hierarchy.get(currentIri) || [];
-      for (const childIri of children) {
-        const result = findPath(childIri, [...path, currentIri]);
-        if (result) return result;
-      }
-      
-      return null;
-    };
-    
-    // Start from root
-    const result = findPath('root', []);
-    return result || [];
-  }, []);
+  // const findPathToConcept = useCallback((targetIri: string, conceptMap: Map<string, OntologyConcept>, hierarchy: Map<string, string[]>): string[] => {
+  //   const visited = new Set<string>();
+  //
+  //   const findPath = (currentIri: string, path: string[]): string[] | null => {
+  //     if (visited.has(currentIri)) return null;
+  //     visited.add(currentIri);
+  //
+  //     if (currentIri === targetIri) {
+  //       return [...path, currentIri];
+  //     }
+  //
+  //     // Check children
+  //     const children = hierarchy.get(currentIri) || [];
+  //     for (const childIri of children) {
+  //       const result = findPath(childIri, [...path, currentIri]);
+  //       if (result) return result;
+  //     }
+  //
+  //     return null;
+  //   };
+  //
+  //   // Start from root
+  //   const result = findPath('root', []);
+  //   return result || [];
+  // }, []);
 
   // Build hierarchical data structure for Headless Tree
   const treeData = useMemo(() => {
@@ -605,7 +604,7 @@ export default function SemanticModelsView() {
   // Tabs removed; show sections in a single view
   const [stats, setStats] = useState<TaxonomyStats | null>(null);
   const [showKnowledgeGraph, setShowKnowledgeGraph] = useState(false);
-  const [graphExpanded, setGraphExpanded] = useState<Set<string>>(new Set());
+  // const [graphExpanded, setGraphExpanded] = useState<Set<string>>(new Set());
 
   // Legacy form state removed - Phase 0 (read-only ontologies)
 

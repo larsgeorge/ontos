@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { X, Shapes, Columns2 } from 'lucide-react'
@@ -22,8 +22,6 @@ export default function BusinessConceptsDisplay({
   concepts = [],
   onConceptsChange,
   parentConceptIris,
-  entityType,
-  entityId,
   conceptType = 'class'
 }: BusinessConceptsDisplayProps) {
   const [showDialog, setShowDialog] = useState(false)

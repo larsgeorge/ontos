@@ -3,7 +3,7 @@ import { GitBranch, ArrowUp, ArrowDown, Calendar, User } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useToast } from '@/hooks/useToast'
+import { useToast } from '@/hooks/use-toast'
 import { Skeleton } from '@/components/ui/skeleton'
 
 type ContractSummary = {
