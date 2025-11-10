@@ -99,18 +99,16 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
       <CardHeader>
         <CardTitle className="text-xl flex items-center gap-2">
           {t('title')}
-          {entityType === 'data_product' && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={() => setShowPreview(true)}>
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('previewRenderedPage')}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => setShowPreview(true)}>
+                  <Eye className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('previewRenderedPage')}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </CardTitle>
         <CardDescription>{t('description')}</CardDescription>
       </CardHeader>
@@ -576,15 +574,13 @@ const EntityMetadataPanel: React.FC<Props> = ({ entityId, entityType }) => {
         </Dialog>
       </CardContent>
     </Card>
-    {entityType === 'data_product' && (
-      <EntityInfoDialog
-        entityType={'data_product'}
-        entityId={entityId}
-        title={undefined}
-        open={showPreview}
-        onOpenChange={setShowPreview}
-      />
-    )}
+    <EntityInfoDialog
+      entityType={entityType}
+      entityId={entityId}
+      title={undefined}
+      open={showPreview}
+      onOpenChange={setShowPreview}
+    />
   </>
   );
 };
