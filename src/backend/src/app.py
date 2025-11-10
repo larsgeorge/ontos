@@ -7,6 +7,7 @@ setup_logging(level=settings.LOG_LEVEL, log_file=settings.LOG_FILE)
 logger = get_logger(__name__)
 
 import mimetypes
+import os
 import time
 from pathlib import Path
 
@@ -175,8 +176,9 @@ app.add_middleware(
 app.add_middleware(ErrorHandlingMiddleware)
 app.add_middleware(LoggingMiddleware)
 
-# Mount static files for the React application
-app.mount("/static", StaticFiles(directory=STATIC_ASSETS_PATH, html=True), name="static")
+# Mount static files for the React application (skip in test mode)
+if not os.environ.get('TESTING'):
+    app.mount("/static", StaticFiles(directory=STATIC_ASSETS_PATH, html=True), name="static")
 
 # Data Management features
 data_product_routes.register_routes(app)
@@ -237,23 +239,24 @@ async def get_app_version():
         'timestamp': int(time.time())
     }
 
-# Define the SPA catch-all route LAST
-@app.get("/{full_path:path}")
-def serve_spa(full_path: str):
-    # Only catch routes that aren't API routes or static files
-    # This check might be redundant now due to ordering, but safe to keep
-    if not full_path.startswith("api/") and not full_path.startswith("static/"):
-        # Ensure the path exists before serving
-        spa_index = STATIC_ASSETS_PATH / "index.html"
-        if spa_index.is_file():
-           return FileResponse(spa_index, media_type="text/html")
-        else:
-           # Optional: Return a 404 or a simple HTML message if index.html is missing
-           logger.error(f"SPA index.html not found at {spa_index}")
-           return HTMLResponse(content="<html><body>Frontend not built or index.html missing.</body></html>", status_code=404)
-    # If it starts with api/ or static/ but wasn't handled by a router/StaticFiles,
-    # FastAPI will return its default 404 Not Found, which is correct.
-    # No explicit return needed here for that case.
+# Define the SPA catch-all route LAST (skip in test mode)
+if not os.environ.get('TESTING'):
+    @app.get("/{full_path:path}")
+    def serve_spa(full_path: str):
+        # Only catch routes that aren't API routes or static files
+        # This check might be redundant now due to ordering, but safe to keep
+        if not full_path.startswith("api/") and not full_path.startswith("static/"):
+            # Ensure the path exists before serving
+            spa_index = STATIC_ASSETS_PATH / "index.html"
+            if spa_index.is_file():
+               return FileResponse(spa_index, media_type="text/html")
+            else:
+               # Optional: Return a 404 or a simple HTML message if index.html is missing
+               logger.error(f"SPA index.html not found at {spa_index}")
+               return HTMLResponse(content="<html><body>Frontend not built or index.html missing.</body></html>", status_code=404)
+        # If it starts with api/ or static/ but wasn't handled by a router/StaticFiles,
+        # FastAPI will return its default 404 Not Found, which is correct.
+        # No explicit return needed here for that case.
 
 logger.info("All routes registered.")
 
