@@ -14,6 +14,7 @@ import { useForm, useFieldArray, Controller, SubmitHandler } from 'react-hook-fo
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from "@/lib/utils"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useProjectContext } from '@/stores/project-store'
 import {
     Command,
     CommandEmpty,
@@ -319,6 +320,7 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 }) => {
   const { get, post, put } = api; // Destructure methods from passed api object
   const { toast } = useToast();
+  const { currentProject, availableProjects, fetchUserProjects, isLoading: projectsLoading } = useProjectContext();
   const isEditMode = !!initialProduct?.id;
   const [isLoadingProduct, setIsLoadingProduct] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -408,6 +410,11 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
   // Effect to load product data when dialog opens in edit mode
   useEffect(() => {
     const loadProductForEdit = async () => {
+      // Fetch user projects when dialog opens
+      if (isOpen) {
+        fetchUserProjects();
+      }
+      
       if (isOpen && isEditMode && initialProduct?.id) {
         setIsLoadingProduct(true);
         setFormError(null);
@@ -473,7 +480,17 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
 
     loadProductForEdit();
 
-  }, [isOpen, isEditMode, initialProduct, get, reset, toast, schemaValidator]); // Add schemaValidator dependency
+  }, [isOpen, isEditMode, initialProduct, get, reset, toast, schemaValidator, fetchUserProjects]); // Dependencies
+
+  // Set default project when creating new product and currentProject is available
+  useEffect(() => {
+    if (isOpen && !isEditMode && currentProject?.id) {
+      const currentProjectId = getValues('project_id');
+      if (!currentProjectId) {
+        setValue('project_id', currentProject.id, { shouldDirty: false });
+      }
+    }
+  }, [isOpen, isEditMode, currentProject, setValue, getValues]);
 
   // --- Event Handlers --- 
 
@@ -908,6 +925,34 @@ const DataProductFormDialog: React.FC<DataProductFormDialogProps> = ({
                                       )}
                                   />
                                   {errors.productType && <p className="text-sm text-red-600 mt-1">{errors.productType.message}</p>}
+                              </div>
+                              {/* Project Field */}
+                              <div>
+                                  <Label htmlFor="project_id">Project</Label>
+                                  <Controller
+                                      name="project_id"
+                                      control={control}
+                                      render={({ field }) => (
+                                          <Select 
+                                              onValueChange={(value) => field.onChange(value === '' ? undefined : value)} 
+                                              value={field.value || ""}
+                                              disabled={isSubmitting || projectsLoading}
+                                          >
+                                              <SelectTrigger><SelectValue placeholder="Select project (optional)" /></SelectTrigger>
+                                              <SelectContent>
+                                                  <SelectItem value="">None</SelectItem>
+                                                  {availableProjects.map(project => (
+                                                      <SelectItem key={project.id} value={project.id}>
+                                                          {project.name} ({project.team_count} teams)
+                                                      </SelectItem>
+                                                  ))}
+                                              </SelectContent>
+                                          </Select>
+                                      )}
+                                  />
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                      You can only select projects you are a member of
+                                  </p>
                               </div>
                               <div className="grid grid-cols-2 gap-4">
                                   <div>

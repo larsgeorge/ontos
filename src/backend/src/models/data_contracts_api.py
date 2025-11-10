@@ -325,6 +325,7 @@ class DataContractBase(BaseModel):
     version: str = Field('1.0.0')
     status: str = Field('draft')
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
+    project_id: Optional[str] = None  # Project association
     kind: str = Field('DataContract')  # Required by ODCS
     apiVersion: str = Field('v3.0.2', alias='api_version')  # Required by ODCS
     domainId: Optional[str] = Field(None, alias='domain_id')
@@ -397,6 +398,7 @@ class DataContractUpdate(BaseModel):
     status: Optional[str] = None
     published: Optional[bool] = None  # Marketplace publication status
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
+    project_id: Optional[str] = None  # Project association
     kind: Optional[str] = None
     apiVersion: Optional[str] = Field(None, alias='api_version')
     domainId: Optional[str] = Field(None, alias='domain_id')
@@ -431,6 +433,7 @@ class DataContractRead(BaseModel):
     status: str  # Required by ODCS
     published: bool = False  # Marketplace publication status
     owner_team_id: Optional[str] = None  # No alias - always serializes as owner_team_id
+    project_id: Optional[str] = None  # Project association
     kind: str = Field('DataContract')  # Required by ODCS
     # Ensure JSON uses camelCase key 'apiVersion' so frontend reads it
     apiVersion: str = Field('v3.0.2', alias='apiVersion')  # Required by ODCS

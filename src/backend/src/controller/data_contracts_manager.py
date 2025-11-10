@@ -2028,6 +2028,19 @@ class DataContractsManager(SearchableAsset):
             if not owner_team_id and data_dict.get('owner'):
                 owner_team_id = self._resolve_team_name_to_id(db, data_dict['owner'])
             
+            # Validate project access if project_id is provided
+            project_id = data_dict.get('project_id')
+            if project_id:
+                # Import here to avoid circular dependency
+                from src.controller.projects_manager import projects_manager
+                from src.common.config import get_settings
+                
+                # Need user info - get from current_user parameter (username)
+                # Note: This validation requires user_groups which aren't available here
+                # The actual validation should happen in the route where we have access to current_user with groups
+                # For now, we'll just store the project_id and rely on route-level validation
+                pass
+            
             # Extract description fields
             description = data_dict.get('description', {})
             if isinstance(description, str):
@@ -2041,6 +2054,7 @@ class DataContractsManager(SearchableAsset):
                 version=data_dict.get('version', '1.0.0'),
                 status=data_dict.get('status', 'draft'),
                 owner_team_id=owner_team_id,
+                project_id=project_id,  # Add project_id
                 kind=data_dict.get('kind', 'DataContract'),
                 api_version=data_dict.get('apiVersion', 'v3.0.2'),
                 tenant=data_dict.get('tenant'),

@@ -11,6 +11,7 @@ import type { DataContractCreate } from '@/types/data-contract'
 import type { TeamSummary } from '@/types/team'
 import TagSelector from '@/components/ui/tag-selector'
 import type { AssignedTag } from '@/components/ui/tag-chip'
+import { useProjectContext } from '@/stores/project-store'
 
 type BasicFormProps = {
   isOpen: boolean
@@ -21,6 +22,7 @@ type BasicFormProps = {
     version?: string
     status?: string
     owner_team_id?: string
+    project_id?: string
     domain?: string
     tenant?: string
     dataProduct?: string
@@ -36,6 +38,7 @@ const statuses = ['draft', 'active', 'deprecated', 'archived']
 export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSubmit, initial }: BasicFormProps) {
   const { domains, loading: domainsLoading } = useDomains()
   const { toast } = useToast()
+  const { currentProject, availableProjects, fetchUserProjects, isLoading: projectsLoading } = useProjectContext()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Form state
@@ -43,6 +46,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   const [version, setVersion] = useState('0.0.1')
   const [status, setStatus] = useState('draft')
   const [ownerTeamId, setOwnerTeamId] = useState('')
+  const [projectId, setProjectId] = useState('')
   const [domain, setDomain] = useState('')
   const [tenant, setTenant] = useState('')
   const [dataProduct, setDataProduct] = useState('')
@@ -55,7 +59,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   const [teams, setTeams] = useState<TeamSummary[]>([])
   const [teamsLoading, setTeamsLoading] = useState(false)
 
-  // Fetch teams when dialog opens
+  // Fetch teams and projects when dialog opens
   useEffect(() => {
     if (isOpen) {
       setTeamsLoading(true)
@@ -67,8 +71,11 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
           setTeams([])
         })
         .finally(() => setTeamsLoading(false))
+      
+      // Fetch user projects
+      fetchUserProjects()
     }
-  }, [isOpen])
+  }, [isOpen, fetchUserProjects])
 
   // Initialize form state when dialog opens or initial data changes
   useEffect(() => {
@@ -77,6 +84,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       setVersion(initial.version || '0.0.1')
       setStatus(initial.status || 'draft')
       setOwnerTeamId(initial.owner_team_id || '')
+      setProjectId(initial.project_id || '')
       setDomain(initial.domain || '')
       setTenant(initial.tenant || '')
       setDataProduct(initial.dataProduct || '')
@@ -90,6 +98,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       setVersion('0.0.1')
       setStatus('draft')
       setOwnerTeamId('')
+      setProjectId('')
       setDomain('')
       setTenant('')
       setDataProduct('')
@@ -99,6 +108,13 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       setTags([])
     }
   }, [isOpen, initial])
+
+  // Set default project when creating new contract and currentProject is available
+  useEffect(() => {
+    if (isOpen && !initial && currentProject?.id && !projectId) {
+      setProjectId(currentProject.id)
+    }
+  }, [isOpen, initial, currentProject, projectId])
 
   const handleSubmit = async () => {
     // Validate required fields
@@ -123,6 +139,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         version: version.trim() || '0.0.1',
         status: status || 'draft',
         owner_team_id: ownerTeamId && ownerTeamId !== '__none__' ? ownerTeamId : undefined,
+        project_id: projectId && projectId !== '__none__' ? projectId : undefined,
         kind: 'DataContract',
         apiVersion: 'v3.0.2',
         domainId: domain && domain !== '__none__' ? domain : undefined,
@@ -222,6 +239,27 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Project */}
+          <div className="space-y-2">
+            <Label htmlFor="projectId">Project</Label>
+            <Select value={projectId} onValueChange={setProjectId} disabled={projectsLoading}>
+              <SelectTrigger id="projectId">
+                <SelectValue placeholder="Select a project (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None</SelectItem>
+                {availableProjects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name} ({project.team_count} teams)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              You can only select projects you are a member of
+            </p>
           </div>
 
           {/* Domain */}

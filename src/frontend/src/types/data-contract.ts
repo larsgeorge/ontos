@@ -188,6 +188,7 @@ export interface DataContract {
   dataProduct?: string
   owner_team_id?: string // UUID of the owning team
   owner_team_name?: string // Display name of the owning team
+  project_id?: string // Project association
   description?: ContractDescription
   tags?: any[] // Tags assigned to the contract
   schema?: SchemaObject[]
@@ -266,6 +267,7 @@ export type DataContractCreate = {
   version?: string
   status?: string
   owner_team_id?: string // UUID of the owning team
+  project_id?: string // Project association
   kind?: string
   apiVersion?: string
   domain?: string

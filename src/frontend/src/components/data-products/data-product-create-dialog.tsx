@@ -21,6 +21,7 @@ import { DataProduct, DataProductStatus } from '@/types/data-product';
 import { useDomains } from '@/hooks/use-domains';
 import { useTeams } from '@/hooks/use-teams';
 import TagSelector from '@/components/ui/tag-selector';
+import { useProjectContext } from '@/stores/project-store';
 
 /**
  * ODPS v1.0.0 Data Product Creation Dialog
@@ -37,6 +38,7 @@ const dataProductCreateSchema = z.object({
   status: z.string().min(1, 'Status is required'),
   productType: z.enum(productTypes).optional(),
   ownerTeamId: z.string().optional(),
+  projectId: z.string().optional(),
   domain: z.string().optional(),
   tenant: z.string().optional(),
   purpose: z.string().optional(),
@@ -65,6 +67,7 @@ export default function DataProductCreateDialog({
   const { toast } = useToast();
   const { domains, loading: domainsLoading } = useDomains();
   const { teams, loading: teamsLoading } = useTeams();
+  const { currentProject, availableProjects, isLoading: projectsLoading, fetchUserProjects } = useProjectContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormData>({
@@ -75,6 +78,7 @@ export default function DataProductCreateDialog({
       status: DataProductStatus.DRAFT,
       productType: undefined,
       ownerTeamId: '',
+      projectId: '',
       domain: '',
       tenant: '',
       purpose: '',
@@ -83,6 +87,13 @@ export default function DataProductCreateDialog({
       tags: [],
     },
   });
+
+  // Fetch user projects when dialog opens
+  useEffect(() => {
+    if (open) {
+      fetchUserProjects();
+    }
+  }, [open, fetchUserProjects]);
 
   // Reset or populate form when dialog opens
   useEffect(() => {
@@ -96,6 +107,7 @@ export default function DataProductCreateDialog({
           status: product.status || DataProductStatus.DRAFT,
           productType: productType || undefined,
           ownerTeamId: product.owner_team_id || '',
+          projectId: product.project_id || '',
           domain: product.domain || '',
           tenant: product.tenant || '',
           purpose: product.description?.purpose || '',
@@ -104,13 +116,14 @@ export default function DataProductCreateDialog({
           tags: product.tags || [],
         });
       } else {
-        // Reset to defaults for create mode
+        // Reset to defaults for create mode, default to current project
         form.reset({
           name: '',
           version: '0.0.1',
           status: DataProductStatus.DRAFT,
           productType: undefined,
           ownerTeamId: '',
+          projectId: currentProject?.id || '',
           domain: '',
           tenant: '',
           purpose: '',
@@ -120,7 +133,7 @@ export default function DataProductCreateDialog({
         });
       }
     }
-  }, [open, mode, product, form]);
+  }, [open, mode, product, form, currentProject]);
 
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
@@ -205,6 +218,7 @@ export default function DataProductCreateDialog({
           domain: data.domain || undefined,
           tenant: data.tenant || undefined,
           owner_team_id: data.ownerTeamId || undefined,
+          project_id: data.projectId || undefined,
           tags: normalizedTags.length > 0 ? normalizedTags : undefined,
           description: {
             purpose: data.purpose || undefined,
@@ -386,6 +400,31 @@ export default function DataProductCreateDialog({
                 Team responsible for this product
               </p>
             </div>
+          </div>
+
+          {/* Project Field */}
+          <div className="space-y-2">
+            <Label htmlFor="projectId">Project</Label>
+            <Select
+              value={form.watch('projectId') || '__none__'}
+              onValueChange={(value) => form.setValue('projectId', value === '__none__' ? '' : value)}
+              disabled={projectsLoading}
+            >
+              <SelectTrigger id="projectId">
+                <SelectValue placeholder="Select project (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">None</SelectItem>
+                {availableProjects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name} ({project.team_count} teams)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              You can only select projects you are a member of
+            </p>
           </div>
 
           {/* Optional Fields */}

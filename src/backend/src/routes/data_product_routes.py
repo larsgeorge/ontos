@@ -631,6 +631,26 @@ async def create_data_product(
             details_for_audit["validation_error"] = error_details
             raise HTTPException(status_code=422, detail=error_details)
 
+        # Validate project access if project_id is provided
+        project_id = payload.get('project_id')
+        if project_id:
+            from src.controller.projects_manager import projects_manager
+            from src.common.config import get_settings
+            user_groups = current_user.groups or []
+            settings = get_settings()
+            is_member = projects_manager.is_user_project_member(
+                db=db,
+                user_identifier=current_user.email,
+                user_groups=user_groups,
+                project_id=project_id,
+                settings=settings
+            )
+            if not is_member:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="You must be a member of the project to create a product in it"
+                )
+
         created_product_response = manager.create_product(payload, db=db)
         success = True
 
