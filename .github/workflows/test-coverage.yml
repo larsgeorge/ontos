@@ -31,6 +31,13 @@ jobs:
 
       - name: Run tests with coverage
         working-directory: ./src
+        env:
+          DATABRICKS_HOST: https://test.databricks.com
+          DATABRICKS_WAREHOUSE_ID: test_warehouse_id
+          DATABRICKS_CATALOG: test_catalog
+          DATABRICKS_SCHEMA: test_schema
+          DATABRICKS_VOLUME: test_volume
+          APP_AUDIT_LOG_DIR: /tmp/audit_logs
         run: |
           hatch -e dev run pytest \
             --cov=backend/src \
@@ -56,6 +63,13 @@ jobs:
 
       - name: Check coverage threshold
         working-directory: ./src
+        env:
+          DATABRICKS_HOST: https://test.databricks.com
+          DATABRICKS_WAREHOUSE_ID: test_warehouse_id
+          DATABRICKS_CATALOG: test_catalog
+          DATABRICKS_SCHEMA: test_schema
+          DATABRICKS_VOLUME: test_volume
+          APP_AUDIT_LOG_DIR: /tmp/audit_logs
         run: |
           hatch -e dev run pytest \
             --cov=backend/src \
