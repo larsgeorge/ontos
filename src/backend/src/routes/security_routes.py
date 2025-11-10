@@ -9,7 +9,7 @@ from src.models.security import SecurityType
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/security", tags=["security"])
+router = APIRouter(prefix="/api", tags=["security"])
 
 # Pydantic models for request/response
 class SecurityRuleCreate(BaseModel):
@@ -44,7 +44,7 @@ class SecurityRuleResponse(BaseModel):
 def get_security_manager() -> SecurityManager:
     return SecurityManager()
 
-@router.post("/rules", response_model=SecurityRuleResponse)
+@router.post("/security/rules", response_model=SecurityRuleResponse)
 async def create_rule(
     rule: SecurityRuleCreate,
     manager: SecurityManager = Depends(get_security_manager)
@@ -63,7 +63,7 @@ async def create_rule(
         logger.error("Failed to create security rule", exc_info=True)
         raise HTTPException(status_code=400, detail="Failed to create security rule")
 
-@router.get("/rules", response_model=List[SecurityRuleResponse])
+@router.get("/security/rules", response_model=List[SecurityRuleResponse])
 async def list_rules(
     manager: SecurityManager = Depends(get_security_manager)
 ) -> List[SecurityRuleResponse]:
@@ -71,7 +71,7 @@ async def list_rules(
     rules = manager.list_rules()
     return [SecurityRuleResponse.from_orm(rule) for rule in rules]
 
-@router.get("/rules/{rule_id}", response_model=SecurityRuleResponse)
+@router.get("/security/rules/{rule_id}", response_model=SecurityRuleResponse)
 async def get_rule(
     rule_id: str,
     manager: SecurityManager = Depends(get_security_manager)
@@ -82,7 +82,7 @@ async def get_rule(
         raise HTTPException(status_code=404, detail="Rule not found")
     return SecurityRuleResponse.from_orm(rule)
 
-@router.put("/rules/{rule_id}", response_model=SecurityRuleResponse)
+@router.put("/security/rules/{rule_id}", response_model=SecurityRuleResponse)
 async def update_rule(
     rule_id: str,
     rule_update: SecurityRuleUpdate,
@@ -102,7 +102,7 @@ async def update_rule(
         raise HTTPException(status_code=404, detail="Rule not found")
     return SecurityRuleResponse.from_orm(updated_rule)
 
-@router.delete("/rules/{rule_id}")
+@router.delete("/security/rules/{rule_id}")
 async def delete_rule(
     rule_id: str,
     manager: SecurityManager = Depends(get_security_manager)

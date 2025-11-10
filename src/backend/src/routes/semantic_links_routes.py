@@ -9,7 +9,7 @@ from src.models.semantic_links import EntitySemanticLink, EntitySemanticLinkCrea
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/semantic-links", tags=["semantic-links"])
+router = APIRouter(prefix="/api", tags=["semantic-links"])
 
 
 def get_manager(request: Request, db: DBSessionDep) -> SemanticLinksManager:
@@ -17,7 +17,7 @@ def get_manager(request: Request, db: DBSessionDep) -> SemanticLinksManager:
     return SemanticLinksManager(db, semantic_models_manager=semantic_models_manager)
 
 
-@router.get("/entity/{entity_type}/{entity_id}", response_model=List[EntitySemanticLink])
+@router.get("/semantic-links/entity/{entity_type}/{entity_id}", response_model=List[EntitySemanticLink])
 async def list_links(entity_type: str, entity_id: str, manager: SemanticLinksManager = Depends(get_manager)):
     try:
         return manager.list_for_entity(entity_id=entity_id, entity_type=entity_type)
@@ -26,7 +26,7 @@ async def list_links(entity_type: str, entity_id: str, manager: SemanticLinksMan
         raise HTTPException(status_code=500, detail="Failed to list semantic links")
 
 
-@router.get("/iri/{iri:path}", response_model=List[EntitySemanticLink])
+@router.get("/semantic-links/iri/{iri:path}", response_model=List[EntitySemanticLink])
 async def list_links_by_iri(iri: str, manager: SemanticLinksManager = Depends(get_manager)):
     try:
         return manager.list_for_iri(iri=iri)
@@ -35,7 +35,7 @@ async def list_links_by_iri(iri: str, manager: SemanticLinksManager = Depends(ge
         raise HTTPException(status_code=500, detail="Failed to list semantic links for IRI")
 
 
-@router.post("/", response_model=EntitySemanticLink)
+@router.post("/semantic-links/", response_model=EntitySemanticLink)
 async def add_link(
     payload: EntitySemanticLinkCreate,
     request: Request,
@@ -50,7 +50,7 @@ async def add_link(
             "entity_type": payload.entity_type,
             "entity_id": payload.entity_id,
             "iri": payload.iri,
-            "link_type": payload.link_type
+            "label": payload.label
         }
     }
 
@@ -81,7 +81,7 @@ async def add_link(
             )
 
 
-@router.delete("/{link_id}")
+@router.delete("/semantic-links/{link_id}")
 async def delete_link(
     link_id: str,
     request: Request,
