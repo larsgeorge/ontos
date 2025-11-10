@@ -17,11 +17,11 @@ from src.db_models.data_contracts import (
     DataContractPricingDb,
     DataContractSlaPropertyDb,
     DataContractCustomPropertyDb,
-    DataContractAuthorityDb,
+    DataContractAuthoritativeDefinitionDb,
     SchemaObjectDb,
     SchemaPropertyDb,
     DataQualityCheckDb,
-    SchemaObjectAuthorityDb,
+    SchemaObjectAuthoritativeDefinitionDb,
     SchemaObjectCustomPropertyDb,
 )
 
@@ -354,7 +354,7 @@ class TestODCSExportValidation:
         db_session.add_all(custom_props)
 
         # Add authoritative definitions
-        auth_def = DataContractAuthorityDb(
+        auth_def = DataContractAuthoritativeDefinitionDb(
             contract_id=contract.id,
             url="https://example.com/gdpr.pdf",
             type="privacy-statement"
@@ -412,12 +412,12 @@ class TestODCSExportValidation:
 
         # Add schema authoritative definitions
         schema_auth_defs = [
-            SchemaObjectAuthorityDb(
+            SchemaObjectAuthoritativeDefinitionDb(
                 schema_object_id=schema_obj.id,
                 url="https://catalog.data.gov/dataset/air-quality",
                 type="businessDefinition"
             ),
-            SchemaObjectAuthorityDb(
+            SchemaObjectAuthoritativeDefinitionDb(
                 schema_object_id=schema_obj.id,
                 url="https://youtu.be/jbY1BKFj9ec",
                 type="videoTutorial"

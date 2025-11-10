@@ -12,15 +12,15 @@ from src.db_models.data_contracts import (
     DataContractTeamDb,
     DataContractSupportDb,
     DataContractPricingDb,
-    DataContractAuthorityDb,
+    DataContractAuthoritativeDefinitionDb,
     DataContractCustomPropertyDb,
     DataContractSlaPropertyDb,
     SchemaObjectDb,
     SchemaPropertyDb,
     DataQualityCheckDb,
-    SchemaObjectAuthorityDb,
+    SchemaObjectAuthoritativeDefinitionDb,
     SchemaObjectCustomPropertyDb,
-    SchemaPropertyAuthorityDb,
+    SchemaPropertyAuthoritativeDefinitionDb,
     DataContractCommentDb,
 )
 
@@ -513,12 +513,12 @@ class TestDataContractDbModels:
 
         # Add authoritative definitions
         auth_defs = [
-            SchemaObjectAuthorityDb(
+            SchemaObjectAuthoritativeDefinitionDb(
                 schema_object_id=schema_obj.id,
                 url="https://catalog.company.com/table/authority_table",
                 type="catalog"
             ),
-            SchemaObjectAuthorityDb(
+            SchemaObjectAuthoritativeDefinitionDb(
                 schema_object_id=schema_obj.id,
                 url="https://docs.company.com/schema/authority_table",
                 type="documentation"
@@ -605,12 +605,12 @@ class TestDataContractDbModels:
 
         # Add property-level authoritative definitions
         prop_auth_defs = [
-            SchemaPropertyAuthorityDb(
+            SchemaPropertyAuthoritativeDefinitionDb(
                 property_id=property_obj.id,
                 url="http://example.com/business/properties#email",
                 type="http://databricks.com/ontology/uc/semanticAssignment"
             ),
-            SchemaPropertyAuthorityDb(
+            SchemaPropertyAuthoritativeDefinitionDb(
                 property_id=property_obj.id,
                 url="https://schema.org/email",
                 type="http://databricks.com/ontology/uc/semanticAssignment"
@@ -690,7 +690,7 @@ class TestDataContractDbModels:
         db_session.commit()
 
         # Add property authoritative definition
-        prop_auth = SchemaPropertyAuthorityDb(
+        prop_auth = SchemaPropertyAuthoritativeDefinitionDb(
             property_id=schema_prop.id,
             url="http://example.com/test",
             type="test"
@@ -703,7 +703,7 @@ class TestDataContractDbModels:
         assert db_session.query(DataContractTeamDb).filter_by(contract_id=contract.id).count() == 1
         assert db_session.query(SchemaObjectDb).filter_by(contract_id=contract.id).count() == 1
         assert db_session.query(SchemaPropertyDb).filter_by(object_id=schema_obj.id).count() == 1
-        assert db_session.query(SchemaPropertyAuthorityDb).filter_by(property_id=schema_prop.id).count() == 1
+        assert db_session.query(SchemaPropertyAuthoritativeDefinitionDb).filter_by(property_id=schema_prop.id).count() == 1
 
         # Delete contract
         db_session.delete(contract)
@@ -714,7 +714,7 @@ class TestDataContractDbModels:
         assert db_session.query(DataContractTeamDb).filter_by(contract_id=contract.id).count() == 0
         assert db_session.query(SchemaObjectDb).filter_by(contract_id=contract.id).count() == 0
         assert db_session.query(SchemaPropertyDb).filter_by(object_id=schema_obj.id).count() == 0
-        assert db_session.query(SchemaPropertyAuthorityDb).filter_by(property_id=schema_prop.id).count() == 0
+        assert db_session.query(SchemaPropertyAuthoritativeDefinitionDb).filter_by(property_id=schema_prop.id).count() == 0
 
     def test_contract_timestamps(self, db_session: Session):
         """Test that timestamps are properly set and updated."""

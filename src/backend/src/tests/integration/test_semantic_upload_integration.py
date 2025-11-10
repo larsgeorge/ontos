@@ -313,10 +313,10 @@ class TestSemanticUploadIntegration:
         assert semantic_links[0].iri == "https://example.com/business-concept/semantic-link"
 
         # Verify all authoritative definitions were preserved in the database
-        # (This would need to query the DataContractAuthorityDb table)
-        from src.db_models.data_contracts import DataContractAuthorityDb
-        auth_defs = db.query(DataContractAuthorityDb).filter(
-            DataContractAuthorityDb.contract_id == contract_id
+        # (This would need to query the DataContractAuthoritativeDefinitionDb table)
+        from src.db_models.data_contracts import DataContractAuthoritativeDefinitionDb
+        auth_defs = db.query(DataContractAuthoritativeDefinitionDb).filter(
+            DataContractAuthoritativeDefinitionDb.contract_id == contract_id
         ).all()
         assert len(auth_defs) == 3
 
