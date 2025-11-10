@@ -179,6 +179,7 @@ export default function DataContractDetails() {
   // Team import state
   const [isImportTeamMembersOpen, setIsImportTeamMembersOpen] = useState(false)
   const [ownerTeamName, setOwnerTeamName] = useState<string>('')
+  const [projectName, setProjectName] = useState<string>('')
 
   // Link product dialog state
   const [isLinkProductDialogOpen, setIsLinkProductDialogOpen] = useState(false)
@@ -260,6 +261,19 @@ export default function DataContractDetails() {
     }
   }
 
+  const fetchProjectName = async (projectId: string) => {
+    if (!projectId) return
+    try {
+      const response = await fetch(`/api/projects/${projectId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setProjectName(data.name || '')
+      }
+    } catch (e) {
+      console.warn('Failed to fetch project:', e)
+    }
+  }
+
   const fetchContractAuthDefs = async () => {
     if (!contractId) return
     try {
@@ -333,6 +347,13 @@ export default function DataContractDetails() {
       } else {
         console.log('[DEBUG] No owner_team_id, clearing team name')
         setOwnerTeamName('')
+      }
+
+      // Fetch project name if set
+      if ((contractData as any).project_id) {
+        await fetchProjectName((contractData as any).project_id)
+      } else {
+        setProjectName('')
       }
 
       if (linksRes.ok) {
@@ -612,6 +633,13 @@ export default function DataContractDetails() {
       } else {
         console.log('[DEBUG] No owner_team_id in payload, clearing name')
         setOwnerTeamName('')
+      }
+
+      // If project_id was updated, fetch the new project name
+      if (payload.project_id) {
+        await fetchProjectName(payload.project_id)
+      } else {
+        setProjectName('')
       }
       
       toast({ title: 'Updated', description: 'Contract metadata updated.' })
@@ -1191,6 +1219,20 @@ export default function DataContractDetails() {
                   <span className="text-sm block">{contract.domain || 'N/A'}</span>
                 );
               })()}
+            </div>
+            <div className="space-y-1">
+              <Label>Project:</Label>
+              {(contract as any).project_id && projectName ? (
+                <span
+                  className="text-sm block cursor-pointer text-primary hover:underline"
+                  onClick={() => navigate(`/projects/${(contract as any).project_id}`)}
+                  title={`Project ID: ${(contract as any).project_id}`}
+                >
+                  {projectName}
+                </span>
+              ) : (
+                <span className="text-sm block">{(contract as any).project_id || 'N/A'}</span>
+              )}
             </div>
             <div className="space-y-1">
               <Label>Tenant:</Label>

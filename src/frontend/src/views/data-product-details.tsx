@@ -867,7 +867,7 @@ export default function DataProductDetails() {
             <LinkedConceptChips
               links={links}
               onRemove={canWrite ? removeLink : undefined}
-              onAdd={canWrite ? () => setIriDialogOpen(true) : undefined}
+              trailing={canWrite ? <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add Concept</Button> : undefined}
             />
           </div>
         </CardContent>
@@ -1228,7 +1228,7 @@ export default function DataProductDetails() {
       />
 
       <ConceptSelectDialog
-        open={iriDialogOpen}
+        isOpen={iriDialogOpen}
         onOpenChange={setIriDialogOpen}
         onSelect={addIri}
       />

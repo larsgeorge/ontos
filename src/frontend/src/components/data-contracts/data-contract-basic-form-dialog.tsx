@@ -93,12 +93,12 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       setDescriptionLimitations(initial.descriptionLimitations || '')
       setTags(initial.tags || [])
     } else if (isOpen && !initial) {
-      // Reset to defaults for new contract
+      // Reset to defaults for new contract, default to current project
       setName('')
       setVersion('0.0.1')
       setStatus('draft')
       setOwnerTeamId('')
-      setProjectId('')
+      setProjectId(currentProject?.id || '')
       setDomain('')
       setTenant('')
       setDataProduct('')
@@ -107,14 +107,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       setDescriptionLimitations('')
       setTags([])
     }
-  }, [isOpen, initial])
-
-  // Set default project when creating new contract and currentProject is available
-  useEffect(() => {
-    if (isOpen && !initial && currentProject?.id && !projectId) {
-      setProjectId(currentProject.id)
-    }
-  }, [isOpen, initial, currentProject, projectId])
+  }, [isOpen, initial, currentProject])
 
   const handleSubmit = async () => {
     // Validate required fields
