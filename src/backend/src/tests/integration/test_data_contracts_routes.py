@@ -373,7 +373,7 @@ class TestDataContractsRoutes:
             name="Export Test",
             version="1.0.0",
             status="active",
-            owner="test@example.com",
+            owner_team_id=None,
             description_usage="Test export",
             description_purpose="Test ODCS export functionality"
         )
@@ -435,7 +435,7 @@ class TestDataContractsRoutes:
                 name=f"Contract {i}",
                 version="1.0.0",
                 status="draft",
-                owner="test@example.com"
+                owner_team_id=None
             )
             db_session.add(contract)
         db_session.commit()
@@ -459,13 +459,13 @@ class TestDataContractsRoutes:
             name="Active Contract",
             version="1.0.0",
             status="active",
-            owner="test@example.com"
+            owner_team_id=None
         )
         draft_contract = DataContractDb(
             name="Draft Contract",
             version="1.0.0",
             status="draft",
-            owner="test@example.com"
+            owner_team_id=None
         )
         db_session.add_all([active_contract, draft_contract])
         db_session.commit()
@@ -484,7 +484,7 @@ class TestDataContractsRoutes:
             name="Complex Contract",
             version="1.0.0",
             status="active",
-            owner="test@example.com"
+            owner_team_id=None
         )
         db_session.add(contract)
         db_session.commit()
@@ -584,7 +584,7 @@ class TestDataContractsRoutes:
             name="Minimal Contract",
             version="1.0.0",
             status="draft",
-            owner="test@example.com"
+            owner_team_id=None
         )
         db_session.add(contract)
         db_session.commit()

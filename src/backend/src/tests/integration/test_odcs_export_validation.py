@@ -227,7 +227,7 @@ class TestODCSExportValidation:
             api_version="v3.0.2",
             version="1.1.0",
             status="active",
-            owner="localdev",
+            owner_team_id=None,
             tenant="ClimateQuantumInc",
             data_product="my quantum",
             sla_default_element="tab1.txn_ref_dt",
