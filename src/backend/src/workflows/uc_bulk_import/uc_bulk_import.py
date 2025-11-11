@@ -20,6 +20,7 @@ from sqlalchemy.engine import Engine
 
 from databricks.sdk import WorkspaceClient
 from sqlalchemy import create_engine
+from pyspark.sql import SparkSession
 
 
 # ============================================================================
@@ -171,17 +172,22 @@ def scan_catalog_tags(ws: WorkspaceClient, verbose: bool = False) -> List[Discov
     """
     discovered = []
     
+    # Initialize Spark session
+    spark = SparkSession.builder.appName("UC-Bulk-Import").getOrCreate()
+    
     if verbose:
         print("Scanning Unity Catalog tags...")
     
     # Query catalog tags
     try:
         query = "SELECT catalog_name, tag_name, tag_value FROM system.information_schema.catalog_tags"
-        rows = list(ws.sql.statements.execute(statement=query))
+        df = spark.sql(query)
+        rows = df.collect()  # Returns list of Row objects
+        
         for row in rows:
-            catalog_name = row.get('catalog_name')
-            tag_name = row.get('tag_name')
-            tag_value = row.get('tag_value') or ''
+            catalog_name = row['catalog_name']
+            tag_name = row['tag_name']
+            tag_value = row['tag_value'] if row['tag_value'] else ''
             
             # Find or create discovered object
             obj = next((o for o in discovered if o.full_name == catalog_name and o.object_type == 'CATALOG'), None)
@@ -198,13 +204,15 @@ def scan_catalog_tags(ws: WorkspaceClient, verbose: bool = False) -> List[Discov
     # Query schema tags
     try:
         query = "SELECT catalog_name, schema_name, tag_name, tag_value FROM system.information_schema.schema_tags"
-        rows = list(ws.sql.statements.execute(statement=query))
+        df = spark.sql(query)
+        rows = df.collect()
+        
         for row in rows:
-            catalog_name = row.get('catalog_name')
-            schema_name = row.get('schema_name')
+            catalog_name = row['catalog_name']
+            schema_name = row['schema_name']
             full_name = f"{catalog_name}.{schema_name}"
-            tag_name = row.get('tag_name')
-            tag_value = row.get('tag_value') or ''
+            tag_name = row['tag_name']
+            tag_value = row['tag_value'] if row['tag_value'] else ''
             
             obj = next((o for o in discovered if o.full_name == full_name and o.object_type == 'SCHEMA'), None)
             if not obj:
@@ -220,14 +228,16 @@ def scan_catalog_tags(ws: WorkspaceClient, verbose: bool = False) -> List[Discov
     # Query table tags
     try:
         query = "SELECT catalog_name, schema_name, table_name, tag_name, tag_value FROM system.information_schema.table_tags"
-        rows = list(ws.sql.statements.execute(statement=query))
+        df = spark.sql(query)
+        rows = df.collect()
+        
         for row in rows:
-            catalog_name = row.get('catalog_name')
-            schema_name = row.get('schema_name')
-            table_name = row.get('table_name')
+            catalog_name = row['catalog_name']
+            schema_name = row['schema_name']
+            table_name = row['table_name']
             full_name = f"{catalog_name}.{schema_name}.{table_name}"
-            tag_name = row.get('tag_name')
-            tag_value = row.get('tag_value') or ''
+            tag_name = row['tag_name']
+            tag_value = row['tag_value'] if row['tag_value'] else ''
             
             obj = next((o for o in discovered if o.full_name == full_name and o.object_type == 'TABLE'), None)
             if not obj:
