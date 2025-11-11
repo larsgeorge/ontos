@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+from pyspark.sql import SparkSession
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
@@ -216,11 +217,11 @@ def ensure_tag_key(ws: WorkspaceClient, key: str) -> None:
         pass
 
 
-def get_existing_prefixed_tags(ws: WorkspaceClient, object_type: str, object_name: str, prefix: str) -> Dict[str, Optional[str]]:
-    # Fallback to SQL SHOW TAGS if direct API not available
+def get_existing_prefixed_tags(spark: SparkSession, object_type: str, object_name: str, prefix: str) -> Dict[str, Optional[str]]:
+    # Use SparkSQL to query Unity Catalog tags
     # object_type in {CATALOG, SCHEMA, TABLE}
     q = f"SHOW TAGS ON {object_type} {object_name}"
-    rows = list(ws.sql.statements.execute(statement=q))
+    rows = spark.sql(q).collect()
     existing: Dict[str, Optional[str]] = {}
     # Rows typically have columns: key, value, inheritable, applied_by
     for r in rows:
@@ -230,17 +231,17 @@ def get_existing_prefixed_tags(ws: WorkspaceClient, object_type: str, object_nam
     return existing
 
 
-def assign_tag(ws: WorkspaceClient, object_type: str, object_name: str, key: str, value: Optional[str]) -> None:
+def assign_tag(spark: SparkSession, object_type: str, object_name: str, key: str, value: Optional[str]) -> None:
     v = value if value is not None else ""
-    ws.sql.statements.execute(statement=f"ALTER {object_type} {object_name} SET TAGS ('{key}' = '{v.replace("'","''")}')")
+    spark.sql(f"ALTER {object_type} {object_name} SET TAGS ('{key}' = '{v.replace(\"'\",\"''\")}')")
 
 
-def unassign_tag(ws: WorkspaceClient, object_type: str, object_name: str, key: str) -> None:
-    ws.sql.statements.execute(statement=f"ALTER {object_type} {object_name} UNSET TAGS ('{key}')")
+def unassign_tag(spark: SparkSession, object_type: str, object_name: str, key: str) -> None:
+    spark.sql(f"ALTER {object_type} {object_name} UNSET TAGS ('{key}')")
 
 
-def reconcile_tags(ws: WorkspaceClient, object_type: str, object_name: str, desired: Dict[str, Optional[str]], prefix: str, dry_run: bool = False) -> Tuple[int, int]:
-    existing = get_existing_prefixed_tags(ws, object_type, object_name, prefix)
+def reconcile_tags(ws: WorkspaceClient, spark: SparkSession, object_type: str, object_name: str, desired: Dict[str, Optional[str]], prefix: str, dry_run: bool = False) -> Tuple[int, int]:
+    existing = get_existing_prefixed_tags(spark, object_type, object_name, prefix)
     to_remove = [k for k in existing.keys() if k not in desired]
     to_upsert = {k: v for k, v in desired.items() if existing.get(k) != v}
 
@@ -253,7 +254,7 @@ def reconcile_tags(ws: WorkspaceClient, object_type: str, object_name: str, desi
 
     for k in to_remove:
         try:
-            unassign_tag(ws, object_type, object_name, k)
+            unassign_tag(spark, object_type, object_name, k)
             removed += 1
         except Exception as e:
             print(f"[WARN] Failed to remove tag {k} from {object_type} {object_name}: {e}")
@@ -261,7 +262,7 @@ def reconcile_tags(ws: WorkspaceClient, object_type: str, object_name: str, desi
     for k, v in to_upsert.items():
         try:
             ensure_tag_key(ws, k)
-            assign_tag(ws, object_type, object_name, k, v)
+            assign_tag(spark, object_type, object_name, k, v)
             updated += 1
         except Exception as e:
             print(f"[WARN] Failed to assign tag {k}={v} to {object_type} {object_name}: {e}")
@@ -368,6 +369,11 @@ def main() -> None:
     )
     print("✓ Database connection established successfully")
 
+    # Initialize Spark
+    print("\nInitializing Spark Session...")
+    spark = SparkSession.builder.appName("UC-Tag-Sync").getOrCreate()
+    print("✓ Spark session initialized")
+
     rows = read_contracts_and_links(engine, limit=limit)
     datasets = build_dataset_tag_infos(rows, default_catalog, default_schema)
 
@@ -380,7 +386,7 @@ def main() -> None:
         desired = build_desired_for_dataset(d, prefix)
         if not desired:
             continue
-        u, r = reconcile_tags(ws, "TABLE", d.fqn, desired, prefix, dry_run=dry_run)
+        u, r = reconcile_tags(ws, spark, "TABLE", d.fqn, desired, prefix, dry_run=dry_run)
         updated_total += u
         removed_total += r
         if verbose:
@@ -393,7 +399,7 @@ def main() -> None:
     for schema_fqn, desired in schema_desired.items():
         if not desired:
             continue
-        u, r = reconcile_tags(ws, "SCHEMA", schema_fqn, desired, prefix, dry_run=dry_run)
+        u, r = reconcile_tags(ws, spark, "SCHEMA", schema_fqn, desired, prefix, dry_run=dry_run)
         updated_total += u
         removed_total += r
 
@@ -401,7 +407,7 @@ def main() -> None:
     for catalog_name, desired in catalog_desired.items():
         if not desired:
             continue
-        u, r = reconcile_tags(ws, "CATALOG", catalog_name, desired, prefix, dry_run=dry_run)
+        u, r = reconcile_tags(ws, spark, "CATALOG", catalog_name, desired, prefix, dry_run=dry_run)
         updated_total += u
         removed_total += r
 
