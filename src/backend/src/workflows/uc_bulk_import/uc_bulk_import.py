@@ -251,7 +251,7 @@ def scan_catalog_tags(ws: WorkspaceClient, verbose: bool = False) -> List[Discov
         print(f"Warning: Failed to scan table tags: {e}")
     
     if verbose:
-        print(f"Total discovered objects: {len(discovered)}")
+        print(f"\nTotal discovered objects: {len(discovered)}")
     
     return discovered
 
@@ -355,8 +355,19 @@ def discover_entities(
         
         if verbose:
             print(f"  Discovered {len(entity_map)} {pattern.entity_type}(s)")
-            for name, objs in entity_map.items():
-                print(f"    - {name}: {len(objs)} object(s)")
+            for name, objs in list(entity_map.items())[:10]:  # Show first 10
+                print(f"    - {name}: {len(objs)} UC object(s)")
+                for obj in objs[:3]:  # Show first 3 objects per entity
+                    tags_str = ", ".join(f"{k}={v}" for k, v in list(obj.tags.items())[:5])
+                    if len(obj.tags) > 5:
+                        tags_str += f" ... +{len(obj.tags) - 5} more"
+                    print(f"      • {obj.full_name} ({obj.object_type})")
+                    print(f"        Tags: {tags_str}")
+                if len(objs) > 3:
+                    print(f"      ... and {len(objs) - 3} more object(s)")
+            
+            if len(entity_map) > 10:
+                print(f"    ... and {len(entity_map) - 10} more {pattern.entity_type}(s)")
     
     return results
 
@@ -586,6 +597,7 @@ def create_domains(
     engine: Engine,
     entity_objects: Dict[str, List[DiscoveredObject]],
     conflict_strategy: str,
+    created_by: str,
     dry_run: bool = False,
     verbose: bool = False
 ) -> Dict[str, int]:
@@ -621,9 +633,9 @@ def create_domains(
             domain_id = str(uuid4())
             domain_sql = text("""
                 INSERT INTO data_domains (
-                    id, name, created_at, updated_at
+                    id, name, created_by, created_at, updated_at
                 ) VALUES (
-                    :id, :name, :created_at, :updated_at
+                    :id, :name, :created_by, :created_at, :updated_at
                 )
                 ON CONFLICT (id) DO UPDATE SET
                     updated_at = :updated_at
@@ -633,6 +645,7 @@ def create_domains(
                 conn.execute(domain_sql, {
                     "id": domain_id,
                     "name": domain_name,
+                    "created_by": created_by,
                     "created_at": datetime.utcnow(),
                     "updated_at": datetime.utcnow()
                 })
@@ -770,6 +783,10 @@ def main():
     ws = WorkspaceClient()
     print("  Workspace client initialized")
     
+    # Get current service principal for audit fields
+    current_user = ws.current_user.me().user_name
+    print(f"  Running as: {current_user}")
+    
     print("\nConnecting to database...")
     engine = create_engine_from_params(
         ws_client=ws,
@@ -787,6 +804,22 @@ def main():
     print("=" * 80)
     objects = scan_catalog_tags(ws, verbose=verbose)
     print(f"✓ Scanned {len(objects)} objects with tags")
+    
+    # Validate that we discovered at least some objects
+    if len(objects) == 0:
+        print("\n" + "=" * 80)
+        print("❌ ERROR: No tagged objects discovered in Unity Catalog")
+        print("=" * 80)
+        print("\nThis may indicate:")
+        print("  - No tags exist in Unity Catalog (check your catalogs/schemas/tables)")
+        print("  - Scanning queries failed (check warnings above)")
+        print("  - Insufficient permissions to read system.information_schema")
+        print("  - Spark SQL is not properly configured")
+        print("\nPlease verify:")
+        print("  1. Tags exist on UC objects (catalogs, schemas, or tables)")
+        print("  2. Service principal has SELECT permission on system.information_schema")
+        print("  3. Review any warning messages above")
+        sys.exit(1)
     
     # Discover entities
     print("\n" + "=" * 80)
@@ -838,6 +871,7 @@ def main():
             engine,
             discovered['domain'],
             args.conflict_strategy,
+            created_by=current_user,
             dry_run=dry_run,
             verbose=verbose
         )

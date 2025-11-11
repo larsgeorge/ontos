@@ -49,7 +49,7 @@ parameters:
   default_schema: ""
   conflict_strategy: "skip"
   dry_run: "false"
-  verbose: "false"
+  verbose: "true"
   lakebase_instance_name: ""
   postgres_host: ""
   postgres_db: ""
