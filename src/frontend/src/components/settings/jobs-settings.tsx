@@ -9,8 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { JobRunsDialog } from '@/components/settings/job-runs-dialog';
 import WorkflowActions from '@/components/settings/workflow-actions';
+import WorkflowConfigurationDialog from '@/components/settings/workflow-configuration-dialog';
 import { WorkflowStatus } from '@/types/workflows';
-import { History } from 'lucide-react';
+import { WorkflowParameterDefinition } from '@/types/workflow-configurations';
+import { History, Settings as SettingsIcon } from 'lucide-react';
 
 interface SettingsApiResponse {
   job_cluster_id?: string | null;
@@ -38,6 +40,10 @@ export default function JobsSettings() {
   // Job runs dialog state
   const [selectedWorkflow, setSelectedWorkflow] = useState<{ id: string; name: string } | null>(null);
   const [jobRunsDialogOpen, setJobRunsDialogOpen] = useState(false);
+  
+  // Configuration dialog state
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const [configurableWorkflows, setConfigurableWorkflows] = useState<Set<string>>(new Set());
 
   const mergedList = useMemo(() => {
     return Object.values(workflows).map(w => ({
@@ -69,6 +75,23 @@ export default function JobsSettings() {
         const toggles: Record<string, boolean> = {};
         wfList.forEach(w => { toggles[w.id] = enabledSet.has(w.id); });
         setEnabled(toggles);
+        
+        // Check which workflows have configurable parameters
+        const configurable = new Set<string>();
+        for (const wf of wfList) {
+          try {
+            const defsResponse = await get<WorkflowParameterDefinition[]>(
+              `/api/jobs/workflows/${encodeURIComponent(wf.id)}/parameter-definitions`
+            );
+            if (defsResponse.data && defsResponse.data.length > 0) {
+              configurable.add(wf.id);
+            }
+          } catch (e) {
+            // Workflow doesn't have configurable parameters or error occurred
+            console.debug(`No configurable parameters for ${wf.id}`);
+          }
+        }
+        setConfigurableWorkflows(configurable);
       } catch (e) {
         console.error('Error loading settings', e);
       }
@@ -211,6 +234,20 @@ export default function JobsSettings() {
                     </Button>
                   )}
 
+                  {/* Configure button for workflows with configurable parameters */}
+                  {configurableWorkflows.has(wf.id) && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => { setSelectedWorkflow({ id: wf.id, name: wf.name }); setConfigDialogOpen(true); }}
+                      aria-label="Configure"
+                      title="Configure workflow parameters"
+                    >
+                      <SettingsIcon className="h-4 w-4" />
+                    </Button>
+                  )}
+
                   {/* Toggle is always at far right */}
                   <Switch
                     checked={!!wf.enabled}
@@ -237,6 +274,16 @@ export default function JobsSettings() {
           workflowName={selectedWorkflow.name}
           open={jobRunsDialogOpen}
           onOpenChange={setJobRunsDialogOpen}
+        />
+      )}
+
+      {/* Configuration Dialog */}
+      {selectedWorkflow && (
+        <WorkflowConfigurationDialog
+          workflowId={selectedWorkflow.id}
+          workflowName={selectedWorkflow.name}
+          open={configDialogOpen}
+          onOpenChange={setConfigDialogOpen}
         />
       )}
     </Card>

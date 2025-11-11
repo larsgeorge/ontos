@@ -9,6 +9,12 @@ from src.controller.jobs_manager import JobsManager
 from src.repositories.workflow_job_runs_repository import workflow_job_run_repo
 from src.models.workflow_job_runs import WorkflowJobRun
 from src.repositories.workflow_installations_repository import workflow_installation_repo
+from src.models.workflow_configurations import (
+    WorkflowParameterDefinition,
+    WorkflowConfiguration,
+    WorkflowConfigurationUpdate,
+    WorkflowConfigurationResponse
+)
 
 # Configure logging
 from src.common.logging import get_logger
@@ -112,7 +118,15 @@ async def start_workflow(
         inst = workflow_installation_repo.get_by_workflow_id(db=db, workflow_id=workflow_id)
         if inst is None:
             raise HTTPException(status_code=404, detail=f"Workflow '{workflow_id}' not installed")
-        run_id = jobs_manager.run_job(job_id=int(inst.job_id), job_name=workflow_id)
+        
+        # Merge saved configuration with any runtime parameters
+        job_parameters = jobs_manager.get_merged_job_parameters(workflow_id)
+        
+        run_id = jobs_manager.run_job(
+            job_id=int(inst.job_id), 
+            job_name=workflow_id,
+            job_parameters=job_parameters if job_parameters else None
+        )
         return {"run_id": run_id}
     except HTTPException:
         raise
@@ -202,4 +216,71 @@ async def get_job_status(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get job status: {str(e)}"
+        )
+
+
+# --- Workflow Configuration Routes ---
+
+@router.get('/jobs/workflows/{workflow_id}/parameter-definitions')
+async def get_workflow_parameter_definitions(
+    workflow_id: str,
+    jobs_manager: JobsManager = Depends(get_jobs_manager)
+) -> List[WorkflowParameterDefinition]:
+    """Get parameter definitions for a workflow from its YAML configuration.
+    
+    Returns the configurable_parameters section from the workflow YAML.
+    """
+    try:
+        definitions = jobs_manager.get_workflow_parameter_definitions(workflow_id)
+        return definitions
+    except Exception as e:
+        logger.error(f"Error getting parameter definitions for {workflow_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get parameter definitions: {str(e)}"
+        )
+
+
+@router.get('/jobs/workflows/{workflow_id}/configuration')
+async def get_workflow_configuration(
+    workflow_id: str,
+    jobs_manager: JobsManager = Depends(get_jobs_manager)
+) -> Dict[str, Any]:
+    """Get saved configuration for a workflow.
+    
+    Returns the stored parameter values for this workflow, or empty dict if not configured.
+    """
+    try:
+        configuration = jobs_manager.get_workflow_configuration(workflow_id)
+        return {"workflow_id": workflow_id, "configuration": configuration or {}}
+    except Exception as e:
+        logger.error(f"Error getting configuration for {workflow_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get configuration: {str(e)}"
+        )
+
+
+@router.put('/jobs/workflows/{workflow_id}/configuration')
+async def update_workflow_configuration(
+    workflow_id: str,
+    config_update: WorkflowConfigurationUpdate,
+    jobs_manager: JobsManager = Depends(get_jobs_manager)
+) -> WorkflowConfiguration:
+    """Update workflow configuration.
+    
+    Saves parameter values for a workflow. These will be merged with runtime parameters
+    when the workflow is executed.
+    """
+    try:
+        updated_config = jobs_manager.update_workflow_configuration(
+            workflow_id=workflow_id,
+            configuration=config_update.configuration
+        )
+        return updated_config
+    except Exception as e:
+        logger.error(f"Error updating configuration for {workflow_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update configuration: {str(e)}"
         )

@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: Optional[str] = None
     POSTGRES_DB: Optional[str] = None
     POSTGRES_DB_SCHEMA: Optional[str] = "public" # Default schema for Postgres
+    LAKEBASE_INSTANCE_NAME: Optional[str] = None  # Instance name for Lakebase OAuth authentication
     
     # Database connection pool settings
     DB_POOL_SIZE: int = Field(5, env='DB_POOL_SIZE')  # Base connection pool size

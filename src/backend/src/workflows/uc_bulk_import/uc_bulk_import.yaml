@@ -1,0 +1,109 @@
+name: "UC Bulk Import"
+description: "Import Contracts, Products, and Domains from Unity Catalog tags"
+format: "MULTI_TASK"
+environments:
+  - environment_key: "uc-bulk-import-env"
+    spec:
+      dependencies:
+        - "sqlalchemy"
+        - "psycopg2-binary"
+tasks:
+  - task_key: "uc_bulk_import"
+    spark_python_task:
+      python_file: "uc_bulk_import.py"
+      parameters:
+        - "--entity_patterns"
+        - "{{job.parameters.entity_patterns}}"
+        - "--default_catalog"
+        - "{{job.parameters.default_catalog}}"
+        - "--default_schema"
+        - "{{job.parameters.default_schema}}"
+        - "--conflict_strategy"
+        - "{{job.parameters.conflict_strategy}}"
+        - "--dry_run"
+        - "{{job.parameters.dry_run}}"
+        - "--verbose"
+        - "{{job.parameters.verbose}}"
+        - "--lakebase_instance_name"
+        - "{{job.parameters.lakebase_instance_name}}"
+        - "--postgres_host"
+        - "{{job.parameters.postgres_host}}"
+        - "--postgres_db"
+        - "{{job.parameters.postgres_db}}"
+        - "--postgres_port"
+        - "{{job.parameters.postgres_port}}"
+        - "--postgres_schema"
+        - "{{job.parameters.postgres_schema}}"
+    environment_key: "uc-bulk-import-env"
+
+schedule:
+  quartz_cron_expression: "0 0 2 * * ?"  # Daily at 2 AM
+  timezone_id: "UTC"
+  pause_status: "PAUSED"
+
+# Standard runtime parameters (defaults, overridden by configurable_parameters from UI)
+parameters:
+  entity_patterns: "[]"
+  default_catalog: ""
+  default_schema: ""
+  conflict_strategy: "skip"
+  dry_run: "false"
+  verbose: "false"
+  lakebase_instance_name: ""
+  postgres_host: ""
+  postgres_db: ""
+  postgres_port: "5432"
+  postgres_schema: "public"
+
+# Configurable parameters (managed via UI)
+configurable_parameters:
+  - name: "entity_patterns"
+    type: "entity_patterns"
+    description: "Tag patterns for discovering and importing entities from Unity Catalog"
+    required: true
+    entity_types: ["contract", "product", "domain"]
+    default:
+      - entity_type: "contract"
+        enabled: true
+        key_pattern: "^data_contract_(.+)$"
+        value_extraction_source: "key"
+        value_extraction_pattern: "^data_contract_(.+)$"
+      - entity_type: "product"
+        enabled: true
+        key_pattern: "^data_product_(.+)$"
+        value_extraction_source: "key"
+        value_extraction_pattern: "^data_product_(.+)$"
+      - entity_type: "domain"
+        enabled: true
+        key_pattern: "^data_domain_(.+)$"
+        value_extraction_source: "key"
+        value_extraction_pattern: "^data_domain_(.+)$"
+  
+  - name: "default_catalog"
+    type: "string"
+    description: "Default catalog for unqualified table names"
+    required: false
+    default: null
+  
+  - name: "default_schema"
+    type: "string"
+    description: "Default schema for unqualified table names"
+    required: false
+    default: null
+  
+  - name: "conflict_strategy"
+    type: "select"
+    description: "How to handle existing entities with same name"
+    required: true
+    default: "skip"
+    options: ["skip", "update", "error"]
+
+timeout_seconds: 7200
+max_concurrent_runs: 1
+
+tags:
+  environment: "production"
+  team: "data_governance"
+  workflow_type: "import"
+  owner: "ontos"
+

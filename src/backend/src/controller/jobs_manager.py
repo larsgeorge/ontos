@@ -17,7 +17,9 @@ from sqlalchemy.orm import Session
 from src.common.logging import get_logger
 from src.repositories.workflow_installations_repository import workflow_installation_repo
 from src.repositories.workflow_job_runs_repository import workflow_job_run_repo
+from src.repositories.workflow_configurations_repository import workflow_configuration_repo
 from src.models.workflow_installations import WorkflowInstallation
+from src.models.workflow_configurations import WorkflowParameterDefinition, WorkflowConfiguration, WorkflowConfigurationUpdate
 
 logger = get_logger(__name__)
 
@@ -352,6 +354,137 @@ class JobsManager:
     def find_job_by_name(self, job_name: str) -> Optional[jobs.Job]:
         all_jobs = self._client.jobs.list()
         return next((job for job in all_jobs if job.settings.name == job_name), None)
+
+    # --- Configuration Management ---
+    
+    def get_workflow_parameter_definitions(self, workflow_id: str) -> List[WorkflowParameterDefinition]:
+        """Get parameter definitions from workflow YAML configurable_parameters section.
+        
+        Args:
+            workflow_id: Workflow identifier
+            
+        Returns:
+            List of parameter definitions from YAML
+        """
+        try:
+            yaml_path = self._workflows_root / workflow_id / f"{workflow_id}.yaml"
+            if not yaml_path.exists():
+                logger.warning(f"Workflow YAML not found: {yaml_path}")
+                return []
+            
+            with open(yaml_path) as f:
+                data = yaml.safe_load(f) or {}
+            
+            config_params = data.get('configurable_parameters', [])
+            if not isinstance(config_params, list):
+                return []
+            
+            # Parse each parameter definition
+            definitions = []
+            for param_def in config_params:
+                if not isinstance(param_def, dict):
+                    continue
+                try:
+                    definitions.append(WorkflowParameterDefinition(**param_def))
+                except Exception as e:
+                    logger.warning(f"Invalid parameter definition in {workflow_id}: {e}")
+                    continue
+            
+            return definitions
+        except Exception as e:
+            logger.error(f"Error reading parameter definitions for {workflow_id}: {e}")
+            return []
+    
+    def get_workflow_configuration(self, workflow_id: str) -> Optional[Dict[str, Any]]:
+        """Get saved configuration for a workflow from database.
+        
+        Args:
+            workflow_id: Workflow identifier
+            
+        Returns:
+            Configuration dict or None if not found
+        """
+        return workflow_configuration_repo.get_configuration_dict(self._db, workflow_id=workflow_id)
+    
+    def update_workflow_configuration(self, workflow_id: str, configuration: Dict[str, Any]) -> WorkflowConfiguration:
+        """Update workflow configuration in database.
+        
+        Args:
+            workflow_id: Workflow identifier
+            configuration: Parameter name -> value mapping
+            
+        Returns:
+            Updated configuration
+        """
+        db_obj = workflow_configuration_repo.upsert(
+            self._db,
+            workflow_id=workflow_id,
+            configuration=configuration
+        )
+        self._db.commit()
+        
+        # Return as Pydantic model
+        config_dict = workflow_configuration_repo.get_configuration_dict(self._db, workflow_id=workflow_id)
+        return WorkflowConfiguration(workflow_id=workflow_id, configuration=config_dict or {})
+    
+    def get_merged_job_parameters(self, workflow_id: str, ad_hoc_params: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+        """Merge saved configuration with ad-hoc parameters for job execution.
+        
+        Saved configuration values are converted to strings and merged with ad-hoc parameters.
+        Ad-hoc parameters take precedence over saved configuration.
+        
+        Also automatically injects system-level database connection parameters from settings.
+        
+        Args:
+            workflow_id: Workflow identifier
+            ad_hoc_params: Optional runtime parameters to override saved config
+            
+        Returns:
+            Merged parameters dict (all values as strings for job submission)
+        """
+        merged: Dict[str, str] = {}
+        
+        # Load saved configuration
+        saved_config = self.get_workflow_configuration(workflow_id)
+        if saved_config:
+            # Convert all values to strings for job parameters
+            for key, value in saved_config.items():
+                if isinstance(value, (list, dict)):
+                    # Serialize complex types to JSON
+                    merged[key] = json.dumps(value)
+                elif value is None:
+                    merged[key] = ""
+                else:
+                    merged[key] = str(value)
+        
+        # Inject system-level database connection parameters from settings
+        # These are required for workflows that connect to the app's database
+        if self._settings:
+            db_params = {
+                'lakebase_instance_name': getattr(self._settings, 'LAKEBASE_INSTANCE_NAME', ''),
+                'postgres_host': getattr(self._settings, 'POSTGRES_HOST', ''),
+                'postgres_db': getattr(self._settings, 'POSTGRES_DB', ''),
+                'postgres_port': getattr(self._settings, 'POSTGRES_PORT', '5432'),
+                'postgres_schema': getattr(self._settings, 'POSTGRES_DB_SCHEMA', 'public'),
+            }
+            # Only inject if workflow YAML defines these parameters
+            try:
+                wf_def = self._get_workflow_definition(workflow_id, job_cluster_id=None)
+                wf_params = wf_def.get('parameters', {})
+                if isinstance(wf_params, dict):
+                    for param_name, param_value in db_params.items():
+                        if param_name in wf_params:
+                            # Only inject if not already set by user config
+                            if param_name not in merged:
+                                merged[param_name] = str(param_value)
+            except Exception as e:
+                logger.warning(f"Could not check workflow parameters for {workflow_id}: {e}")
+        
+        # Merge ad-hoc parameters (these override everything)
+        if ad_hoc_params:
+            merged.update(ad_hoc_params)
+        
+        return merged
 
     # --- internals ---
     def _get_workflow_definition(self, workflow_id: str, *, job_cluster_id: Optional[str]) -> Dict[str, Any]:
