@@ -5,6 +5,7 @@ environments:
   - environment_key: "uc-bulk-import-env"
     spec:
       dependencies:
+        - "databricks-sdk>=0.60.0"
         - "sqlalchemy"
         - "psycopg2-binary"
 tasks:

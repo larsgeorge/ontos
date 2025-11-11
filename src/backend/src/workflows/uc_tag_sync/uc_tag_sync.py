@@ -1,33 +1,112 @@
 import os
 import re
 import sys
-import time
 import argparse
 from typing import Any, Dict, Iterable, List, Optional, Tuple
-
 from dataclasses import dataclass
+from uuid import uuid4
 
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import NotFound
 
-# Make 'workflows/shared' helper directory importable when running as a script on Databricks
-_BASE_DIR = os.path.dirname(__file__) if '__file__' in globals() else os.getcwd()
-_WF_ROOT = os.path.dirname(_BASE_DIR)
-_SHARED_DIR = os.path.join(_WF_ROOT, 'shared')
-if _SHARED_DIR not in sys.path:
-    sys.path.insert(0, _SHARED_DIR)
-from db import create_engine_from_env  # type: ignore
+
+# ============================================================================
+# OAuth Token Generation & Database Connection (for Lakebase Postgres)
+# ============================================================================
+
+def get_oauth_token(ws_client: WorkspaceClient, instance_name: str) -> Tuple[str, str]:
+    """Generate OAuth token for the service principal to access Lakebase Postgres."""
+    if not instance_name or instance_name == 'None' or instance_name == '':
+        raise RuntimeError(
+            "Lakebase instance name is required but was not provided.\n"
+            "This is auto-detected from the Databricks App resources.\n"
+            "Ensure your app has a Lakebase database resource configured."
+        )
+    
+    print(f"  Generating OAuth token for instance: {instance_name}")
+    
+    # Get current service principal
+    current_user = ws_client.current_user.me().user_name
+    print(f"  Service Principal: {current_user}")
+    
+    # Generate token
+    try:
+        cred = ws_client.database.generate_database_credential(
+            request_id=str(uuid4()),
+            instance_names=[instance_name],
+        )
+    except AttributeError as e:
+        raise RuntimeError(
+            f"Failed to generate OAuth token: {e}\n"
+            "This may indicate that the Databricks SDK version doesn't support database OAuth,\n"
+            "or that the workspace client is not properly initialized.\n"
+            "Please ensure you're using a recent version of the databricks-sdk package."
+        )
+    
+    print(f"  ✓ Successfully generated OAuth token")
+    return current_user, cred.token
+
+
+def build_db_url(
+    host: str,
+    db: str, 
+    port: str, 
+    schema: str,
+    instance_name: str,
+    ws_client: WorkspaceClient
+) -> Tuple[str, str]:
+    """Build PostgreSQL connection URL using OAuth authentication.
+    
+    Returns: (connection_url, auth_user)
+    """
+    
+    print(f"  POSTGRES_HOST: {host}")
+    print(f"  POSTGRES_DB: {db}")
+    print(f"  POSTGRES_PORT: {port}")
+    print(f"  POSTGRES_DB_SCHEMA: {schema}")
+    print(f"  LAKEBASE_INSTANCE_NAME: {instance_name}")
+    print(f"  Authentication: OAuth (Lakebase Postgres)")
+    
+    # Generate OAuth token
+    oauth_user, oauth_token = get_oauth_token(ws_client, instance_name)
+    print(f"  Using OAuth user: {oauth_user}")
+    
+    if not all([host, oauth_user, oauth_token, db]):
+        missing = []
+        if not host: missing.append("host")
+        if not oauth_user: missing.append("oauth_user")
+        if not oauth_token: missing.append("oauth_token")
+        if not db: missing.append("db")
+        raise RuntimeError(f"Missing required Postgres parameters: {', '.join(missing)}")
+    
+    query = f"?options=-csearch_path%3D{schema}" if schema else ""
+    connection_url = f"postgresql+psycopg2://{oauth_user}:****@{host}:{port}/{db}{query}"
+    print(f"  Connection URL (token redacted): {connection_url}")
+    
+    actual_url = f"postgresql+psycopg2://{oauth_user}:{oauth_token}@{host}:{port}/{db}{query}"
+    return actual_url, oauth_user
+
+
+def create_engine_from_params(
+    ws_client: WorkspaceClient,
+    host: str,
+    db: str,
+    port: str,
+    schema: str,
+    instance_name: str
+) -> Engine:
+    """Create SQLAlchemy engine using OAuth authentication."""
+    if not instance_name:
+        raise RuntimeError("lakebase_instance_name parameter is required")
+    
+    url, auth_user = build_db_url(host, db, port, schema, instance_name, ws_client)
+    return create_engine(url, pool_pre_ping=True)
 
 
 # --- Helpers -----------------------------------------------------------------
-
-def build_db_url_from_env() -> str:
-    # Kept for backward compatibility; use create_engine_from_env directly where possible
-    from db import build_db_url_from_env as _impl  # type: ignore
-    return _impl()
 
 
 def slugify_iri(iri: str) -> str:
@@ -240,29 +319,61 @@ def build_desired_for_dataset(d: DatasetTagInfo, prefix: str) -> Dict[str, Optio
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sync Ontos metadata to UC governed tags")
-    parser.add_argument("--prefix", type=str, default=os.environ.get("ONTOS_TAG_PREFIX", "x_ontos_"))
-    parser.add_argument("--dry-run", dest="dry_run", action="store_true")
-    parser.add_argument("--catalog", type=str, default=os.environ.get("DATABRICKS_CATALOG"))
-    parser.add_argument("--schema", type=str, default=os.environ.get("DATABRICKS_SCHEMA"))
-    parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--prefix", type=str, default="x_ontos_")
+    parser.add_argument("--dry_run", type=str, default="false")
+    parser.add_argument("--default_catalog", type=str, default="")
+    parser.add_argument("--default_schema", type=str, default="")
+    parser.add_argument("--limit", type=str, default="")
+    parser.add_argument("--verbose", type=str, default="false")
+    parser.add_argument("--lakebase_instance_name", type=str, required=True)
+    parser.add_argument("--postgres_host", type=str, required=True)
+    parser.add_argument("--postgres_db", type=str, required=True)
+    parser.add_argument("--postgres_port", type=str, default="5432")
+    parser.add_argument("--postgres_schema", type=str, default="public")
     args, _ = parser.parse_known_args()
 
     prefix: str = args.prefix
-    dry_run: bool = bool(args.dry_run)
-    default_catalog = args.catalog
-    default_schema = args.schema
+    dry_run: bool = args.dry_run.lower() in ("true", "1", "yes")
+    default_catalog = args.default_catalog if args.default_catalog else None
+    default_schema = args.default_schema if args.default_schema else None
+    limit = int(args.limit) if args.limit and args.limit.isdigit() else None
+    verbose = args.verbose.lower() in ("true", "1", "yes")
 
-    # DB engine
-    engine = create_engine_from_env()
+    print("=" * 80)
+    print("UC Tag Sync workflow started")
+    print("=" * 80)
+    print(f"\nJob Parameters:")
+    print(f"  Prefix: {prefix}")
+    print(f"  Dry run: {dry_run}")
+    print(f"  Default catalog: {default_catalog}")
+    print(f"  Default schema: {default_schema}")
+    print(f"  Limit: {limit}")
+    print(f"  Verbose: {verbose}")
+    print(f"  Lakebase instance name: {args.lakebase_instance_name}")
 
-    # Workspace client (host/token from env)
+    # Initialize Workspace Client (needed for OAuth authentication)
+    print("\nInitializing Databricks Workspace Client...")
     ws = WorkspaceClient()
+    print("✓ Workspace client initialized")
 
-    rows = read_contracts_and_links(engine, limit=args.limit)
+    # Connect to database using OAuth
+    print("\nConnecting to database...")
+    engine = create_engine_from_params(
+        ws_client=ws,
+        host=args.postgres_host,
+        db=args.postgres_db,
+        port=args.postgres_port,
+        schema=args.postgres_schema,
+        instance_name=args.lakebase_instance_name
+    )
+    print("✓ Database connection established successfully")
+
+    rows = read_contracts_and_links(engine, limit=limit)
     datasets = build_dataset_tag_infos(rows, default_catalog, default_schema)
 
     updated_total = removed_total = 0
+
+    print(f"\nProcessing {len(datasets)} datasets...")
 
     # Dataset-level
     for d in datasets:
@@ -272,7 +383,7 @@ def main() -> None:
         u, r = reconcile_tags(ws, "TABLE", d.fqn, desired, prefix, dry_run=dry_run)
         updated_total += u
         removed_total += r
-        if args.verbose:
+        if verbose:
             print(f"Dataset {d.fqn}: updated={u} removed={r}")
 
     # Aggregate parent desired values
@@ -294,7 +405,10 @@ def main() -> None:
         updated_total += u
         removed_total += r
 
-    print(f"Tag sync complete. updated={updated_total} removed={removed_total}")
+    print("\n" + "=" * 80)
+    print("✓ UC Tag Sync workflow completed successfully!")
+    print("=" * 80)
+    print(f"Summary: updated={updated_total} removed={removed_total}")
 
 
 if __name__ == "__main__":

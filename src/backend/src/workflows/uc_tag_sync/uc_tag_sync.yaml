@@ -1,10 +1,41 @@
 name: "UC Tag Sync"
 description: "Sync Ontos metadata to UC governed tags"
 format: "MULTI_TASK"
+environments:
+  - environment_key: "uc-tag-sync-env"
+    spec:
+      dependencies:
+        - "databricks-sdk>=0.60.0"
+        - "sqlalchemy"
+        - "psycopg2-binary"
 tasks:
   - task_key: "uc_tag_sync"
     spark_python_task:
       python_file: "uc_tag_sync.py"
+      parameters:
+        - "--prefix"
+        - "{{job.parameters.prefix}}"
+        - "--dry_run"
+        - "{{job.parameters.dry_run}}"
+        - "--default_catalog"
+        - "{{job.parameters.default_catalog}}"
+        - "--default_schema"
+        - "{{job.parameters.default_schema}}"
+        - "--limit"
+        - "{{job.parameters.limit}}"
+        - "--verbose"
+        - "{{job.parameters.verbose}}"
+        - "--lakebase_instance_name"
+        - "{{job.parameters.lakebase_instance_name}}"
+        - "--postgres_host"
+        - "{{job.parameters.postgres_host}}"
+        - "--postgres_db"
+        - "{{job.parameters.postgres_db}}"
+        - "--postgres_port"
+        - "{{job.parameters.postgres_port}}"
+        - "--postgres_schema"
+        - "{{job.parameters.postgres_schema}}"
+    environment_key: "uc-tag-sync-env"
 
 # Schedule to run every 4 hours
 schedule:
@@ -15,9 +46,16 @@ schedule:
 # Parameters for configuration
 parameters:
   prefix: "x_ontos_"
-  reconcile: "true"
   dry_run: "false"
-  batch_size: "500"
+  default_catalog: ""
+  default_schema: ""
+  limit: ""
+  verbose: "false"
+  lakebase_instance_name: ""
+  postgres_host: ""
+  postgres_db: ""
+  postgres_port: "5432"
+  postgres_schema: "public"
 
 # Job timeout (in seconds)
 timeout_seconds: 3600
