@@ -119,13 +119,11 @@ async def start_workflow(
         if inst is None:
             raise HTTPException(status_code=404, detail=f"Workflow '{workflow_id}' not installed")
         
-        # Merge saved configuration with any runtime parameters
-        job_parameters = jobs_manager.get_merged_job_parameters(workflow_id)
-        
+        # Run job - database params and saved configuration are auto-injected
         run_id = jobs_manager.run_job(
             job_id=int(inst.job_id), 
             job_name=workflow_id,
-            job_parameters=job_parameters if job_parameters else None
+            workflow_id=workflow_id  # Enable auto-injection of database params
         )
         return {"run_id": run_id}
     except HTTPException:

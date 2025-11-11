@@ -28,6 +28,13 @@ from sqlalchemy import create_engine
 
 def get_oauth_token(ws_client: WorkspaceClient, instance_name: str) -> Tuple[str, str]:
     """Generate OAuth token for the service principal to access Lakebase Postgres."""
+    if not instance_name or instance_name == 'None' or instance_name == '':
+        raise RuntimeError(
+            "Lakebase instance name is required but was not provided.\n"
+            "This is auto-detected from the Databricks App resources.\n"
+            "Ensure your app has a Lakebase database resource configured."
+        )
+    
     print(f"  Generating OAuth token for instance: {instance_name}")
     
     # Get current service principal
@@ -35,10 +42,18 @@ def get_oauth_token(ws_client: WorkspaceClient, instance_name: str) -> Tuple[str
     print(f"  Service Principal: {current_user}")
     
     # Generate token
-    cred = ws_client.database.generate_database_credential(
-        request_id=str(uuid4()),
-        instance_names=[instance_name],
-    )
+    try:
+        cred = ws_client.database.generate_database_credential(
+            request_id=str(uuid4()),
+            instance_names=[instance_name],
+        )
+    except AttributeError as e:
+        raise RuntimeError(
+            f"Failed to generate OAuth token: {e}\n"
+            "This may indicate that the Databricks SDK version doesn't support database OAuth,\n"
+            "or that the workspace client is not properly initialized.\n"
+            "Please ensure you're using a recent version of the databricks-sdk package."
+        )
     
     print(f"  ✓ Successfully generated OAuth token")
     return current_user, cred.token

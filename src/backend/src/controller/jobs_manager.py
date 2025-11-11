@@ -308,13 +308,14 @@ class JobsManager:
             logger.error(f"Failed to remove installation record for job_id {job_id}: {e}")
             self._db.rollback()
 
-    def run_job(self, job_id: int, job_name: Optional[str] = None, job_parameters: Optional[Dict[str, str]] = None) -> int:
+    def run_job(self, job_id: int, job_name: Optional[str] = None, job_parameters: Optional[Dict[str, str]] = None, workflow_id: Optional[str] = None) -> int:
         """Run a job and create a progress notification.
         
         Args:
             job_id: Databricks job ID to run
             job_name: Optional job name for notifications
-            job_parameters: Optional dict of parameter name->value for the job
+            job_parameters: Optional dict of parameter name->value for the job (ad-hoc overrides)
+            workflow_id: Optional workflow ID to enable auto-injection of database params
         
         Returns:
             run_id: Databricks run ID
@@ -322,11 +323,18 @@ class JobsManager:
         # Prepare run_now arguments
         run_now_kwargs = {"job_id": job_id}
         
-        # Add parameters if provided
-        if job_parameters:
-            # Convert parameters to list of JobParameter for the SDK
-            from databricks.sdk.service.jobs import RunParameters
-            run_now_kwargs["job_parameters"] = job_parameters
+        # Merge saved configuration with database params and ad-hoc params
+        merged_params = {}
+        if workflow_id:
+            # Auto-inject database params and merge with any saved configuration
+            merged_params = self.get_merged_job_parameters(workflow_id, ad_hoc_params=job_parameters)
+        elif job_parameters:
+            # No workflow_id provided, use ad-hoc params as-is
+            merged_params = job_parameters
+        
+        # Add parameters if any exist
+        if merged_params:
+            run_now_kwargs["job_parameters"] = merged_params
         
         run = self._client.jobs.run_now(**run_now_kwargs)
         run_id = int(run.run_id)
@@ -460,12 +468,29 @@ class JobsManager:
         # Inject system-level database connection parameters from settings
         # These are required for workflows that connect to the app's database
         if self._settings:
+            # Get Lakebase instance name from app resources (same as database.py)
+            lakebase_instance = ''
+            try:
+                app_name = getattr(self._settings, 'DATABRICKS_APP_NAME', None)
+                if app_name and self._client:
+                    app_info = self._client.apps.get(app_name)
+                    if app_info.resources:
+                        for resource in app_info.resources:
+                            if resource.database is not None:
+                                lakebase_instance = resource.database.instance_name
+                                logger.info(f"Auto-detected Lakebase instance: {lakebase_instance}")
+                                break
+                if not lakebase_instance:
+                    logger.warning(f"Could not auto-detect Lakebase instance name for app '{app_name}'")
+            except Exception as e:
+                logger.warning(f"Failed to get Lakebase instance name: {e}")
+            
             db_params = {
-                'lakebase_instance_name': getattr(self._settings, 'LAKEBASE_INSTANCE_NAME', ''),
-                'postgres_host': getattr(self._settings, 'POSTGRES_HOST', ''),
-                'postgres_db': getattr(self._settings, 'POSTGRES_DB', ''),
-                'postgres_port': getattr(self._settings, 'POSTGRES_PORT', '5432'),
-                'postgres_schema': getattr(self._settings, 'POSTGRES_DB_SCHEMA', 'public'),
+                'lakebase_instance_name': lakebase_instance,
+                'postgres_host': str(getattr(self._settings, 'POSTGRES_HOST', '') or ''),
+                'postgres_db': str(getattr(self._settings, 'POSTGRES_DB', '') or ''),
+                'postgres_port': str(getattr(self._settings, 'POSTGRES_PORT', '5432') or '5432'),
+                'postgres_schema': str(getattr(self._settings, 'POSTGRES_DB_SCHEMA', 'public') or 'public'),
             }
             # Only inject if workflow YAML defines these parameters
             try:

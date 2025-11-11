@@ -3391,24 +3391,18 @@ class DataContractsManager(SearchableAsset):
             raise ValueError(f"Workflow '{workflow_id}' not installed. Please install it via Settings > Jobs & Workflows.")
         
         # Trigger workflow with parameters
-        settings = get_settings()
-        # Fetch instance name dynamically
-        from src.common.database import get_lakebase_instance_name
-        instance_name = get_lakebase_instance_name(settings.DATABRICKS_APP_NAME, self.ws_client)
+        # Only pass workflow-specific parameters
+        # Database connection params are auto-injected by JobsManager
         job_params = {
             "contract_id": contract_id,
             "schema_names": json.dumps(schema_names),
             "profile_run_id": profile_run_id,
-            "lakebase_instance_name": instance_name or "",
-            "postgres_host": settings.POSTGRES_HOST or "",
-            "postgres_db": settings.POSTGRES_DB or "",
-            "postgres_port": str(settings.POSTGRES_PORT) if settings.POSTGRES_PORT else "5432",
-            "postgres_schema": settings.POSTGRES_DB_SCHEMA or "public"
         }
         
         run_id = jobs_manager.run_job(
             job_id=int(installation.job_id),
             job_name=workflow_id,
+            workflow_id=workflow_id,  # Enable auto-injection of database params
             job_parameters=job_params
         )
         
