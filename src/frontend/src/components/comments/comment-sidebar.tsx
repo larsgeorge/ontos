@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MessageSquare, Plus, Trash2, Edit, Send, Users, Filter, Clock, FileText, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApi } from '@/hooks/use-api';
@@ -90,6 +90,9 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
     selectedTeams: [],
     selectedRoles: [],
   });
+
+  // Ref for the ScrollArea viewport to control scrolling
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // State for available teams and roles
   const [availableTeams, setAvailableTeams] = useState<AudienceTeam[]>([]);
@@ -348,6 +351,17 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       fetchTimeline();
     }
   }, [isOpen, entityType, entityId, filterType, currentProject?.id]);
+
+  // Scroll to top when comment form opens
+  useEffect(() => {
+    if (isFormOpen && scrollAreaRef.current) {
+      // Find the viewport element within the ScrollArea
+      const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (viewport) {
+        viewport.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  }, [isFormOpen]);
 
   const CommentForm = React.useMemo(() => (
     <form onSubmit={handleSubmit} className="space-y-4 p-4 border-t">
@@ -732,7 +746,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
           </div>
         </div>
         
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">
           <div className="p-4 pt-0">
             <Button 
               variant="outline" 
@@ -745,11 +759,11 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
             </Button>
           </div>
           
-          {isFormOpen && CommentForm}
-          
           <Separator />
           
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1" ref={scrollAreaRef}>
+            {isFormOpen && CommentForm}
+            
             {timeline.length > 0 ? (
               <div className="p-4 space-y-3">
                 {timeline.map(entry => (
