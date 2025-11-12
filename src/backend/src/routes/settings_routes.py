@@ -144,6 +144,16 @@ async def list_roles(manager: SettingsManager = Depends(get_settings_manager)):
         logger.error("Error listing roles", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list roles")
 
+@router.get("/settings/roles/summary", response_model=List[dict])
+async def list_roles_summary(manager: SettingsManager = Depends(get_settings_manager)):
+    """Get a simple summary list of role names for dropdowns/selection."""
+    try:
+        roles = manager.list_app_roles()
+        return [{"name": role.name} for role in roles]
+    except Exception as e:
+        logger.error("Error listing roles summary", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list roles summary")
+
 @router.post("/settings/roles", response_model=AppRole, status_code=status.HTTP_201_CREATED)
 async def create_role(
     request: Request,

@@ -9,6 +9,7 @@ interface ProjectState {
   allProjects: ProjectSummary[];
   isLoading: boolean;
   error: string | null;
+  _cacheVersion?: number; // Server cache version for invalidation
 
   // Actions
   setCurrentProject: (project: ProjectSummary | null) => void;
@@ -22,6 +23,21 @@ interface ProjectState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
 }
+
+// Helper to check and update cache version
+const checkAndUpdateCacheVersion = async (): Promise<boolean> => {
+  try {
+    const response = await fetch('/api/cache-version');
+    if (!response.ok) {
+      return false; // Treat as stale if we can't check
+    }
+    const data = await response.json();
+    return data.version;
+  } catch (error) {
+    console.error('Failed to check cache version:', error);
+    return false;
+  }
+};
 
 // Helper function to make API calls
 const apiCall = async (endpoint: string, options?: RequestInit) => {
@@ -49,6 +65,7 @@ export const useProjectStore = create<ProjectState>()(
       allProjects: [],
       isLoading: false,
       error: null,
+      _cacheVersion: undefined,
 
       setCurrentProject: (project) => {
         set({ currentProject: project, error: null });
@@ -63,15 +80,34 @@ export const useProjectStore = create<ProjectState>()(
       },
 
       fetchUserProjects: async () => {
-        const { setLoading, setError, setAvailableProjects, setCurrentProject, currentProject } = get();
+        const { setLoading, setError, setAvailableProjects, setCurrentProject, currentProject, _cacheVersion } = get();
 
         try {
           setLoading(true);
           setError(null);
 
+          // Check cache version and invalidate stale data
+          const serverVersion = await checkAndUpdateCacheVersion();
+          if (serverVersion && _cacheVersion && serverVersion !== _cacheVersion) {
+            console.log('Project cache is stale, clearing current project');
+            setCurrentProject(null);
+          }
+
           const data: UserProjectAccess = await apiCall('/user/projects');
 
           setAvailableProjects(data.projects || []);
+          
+          // Update cache version
+          set({ _cacheVersion: serverVersion });
+
+          // Validate current project still exists
+          if (currentProject) {
+            const projectStillExists = data.projects?.some(p => p.id === currentProject.id);
+            if (!projectStillExists) {
+              console.log('Current project no longer exists, clearing');
+              setCurrentProject(null);
+            }
+          }
 
           // Set current project if provided by backend
           if (data.current_project_id) {
@@ -191,9 +227,10 @@ export const useProjectStore = create<ProjectState>()(
     }),
     {
       name: 'ucapp-project-store',
-      // Only persist the current project, not the loading state or errors
+      // Persist the current project and cache version for invalidation
       partialize: (state) => ({
         currentProject: state.currentProject,
+        _cacheVersion: state._cacheVersion,
       }),
     }
   )

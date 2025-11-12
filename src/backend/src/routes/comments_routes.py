@@ -5,12 +5,13 @@ from sqlalchemy.orm import Session
 
 from src.common.dependencies import DBSessionDep, CurrentUserDep, AuditManagerDep, AuditCurrentUserDep
 from src.common.features import FeatureAccessLevel
-from src.common.authorization import PermissionChecker, get_user_groups, is_user_admin
+from src.common.authorization import PermissionChecker, get_user_groups, is_user_admin, get_user_team_role_overrides
 from src.common.config import get_settings, Settings
 from src.controller.comments_manager import CommentsManager
 from src.controller.change_log_manager import change_log_manager
 from src.common.manager_dependencies import get_comments_manager
 from src.models.comments import Comment, CommentCreate, CommentUpdate, CommentListResponse
+from src.repositories.teams_repository import team_repo
 
 from src.common.logging import get_logger
 logger = get_logger(__name__)
@@ -41,7 +42,8 @@ async def create_comment(
             "entity_type": entity_type,
             "entity_id": entity_id,
             "title": payload.title,
-            "audience": payload.audience
+            "audience": payload.audience,
+            "project_id": payload.project_id
         }
     }
 
@@ -53,10 +55,27 @@ async def create_comment(
                 detail="Entity path does not match request body"
             )
 
-        result = manager.create_comment(db, data=payload, user_email=current_user.email)
+        # Get user's groups and check admin status
+        user_groups = await get_user_groups(current_user.email)
+        is_admin = is_user_admin(user_groups, get_settings())
+        
+        # Get user's teams (for validation if needed)
+        user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
+        user_team_ids = [team.id for team in user_teams]
+
+        result = manager.create_comment(
+            db, 
+            data=payload, 
+            user_email=current_user.email,
+            user_teams=user_team_ids,
+            is_admin=is_admin
+        )
         success = True
         details["comment_id"] = result.id
         return result
+    except ValueError as e:
+        details["exception"] = {"type": "ValueError", "message": str(e)}
+        raise HTTPException(status_code=403, detail=str(e))
     except HTTPException as e:
         details["exception"] = {"type": "HTTPException", "status_code": e.status_code, "detail": e.detail}
         raise
@@ -82,18 +101,25 @@ async def list_comments(
     entity_id: str,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    project_id: Optional[str] = Query(None, description="Filter by project context"),
     include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
     manager: CommentsManager = Depends(get_comments_manager),
     _: bool = Depends(PermissionChecker(FEATURE_ID, FeatureAccessLevel.READ_ONLY)),
 ):
-    """List comments for an entity, filtered by user's visibility permissions."""
+    """List comments for an entity, filtered by project context and user's visibility permissions."""
     try:
         # Get user's groups for audience filtering
         user_groups = await get_user_groups(current_user.email)
         
+        # Get user's teams for team-based audience filtering
+        user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
+        user_team_ids = [team.id for team in user_teams]
+        
+        # Get user's app role for role-based audience filtering
+        user_app_role = await get_user_team_role_overrides(current_user.email, user_groups, request=Request)
+        
         # Only admins can see deleted comments
         if include_deleted:
-            # Check if user is admin (simplified - in production you'd check permissions properly)
             is_admin = is_user_admin(user_groups, get_settings())
             if not is_admin:
                 include_deleted = False
@@ -102,7 +128,11 @@ async def list_comments(
             db,
             entity_type=entity_type,
             entity_id=entity_id,
+            project_id=project_id,
             user_groups=user_groups,
+            user_teams=user_team_ids,
+            user_app_role=user_app_role,
+            user_email=current_user.email,
             include_deleted=include_deleted
         )
     except HTTPException:
@@ -118,6 +148,7 @@ async def get_entity_timeline_count(
     entity_id: str,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    project_id: Optional[str] = Query(None, description="Filter by project context"),
     include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
     filter_type: str = Query("all", description="Filter type: 'all', 'comments', 'changes'"),
     manager: CommentsManager = Depends(get_comments_manager),
@@ -130,6 +161,11 @@ async def get_entity_timeline_count(
         # Get user's groups for audience filtering
         user_groups = await get_user_groups(current_user.email)
         is_admin = is_user_admin(user_groups, get_settings())
+        
+        # Get user's teams and app role
+        user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
+        user_team_ids = [team.id for team in user_teams]
+        user_app_role = await get_user_team_role_overrides(current_user.email, user_groups, request=Request)
 
         if filter_type in ("all", "comments"):
             # Get comments count
@@ -140,7 +176,11 @@ async def get_entity_timeline_count(
                 db,
                 entity_type=entity_type,
                 entity_id=entity_id,
+                project_id=project_id,
                 user_groups=user_groups,
+                user_teams=user_team_ids,
+                user_app_role=user_app_role,
+                user_email=current_user.email,
                 include_deleted=include_deleted
             )
             total_count += len(comments_response.comments)
@@ -173,6 +213,7 @@ async def get_entity_timeline(
     entity_id: str,
     db: DBSessionDep,
     current_user: CurrentUserDep,
+    project_id: Optional[str] = Query(None, description="Filter by project context"),
     include_deleted: bool = Query(False, description="Include soft-deleted comments (admin only)"),
     filter_type: str = Query("all", description="Filter type: 'all', 'comments', 'changes'"),
     limit: int = Query(100, ge=1, le=1000, description="Max number of entries"),
@@ -187,6 +228,11 @@ async def get_entity_timeline(
         user_groups = await get_user_groups(current_user.email)
         is_admin = is_user_admin(user_groups, get_settings())
         
+        # Get user's teams and app role
+        user_teams = team_repo.get_teams_for_user(db, current_user.email, user_groups)
+        user_team_ids = [team.id for team in user_teams]
+        user_app_role = await get_user_team_role_overrides(current_user.email, user_groups, request=Request)
+        
         if filter_type in ("all", "comments"):
             # Get comments
             if include_deleted and not is_admin:
@@ -196,7 +242,11 @@ async def get_entity_timeline(
                 db,
                 entity_type=entity_type,
                 entity_id=entity_id,
+                project_id=project_id,
                 user_groups=user_groups,
+                user_teams=user_team_ids,
+                user_app_role=user_app_role,
+                user_email=current_user.email,
                 include_deleted=include_deleted
             )
             

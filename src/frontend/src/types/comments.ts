@@ -9,7 +9,8 @@ export interface Comment {
   entity_type: string;
   title?: string | null;
   comment: string;
-  audience?: string[] | null; // Groups who can see the comment
+  audience?: string[] | null; // Audience tokens: plain groups, 'team:<team_id>', or 'role:<role_name>'
+  project_id?: string | null; // Project ID to scope the comment
   status: CommentStatus;
   created_by: string;
   updated_by?: string | null;
@@ -22,7 +23,8 @@ export interface CommentCreate {
   entity_type: string;
   title?: string | null;
   comment: string;
-  audience?: string[] | null;
+  audience?: string[] | null; // Audience tokens: plain groups, 'team:<team_id>', or 'role:<role_name>'
+  project_id?: string | null; // Project ID to scope the comment
 }
 
 export interface CommentUpdate {
@@ -57,4 +59,14 @@ export interface CommentItemProps {
   canModify: boolean;
   onEdit: (comment: Comment) => void;
   onDelete: (commentId: string) => void;
+}
+
+// Types for audience selection
+export interface AudienceTeam {
+  id: string;
+  name: string;
+}
+
+export interface AudienceRole {
+  name: string;
 }

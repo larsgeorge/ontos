@@ -16,30 +16,69 @@ class CommentsRepository(CRUDBase[CommentDb, CommentCreate, CommentUpdate]):
         *, 
         entity_type: str, 
         entity_id: str, 
+        project_id: Optional[str] = None,
         user_groups: Optional[List[str]] = None,
+        user_teams: Optional[List[str]] = None,
+        user_app_role: Optional[str] = None,
         include_deleted: bool = False
     ) -> List[CommentDb]:
-        """Get comments for a specific entity, filtered by visibility to user groups."""
+        """Get comments for a specific entity, filtered by project and audience visibility.
+        
+        Args:
+            db: Database session
+            entity_type: Type of entity (data_domain, data_product, etc.)
+            entity_id: ID of the entity
+            project_id: Filter by project ID. If provided, matches comments with this project_id or null (global)
+            user_groups: List of user's group memberships
+            user_teams: List of team IDs the user belongs to
+            user_app_role: The user's app role name
+            include_deleted: Whether to include soft-deleted comments
+        """
         query = db.query(CommentDb).filter(
             CommentDb.entity_type == entity_type, 
             CommentDb.entity_id == entity_id
         )
         
+        # Filter by project_id: match specific project or global (null) comments
+        if project_id is not None:
+            query = query.filter(
+                or_(
+                    CommentDb.project_id == project_id,
+                    CommentDb.project_id.is_(None)
+                )
+            )
+        
         # Filter by status unless explicitly including deleted
         if not include_deleted:
             query = query.filter(CommentDb.status == CommentStatus.ACTIVE)
         
-        # Filter by audience if user_groups provided
-        if user_groups is not None:
+        # Filter by audience if user info provided
+        if user_groups is not None or user_teams is not None or user_app_role is not None:
             # Comments visible to user if:
             # 1. audience is null (visible to all)
-            # 2. audience contains at least one of user's groups
+            # 2. audience contains at least one of user's groups (plain string)
+            # 3. audience contains team:<team_id> matching user's teams
+            # 4. audience contains role:<role_name> matching user's app role
             audience_conditions = [CommentDb.audience.is_(None)]
             
-            for group in user_groups:
-                # Check if any of the user's groups is in the audience JSON array
+            # Check plain group memberships
+            if user_groups:
+                for group in user_groups:
+                    audience_conditions.append(
+                        CommentDb.audience.contains(f'"{group}"')
+                    )
+            
+            # Check team: prefixed tokens
+            if user_teams:
+                for team_id in user_teams:
+                    audience_conditions.append(
+                        CommentDb.audience.contains(f'"team:{team_id}"')
+                    )
+            
+            # Check role: prefixed token
+            if user_app_role:
                 audience_conditions.append(
-                    CommentDb.audience.contains(f'"{group}"')
+                    CommentDb.audience.contains(f'"role:{user_app_role}"')
                 )
             
             query = query.filter(or_(*audience_conditions))

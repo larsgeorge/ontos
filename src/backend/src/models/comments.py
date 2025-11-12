@@ -17,7 +17,8 @@ class CommentBase(BaseModel):
     entity_type: str = Field(..., description="Type of entity being commented on (data_domain, data_product, data_contract, etc.)")
     title: Optional[str] = Field(None, max_length=255, description="Optional title for the comment")
     comment: str = Field(..., min_length=1, description="The comment content")
-    audience: Optional[List[str]] = Field(None, description="List of group names who can see the comment. If null, visible to all users with access to the entity")
+    audience: Optional[List[str]] = Field(None, description="List of audience tokens: plain groups, 'team:<team_id>', or 'role:<role_name>'. If null, visible to all users with access to the entity")
+    project_id: Optional[str] = Field(None, description="Project ID to scope the comment. If null, visible globally (admin/owning team only)")
 
 
 class CommentCreate(CommentBase):
@@ -33,6 +34,7 @@ class CommentUpdate(BaseModel):
 class Comment(CommentBase):
     id: UUID
     status: CommentStatus = CommentStatus.ACTIVE
+    project_id: Optional[str] = None
     created_by: str
     updated_by: Optional[str] = None
     created_at: datetime

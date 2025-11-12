@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MessageSquare, Plus, Trash2, Edit, Send, Users, Filter, Clock, FileText } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, Edit, Send, Users, Filter, Clock, FileText, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApi } from '@/hooks/use-api';
 import { useToast } from '@/hooks/use-toast';
+import { useProjectContext } from '@/stores/project-store';
 import {
   Comment,
   CommentCreate,
   CommentUpdate,
   CommentSidebarProps,
+  AudienceTeam,
+  AudienceRole,
 } from '@/types/comments';
 import {
   Sheet,
@@ -25,11 +28,19 @@ import { Avatar } from '@/components/ui/avatar';
 import { RelativeDate } from '@/components/common/relative-date';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface CommentFormData {
   title: string;
   comment: string;
-  audience: string[];
+  selectedTeams: string[];
+  selectedRoles: string[];
 }
 
 interface TimelineEntry {
@@ -66,6 +77,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
 }) => {
   const { get, post, put, delete: deleteApi, loading } = useApi();
   const { toast } = useToast();
+  const { currentProject } = useProjectContext();
   
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -75,11 +87,55 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
   const [formData, setFormData] = useState<CommentFormData>({
     title: '',
     comment: '',
-    audience: [],
+    selectedTeams: [],
+    selectedRoles: [],
   });
 
-  // Available groups for audience selection (in a real app, fetch from API)
-  const availableGroups = ['admin', 'data-producers', 'data-consumers', 'data-stewards'];
+  // State for available teams and roles
+  const [availableTeams, setAvailableTeams] = useState<AudienceTeam[]>([]);
+  const [availableRoles, setAvailableRoles] = useState<AudienceRole[]>([]);
+
+  // Fetch teams for current project
+  const fetchTeams = useCallback(async () => {
+    if (!currentProject?.id) {
+      console.debug('CommentSidebar: No current project, clearing teams');
+      setAvailableTeams([]);
+      return;
+    }
+
+    console.debug(`CommentSidebar: Fetching teams for project ${currentProject.id} (${currentProject.name})`);
+    const response = await get<AudienceTeam[]>(`/api/projects/${currentProject.id}/teams`);
+    
+    if (response.error) {
+      console.error('CommentSidebar: Failed to fetch teams:', response.error);
+      // Don't show error toast for now - project might not exist
+      setAvailableTeams([]);
+    } else if (response.data) {
+      console.debug(`CommentSidebar: Loaded ${response.data.length} teams:`, response.data);
+      setAvailableTeams(response.data);
+    } else {
+      console.warn('CommentSidebar: No team data returned');
+      setAvailableTeams([]);
+    }
+  }, [currentProject?.id, currentProject?.name, get]);
+
+  // Fetch available app roles
+  const fetchRoles = useCallback(async () => {
+    console.debug('CommentSidebar: Fetching app roles');
+    const response = await get<AudienceRole[]>('/api/settings/roles/summary');
+    
+    if (response.error) {
+      console.error('CommentSidebar: Failed to fetch roles:', response.error);
+      // Roles are less critical, just log the error
+      setAvailableRoles([]);
+    } else if (response.data) {
+      console.debug(`CommentSidebar: Loaded ${response.data.length} roles:`, response.data);
+      setAvailableRoles(response.data);
+    } else {
+      console.warn('CommentSidebar: No role data returned');
+      setAvailableRoles([]);
+    }
+  }, [get]);
 
   const fetchCommentCount = useCallback(async () => {
     if (!entityType || !entityId) {
@@ -89,8 +145,9 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
 
     console.debug(`CommentSidebar: Fetching count for ${entityType}/${entityId}`);
 
+    const projectParam = currentProject?.id ? `&project_id=${currentProject.id}` : '';
     const response = await get<TimelineResponse>(
-      `/api/entities/${entityType}/${entityId}/timeline/count?filter_type=all`
+      `/api/entities/${entityType}/${entityId}/timeline/count?filter_type=all${projectParam}`
     );
 
     if (response.error) {
@@ -110,8 +167,9 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
   }, [entityType, entityId, get]);
 
   const fetchTimeline = async () => {
+    const projectParam = currentProject?.id ? `&project_id=${currentProject.id}` : '';
     const response = await get<TimelineResponse>(
-      `/api/entities/${entityType}/${entityId}/timeline?filter_type=${filterType}`
+      `/api/entities/${entityType}/${entityId}/timeline?filter_type=${filterType}${projectParam}`
     );
     
     if (response.error) {
@@ -139,10 +197,16 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
       return;
     }
 
+    // Build audience array with team: and role: prefixes
+    const audienceTokens: string[] = [
+      ...formData.selectedTeams.map(teamId => `team:${teamId}`),
+      ...formData.selectedRoles.map(roleName => `role:${roleName}`),
+    ];
+
     const commentData: CommentCreate | CommentUpdate = {
       title: formData.title || null,
       comment: formData.comment,
-      audience: formData.audience.length > 0 ? formData.audience : null,
+      audience: audienceTokens.length > 0 ? audienceTokens : null,
     };
 
     if (editingComment) {
@@ -172,7 +236,8 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
         entity_type: entityType,
         title: formData.title || null,
         comment: formData.comment,
-        audience: formData.audience.length > 0 ? formData.audience : null,
+        audience: audienceTokens.length > 0 ? audienceTokens : null,
+        project_id: currentProject?.id || null,
       };
       
       const response = await post<Comment>(
@@ -196,7 +261,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
     }
     
     // Reset form and refresh timeline
-    setFormData({ title: '', comment: '', audience: [] });
+    setFormData({ title: '', comment: '', selectedTeams: [], selectedRoles: [] });
     setEditingComment(null);
     setIsFormOpen(false);
     await fetchTimeline();
@@ -238,16 +303,32 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
 
   const handleEdit = (comment: Comment) => {
     setEditingComment(comment);
+    
+    // Parse audience tokens to extract teams and roles
+    const teams: string[] = [];
+    const roles: string[] = [];
+    
+    if (comment.audience) {
+      comment.audience.forEach(token => {
+        if (token.startsWith('team:')) {
+          teams.push(token.substring(5));
+        } else if (token.startsWith('role:')) {
+          roles.push(token.substring(5));
+        }
+      });
+    }
+    
     setFormData({
       title: comment.title || '',
       comment: comment.comment,
-      audience: comment.audience || [],
+      selectedTeams: teams,
+      selectedRoles: roles,
     });
     setIsFormOpen(true);
   };
 
   const resetForm = () => {
-    setFormData({ title: '', comment: '', audience: [] });
+    setFormData({ title: '', comment: '', selectedTeams: [], selectedRoles: [] });
     setEditingComment(null);
     setIsFormOpen(false);
   };
@@ -259,12 +340,14 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
     }
   }, [fetchCountOnMount, fetchCommentCount]);
 
-  // Fetch timeline when sidebar opens or filter changes
+  // Fetch teams and roles when sidebar opens
   useEffect(() => {
     if (isOpen) {
+      fetchTeams();
+      fetchRoles();
       fetchTimeline();
     }
-  }, [isOpen, entityType, entityId, filterType]);
+  }, [isOpen, entityType, entityId, filterType, currentProject?.id]);
 
   const CommentForm = React.useMemo(() => (
     <form onSubmit={handleSubmit} className="space-y-4 p-4 border-t">
@@ -292,45 +375,95 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
         />
       </div>
       
-      <div>
-        <Label>Visible to Groups (Optional)</Label>
-        <div className="mt-2 space-y-2">
-          <div className="text-xs text-muted-foreground">
-            Leave all unchecked for visibility to all users
-          </div>
-          {availableGroups.map(group => (
-            <div key={group} className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id={`group-${group}`}
-                checked={formData.audience.includes(group)}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setFormData({ 
-                      ...formData, 
-                      audience: [...formData.audience, group] 
-                    });
-                  } else {
-                    setFormData({ 
-                      ...formData, 
-                      audience: formData.audience.filter(g => g !== group) 
-                    });
-                  }
-                }}
-                className="rounded"
-              />
-              <Label htmlFor={`group-${group}`} className="text-sm font-normal">
-                {group}
-              </Label>
-            </div>
-          ))}
+      <div className="space-y-3">
+        <div className="text-sm text-muted-foreground">
+          Target specific teams or roles (optional). Leave empty for visibility to all project members.
         </div>
-        {formData.audience.length > 0 && (
+        
+        {/* Teams multi-select */}
+        <div>
+          <Label htmlFor="teams">Teams</Label>
+          <div className="mt-1 space-y-2">
+            {availableTeams.map(team => (
+              <div key={team.id} className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id={`team-${team.id}`}
+                  checked={formData.selectedTeams.includes(team.id)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setFormData({ 
+                        ...formData, 
+                        selectedTeams: [...formData.selectedTeams, team.id] 
+                      });
+                    } else {
+                      setFormData({ 
+                        ...formData, 
+                        selectedTeams: formData.selectedTeams.filter(id => id !== team.id) 
+                      });
+                    }
+                  }}
+                  className="rounded"
+                />
+                <Label htmlFor={`team-${team.id}`} className="text-sm font-normal">
+                  {team.name}
+                </Label>
+              </div>
+            ))}
+            {availableTeams.length === 0 && (
+              <div className="text-xs text-muted-foreground">No teams available in current project</div>
+            )}
+          </div>
+        </div>
+
+        {/* Roles multi-select */}
+        <div>
+          <Label htmlFor="roles">App Roles</Label>
+          <div className="mt-1 space-y-2">
+            {availableRoles.map(role => (
+              <div key={role.name} className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id={`role-${role.name}`}
+                  checked={formData.selectedRoles.includes(role.name)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setFormData({ 
+                        ...formData, 
+                        selectedRoles: [...formData.selectedRoles, role.name] 
+                      });
+                    } else {
+                      setFormData({ 
+                        ...formData, 
+                        selectedRoles: formData.selectedRoles.filter(name => name !== role.name) 
+                      });
+                    }
+                  }}
+                  className="rounded"
+                />
+                <Label htmlFor={`role-${role.name}`} className="text-sm font-normal">
+                  {role.name}
+                </Label>
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Display selected teams and roles */}
+        {(formData.selectedTeams.length > 0 || formData.selectedRoles.length > 0) && (
           <div className="flex flex-wrap gap-1 mt-2">
-            {formData.audience.map(group => (
-              <Badge key={group} variant="secondary" className="text-xs">
-                <Users className="w-3 h-3 mr-1" />
-                {group}
+            {formData.selectedTeams.map(teamId => {
+              const team = availableTeams.find(t => t.id === teamId);
+              return team ? (
+                <Badge key={`team-${teamId}`} variant="secondary" className="text-xs">
+                  <Users className="w-3 h-3 mr-1" />
+                  Team: {team.name}
+                </Badge>
+              ) : null;
+            })}
+            {formData.selectedRoles.map(roleName => (
+              <Badge key={`role-${roleName}`} variant="outline" className="text-xs">
+                Role: {roleName}
               </Badge>
             ))}
           </div>
@@ -349,7 +482,7 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
         )}
       </div>
     </form>
-  ), [formData, editingComment, loading, availableGroups, handleSubmit, resetForm]);
+  ), [formData, editingComment, loading, availableTeams, availableRoles, handleSubmit, resetForm]);
 
   const TimelineItem: React.FC<{ entry: TimelineEntry; canModify: boolean }> = ({ 
     entry, 
@@ -453,12 +586,34 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
 
         {entry.audience && entry.audience.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {entry.audience.map(group => (
-              <Badge key={group} variant="outline" className="text-xs">
-                <Users className="w-3 h-3 mr-1" />
-                {group}
-              </Badge>
-            ))}
+            {entry.audience.map((token, idx) => {
+              // Parse audience tokens
+              if (token.startsWith('team:')) {
+                const teamId = token.substring(5);
+                const team = availableTeams.find(t => t.id === teamId);
+                return (
+                  <Badge key={`${token}-${idx}`} variant="secondary" className="text-xs">
+                    <Users className="w-3 h-3 mr-1" />
+                    Team: {team?.name || teamId}
+                  </Badge>
+                );
+              } else if (token.startsWith('role:')) {
+                const roleName = token.substring(5);
+                return (
+                  <Badge key={`${token}-${idx}`} variant="outline" className="text-xs">
+                    Role: {roleName}
+                  </Badge>
+                );
+              } else {
+                // Plain group token
+                return (
+                  <Badge key={`${token}-${idx}`} variant="outline" className="text-xs">
+                    <Users className="w-3 h-3 mr-1" />
+                    {token}
+                  </Badge>
+                );
+              }
+            })}
           </div>
         )}
 
@@ -526,6 +681,18 @@ const CommentSidebar: React.FC<CommentSidebarProps> = ({
               </Badge>
             )}
           </SheetTitle>
+          {currentProject && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+              <FolderOpen className="w-3 h-3" />
+              <span>Project: {currentProject.name}</span>
+            </div>
+          )}
+          {!currentProject && (
+            <div className="flex items-center gap-1 text-xs text-amber-600 mt-1">
+              <FolderOpen className="w-3 h-3" />
+              <span>No project context (global)</span>
+            </div>
+          )}
         </SheetHeader>
         
         {/* Filter Toolbar */}
