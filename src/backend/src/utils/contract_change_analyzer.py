@@ -87,17 +87,20 @@ class ContractChangeAnalyzer:
         """
         self._reset()
 
-        # Analyze schema changes
-        self._analyze_schema_changes(
-            old_contract.get('schema', []),
-            new_contract.get('schema', [])
-        )
+        # Only analyze schema changes if 'schema' is provided in the update
+        # (avoid false positives when field is not included in partial updates)
+        if 'schema' in new_contract:
+            self._analyze_schema_changes(
+                old_contract.get('schema', []),
+                new_contract.get('schema', [])
+            )
 
-        # Analyze quality rule changes
-        self._analyze_quality_rule_changes(
-            old_contract.get('qualityRules', []),
-            new_contract.get('qualityRules', [])
-        )
+        # Only analyze quality rule changes if 'qualityRules' is provided in the update
+        if 'qualityRules' in new_contract:
+            self._analyze_quality_rule_changes(
+                old_contract.get('qualityRules', []),
+                new_contract.get('qualityRules', [])
+            )
 
         # Determine change type and version bump
         change_type, version_bump = self._determine_change_type()

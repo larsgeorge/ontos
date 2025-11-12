@@ -2124,7 +2124,8 @@ class DataContractsManager(SearchableAsset):
         try:
             # Support both Pydantic models and dicts
             if hasattr(contract_data, 'model_dump'):
-                data_dict = contract_data.model_dump()
+                # Only include fields that were explicitly provided in the request
+                data_dict = contract_data.model_dump(exclude_unset=True)
             else:
                 data_dict = contract_data
             
@@ -2158,6 +2159,7 @@ class DataContractsManager(SearchableAsset):
                 'version': data_dict.get('version'),
                 'status': data_dict.get('status'),
                 'owner_team_id': data_dict.get('owner_team_id'),
+                'project_id': data_dict.get('project_id'),
                 'tenant': data_dict.get('tenant'),
                 'data_product': data_dict.get('dataProduct'),
                 'description_usage': data_dict.get('descriptionUsage'),
@@ -5044,6 +5046,10 @@ class DataContractsManager(SearchableAsset):
         from src.repositories.tags_repository import entity_tag_repo
         
         # Resolve domain name from domain_id if available
+        logger.info(f"[BUILD API] db_contract.domain_id = {db_contract.domain_id}")
+        logger.info(f"[BUILD API] db_contract.project_id = {db_contract.project_id}")
+        logger.info(f"[BUILD API] db_contract.owner_team_id = {db_contract.owner_team_id}")
+        
         domain_name = None
         if db_contract.domain_id:
             try:
@@ -5231,6 +5237,7 @@ class DataContractsManager(SearchableAsset):
             status=db_contract.status,
             published=db_contract.published if hasattr(db_contract, 'published') else False,
             owner_team_id=db_contract.owner_team_id,
+            project_id=db_contract.project_id,
             kind=db_contract.kind,
             apiVersion=db_contract.api_version,
             tenant=db_contract.tenant,

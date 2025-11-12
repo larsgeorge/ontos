@@ -700,7 +700,7 @@ async def update_contract(
     """Update a data contract"""
     logger.info(f"[DEBUG UPDATE] Received update for contract {contract_id}")
     logger.info(f"[DEBUG UPDATE] contract_data.owner_team_id = {contract_data.owner_team_id}")
-    logger.info(f"[DEBUG UPDATE] contract_data dict = {contract_data.model_dump()}")
+    logger.info(f"[DEBUG UPDATE] contract_data dict = {contract_data.model_dump(exclude_unset=True)}")
     success = False
     details_for_audit = {
         "params": {"contract_id": contract_id},
@@ -764,17 +764,12 @@ async def update_contract(
                             }
                         )
                     else:
-                        # Admin can choose - return recommendation
-                        raise HTTPException(
-                            status_code=409,
-                            detail={
-                                "message": "Breaking changes detected - recommend new version",
-                                "requires_versioning": True,
-                                "change_analysis": impact_analysis['change_analysis'],
-                                "user_can_override": True,
-                                "recommended_action": "clone"
-                            }
+                        # Admin can override - log warning but allow update
+                        logger.warning(
+                            f"Admin {current_user.username if current_user else 'unknown'} is updating contract "
+                            f"{contract_id} with breaking changes: {impact_analysis['change_analysis'].get('summary', 'N/A')}"
                         )
+                        # Continue with update - admin override in effect
 
         # Business logic now in manager
         updated = manager.update_contract_with_relations(

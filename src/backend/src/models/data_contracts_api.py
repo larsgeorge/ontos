@@ -439,7 +439,7 @@ class DataContractRead(BaseModel):
     apiVersion: str = Field('v3.0.2', alias='apiVersion')  # Required by ODCS
     tenant: Optional[str] = None
     domain: Optional[str] = None
-    domainId: Optional[str] = Field(None, alias='domain_id')
+    domainId: Optional[str] = None
     dataProduct: Optional[str] = Field(None, alias='data_product')
     description: Optional[ContractDescription] = None
 

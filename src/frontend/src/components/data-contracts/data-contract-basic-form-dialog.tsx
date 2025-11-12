@@ -78,8 +78,11 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   }, [isOpen, fetchUserProjects])
 
   // Initialize form state when dialog opens or initial data changes
+  // Only reset state when dialog opens, not when currentProject changes mid-edit
   useEffect(() => {
-    if (isOpen && initial) {
+    if (!isOpen) return; // Don't reset if dialog is closed
+    
+    if (initial) {
       setName(initial.name || '')
       setVersion(initial.version || '0.0.1')
       setStatus(initial.status || 'draft')
@@ -92,7 +95,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       setDescriptionPurpose(initial.descriptionPurpose || '')
       setDescriptionLimitations(initial.descriptionLimitations || '')
       setTags(initial.tags || [])
-    } else if (isOpen && !initial) {
+    } else {
       // Reset to defaults for new contract, default to current project
       setName('')
       setVersion('0.0.1')
@@ -107,7 +110,8 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       setDescriptionLimitations('')
       setTags([])
     }
-  }, [isOpen, initial, currentProject])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
 
   const handleSubmit = async () => {
     // Validate required fields
@@ -116,8 +120,10 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       return
     }
 
-    console.log('[DEBUG FORM] ownerTeamId state before submit:', ownerTeamId)
-    console.log('[DEBUG FORM] ownerTeamId !== "__none__":', ownerTeamId !== '__none__')
+    console.log('[DEBUG FORM] State values before submit:')
+    console.log('  - projectId:', projectId)
+    console.log('  - domain:', domain)
+    console.log('  - ownerTeamId:', ownerTeamId)
     
     setIsSubmitting(true)
     try {
@@ -146,8 +152,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         },
       }
 
-      console.log('[DEBUG FORM] Payload owner_team_id:', payload.owner_team_id)
-      console.log('[DEBUG FORM] Full payload:', JSON.stringify(payload, null, 2))
+      console.log('[DEBUG FORM] Final payload:', JSON.stringify(payload, null, 2))
       
       await onSubmit(payload)
       onOpenChange(false)
@@ -216,62 +221,83 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
             </div>
           </div>
 
-          {/* Owner Team */}
-          <div className="space-y-2">
-            <Label htmlFor="ownerTeamId">Owner Team</Label>
-            <Select value={ownerTeamId} onValueChange={setOwnerTeamId} disabled={teamsLoading}>
-              <SelectTrigger id="ownerTeamId">
-                <SelectValue placeholder="Select an owner team (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">None</SelectItem>
-                {teams.map((team) => (
-                  <SelectItem key={team.id} value={team.id}>
-                    {team.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      {/* Owner Team */}
+      <div className="space-y-2">
+        <Label htmlFor="ownerTeamId">Owner Team</Label>
+        <Select 
+          value={ownerTeamId || '__none__'} 
+          onValueChange={(value) => {
+            console.log('[DEBUG] Owner Team onValueChange fired:', value);
+            setOwnerTeamId(value === '__none__' ? '' : value);
+          }} 
+          disabled={teamsLoading}
+        >
+          <SelectTrigger id="ownerTeamId">
+            <SelectValue placeholder="Select an owner team (optional)" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">None</SelectItem>
+            {teams.map((team) => (
+              <SelectItem key={team.id} value={team.id}>
+                {team.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-          {/* Project */}
-          <div className="space-y-2">
-            <Label htmlFor="projectId">Project</Label>
-            <Select value={projectId} onValueChange={setProjectId} disabled={projectsLoading}>
-              <SelectTrigger id="projectId">
-                <SelectValue placeholder="Select a project (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">None</SelectItem>
-                {availableProjects.map((project) => (
-                  <SelectItem key={project.id} value={project.id}>
-                    {project.name} ({project.team_count} teams)
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              You can only select projects you are a member of
-            </p>
-          </div>
+      {/* Project */}
+      <div className="space-y-2">
+        <Label htmlFor="projectId">Project</Label>
+        <Select 
+          value={projectId || '__none__'} 
+          onValueChange={(value) => {
+            console.log('[DEBUG] Project onValueChange fired:', value);
+            setProjectId(value === '__none__' ? '' : value);
+          }} 
+          disabled={projectsLoading}
+        >
+          <SelectTrigger id="projectId">
+            <SelectValue placeholder="Select a project (optional)" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">None</SelectItem>
+            {availableProjects.map((project) => (
+              <SelectItem key={project.id} value={project.id}>
+                {project.name} ({project.team_count} teams)
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          You can only select projects you are a member of
+        </p>
+      </div>
 
-          {/* Domain */}
-          <div className="space-y-2">
-            <Label htmlFor="domain">Domain</Label>
-            <Select value={domain} onValueChange={setDomain} disabled={domainsLoading}>
-              <SelectTrigger id="domain">
-                <SelectValue placeholder="Select a domain (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">None</SelectItem>
-                {domains.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      {/* Domain */}
+      <div className="space-y-2">
+        <Label htmlFor="domain">Domain</Label>
+        <Select 
+          value={domain || '__none__'} 
+          onValueChange={(value) => {
+            console.log('[DEBUG] Domain onValueChange fired:', value);
+            setDomain(value === '__none__' ? '' : value);
+          }} 
+          disabled={domainsLoading}
+        >
+          <SelectTrigger id="domain">
+            <SelectValue placeholder="Select a domain (optional)" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">None</SelectItem>
+            {domains.map((d) => (
+              <SelectItem key={d.id} value={d.id}>
+                {d.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
           {/* Tenant & Data Product */}
           <div className="grid grid-cols-2 gap-4">

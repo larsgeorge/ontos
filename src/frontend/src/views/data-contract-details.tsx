@@ -608,6 +608,7 @@ export default function DataContractDetails() {
         version: payload.version,
         status: payload.status,
         owner_team_id: payload.owner_team_id,
+        project_id: payload.project_id,
         tenant: payload.tenant,
         dataProduct: payload.dataProduct,
         domainId: payload.domainId,
@@ -626,6 +627,33 @@ export default function DataContractDetails() {
       })
       
       console.log('[DEBUG] Update response status:', res.status)
+      
+      // Handle version conflict (breaking changes detected)
+      if (res.status === 409) {
+        const errorData = await res.json()
+        console.log('[DEBUG] 409 error data:', errorData)
+        
+        // Show dialog with breaking changes and options
+        if (errorData.detail?.user_can_override) {
+          // Admin can force update or create new version
+          toast({
+            title: 'Breaking Changes Detected',
+            description: `${errorData.detail.message}. As an admin, you can force this update or create a new version.`,
+            variant: 'destructive',
+            duration: 10000
+          })
+        } else {
+          // Non-admin must create new version
+          toast({
+            title: 'Breaking Changes Detected',
+            description: `${errorData.detail.message}. You must create a new version.`,
+            variant: 'destructive',
+            duration: 10000
+          })
+        }
+        throw new Error(errorData.detail?.message || 'Breaking changes detected')
+      }
+      
       if (!res.ok) throw new Error('Update failed')
       
       console.log('[DEBUG] Calling fetchDetails()...')
@@ -2271,6 +2299,7 @@ export default function DataContractDetails() {
           version: contract.version,
           status: contract.status,
           owner_team_id: contract.owner_team_id,
+          project_id: (contract as any).project_id,
           domain: contract.domainId,
           tenant: contract.tenant,
           dataProduct: contract.dataProduct,
