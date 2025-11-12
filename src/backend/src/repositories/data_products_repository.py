@@ -448,11 +448,30 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
             db.rollback()
             raise
 
-    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[DataProductDb]:
-        """Get multiple ODPS v1.0.0 Data Products with all relationships eagerly loaded."""
-        logger.debug(f"Fetching multiple ODPS v1.0.0 DataProducts (skip: {skip}, limit: {limit})")
+    def get_multi(
+        self,
+        db: Session,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        project_id: Optional[str] = None,
+        is_admin: bool = False
+    ) -> List[DataProductDb]:
+        """Get multiple ODPS v1.0.0 Data Products with all relationships eagerly loaded.
+
+        Args:
+            db: Database session
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            project_id: Optional project ID to filter by (ignored if is_admin=True)
+            is_admin: If True, return all products regardless of project_id
+
+        Returns:
+            List of DataProductDb objects
+        """
+        logger.debug(f"Fetching multiple ODPS v1.0.0 DataProducts (skip: {skip}, limit: {limit}, project_id: {project_id}, is_admin: {is_admin})")
         try:
-            return db.query(self.model).options(
+            query = db.query(self.model).options(
                 selectinload(self.model.description),
                 selectinload(self.model.authoritative_definitions),
                 selectinload(self.model.custom_properties),
@@ -462,7 +481,18 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 selectinload(self.model.management_ports),
                 selectinload(self.model.support_channels),
                 selectinload(self.model.team).selectinload(DataProductTeamDb.members)
-            ).offset(skip).limit(limit).all()
+            )
+
+            # Apply project filtering only if not admin and project_id is provided
+            if not is_admin and project_id:
+                logger.debug(f"Filtering products by project_id: {project_id}")
+                # Include products with matching project_id OR null project_id (legacy/unassigned)
+                query = query.filter(
+                    (self.model.project_id == project_id) |
+                    (self.model.project_id.is_(None))
+                )
+
+            return query.offset(skip).limit(limit).all()
         except Exception as e:
             logger.error(f"Database error fetching multiple ODPS DataProducts: {e}", exc_info=True)
             db.rollback()

@@ -152,10 +152,32 @@ class DataProductsManager(SearchableAsset):
             logger.error(f"Unexpected error getting product {product_id}: {e}")
             raise
 
-    def list_products(self, skip: int = 0, limit: int = 100) -> List[DataProductApi]:
-        """List ODPS v1.0.0 data products."""
+    def list_products(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        project_id: Optional[str] = None,
+        is_admin: bool = False
+    ) -> List[DataProductApi]:
+        """List ODPS v1.0.0 data products.
+
+        Args:
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            project_id: Optional project ID to filter by (ignored if is_admin=True)
+            is_admin: If True, return all products regardless of project_id
+
+        Returns:
+            List of DataProduct API models
+        """
         try:
-            products_db = self._repo.get_multi(db=self._db, skip=skip, limit=limit)
+            products_db = self._repo.get_multi(
+                db=self._db,
+                skip=skip,
+                limit=limit,
+                project_id=project_id,
+                is_admin=is_admin
+            )
             products_with_tags = []
             for product_db in products_db:
                 product_with_tags = self._load_product_with_tags(product_db)

@@ -88,6 +88,47 @@ class DataContractRepository(CRUDBase[DataContractDb, Dict[str, Any], Union[Dict
             db.rollback()
             raise
 
+    # Override get_multi to support project filtering
+    def get_multi(
+        self,
+        db: Session,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        project_id: Optional[str] = None,
+        is_admin: bool = False
+    ) -> List[DataContractDb]:
+        """Get multiple data contracts with optional project filtering.
+
+        Args:
+            db: Database session
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            project_id: Optional project ID to filter by (ignored if is_admin=True)
+            is_admin: If True, return all contracts regardless of project_id
+
+        Returns:
+            List of DataContractDb objects
+        """
+        logger.debug(f"Fetching DataContracts (skip: {skip}, limit: {limit}, project_id: {project_id}, is_admin: {is_admin})")
+        try:
+            query = db.query(self.model)
+
+            # Apply project filtering only if not admin and project_id is provided
+            if not is_admin and project_id:
+                logger.debug(f"Filtering contracts by project_id: {project_id}")
+                # Include contracts with matching project_id OR null project_id (legacy/unassigned)
+                query = query.filter(
+                    (self.model.project_id == project_id) |
+                    (self.model.project_id.is_(None))
+                )
+
+            return query.offset(skip).limit(limit).all()
+        except Exception as e:
+            logger.error(f"Database error fetching DataContracts: {e}", exc_info=True)
+            db.rollback()
+            raise
+
     # --- Project Filtering Methods ---
     def get_by_project(self, db: Session, project_id: str, skip: int = 0, limit: int = 100) -> List[DataContractDb]:
         """Get data contracts filtered by project_id."""

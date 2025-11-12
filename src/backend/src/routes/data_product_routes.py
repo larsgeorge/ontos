@@ -580,12 +580,24 @@ async def upload_data_products(
 
 @router.get('/data-products', response_model=Any)
 async def get_data_products(
+    project_id: Optional[str] = None,
+    current_user: CurrentUserDep = None,
     manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
 ):
     try:
-        logger.info("Retrieving all data products via get_data_products route...")
-        products = manager.list_products()
+        logger.info(f"Retrieving data products via get_data_products route (project_id: {project_id})...")
+
+        # Check if user is admin
+        from src.common.authorization import is_user_admin
+        from src.common.config import get_settings
+        settings = get_settings()
+        user_groups = current_user.groups if current_user else []
+        is_admin = is_user_admin(user_groups, settings)
+
+        logger.info(f"User {current_user.email if current_user else 'unknown'} is_admin: {is_admin}")
+
+        products = manager.list_products(project_id=project_id, is_admin=is_admin)
         logger.info(f"Retrieved {len(products)} data products")
         return [p.model_dump() for p in products]
     except Exception as e:

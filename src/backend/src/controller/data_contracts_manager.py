@@ -4979,23 +4979,45 @@ class DataContractsManager(SearchableAsset):
 
     # --- Contract Listing and API Model Building ---
     
-    def list_contracts_from_db(self, db, domain_id: Optional[str] = None):
-        """List data contracts from database with optional domain filtering.
-        
+    def list_contracts_from_db(
+        self,
+        db,
+        domain_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        is_admin: bool = False
+    ):
+        """List data contracts from database with optional filtering.
+
         Args:
             db: Database session
             domain_id: Optional domain ID filter
-            
+            project_id: Optional project ID filter (ignored if is_admin=True)
+            is_admin: If True, return all contracts regardless of project_id
+
         Returns:
             List of DataContractRead API models
         """
         if domain_id:
-            # Filter by domain ID
-            contracts = db.query(DataContractDb).filter(DataContractDb.domain_id == domain_id).all()
+            # Filter by domain ID (and project if provided)
+            query = db.query(DataContractDb).filter(DataContractDb.domain_id == domain_id)
+
+            # Apply project filtering only if not admin and project_id is provided
+            if not is_admin and project_id:
+                logger.debug(f"Filtering contracts by project_id: {project_id} and domain_id: {domain_id}")
+                query = query.filter(
+                    (DataContractDb.project_id == project_id) |
+                    (DataContractDb.project_id.is_(None))
+                )
+
+            contracts = query.all()
         else:
-            # Get all contracts
-            contracts = data_contract_repo.get_multi(db)
-        
+            # Get contracts with project filtering
+            contracts = data_contract_repo.get_multi(
+                db,
+                project_id=project_id,
+                is_admin=is_admin
+            )
+
         # Build API models for each contract
         return [self._build_contract_api_model(db, c) for c in contracts]
     

@@ -86,12 +86,28 @@ def get_jobs_manager(request: Request):
 async def get_contracts(
     db: DBSessionDep,
     domain_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    current_user: CurrentUserDep = None,
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(PermissionChecker('data-contracts', FeatureAccessLevel.READ_ONLY))
 ):
-    """Get all data contracts with basic ODCS structure"""
+    """Get all data contracts with basic ODCS structure and optional project filtering"""
     try:
-        return manager.list_contracts_from_db(db, domain_id=domain_id)
+        # Check if user is admin
+        from src.common.authorization import is_user_admin
+        from src.common.config import get_settings
+        settings = get_settings()
+        user_groups = current_user.groups if current_user else []
+        is_admin = is_user_admin(user_groups, settings)
+
+        logger.info(f"User {current_user.email if current_user else 'unknown'} fetching contracts (project_id: {project_id}, domain_id: {domain_id}, is_admin: {is_admin})")
+
+        return manager.list_contracts_from_db(
+            db,
+            domain_id=domain_id,
+            project_id=project_id,
+            is_admin=is_admin
+        )
     except Exception as e:
         error_msg = f"Error retrieving data contracts: {e!s}"
         logger.error(error_msg)
