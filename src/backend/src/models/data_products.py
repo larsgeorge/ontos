@@ -9,7 +9,7 @@ These models are used for API request/response validation and serialization.
 
 from datetime import datetime, date
 from enum import Enum
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import json
 
 from pydantic import BaseModel, Field, field_validator
@@ -292,7 +292,7 @@ class DataProduct(BaseModel):
     authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
     description: Optional[Description] = Field(None, description="Structured description")
     customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
-    tags: Optional[List[AssignedTag]] = Field(default_factory=list, description="List of assigned tags with rich metadata")
+    tags: Optional[List[Union[AssignedTag, AssignedTagCreate]]] = Field(default_factory=list, description="List of assigned tags (full metadata or IDs for creation)")
     inputPorts: Optional[List[InputPort]] = Field(None, alias="input_ports", description="Input ports")
     outputPorts: Optional[List[OutputPort]] = Field(None, alias="output_ports", description="Output ports")
     managementPorts: Optional[List[ManagementPort]] = Field(None, alias="management_ports", description="Management ports")
@@ -312,11 +312,17 @@ class DataProduct(BaseModel):
         # If it's already a list of AssignedTag objects, return as-is
         if isinstance(value, list) and value and hasattr(value[0], 'tag_id'):
             return value
+        # Handle list of string IDs from frontend (convert to dicts for AssignedTagCreate)
+        if isinstance(value, list) and value and isinstance(value[0], str):
+            return [{'tag_id': tag_id} for tag_id in value]
         # Legacy support for JSON strings (should not be used anymore)
         if isinstance(value, str):
             try:
                 parsed = json.loads(value)
                 if isinstance(parsed, list):
+                    # Handle if parsed is a list of strings
+                    if parsed and isinstance(parsed[0], str):
+                        return [{'tag_id': tag_id} for tag_id in parsed]
                     return parsed
             except (json.JSONDecodeError, ValueError):
                 pass
@@ -365,12 +371,25 @@ class DataProductCreate(BaseModel):
     description: Optional[Description] = Field(None, description="Description")
     authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = Field(None, description="Authoritative definitions")
     customProperties: Optional[List[CustomProperty]] = Field(None, description="Custom properties")
-    tags: Optional[List[str]] = Field(None, description="Tags")
+    tags: Optional[List[Union[AssignedTag, AssignedTagCreate]]] = Field(None, description="Tags (IDs or full objects)")
     inputPorts: Optional[List[InputPort]] = Field(None, alias="input_ports", description="Input ports")
     outputPorts: Optional[List[OutputPort]] = Field(None, alias="output_ports", description="Output ports")
     managementPorts: Optional[List[ManagementPort]] = Field(None, alias="management_ports", description="Management ports")
     support: Optional[List[Support]] = Field(None, alias="support_channels", description="Support channels")
     team: Optional[Team] = Field(None, description="Team")
+
+    # Field validator to handle string IDs from frontend
+    @field_validator('tags', mode='before')
+    def parse_tags(cls, value):
+        if value is None:
+            return None
+        # If it's already a list of tag objects, return as-is
+        if isinstance(value, list) and value and (hasattr(value[0], 'tag_id') or isinstance(value[0], dict)):
+            return value
+        # Handle list of string IDs from frontend (convert to dicts for AssignedTagCreate)
+        if isinstance(value, list) and value and isinstance(value[0], str):
+            return [{'tag_id': tag_id} for tag_id in value]
+        return value
 
     model_config = {
         "from_attributes": True,
@@ -390,12 +409,25 @@ class DataProductUpdate(BaseModel):
     description: Optional[Description] = None
     authoritativeDefinitions: Optional[List[AuthoritativeDefinition]] = None
     customProperties: Optional[List[CustomProperty]] = None
-    tags: Optional[List[str]] = None
+    tags: Optional[List[Union[AssignedTag, AssignedTagCreate]]] = None
     inputPorts: Optional[List[InputPort]] = Field(None, alias="input_ports")
     outputPorts: Optional[List[OutputPort]] = Field(None, alias="output_ports")
     managementPorts: Optional[List[ManagementPort]] = Field(None, alias="management_ports")
     support: Optional[List[Support]] = Field(None, alias="support_channels")
     team: Optional[Team] = None
+
+    # Field validator to handle string IDs from frontend
+    @field_validator('tags', mode='before')
+    def parse_tags(cls, value):
+        if value is None:
+            return None
+        # If it's already a list of tag objects, return as-is
+        if isinstance(value, list) and value and (hasattr(value[0], 'tag_id') or isinstance(value[0], dict)):
+            return value
+        # Handle list of string IDs from frontend (convert to dicts for AssignedTagCreate)
+        if isinstance(value, list) and value and isinstance(value[0], str):
+            return [{'tag_id': tag_id} for tag_id in value]
+        return value
 
     model_config = {
         "from_attributes": True,

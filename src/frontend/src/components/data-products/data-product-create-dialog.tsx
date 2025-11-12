@@ -159,6 +159,7 @@ export default function DataProductCreateDialog({
           domain: data.domain || undefined,
           tenant: data.tenant || undefined,
           owner_team_id: data.ownerTeamId || undefined,
+          project_id: data.projectId || undefined,
           tags: normalizedTags, // Use normalized tags from form
           description: {
             purpose: data.purpose || undefined,

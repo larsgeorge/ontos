@@ -121,10 +121,9 @@ const TagSelector: React.FC<TagSelectorProps> = ({
         onChange([...value, tag]);
       }
     } else {
-      // Rich tag object - convert to simple selection first
-      // In a full implementation, you might want to allow value assignment here
+      // Rich tag object - use tag ID for backend
       if (!isTagSelected(tag.fully_qualified_name)) {
-        onChange([...value, tag.fully_qualified_name]);
+        onChange([...value, tag.id]);
       }
     }
 

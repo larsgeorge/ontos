@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 import yaml
+from sqlalchemy.orm import Session
 
 from src.models.data_contracts import (
     ColumnDefinition,
@@ -5227,3 +5228,125 @@ class DataContractsManager(SearchableAsset):
             created=db_contract.created_at.isoformat() if db_contract.created_at else None,
             updated=db_contract.updated_at.isoformat() if db_contract.updated_at else None,
         )
+
+    def compare_contracts(self, old_contract: Dict, new_contract: Dict) -> Dict:
+        """
+        Compare two contract versions and analyze changes.
+        
+        Args:
+            old_contract: Previous version (dict representation)
+            new_contract: New version (dict representation)
+            
+        Returns:
+            Dict with change analysis results
+        """
+        from src.utils.contract_change_analyzer import ContractChangeAnalyzer
+        
+        analyzer = ContractChangeAnalyzer()
+        result = analyzer.analyze(old_contract, new_contract)
+        
+        return {
+            'change_type': result.change_type.value,
+            'version_bump': result.version_bump,
+            'summary': result.summary,
+            'breaking_changes': result.breaking_changes,
+            'new_features': result.new_features,
+            'fixes': result.fixes,
+            'schema_changes': [
+                {
+                    'change_type': sc.change_type,
+                    'schema_name': sc.schema_name,
+                    'field_name': sc.field_name,
+                    'old_value': sc.old_value,
+                    'new_value': sc.new_value,
+                    'severity': sc.severity.value
+                }
+                for sc in result.schema_changes
+            ],
+            'quality_rule_changes': result.quality_rule_changes
+        }
+
+    def analyze_update_impact(
+        self,
+        contract_id: str,
+        proposed_changes: Dict,
+        db: Optional[Session] = None
+    ) -> Dict:
+        """
+        Analyze the impact of proposed changes to a contract.
+        
+        Classifies changes as metadata vs child entities and determines
+        if versioning is required based on breaking changes.
+        
+        Args:
+            contract_id: ID of contract being updated
+            proposed_changes: Dict with proposed field changes
+            db: Optional database session (uses self.db if not provided)
+            
+        Returns:
+            Dict with analysis results:
+            {
+                'requires_versioning': bool,
+                'change_analysis': {...},
+                'recommended_action': 'clone' | 'update_in_place',
+                'metadata_changes': List[str],
+                'child_entity_changes': List[str]
+            }
+        """
+        session = db or self.db
+        
+        # Fetch current contract
+        current_contract_db = data_contract_repo.get_with_all(session, id=contract_id)
+        if not current_contract_db:
+            raise ValueError(f"Contract {contract_id} not found")
+        
+        # Convert current DB model to dict for comparison
+        current_contract_dict = self._contract_db_to_dict(current_contract_db, session)
+        
+        # Run change analysis
+        analysis = self.compare_contracts(current_contract_dict, proposed_changes)
+        
+        # Classify changes
+        metadata_changes = []
+        child_entity_changes = []
+        
+        # Metadata fields (top-level, non-nested)
+        metadata_fields = ['name', 'version', 'status', 'domain', 'domainId', 'dataProduct', 'tenant', 'kind']
+        for field in metadata_fields:
+            if field in proposed_changes and proposed_changes.get(field) != current_contract_dict.get(field):
+                metadata_changes.append(field)
+        
+        # Child entity changes (nested structures)
+        child_entity_fields = ['schema', 'qualityRules', 'team', 'support', 'sla', 'servers', 'authoritativeDefinitions', 'customProperties']
+        for field in child_entity_fields:
+            if field in proposed_changes and proposed_changes.get(field) != current_contract_dict.get(field):
+                child_entity_changes.append(field)
+        
+        # Determine if versioning is required
+        has_breaking_changes = len(analysis['breaking_changes']) > 0
+        requires_versioning = has_breaking_changes
+        
+        return {
+            'requires_versioning': requires_versioning,
+            'change_analysis': analysis,
+            'recommended_action': 'clone' if has_breaking_changes else 'update_in_place',
+            'metadata_changes': metadata_changes,
+            'child_entity_changes': child_entity_changes
+        }
+
+    def _contract_db_to_dict(self, contract_db, db: Session) -> Dict:
+        """
+        Convert contract DB model to dict for comparison.
+        
+        Args:
+            contract_db: DataContractDb instance
+            db: Database session
+            
+        Returns:
+            Dict representation of contract
+        """
+        # Use the existing _build_contract_api_model logic
+        contract_api = self._build_contract_api_model(db, contract_db)
+        if contract_api:
+            return contract_api.model_dump(by_alias=True)
+        return {}

@@ -177,26 +177,31 @@ class DataProductsManager(SearchableAsset):
             db: Optional database session. If not provided, uses self._db
         """
         logger.debug(f"Manager updating ODPS product {product_id}")
+        logger.debug(f"Update payload keys: {product_data_dict.keys()}")
+        logger.debug(f"owner_team_id in payload: {product_data_dict.get('owner_team_id')}")
+        logger.debug(f"project_id in payload: {product_data_dict.get('project_id')}")
         db_session = db if db is not None else self._db
         try:
-            db_obj = self._repo.get(db=db_session, id=product_id)
-            if not db_obj:
-                logger.warning(f"Attempted to update non-existent product: {product_id}")
-                return None
-
+            # VALIDATE FIRST - before acquiring any database locks
             # Extract tags (handled separately)
-            tags_data = product_data_dict.get('tags', [])
+            tags_data = product_data_dict.pop('tags', None)
 
             # Prepare update payload
             update_payload = product_data_dict.copy()
             update_payload['id'] = product_id
 
-            # Validate
+            # Validate input data before DB operations
             try:
                 product_update_model = DataProductUpdate(**update_payload)
             except ValidationError as e:
                 logger.error(f"Validation error for ODPS update: {e}")
                 raise ValueError(f"Invalid ODPS update data: {e}") from e
+
+            # NOW do database operations after validation passes
+            db_obj = self._repo.get(db=db_session, id=product_id)
+            if not db_obj:
+                logger.warning(f"Attempted to update non-existent product: {product_id}")
+                return None
 
             # Update via repository
             updated_db_obj = self._repo.update(db=db_session, db_obj=db_obj, obj_in=product_update_model)
@@ -207,15 +212,20 @@ class DataProductsManager(SearchableAsset):
                     self._assign_tags_to_product(product_id, tags_data)
                 except Exception as e:
                     logger.error(f"Failed to update tags for product {product_id}: {e}")
+                    # Rollback on tag assignment failure
+                    db_session.rollback()
+                    raise
 
             # Load and return with tags
             return self._load_product_with_tags(updated_db_obj)
 
         except SQLAlchemyError as e:
             logger.error(f"Database error updating ODPS product {product_id}: {e}")
+            db_session.rollback()
             raise
         except ValueError as e:
             logger.error(f"Value error updating ODPS product {product_id}: {e}")
+            db_session.rollback()
             raise
 
     def update_product_with_auth(
@@ -250,37 +260,46 @@ class DataProductsManager(SearchableAsset):
         logger.debug(f"Updating product {product_id} with auth check for user {user_email}")
         db_session = db if db is not None else self._db
 
-        # Get existing product to check project membership
-        existing_product_db = self._repo.get(db=db_session, id=product_id)
-        if not existing_product_db:
-            logger.warning(f"Product not found for update: {product_id}")
-            return None
+        try:
+            # Get existing product to check project membership
+            existing_product_db = self._repo.get(db=db_session, id=product_id)
+            if not existing_product_db:
+                logger.warning(f"Product not found for update: {product_id}")
+                return None
 
-        # Check project membership if product belongs to a project
-        if existing_product_db.project_id:
-            from src.controller.projects_manager import projects_manager
-            from src.common.config import get_settings
+            # Check project membership if product belongs to a project
+            if existing_product_db.project_id:
+                from src.controller.projects_manager import projects_manager
+                from src.common.config import get_settings
 
-            settings = get_settings()
-            is_member = projects_manager.is_user_project_member(
-                db=db_session,
-                user_identifier=user_email,
-                user_groups=user_groups,
-                project_id=existing_product_db.project_id,
-                settings=settings
-            )
-
-            if not is_member:
-                logger.warning(
-                    f"User {user_email} denied update access to product {product_id} "
-                    f"(project: {existing_product_db.project_id}) - not a project member"
-                )
-                raise PermissionError(
-                    "You must be a member of the project to edit this data product"
+                settings = get_settings()
+                is_member = projects_manager.is_user_project_member(
+                    db=db_session,
+                    user_identifier=user_email,
+                    user_groups=user_groups,
+                    project_id=existing_product_db.project_id,
+                    settings=settings
                 )
 
-        # Perform update
-        return self.update_product(product_id, product_data_dict, db=db_session)
+                if not is_member:
+                    logger.warning(
+                        f"User {user_email} denied update access to product {product_id} "
+                        f"(project: {existing_product_db.project_id}) - not a project member"
+                    )
+                    raise PermissionError(
+                        "You must be a member of the project to edit this data product"
+                    )
+
+            # Perform update (validation happens inside update_product)
+            return self.update_product(product_id, product_data_dict, db=db_session)
+        
+        except PermissionError:
+            # Don't rollback for permission errors as no data was modified
+            raise
+        except Exception as e:
+            logger.error(f"Error in update_product_with_auth for {product_id}: {e}")
+            db_session.rollback()
+            raise
 
     def delete_product(self, product_id: str) -> bool:
         """Delete an ODPS v1.0.0 data product."""
@@ -1270,3 +1289,126 @@ class DataProductsManager(SearchableAsset):
         
         logger.info(f"Retrieved {len(result)} team members from team {team_id} for product {product_id} import")
         return result
+
+    def compare_products(self, old_product: Dict, new_product: Dict) -> Dict:
+        """
+        Compare two product versions and analyze changes.
+        
+        Args:
+            old_product: Previous version (dict representation)
+            new_product: New version (dict representation)
+            
+        Returns:
+            Dict with change analysis results
+        """
+        from src.utils.product_change_analyzer import ProductChangeAnalyzer
+        
+        analyzer = ProductChangeAnalyzer()
+        result = analyzer.analyze(old_product, new_product)
+        
+        return {
+            'change_type': result.change_type.value,
+            'version_bump': result.version_bump,
+            'summary': result.summary,
+            'breaking_changes': result.breaking_changes,
+            'new_features': result.new_features,
+            'fixes': result.fixes,
+            'port_changes': [
+                {
+                    'change_type': pc.change_type,
+                    'port_type': pc.port_type,
+                    'port_name': pc.port_name,
+                    'field_name': pc.field_name,
+                    'old_value': pc.old_value,
+                    'new_value': pc.new_value,
+                    'severity': pc.severity.value
+                }
+                for pc in result.port_changes
+            ],
+            'team_changes': result.team_changes,
+            'support_changes': result.support_changes
+        }
+
+    def analyze_update_impact(
+        self,
+        product_id: str,
+        proposed_changes: Dict,
+        db: Optional[Session] = None
+    ) -> Dict:
+        """
+        Analyze the impact of proposed changes to a product.
+        
+        Classifies changes as metadata vs child entities and determines
+        if versioning is required based on breaking changes.
+        
+        Args:
+            product_id: ID of product being updated
+            proposed_changes: Dict with proposed field changes
+            db: Optional database session (uses self.db if not provided)
+            
+        Returns:
+            Dict with analysis results:
+            {
+                'requires_versioning': bool,
+                'change_analysis': {...},
+                'recommended_action': 'clone' | 'update_in_place',
+                'metadata_changes': List[str],
+                'child_entity_changes': List[str]
+            }
+        """
+        session = db or self.db
+        
+        # Fetch current product
+        current_product_db = data_product_repo.get(session, id=product_id)
+        if not current_product_db:
+            raise ValueError(f"Product {product_id} not found")
+        
+        # Convert current DB model to dict for comparison
+        current_product_dict = self._product_db_to_dict(current_product_db)
+        
+        # Run change analysis
+        analysis = self.compare_products(current_product_dict, proposed_changes)
+        
+        # Classify changes
+        metadata_changes = []
+        child_entity_changes = []
+        
+        # Metadata fields (top-level, non-nested)
+        metadata_fields = ['name', 'version', 'status', 'domain', 'tenant']
+        for field in metadata_fields:
+            if field in proposed_changes and proposed_changes.get(field) != current_product_dict.get(field):
+                metadata_changes.append(field)
+        
+        # Child entity changes (nested structures)
+        child_entity_fields = ['inputPorts', 'outputPorts', 'managementPorts', 'team', 'support', 'description']
+        for field in child_entity_fields:
+            if field in proposed_changes and proposed_changes.get(field) != current_product_dict.get(field):
+                child_entity_changes.append(field)
+        
+        # Determine if versioning is required
+        has_breaking_changes = len(analysis['breaking_changes']) > 0
+        requires_versioning = has_breaking_changes
+        
+        return {
+            'requires_versioning': requires_versioning,
+            'change_analysis': analysis,
+            'recommended_action': 'clone' if has_breaking_changes else 'update_in_place',
+            'metadata_changes': metadata_changes,
+            'child_entity_changes': child_entity_changes
+        }
+
+    def _product_db_to_dict(self, product_db) -> Dict:
+        """
+        Convert product DB model to dict for comparison.
+        
+        Args:
+            product_db: DataProductDb instance
+            
+        Returns:
+            Dict representation of product
+        """
+        # Use the existing get_product logic which returns API model
+        product_api = self.get_product(product_db.id)
+        if product_api:
+            return product_api.model_dump(by_alias=True)
+        return {}

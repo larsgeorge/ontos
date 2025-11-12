@@ -32,6 +32,7 @@ import { useDomains } from '@/hooks/use-domains';
 import RequestProductActionDialog from '@/components/data-products/request-product-action-dialog';
 import EntityCostsPanel from '@/components/costs/entity-costs-panel';
 import LinkContractToPortDialog from '@/components/data-products/link-contract-to-port-dialog';
+import VersioningRecommendationDialog from '@/components/common/versioning-recommendation-dialog';
 import { Link2, Unlink } from 'lucide-react';
 
 /**
@@ -80,6 +81,10 @@ export default function DataProductDetails() {
   const [links, setLinks] = useState<EntitySemanticLink[]>([]);
   const [isCommentSidebarOpen, setIsCommentSidebarOpen] = useState(false);
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
+  const [isVersioningDialogOpen, setIsVersioningDialogOpen] = useState(false);
+  const [versioningAnalysis, setVersioningAnalysis] = useState<any>(null);
+  const [versioningUserCanOverride, setVersioningUserCanOverride] = useState(false);
+  const [pendingUpdate, setPendingUpdate] = useState<any>(null);
 
   // Dialog states for nested entities
   const [isInputPortDialogOpen, setIsInputPortDialogOpen] = useState(false);
@@ -104,6 +109,7 @@ export default function DataProductDetails() {
 
   // Owner team state
   const [ownerTeamName, setOwnerTeamName] = useState<string>('');
+  const [projectName, setProjectName] = useState<string>('');
 
   // Permissions
   const featureId = 'data-products';
@@ -138,6 +144,19 @@ export default function DataProductDetails() {
       }
     } catch (e) {
       console.warn('Failed to fetch owner team:', e)
+    }
+  };
+
+  const fetchProjectName = async (projectId: string) => {
+    if (!projectId) return;
+    try {
+      const response = await fetch(`/api/projects/${projectId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setProjectName(data.name || '');
+      }
+    } catch (e) {
+      console.warn('Failed to fetch project:', e);
     }
   };
 
@@ -194,6 +213,13 @@ export default function DataProductDetails() {
         setOwnerTeamName('');
       }
 
+      // Fetch project name if project_id is set
+      if ((productData as any).project_id) {
+        await fetchProjectName((productData as any).project_id);
+      } else {
+        setProjectName('');
+      }
+
       // Fetch contract names for output ports
       if (productData.outputPorts && productData.outputPorts.length > 0) {
         await fetchContractNames(productData.outputPorts);
@@ -240,6 +266,66 @@ export default function DataProductDetails() {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete product';
       toast({ title: 'Error', description: `Failed to delete: ${errorMessage}`, variant: 'destructive' });
     }
+  };
+
+  // Helper function to update product with 409 handling
+  const updateProduct = async (updatedProduct: DataProduct, forceUpdate: boolean = false) => {
+    if (!productId) return;
+    
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    if (forceUpdate) {
+      headers['X-Force-Update'] = 'true';
+    }
+    
+    const res = await fetch(`/api/data-products/${productId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(updatedProduct),
+    });
+    
+    // Handle 409 Conflict - versioning required
+    if (res.status === 409) {
+      const conflictData = await res.json();
+      const detail = conflictData.detail;
+      
+      if (detail && typeof detail === 'object' && detail.requires_versioning) {
+        // Store the pending update and show versioning dialog
+        setPendingUpdate(updatedProduct);
+        setVersioningAnalysis(detail.change_analysis);
+        setVersioningUserCanOverride(detail.user_can_override);
+        setIsVersioningDialogOpen(true);
+        return; // Don't throw, let the dialog handle it
+      }
+    }
+    
+    if (!res.ok) throw new Error(`Update failed (${res.status})`);
+    await fetchProductDetails();
+  };
+
+  // Handlers for versioning dialog
+  const handleVersioningUpdateInPlace = async () => {
+    if (!pendingUpdate) return;
+    try {
+      await updateProduct(pendingUpdate, true); // Force update
+      setIsVersioningDialogOpen(false);
+      setPendingUpdate(null);
+      setVersioningAnalysis(null);
+      toast({ title: 'Updated', description: 'Product updated successfully.' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e?.message || 'Failed to update', variant: 'destructive' });
+    }
+  };
+
+  const handleVersioningCreateNewVersion = async () => {
+    if (!productId) return;
+    setIsVersioningDialogOpen(false);
+    // Open the version creation dialog instead
+    setIsVersionDialogOpen(true);
+    // The pending update will be discarded - user needs to apply it to the new version
+    toast({
+      title: 'Create New Version',
+      description: 'Creating a new version will clone this product. Apply your changes to the new version after creation.'
+    });
   };
 
   // Nested entity handlers
@@ -814,6 +900,20 @@ export default function DataProductDetails() {
               )}
             </div>
             <div className="space-y-1">
+              <Label>Project:</Label>
+              {(product as any).project_id && projectName ? (
+                <span
+                  className="text-sm block cursor-pointer text-primary hover:underline"
+                  onClick={() => navigate(`/projects/${(product as any).project_id}`)}
+                  title={`Project ID: ${(product as any).project_id}`}
+                >
+                  {projectName}
+                </span>
+              ) : (
+                <span className="text-sm block">{(product as any).project_id || 'N/A'}</span>
+              )}
+            </div>
+            <div className="space-y-1">
               <Label>Tenant:</Label>
               <span className="text-sm block">{product.tenant || 'N/A'}</span>
             </div>
@@ -1327,6 +1427,16 @@ export default function DataProductDetails() {
           setIsLinkContractDialogOpen(false);
           setSelectedPortForLinking(null);
         }}
+      />
+
+      {/* Versioning Recommendation Dialog */}
+      <VersioningRecommendationDialog
+        isOpen={isVersioningDialogOpen}
+        onOpenChange={setIsVersioningDialogOpen}
+        analysis={versioningAnalysis}
+        userCanOverride={versioningUserCanOverride}
+        onUpdateInPlace={handleVersioningUpdateInPlace}
+        onCreateNewVersion={handleVersioningCreateNewVersion}
       />
     </div>
   );

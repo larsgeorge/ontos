@@ -34,6 +34,7 @@ import DqxSuggestionsDialog from '@/components/data-contracts/dqx-suggestions-di
 import AuthoritativeDefinitionFormDialog from '@/components/data-contracts/authoritative-definition-form-dialog'
 import ImportTeamMembersDialog from '@/components/data-contracts/import-team-members-dialog'
 import LinkProductToContractDialog from '@/components/data-contracts/link-product-to-contract-dialog'
+import VersioningRecommendationDialog from '@/components/common/versioning-recommendation-dialog'
 import type { DataProduct } from '@/types/data-product'
 import type { DataProfilingRun } from '@/types/data-contract'
 
@@ -166,6 +167,10 @@ export default function DataContractDetails() {
   const [iriDialogOpen, setIriDialogOpen] = useState(false)
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false)
   const [isVersionDialogOpen, setIsVersionDialogOpen] = useState(false)
+  const [isVersioningDialogOpen, setIsVersioningDialogOpen] = useState(false)
+  const [versioningAnalysis, setVersioningAnalysis] = useState<any>(null)
+  const [versioningUserCanOverride, setVersioningUserCanOverride] = useState(false)
+  const [pendingUpdate, setPendingUpdate] = useState<any>(null)
   const [links, setLinks] = useState<EntitySemanticLink[]>([])
   const [selectedSchemaIndex, setSelectedSchemaIndex] = useState(0)
   const [schemaLinks, setSchemaLinks] = useState<Record<string, EntitySemanticLink[]>>({})
@@ -945,13 +950,34 @@ export default function DataContractDetails() {
   }
 
   // Helper to update contract (read-modify-write pattern)
-  const updateContract = async (updates: Partial<any>, showToast: boolean = true) => {
+  const updateContract = async (updates: Partial<any>, showToast: boolean = true, forceUpdate: boolean = false) => {
     try {
+      const headers: HeadersInit = { 'Content-Type': 'application/json' }
+      if (forceUpdate) {
+        headers['X-Force-Update'] = 'true'
+      }
+      
       const res = await fetch(`/api/data-contracts/${contractId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(updates)
       })
+      
+      // Handle 409 Conflict - versioning required
+      if (res.status === 409) {
+        const conflictData = await res.json()
+        const detail = conflictData.detail
+        
+        if (detail && typeof detail === 'object' && detail.requires_versioning) {
+          // Store the pending update and show versioning dialog
+          setPendingUpdate(updates)
+          setVersioningAnalysis(detail.change_analysis)
+          setVersioningUserCanOverride(detail.user_can_override)
+          setIsVersioningDialogOpen(true)
+          return // Don't throw, let the dialog handle it
+        }
+      }
+      
       if (!res.ok) throw new Error('Update failed')
       await fetchDetails()
       if (showToast) {
@@ -961,6 +987,31 @@ export default function DataContractDetails() {
       toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' })
       throw e
     }
+  }
+
+  // Handlers for versioning dialog
+  const handleVersioningUpdateInPlace = async () => {
+    if (!pendingUpdate) return
+    try {
+      await updateContract(pendingUpdate, true, true) // Force update
+      setIsVersioningDialogOpen(false)
+      setPendingUpdate(null)
+      setVersioningAnalysis(null)
+    } catch (e) {
+      // Error already handled by updateContract
+    }
+  }
+
+  const handleVersioningCreateNewVersion = async () => {
+    if (!contractId) return
+    setIsVersioningDialogOpen(false)
+    // Open the version creation dialog instead
+    setIsVersionDialogOpen(true)
+    // The pending update will be discarded - user needs to apply it to the new version
+    toast({
+      title: 'Create New Version',
+      description: 'Creating a new version will clone this contract. Apply your changes to the new version after creation.'
+    })
   }
 
   // Handler for inferring schema from Unity Catalog dataset
@@ -2382,6 +2433,15 @@ export default function DataContractDetails() {
             description: 'Contract successfully linked to product output port.'
           });
         }}
+      />
+
+      <VersioningRecommendationDialog
+        isOpen={isVersioningDialogOpen}
+        onOpenChange={setIsVersioningDialogOpen}
+        analysis={versioningAnalysis}
+        userCanOverride={versioningUserCanOverride}
+        onUpdateInPlace={handleVersioningUpdateInPlace}
+        onCreateNewVersion={handleVersioningCreateNewVersion}
       />
     </div>
   )

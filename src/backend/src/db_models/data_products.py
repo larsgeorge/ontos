@@ -44,14 +44,14 @@ class DataProductDb(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # ==================== ODPS v1.0.0 Relationships ====================
-    description = relationship("DescriptionDb", back_populates="product", uselist=False, cascade="all, delete-orphan")
-    authoritative_definitions = relationship("AuthoritativeDefinitionDb", back_populates="product", cascade="all, delete-orphan")
-    custom_properties = relationship("CustomPropertyDb", back_populates="product", cascade="all, delete-orphan")
+    description = relationship("DescriptionDb", back_populates="product", uselist=False, cascade="all, delete-orphan", lazy="selectin")
+    authoritative_definitions = relationship("AuthoritativeDefinitionDb", back_populates="product", cascade="all, delete-orphan", lazy="selectin")
+    custom_properties = relationship("CustomPropertyDb", back_populates="product", cascade="all, delete-orphan", lazy="selectin")
     input_ports = relationship("InputPortDb", back_populates="product", cascade="all, delete-orphan", lazy="selectin")
     output_ports = relationship("OutputPortDb", back_populates="product", cascade="all, delete-orphan", lazy="selectin")
-    management_ports = relationship("ManagementPortDb", back_populates="product", cascade="all, delete-orphan")
-    support_channels = relationship("SupportDb", back_populates="product", cascade="all, delete-orphan")
-    team = relationship("DataProductTeamDb", back_populates="product", uselist=False, cascade="all, delete-orphan")
+    management_ports = relationship("ManagementPortDb", back_populates="product", cascade="all, delete-orphan", lazy="selectin")
+    support_channels = relationship("SupportDb", back_populates="product", cascade="all, delete-orphan", lazy="selectin")
+    team = relationship("DataProductTeamDb", back_populates="product", uselist=False, cascade="all, delete-orphan", lazy="selectin")
     owner_team = relationship("TeamDb", foreign_keys=[owner_team_id])
 
     def __repr__(self):

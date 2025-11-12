@@ -240,6 +240,10 @@ class DataProductRepository(CRUDBase[DataProductDb, DataProductCreate, DataProdu
                 db_obj.domain = update_data['domain']
             if 'tenant' in update_data:
                 db_obj.tenant = update_data['tenant']
+            if 'owner_team_id' in update_data:
+                db_obj.owner_team_id = update_data['owner_team_id']
+            if 'project_id' in update_data:
+                db_obj.project_id = update_data['project_id']
 
             # 2. Update Structured Description
             if 'description' in update_data:

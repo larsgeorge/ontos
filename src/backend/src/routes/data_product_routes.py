@@ -745,6 +745,32 @@ async def create_data_product_version(
             details=details_for_audit,
         )
 
+@router.post('/data-products/compare', response_model=dict)
+async def compare_product_versions(
+    body: dict = Body(...),
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_ONLY))
+):
+    """Analyze changes between two product versions and recommend version bump."""
+    old_product = body.get('old_product')
+    new_product = body.get('new_product')
+
+    if not old_product or not new_product:
+        raise HTTPException(status_code=400, detail="Both old_product and new_product are required")
+
+    try:
+        # Business logic now in manager
+        return manager.compare_products(
+            old_product=old_product,
+            new_product=new_product
+        )
+    except ValueError as e:
+        logger.error("Validation error comparing products: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid product data")
+    except Exception as e:
+        logger.error("Error comparing products", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to compare products")
+
 @router.put('/data-products/{product_id}', response_model=DataProduct)
 async def update_data_product(
     product_id: str,
@@ -772,6 +798,7 @@ async def update_data_product(
     # Parse and validate JSON body
     try:
         body_dict = await request.json()
+        logger.info(f"Received raw payload for update (ID: {product_id}): {body_dict}")
         product_update = DataProduct(**body_dict)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON body.")
@@ -801,9 +828,52 @@ async def update_data_product(
     try:
         logger.info(f"Updating data product ID: {product_id}")
 
-        # Delegate to manager (includes auth check)
-        user_groups = current_user.groups or []
-        logger.info(f"Updating data product ID: {product_id}")
+        # Check if versioning is required for non-draft products
+        current_product_db = manager.get_product(product_id)
+        if current_product_db and current_product_db.status and current_product_db.status.lower() != 'draft':
+            # Check if caller explicitly forced the update
+            force_update = request.headers.get('X-Force-Update') == 'true'
+            
+            if not force_update:
+                # Analyze the impact of proposed changes
+                product_dict = product_update.model_dump(by_alias=True)
+                impact_analysis = manager.analyze_update_impact(
+                    product_id=product_id,
+                    proposed_changes=product_dict,
+                    db=db
+                )
+                
+                # Check if user is admin
+                from src.common.authorization import is_user_admin
+                from src.common.config import get_settings
+                settings = get_settings()
+                user_is_admin = is_user_admin(current_user.groups, settings)
+                
+                if impact_analysis['requires_versioning']:
+                    # If breaking changes and not admin, force new version
+                    if not user_is_admin:
+                        raise HTTPException(
+                            status_code=409,
+                            detail={
+                                "message": "Breaking changes detected - new version required",
+                                "requires_versioning": True,
+                                "change_analysis": impact_analysis['change_analysis'],
+                                "user_can_override": False,
+                                "recommended_action": "clone"
+                            }
+                        )
+                    else:
+                        # Admin can choose - return recommendation
+                        raise HTTPException(
+                            status_code=409,
+                            detail={
+                                "message": "Breaking changes detected - recommend new version",
+                                "requires_versioning": True,
+                                "change_analysis": impact_analysis['change_analysis'],
+                                "user_can_override": True,
+                                "recommended_action": "clone"
+                            }
+                        )
 
         # Delegate to manager (includes auth check)
         user_groups = current_user.groups or []
@@ -815,13 +885,6 @@ async def update_data_product(
             user_email=current_user.email,
             user_groups=user_groups,
             db=db
-        )
-
-        updated_product_response = manager.update_product_with_auth(
-            product_id=product_id,
-            product_data_dict=product_dict,
-            user_email=current_user.email,
-            user_groups=user_groups
         )
 
         if not updated_product_response:

@@ -351,8 +351,11 @@ def get_db_url(settings: Settings) -> str:
         logger.info(f"🔑 Detected service principal username: {username}")
         password = ""  # Will be set via event handler
     
-    # Build URL with schema options
+    # Build URL with schema options and statement timeout
     query_params = {}
+    options_list = []
+    
+    # Add schema to search_path if specified
     if settings.POSTGRES_DB_SCHEMA:
         # Validate schema name for connection options to prevent injection
         try:
@@ -362,10 +365,18 @@ def get_db_url(settings: Settings) -> str:
                 f"Invalid PostgreSQL schema identifier in POSTGRES_DB_SCHEMA: {e}. "
                 "Please check configuration."
             ) from e
-        query_params["options"] = f"-csearch_path={validated_schema}"
+        options_list.append(f"-csearch_path={validated_schema}")
         logger.info(f"PostgreSQL schema will be set via options: {validated_schema}")
     else:
         logger.info("No specific PostgreSQL schema configured, using default (public).")
+    
+    # Add statement timeout to prevent indefinite locks (30 seconds)
+    # This helps prevent stuck transactions when operations fail
+    options_list.append("-cstatement_timeout=30000")
+    logger.info("PostgreSQL statement timeout set to 30 seconds")
+    
+    if options_list:
+        query_params["options"] = " ".join(options_list)
     
     db_url_obj = URL.create(
         drivername="postgresql+psycopg2",

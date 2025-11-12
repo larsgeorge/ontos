@@ -239,7 +239,6 @@ export default function DataDomainDetailsView() {
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [domainProjects, setDomainProjects] = useState<any[]>([]);
 
   // Metadata: Rich Texts, Links, Documents
   interface RichTextItem { id: string; entity_id: string; entity_type: string; title: string; short_description?: string | null; content_markdown: string; created_at?: string; }
@@ -469,21 +468,6 @@ export default function DataDomainDetailsView() {
     }
   }, [get]);
 
-  const fetchDomainProjects = useCallback(async (domainId: string) => {
-    try {
-      const response = await get<any[]>(`/api/projects?domain_id=${domainId}`);
-      if (response.data && !response.error) {
-        const projects = Array.isArray(response.data) ? response.data : [];
-        setDomainProjects(projects);
-      } else {
-        setDomainProjects([]);
-      }
-    } catch (error) {
-      console.error('Error fetching domain projects:', error);
-      setDomainProjects([]);
-    }
-  }, [get]);
-
   const handleTeamDialogSuccess = (_team: Team) => {
     // Refresh domain teams after successful team operation
     if (domainId) {
@@ -528,7 +512,6 @@ export default function DataDomainDetailsView() {
       fetchDomainDetails(domainId);
       fetchMetadata(domainId);
       fetchDomainTeams(domainId);
-      fetchDomainProjects(domainId);
     } else {
       setError("No Domain ID provided.");
       setDynamicTitle("Invalid Domain");
@@ -538,7 +521,7 @@ export default function DataDomainDetailsView() {
         setStaticSegments([]);
         setDynamicTitle(null);
     };
-  }, [domainId, fetchDomainDetails, fetchMetadata, fetchDomainTeams, fetchDomainProjects, setStaticSegments, setDynamicTitle]);
+  }, [domainId, fetchDomainDetails, fetchMetadata, fetchDomainTeams, setStaticSegments, setDynamicTitle]);
 
   useEffect(() => {
     if (domain) {
@@ -634,23 +617,6 @@ export default function DataDomainDetailsView() {
               {domain.tags && domain.tags.length > 0 ? (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {domain.tags.map((tag, i) => <TagChip key={i} tag={tag} size="sm" />)}
-                </div>
-              ) : 'N/A'}
-            </InfoItem>
-
-            <InfoItem label="Projects" icon={<Tag />}>
-              {domainProjects.length > 0 ? (
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {domainProjects.map((project, i) => (
-                    <Badge 
-                      key={i} 
-                      variant="outline" 
-                      className="cursor-pointer hover:bg-muted"
-                      onClick={() => navigate(`/projects/${project.id}`)}
-                    >
-                      {project.name}
-                    </Badge>
-                  ))}
                 </div>
               ) : 'N/A'}
             </InfoItem>

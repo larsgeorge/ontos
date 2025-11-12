@@ -714,6 +714,52 @@ async def update_contract(
                     detail="You must be a member of the project to edit this contract"
                 )
 
+        # Check if versioning is required for non-draft contracts
+        if db_obj.status and db_obj.status.lower() != 'draft':
+            # Check if caller explicitly forced the update
+            force_update = request.headers.get('X-Force-Update') == 'true'
+            
+            if not force_update:
+                # Analyze the impact of proposed changes
+                proposed_changes_dict = contract_data.model_dump(by_alias=True, exclude_unset=True)
+                impact_analysis = manager.analyze_update_impact(
+                    contract_id=contract_id,
+                    proposed_changes=proposed_changes_dict,
+                    db=db
+                )
+                
+                # Check if user is admin
+                from src.common.authorization import is_user_admin
+                from src.common.config import get_settings
+                settings = get_settings()
+                user_is_admin = is_user_admin(current_user.groups, settings)
+                
+                if impact_analysis['requires_versioning']:
+                    # If breaking changes and not admin, force new version
+                    if not user_is_admin:
+                        raise HTTPException(
+                            status_code=409,
+                            detail={
+                                "message": "Breaking changes detected - new version required",
+                                "requires_versioning": True,
+                                "change_analysis": impact_analysis['change_analysis'],
+                                "user_can_override": False,
+                                "recommended_action": "clone"
+                            }
+                        )
+                    else:
+                        # Admin can choose - return recommendation
+                        raise HTTPException(
+                            status_code=409,
+                            detail={
+                                "message": "Breaking changes detected - recommend new version",
+                                "requires_versioning": True,
+                                "change_analysis": impact_analysis['change_analysis'],
+                                "user_can_override": True,
+                                "recommended_action": "clone"
+                            }
+                        )
+
         # Business logic now in manager
         updated = manager.update_contract_with_relations(
             db=db,
