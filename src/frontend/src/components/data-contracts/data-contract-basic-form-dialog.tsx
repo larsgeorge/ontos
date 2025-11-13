@@ -25,7 +25,6 @@ type BasicFormProps = {
     project_id?: string
     domain?: string
     tenant?: string
-    dataProduct?: string
     descriptionUsage?: string
     descriptionPurpose?: string
     descriptionLimitations?: string
@@ -49,7 +48,6 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   const [projectId, setProjectId] = useState('')
   const [domain, setDomain] = useState('')
   const [tenant, setTenant] = useState('')
-  const [dataProduct, setDataProduct] = useState('')
   const [descriptionUsage, setDescriptionUsage] = useState('')
   const [descriptionPurpose, setDescriptionPurpose] = useState('')
   const [descriptionLimitations, setDescriptionLimitations] = useState('')
@@ -90,7 +88,6 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       setProjectId(initial.project_id || '')
       setDomain(initial.domain || '')
       setTenant(initial.tenant || '')
-      setDataProduct(initial.dataProduct || '')
       setDescriptionUsage(initial.descriptionUsage || '')
       setDescriptionPurpose(initial.descriptionPurpose || '')
       setDescriptionLimitations(initial.descriptionLimitations || '')
@@ -104,7 +101,6 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
       setProjectId(currentProject?.id || '')
       setDomain('')
       setTenant('')
-      setDataProduct('')
       setDescriptionUsage('')
       setDescriptionPurpose('')
       setDescriptionLimitations('')
@@ -143,7 +139,6 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         apiVersion: 'v3.0.2',
         domainId: domain && domain !== '__none__' ? domain : undefined,
         tenant: tenant.trim() || undefined,
-        dataProduct: dataProduct.trim() || undefined,
         tags: normalizedTags.length > 0 ? normalizedTags as any : undefined,
         description: {
           usage: descriptionUsage.trim() || undefined,
@@ -299,26 +294,15 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         </Select>
       </div>
 
-          {/* Tenant & Data Product */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="tenant">Tenant</Label>
-              <Input
-                id="tenant"
-                value={tenant}
-                onChange={(e) => setTenant(e.target.value)}
-                placeholder="e.g., production"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="dataProduct">Data Product</Label>
-              <Input
-                id="dataProduct"
-                value={dataProduct}
-                onChange={(e) => setDataProduct(e.target.value)}
-                placeholder="e.g., Customer 360"
-              />
-            </div>
+          {/* Tenant */}
+          <div className="space-y-2">
+            <Label htmlFor="tenant">Tenant</Label>
+            <Input
+              id="tenant"
+              value={tenant}
+              onChange={(e) => setTenant(e.target.value)}
+              placeholder="e.g., retail-demo"
+            />
           </div>
 
           {/* Description sections */}

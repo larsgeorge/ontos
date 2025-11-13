@@ -579,8 +579,29 @@ class DataContractsManager(SearchableAsset):
         # Add optional top-level fields
         if db_obj.tenant:
             odcs['tenant'] = db_obj.tenant
-        if db_obj.data_product:
-            odcs['dataProduct'] = db_obj.data_product
+        
+        # Auto-populate dataProduct from linked output ports in Data Products
+        # This maintains the relational integrity of our model while supporting ODCS format
+        if db_session is not None:
+            try:
+                from src.db_models.data_products import DataProductDb, OutputPortDb
+                # Find data products that have output ports linked to this contract
+                linked_product = (
+                    db_session.query(DataProductDb)
+                    .join(OutputPortDb, OutputPortDb.product_id == DataProductDb.id)
+                    .filter(OutputPortDb.contract_id == db_obj.id)
+                    .first()
+                )
+                if linked_product:
+                    odcs['dataProduct'] = linked_product.name
+                elif db_obj.data_product:
+                    # Fallback to stored value if no linked product found (backward compatibility)
+                    odcs['dataProduct'] = db_obj.data_product
+            except Exception as e:
+                logger.warning(f"Failed to auto-populate dataProduct from output ports: {e}")
+                # Fallback to stored value
+                if db_obj.data_product:
+                    odcs['dataProduct'] = db_obj.data_product
 
         # ODCS v3.0.2 additional top-level fields
         if getattr(db_obj, 'sla_default_element', None):
@@ -2457,6 +2478,7 @@ class DataContractsManager(SearchableAsset):
                 kind=kind_val,
                 api_version=api_version_val,
                 tenant=parsed_odcs.get('tenant'),
+                # Store dataProduct from imported ODCS for reference, but actual linkage is via Output Ports
                 data_product=parsed_odcs.get('dataProduct') or parsed_odcs.get('data_product'),
                 domain_id=domain_id,
                 description_usage=description.get('usage'),
