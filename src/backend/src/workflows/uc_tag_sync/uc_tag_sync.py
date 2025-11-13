@@ -130,14 +130,34 @@ def qualify_uc_name(physical_name: str, default_catalog: Optional[str], default_
 
 
 @dataclass
+class SemanticLink:
+    """Semantic link information"""
+    iri: str
+    label: Optional[str]
+    slug: str
+
+
+@dataclass
 class DatasetTagInfo:
     fqn: str
     catalog: str
     schema: str
     table: str
+    # Contract metadata
+    contract_id: Optional[str]
     contract_name: Optional[str]
+    contract_version: Optional[str]
+    contract_status: Optional[str]
+    # Product metadata
+    product_id: Optional[str]
     product_name: Optional[str]
-    semantic_slugs: List[str]
+    product_version: Optional[str]
+    product_status: Optional[str]
+    # Domain metadata (prefer contract domain, fallback to product domain)
+    domain_id: Optional[str]
+    domain_name: Optional[str]
+    # Semantic links
+    semantic_links: List[SemanticLink]
 
 
 def read_contracts_and_links(engine: Engine, limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -145,16 +165,30 @@ def read_contracts_and_links(engine: Engine, limit: Optional[int] = None) -> Lis
         """
         SELECT c.id AS contract_id,
                c.name AS contract_name,
-               c.data_product AS product_name,
+               c.version AS contract_version,
+               c.status AS contract_status,
+               c.data_product AS product_name_from_contract,
+               c.domain_id AS contract_domain_id,
                o.id   AS object_id,
                o.name AS schema_name,
                o.physical_name,
-               el.iri AS schema_semantic_iri
+               el.iri AS schema_semantic_iri,
+               el.label AS schema_semantic_label,
+               d.id AS domain_id,
+               d.name AS domain_name,
+               p.id AS product_id,
+               p.name AS product_name,
+               p.version AS product_version,
+               p.status AS product_status,
+               p.domain AS product_domain
         FROM data_contracts c
         JOIN data_contract_schema_objects o ON o.contract_id = c.id
         LEFT JOIN entity_semantic_links el
           ON el.entity_type = 'data_contract_schema'
          AND el.entity_id = c.id || '#' || o.name
+        LEFT JOIN data_domains d ON c.domain_id = d.id
+        LEFT JOIN output_ports op ON op.contract_id = c.id AND op.asset_identifier = o.physical_name
+        LEFT JOIN data_products p ON op.product_id = p.id
         """
         + (" LIMIT :limit" if limit else "")
     )
@@ -165,22 +199,41 @@ def read_contracts_and_links(engine: Engine, limit: Optional[int] = None) -> Lis
 
 
 def build_dataset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optional[str], default_schema: Optional[str]) -> List[DatasetTagInfo]:
-    # Aggregate semantic IRIs per object
+    # Aggregate data per object (multiple rows per object due to semantic links)
     by_object: Dict[str, Dict[str, Any]] = {}
     for r in rows:
         key = r["object_id"]
         obj = by_object.setdefault(
             key,
             {
-                "contract_name": r.get("contract_name"),
-                "product_name": r.get("product_name"),
                 "physical_name": r.get("physical_name"),
-                "sem_iris": set(),
+                "contract_id": r.get("contract_id"),
+                "contract_name": r.get("contract_name"),
+                "contract_version": r.get("contract_version"),
+                "contract_status": r.get("contract_status"),
+                "product_id": r.get("product_id"),
+                "product_name": r.get("product_name") or r.get("product_name_from_contract"),
+                "product_version": r.get("product_version"),
+                "product_status": r.get("product_status"),
+                "domain_id": r.get("domain_id"),
+                "domain_name": r.get("domain_name"),
+                "product_domain": r.get("product_domain"),
+                "semantic_links": [],
             },
         )
+
+        # Add semantic link if present
         iri = r.get("schema_semantic_iri")
         if iri:
-            obj["sem_iris"].add(str(iri))
+            label = r.get("schema_semantic_label")
+            slug = slugify_iri(str(iri))
+            # Avoid duplicates
+            if not any(link["iri"] == iri for link in obj["semantic_links"]):
+                obj["semantic_links"].append({
+                    "iri": str(iri),
+                    "label": str(label) if label else None,
+                    "slug": slug
+                })
 
     out: List[DatasetTagInfo] = []
     for _obj_id, data in by_object.items():
@@ -191,19 +244,112 @@ def build_dataset_tag_infos(rows: List[Dict[str, Any]], default_catalog: Optiona
         if len(parts) != 3:
             continue
         cat, sch, tbl = parts
-        slugs = sorted({slugify_iri(iri) for iri in data["sem_iris"]})
+
+        # Prefer contract domain, fallback to product domain (string field)
+        domain_id = data.get("domain_id")
+        domain_name = data.get("domain_name")
+        if not domain_name and data.get("product_domain"):
+            # Product domain is a string field, not FK
+            domain_name = data.get("product_domain")
+
+        semantic_links = [
+            SemanticLink(iri=link["iri"], label=link["label"], slug=link["slug"])
+            for link in data["semantic_links"]
+        ]
+
         out.append(
             DatasetTagInfo(
                 fqn=qualified,
                 catalog=cat,
                 schema=sch,
                 table=tbl,
+                contract_id=str(data.get("contract_id") or "") or None,
                 contract_name=str(data.get("contract_name") or "") or None,
+                contract_version=str(data.get("contract_version") or "") or None,
+                contract_status=str(data.get("contract_status") or "") or None,
+                product_id=str(data.get("product_id") or "") or None,
                 product_name=str(data.get("product_name") or "") or None,
-                semantic_slugs=slugs,
+                product_version=str(data.get("product_version") or "") or None,
+                product_status=str(data.get("product_status") or "") or None,
+                domain_id=str(domain_id) if domain_id else None,
+                domain_name=str(domain_name) if domain_name else None,
+                semantic_links=semantic_links,
             )
         )
     return out
+
+
+# Tag formatting and validation helpers --------------------------------------------
+
+def sanitize_tag_key(key: str) -> str:
+    """Sanitize tag key by replacing UC-invalid characters with underscores.
+
+    UC tag keys cannot contain: commas, periods, colons, hyphens, forward slashes,
+    backticks, equals signs. Also strip leading/trailing spaces.
+    """
+    invalid_chars = [',', '.', ':', '-', '/', '`', '=']
+    sanitized = key.strip()
+    for char in invalid_chars:
+        sanitized = sanitized.replace(char, '_')
+    return sanitized
+
+
+def format_tag_string(format_str: str, variables: Dict[str, Optional[str]]) -> Optional[str]:
+    """Format a tag key or value string by replacing {VARIABLE} placeholders.
+
+    Args:
+        format_str: Format string with {VARIABLE} placeholders
+        variables: Dictionary mapping variable names to values
+
+    Returns:
+        Formatted string, or None if any required variable is missing/None
+    """
+    result = format_str
+    for var_name, var_value in variables.items():
+        placeholder = f"{{{var_name}}}"
+        if placeholder in result:
+            if var_value is None:
+                # Required variable is missing
+                return None
+            result = result.replace(placeholder, var_value)
+    return result
+
+
+def build_variables_for_dataset(d: DatasetTagInfo, link: Optional[SemanticLink] = None) -> Dict[str, Optional[str]]:
+    """Build variable dictionary for tag formatting.
+
+    Args:
+        d: Dataset tag info
+        link: Optional semantic link (for semantic_assignment entity type)
+
+    Returns:
+        Dictionary mapping variable names to values
+    """
+    variables = {
+        # Contract variables
+        "CONTRACT.ID": d.contract_id,
+        "CONTRACT.NAME": d.contract_name,
+        "CONTRACT.VERSION": d.contract_version,
+        "CONTRACT.STATUS": d.contract_status,
+        # Product variables
+        "PRODUCT.ID": d.product_id,
+        "PRODUCT.NAME": d.product_name,
+        "PRODUCT.VERSION": d.product_version,
+        "PRODUCT.STATUS": d.product_status,
+        # Domain variables
+        "DOMAIN.ID": d.domain_id,
+        "DOMAIN.NAME": d.domain_name,
+    }
+
+    # Add semantic link variables if provided
+    if link:
+        variables.update({
+            "LINK.IRI": link.iri,
+            "LINK.LABEL": link.label,
+            "LINK.SLUG": link.slug,
+        })
+
+    return variables
 
 
 # Databricks governed tags helpers ------------------------------------------------
@@ -270,56 +416,123 @@ def reconcile_tags(ws: WorkspaceClient, spark: SparkSession, object_type: str, o
     return (updated, removed)
 
 
-def aggregate_parent_desired(dataset_items: List[DatasetTagInfo], prefix: str) -> Tuple[Dict[str, Dict[str, Optional[str]]], Dict[str, Dict[str, Optional[str]]]]:
-    # schema FQN -> desired tags, catalog name -> desired tags
-    schema_to_values: Dict[str, Dict[str, Optional[str]]] = {}
-    catalog_to_values: Dict[str, Dict[str, Optional[str]]] = {}
+def aggregate_parent_desired(dataset_items: List[DatasetTagInfo], tag_sync_configs: List[Dict[str, Any]]) -> Tuple[Dict[str, Dict[str, Optional[str]]], Dict[str, Dict[str, Optional[str]]]]:
+    """Aggregate tags for parent schema and catalog levels.
+
+    For now, we aggregate all dataset tags to their parent levels.
+    This could be made more sophisticated in the future.
+
+    Args:
+        dataset_items: List of dataset tag infos
+        tag_sync_configs: Tag sync configuration
+
+    Returns:
+        Tuple of (schema_tags, catalog_tags) where each is a dict mapping FQN to tag dict
+    """
+    schema_to_tags: Dict[str, Dict[str, set]] = {}
+    catalog_to_tags: Dict[str, Dict[str, set]] = {}
 
     for d in dataset_items:
         schema_fqn = f"{d.catalog}.{d.schema}"
-        # Aggregate product names
-        if d.product_name:
-            schema_vals = schema_to_values.setdefault(schema_fqn, {})
-            catalog_vals = catalog_to_values.setdefault(d.catalog, {})
-            schema_vals.setdefault(f"{prefix}product_name:list", set()).add(d.product_name)
-            catalog_vals.setdefault(f"{prefix}product_name:list", set()).add(d.product_name)
 
-        # Aggregate semantic links
-        if d.semantic_slugs:
-            schema_vals = schema_to_values.setdefault(schema_fqn, {})
-            catalog_vals = catalog_to_values.setdefault(d.catalog, {})
-            for slug in d.semantic_slugs:
-                schema_vals.setdefault(f"{prefix}semantic_link:list", set()).add(slug)
-                catalog_vals.setdefault(f"{prefix}semantic_link:list", set()).add(slug)
+        # Build desired tags for this dataset
+        desired = build_desired_for_dataset(d, tag_sync_configs)
 
-    # Collapse sets to comma strings and map keys
-    def collapse(map_in: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Optional[str]]]:
+        # Aggregate to parent levels
+        for tag_key, tag_value in desired.items():
+            if tag_value:
+                # Add to schema level
+                schema_vals = schema_to_tags.setdefault(schema_fqn, {})
+                schema_vals.setdefault(tag_key, set()).add(tag_value)
+
+                # Add to catalog level
+                catalog_vals = catalog_to_tags.setdefault(d.catalog, {})
+                catalog_vals.setdefault(tag_key, set()).add(tag_value)
+
+    # Collapse sets to comma-separated strings
+    def collapse(map_in: Dict[str, Dict[str, set]]) -> Dict[str, Dict[str, Optional[str]]]:
         out: Dict[str, Dict[str, Optional[str]]] = {}
         for res, vals in map_in.items():
             m: Dict[str, Optional[str]] = {}
             for k, v in vals.items():
-                if k.endswith(":list") and isinstance(v, set):
-                    base = k[:-5]
-                    m[base] = ",".join(sorted(v)) if v else None
+                if isinstance(v, set):
+                    m[k] = ",".join(sorted(v)) if v else None
             out[res] = m
         return out
 
-    return collapse(schema_to_values), collapse(catalog_to_values)
+    return collapse(schema_to_tags), collapse(catalog_to_tags)
 
 
-def build_desired_for_dataset(d: DatasetTagInfo, prefix: str) -> Dict[str, Optional[str]]:
+def build_desired_for_dataset(d: DatasetTagInfo, tag_sync_configs: List[Dict[str, Any]]) -> Dict[str, Optional[str]]:
+    """Build desired tags for a dataset based on configuration.
+
+    Args:
+        d: Dataset tag info
+        tag_sync_configs: List of tag sync configuration dictionaries
+
+    Returns:
+        Dictionary of tag key -> value mappings
+    """
     desired: Dict[str, Optional[str]] = {}
-    if d.contract_name:
-        desired[f"{prefix}contract_name"] = d.contract_name
-    if d.product_name:
-        desired[f"{prefix}product_name"] = d.product_name
-    if d.semantic_slugs:
-        desired[f"{prefix}semantic_link"] = ",".join(sorted(d.semantic_slugs))
+
+    for config in tag_sync_configs:
+        entity_type = config.get("entity_type")
+        enabled = config.get("enabled", True)
+
+        if not enabled:
+            continue
+
+        tag_key_format = config.get("tag_key_format", "")
+        tag_value_format = config.get("tag_value_format", "")
+
+        if entity_type == "semantic_assignment":
+            # Create one tag per semantic link
+            for link in d.semantic_links:
+                variables = build_variables_for_dataset(d, link=link)
+                tag_key = format_tag_string(tag_key_format, variables)
+                tag_value = format_tag_string(tag_value_format, variables)
+
+                if tag_key and tag_value:
+                    # Sanitize key for UC constraints
+                    tag_key = sanitize_tag_key(tag_key)
+                    desired[tag_key] = tag_value
+
+        elif entity_type == "data_domain":
+            if d.domain_name:
+                variables = build_variables_for_dataset(d)
+                tag_key = format_tag_string(tag_key_format, variables)
+                tag_value = format_tag_string(tag_value_format, variables)
+
+                if tag_key and tag_value:
+                    tag_key = sanitize_tag_key(tag_key)
+                    desired[tag_key] = tag_value
+
+        elif entity_type == "data_contract":
+            if d.contract_name:
+                variables = build_variables_for_dataset(d)
+                tag_key = format_tag_string(tag_key_format, variables)
+                tag_value = format_tag_string(tag_value_format, variables)
+
+                if tag_key and tag_value:
+                    tag_key = sanitize_tag_key(tag_key)
+                    desired[tag_key] = tag_value
+
+        elif entity_type == "data_product":
+            if d.product_name:
+                variables = build_variables_for_dataset(d)
+                tag_key = format_tag_string(tag_key_format, variables)
+                tag_value = format_tag_string(tag_value_format, variables)
+
+                if tag_key and tag_value:
+                    tag_key = sanitize_tag_key(tag_key)
+                    desired[tag_key] = tag_value
+
     return desired
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sync Ontos metadata to UC governed tags")
+    parser.add_argument("--tag_sync_configs", type=str, default="[]")
     parser.add_argument("--prefix", type=str, default="x_ontos_")
     parser.add_argument("--dry_run", type=str, default="false")
     parser.add_argument("--default_catalog", type=str, default="")
@@ -333,7 +546,38 @@ def main() -> None:
     parser.add_argument("--postgres_schema", type=str, default="public")
     args, _ = parser.parse_known_args()
 
-    prefix: str = args.prefix
+    # Parse tag sync configs
+    tag_sync_configs = json.loads(args.tag_sync_configs) if args.tag_sync_configs else []
+
+    # Compute tag prefix for filtering existing tags (find common prefix from all tag keys)
+    # Fall back to legacy prefix parameter if no configs
+    tag_prefixes = set()
+    for config in tag_sync_configs:
+        if config.get("enabled", True):
+            key_format = config.get("tag_key_format", "")
+            # Extract prefix before first variable placeholder
+            if "{" in key_format:
+                tag_prefixes.add(key_format.split("{")[0])
+            else:
+                tag_prefixes.add(key_format)
+
+    # Use common prefix if all start with same prefix, otherwise use legacy prefix
+    if tag_prefixes:
+        common_prefix = ""
+        sorted_prefixes = sorted(tag_prefixes)
+        if len(sorted_prefixes) > 0:
+            # Find longest common prefix
+            first = sorted_prefixes[0]
+            last = sorted_prefixes[-1]
+            for i, char in enumerate(first):
+                if i < len(last) and char == last[i]:
+                    common_prefix += char
+                else:
+                    break
+        prefix = common_prefix if common_prefix else args.prefix
+    else:
+        prefix = args.prefix
+
     dry_run: bool = args.dry_run.lower() in ("true", "1", "yes")
     default_catalog = args.default_catalog if args.default_catalog else None
     default_schema = args.default_schema if args.default_schema else None
@@ -344,7 +588,8 @@ def main() -> None:
     print("UC Tag Sync workflow started")
     print("=" * 80)
     print(f"\nJob Parameters:")
-    print(f"  Prefix: {prefix}")
+    print(f"  Tag sync configs: {len(tag_sync_configs)} entity types configured")
+    print(f"  Computed prefix: {prefix}")
     print(f"  Dry run: {dry_run}")
     print(f"  Default catalog: {default_catalog}")
     print(f"  Default schema: {default_schema}")
@@ -383,7 +628,7 @@ def main() -> None:
 
     # Dataset-level
     for d in datasets:
-        desired = build_desired_for_dataset(d, prefix)
+        desired = build_desired_for_dataset(d, tag_sync_configs)
         if not desired:
             continue
         u, r = reconcile_tags(ws, spark, "TABLE", d.fqn, desired, prefix, dry_run=dry_run)
@@ -393,7 +638,7 @@ def main() -> None:
             print(f"Dataset {d.fqn}: updated={u} removed={r}")
 
     # Aggregate parent desired values
-    schema_desired, catalog_desired = aggregate_parent_desired(datasets, prefix)
+    schema_desired, catalog_desired = aggregate_parent_desired(datasets, tag_sync_configs)
 
     # Schema-level
     for schema_fqn, desired in schema_desired.items():

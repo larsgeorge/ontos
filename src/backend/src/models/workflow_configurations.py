@@ -88,6 +88,40 @@ class WorkflowConfiguration(BaseModel):
         }
 
 
+class TagSyncConfig(BaseModel):
+    """Configuration for a single tag sync entity type (used in tag_sync_configs parameter type)"""
+    entity_type: str = Field(..., description="Entity type: semantic_assignment, data_domain, data_contract, data_product")
+    enabled: bool = Field(True, description="Whether syncing is enabled for this entity type")
+    tag_key_format: str = Field(..., description="Format string for tag key with {VARIABLE} placeholders")
+    tag_value_format: str = Field(..., description="Format string for tag value with {VARIABLE} placeholders")
+
+    @staticmethod
+    def validate_tag_key(key: str) -> None:
+        """Validate tag key against UC governed tag constraints.
+
+        Tag keys cannot contain: commas, periods, colons, hyphens, forward slashes,
+        backticks, equals signs, or leading/trailing spaces.
+        """
+        invalid_chars = [',', '.', ':', '-', '/', '`', '=']
+        for char in invalid_chars:
+            if char in key:
+                raise ValueError(f"Tag key cannot contain '{char}': {key}")
+        if key != key.strip():
+            raise ValueError(f"Tag key cannot have leading/trailing spaces: '{key}'")
+        if not key:
+            raise ValueError("Tag key cannot be empty")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "entity_type": "semantic_assignment",
+                "enabled": True,
+                "tag_key_format": "ontos_semantic_{LINK.SLUG}",
+                "tag_value_format": "{LINK.IRI}"
+            }
+        }
+
+
 class WorkflowConfigurationUpdate(BaseModel):
     """Update workflow configuration"""
     configuration: Dict[str, Any] = Field(..., description="Parameter name to value mapping")

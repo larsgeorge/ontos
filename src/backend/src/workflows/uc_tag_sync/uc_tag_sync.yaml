@@ -13,6 +13,8 @@ tasks:
     spark_python_task:
       python_file: "uc_tag_sync.py"
       parameters:
+        - "--tag_sync_configs"
+        - "{{job.parameters.tag_sync_configs}}"
         - "--prefix"
         - "{{job.parameters.prefix}}"
         - "--dry_run"
@@ -43,7 +45,7 @@ schedule:
   timezone_id: "UTC"
   pause_status: "UNPAUSED"
 
-# Parameters for configuration
+# Standard runtime parameters (defaults, overridden by configurable_parameters from UI)
 parameters:
   prefix: "x_ontos_"
   dry_run: "false"
@@ -56,6 +58,50 @@ parameters:
   postgres_db: ""
   postgres_port: "5432"
   postgres_schema: "public"
+  tag_sync_configs: "[]"
+
+# Configurable parameters (managed via UI)
+configurable_parameters:
+  - name: "tag_sync_configs"
+    type: "tag_sync_configs"
+    description: "Configure which metadata to sync to Unity Catalog tags and customize tag formats"
+    required: true
+    entity_types: ["semantic_assignment", "data_domain", "data_contract", "data_product"]
+    default:
+      - entity_type: "semantic_assignment"
+        enabled: true
+        tag_key_format: "ontos_semantic_{LINK.SLUG}"
+        tag_value_format: "{LINK.IRI}"
+      - entity_type: "data_domain"
+        enabled: true
+        tag_key_format: "ontos_data_domain_name"
+        tag_value_format: "{DOMAIN.NAME}"
+      - entity_type: "data_contract"
+        enabled: true
+        tag_key_format: "ontos_contract_name"
+        tag_value_format: "{CONTRACT.NAME}"
+      - entity_type: "data_product"
+        enabled: true
+        tag_key_format: "ontos_product_name"
+        tag_value_format: "{PRODUCT.NAME}"
+
+  - name: "prefix"
+    type: "string"
+    description: "Prefix for tag keys (deprecated - use tag_key_format in tag_sync_configs)"
+    required: false
+    default: "x_ontos_"
+
+  - name: "default_catalog"
+    type: "string"
+    description: "Default catalog for unqualified table names"
+    required: false
+    default: ""
+
+  - name: "default_schema"
+    type: "string"
+    description: "Default schema for unqualified table names"
+    required: false
+    default: ""
 
 # Job timeout (in seconds)
 timeout_seconds: 3600

@@ -9,7 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useApi } from '@/hooks/use-api';
 import { Loader2 } from 'lucide-react';
 import EntityPatternsField from './entity-patterns-field';
-import { WorkflowParameterDefinition, EntityPatternConfig } from '@/types/workflow-configurations';
+import TagSyncConfigsField from './tag-sync-configs-field';
+import { WorkflowParameterDefinition, EntityPatternConfig, TagSyncConfig } from '@/types/workflow-configurations';
 
 interface WorkflowConfigurationDialogProps {
   open: boolean;
@@ -211,7 +212,25 @@ export default function WorkflowConfigurationDialog({
             />
           </div>
         );
-      
+
+      case 'tag_sync_configs':
+        return (
+          <div key={paramDef.name} className="space-y-2">
+            <Label>
+              {paramDef.name}
+              {paramDef.required && <span className="text-red-500 ml-1">*</span>}
+            </Label>
+            {paramDef.description && (
+              <p className="text-sm text-muted-foreground mb-2">{paramDef.description}</p>
+            )}
+            <TagSyncConfigsField
+              value={(value as TagSyncConfig[]) || []}
+              onChange={(configs) => setConfiguration({ ...configuration, [paramDef.name]: configs })}
+              entityTypes={paramDef.entity_types || ['semantic_assignment', 'data_domain', 'data_contract', 'data_product']}
+            />
+          </div>
+        );
+
       default:
         return null;
     }
