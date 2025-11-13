@@ -16,6 +16,9 @@ import ConceptSelectDialog from '@/components/semantic/concept-select-dialog'
 import LinkedConceptChips from '@/components/semantic/linked-concept-chips'
 import TagChip from '@/components/ui/tag-chip'
 import { useDomains } from '@/hooks/use-domains'
+import { usePermissions } from '@/stores/permissions-store'
+import { useUserStore } from '@/stores/user-store'
+import { FeatureAccessLevel } from '@/types/settings'
 import type { EntitySemanticLink } from '@/types/semantic-link'
 import type { DataContract, SchemaObject, QualityRule, TeamMember, ServerConfig, SLARequirements } from '@/types/data-contract'
 import useBreadcrumbStore from '@/stores/breadcrumb-store'
@@ -37,6 +40,10 @@ import LinkProductToContractDialog from '@/components/data-contracts/link-produc
 import VersioningRecommendationDialog from '@/components/common/versioning-recommendation-dialog'
 import type { DataProduct } from '@/types/data-product'
 import type { DataProfilingRun } from '@/types/data-contract'
+
+// View mode for filtering contract details sections
+type ViewMode = 'minimal' | 'medium' | 'large'
+const VIEW_MODE_STORAGE_KEY = 'data-contract-view-mode'
 
 // Define column structure for schema properties
 type SchemaProperty = {
@@ -156,6 +163,8 @@ export default function DataContractDetails() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { getDomainName } = useDomains()
+  const { getPermissionLevel } = usePermissions()
+  const { userInfo, fetchUserInfo } = useUserStore()
 
   const setStaticSegments = useBreadcrumbStore((state) => state.setStaticSegments)
   const setDynamicTitle = useBreadcrumbStore((state) => state.setDynamicTitle)
@@ -188,6 +197,9 @@ export default function DataContractDetails() {
 
   // Link product dialog state
   const [isLinkProductDialogOpen, setIsLinkProductDialogOpen] = useState(false)
+
+  // View mode state for filtering sections
+  const [viewMode, setViewMode] = useState<ViewMode>('minimal')
 
   // Authoritative Definitions state (contract-level)
   type AuthoritativeDefinition = { id: string; url: string; type: string }
@@ -463,6 +475,47 @@ export default function DataContractDetails() {
       setIsProfilingRunning(false)
     }
   }, [contractId, isProfilingRunning, toast])
+
+  // Determine default view mode based on user role and ownership
+  const getDefaultViewMode = useCallback((): ViewMode => {
+    // Check if user is owner or member of owning team
+    if (contract?.owner_team_id && userInfo?.groups?.includes(contract.owner_team_id)) {
+      return 'large'
+    }
+
+    // Check permission level for data-contracts feature
+    const permissionLevel = getPermissionLevel('data-contracts')
+    if (permissionLevel === FeatureAccessLevel.READ_WRITE ||
+        permissionLevel === FeatureAccessLevel.ADMIN ||
+        permissionLevel === FeatureAccessLevel.FULL) {
+      return 'medium'
+    }
+
+    // Default to minimal
+    return 'minimal'
+  }, [contract?.owner_team_id, userInfo?.groups, getPermissionLevel])
+
+  // Fetch user info on mount if not already loaded
+  useEffect(() => {
+    if (!userInfo) {
+      fetchUserInfo()
+    }
+  }, [userInfo, fetchUserInfo])
+
+  // Load view mode from localStorage or use default
+  useEffect(() => {
+    const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY)
+    if (stored && ['minimal', 'medium', 'large'].includes(stored)) {
+      setViewMode(stored as ViewMode)
+    } else {
+      setViewMode(getDefaultViewMode())
+    }
+  }, [getDefaultViewMode])
+
+  // Save view mode to localStorage when changed
+  useEffect(() => {
+    localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode)
+  }, [viewMode])
 
   useEffect(() => {
     setStaticSegments([{ label: 'Data Contracts', path: '/data-contracts' }])
@@ -1204,6 +1257,28 @@ export default function DataContractDetails() {
     }
   }
 
+  // Helper functions for conditional rendering based on view mode
+  const shouldShowSection = (section: string): boolean => {
+    switch (viewMode) {
+      case 'minimal':
+        return ['metadata', 'description', 'schemas'].includes(section)
+      case 'medium':
+        return !['quality-rules', 'sla', 'access-control', 'custom-properties', 'support', 'authoritative-definitions'].includes(section)
+      case 'large':
+        return true
+      default:
+        return false
+    }
+  }
+
+  // Special case for linked products in minimal mode
+  const shouldShowLinkedProducts = (): boolean => {
+    if (viewMode === 'minimal') {
+      return linkedProducts.length > 0
+    }
+    return shouldShowSection('linked-products')
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -1225,10 +1300,40 @@ export default function DataContractDetails() {
   return (
     <div className="py-6 space-y-6">
       <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={() => navigate('/data-contracts')} size="sm">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to List
-        </Button>
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={() => navigate('/data-contracts')} size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to List
+          </Button>
+
+          {/* View Mode Toggle */}
+          <div className="inline-flex items-stretch h-8 gap-px border rounded-md bg-background overflow-hidden">
+            <Button
+              variant={viewMode === 'minimal' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('minimal')}
+              className="h-full w-8 p-0 font-semibold text-xs rounded-none"
+              title="Small View"
+            >
+              S
+            </Button>
+            <Button
+              variant={viewMode === 'medium' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('medium')}
+              className="h-full w-8 p-0 font-semibold text-xs rounded-none"
+              title="Medium View"
+            >
+              M
+            </Button>
+            <Button
+              variant={viewMode === 'large' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('large')}
+              className="h-full w-8 p-0 font-semibold text-xs rounded-none"
+              title="Large View"
+            >
+              L
+            </Button>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           {/* Lifecycle actions */}
           {contract && (contract.status?.toLowerCase() === 'draft') && (
@@ -1266,116 +1371,137 @@ export default function DataContractDetails() {
             {contract.description?.purpose || 'No description provided'}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid md:grid-cols-4 gap-4">
-            <div className="space-y-1">
-              <Label>Status:</Label>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary">{contract.status}</Badge>
+        <CardContent className="space-y-3">
+          <div className="grid md:grid-cols-3 gap-x-6 gap-y-2">
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">Status:</Label>
+              <div className="flex items-center gap-1.5">
+                <Badge variant="secondary" className="text-xs">{contract.status}</Badge>
                 {contract.published && (
-                  <Badge variant="default" className="bg-green-600">Published</Badge>
+                  <Badge variant="default" className="bg-green-600 text-xs">Published</Badge>
                 )}
               </div>
             </div>
-            <div className="space-y-1">
-              <Label>Version:</Label>
-              <Badge variant="outline" className="ml-1">{contract.version}</Badge>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">Version:</Label>
+              <Badge variant="outline" className="text-xs">{contract.version}</Badge>
             </div>
-            <div className="space-y-1">
-              <Label>Domain:</Label>
-              {(() => {
-                const domainId = contract.domainId;
-                const domainName = getDomainName(domainId) || contract.domain;
-                return domainName && domainId ? (
+            {/* Hide Domain if empty in minimal mode */}
+            {(viewMode !== 'minimal' || contract.domainId || contract.domain) && (
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">Domain:</Label>
+                {(() => {
+                  const domainId = contract.domainId;
+                  const domainName = getDomainName(domainId) || contract.domain;
+                  return domainName && domainId ? (
+                    <span
+                      className="text-xs cursor-pointer text-primary hover:underline truncate"
+                      onClick={() => navigate(`/data-domains/${domainId}`)}
+                    >
+                      {domainName}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">{contract.domain || 'N/A'}</span>
+                  );
+                })()}
+              </div>
+            )}
+            {/* Hide Project if empty in minimal mode */}
+            {(viewMode !== 'minimal' || ((contract as any).project_id && projectName)) && (
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">Project:</Label>
+                {(contract as any).project_id && projectName ? (
                   <span
-                    className="text-sm block cursor-pointer text-primary hover:underline"
-                    onClick={() => navigate(`/data-domains/${domainId}`)}
+                    className="text-xs cursor-pointer text-primary hover:underline truncate"
+                    onClick={() => navigate(`/projects/${(contract as any).project_id}`)}
+                    title={`Project ID: ${(contract as any).project_id}`}
                   >
-                    {domainName}
+                    {projectName}
                   </span>
                 ) : (
-                  <span className="text-sm block">{contract.domain || 'N/A'}</span>
-                );
-              })()}
+                  <span className="text-xs text-muted-foreground">{(contract as any).project_id || 'N/A'}</span>
+                )}
+              </div>
+            )}
+            {/* Hide Tenant if empty in minimal mode */}
+            {(viewMode !== 'minimal' || contract.tenant) && (
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">Tenant:</Label>
+                <span className="text-xs text-muted-foreground truncate">{contract.tenant || 'N/A'}</span>
+              </div>
+            )}
+            {/* Hide Owner if empty in minimal mode */}
+            {(viewMode !== 'minimal' || (contract.owner_team_id && ownerTeamName)) && (
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">Owner:</Label>
+                {contract.owner_team_id && ownerTeamName ? (
+                  <span
+                    className="text-xs cursor-pointer text-primary hover:underline truncate"
+                    onClick={() => navigate(`/teams/${contract.owner_team_id}`)}
+                    title={`Team ID: ${contract.owner_team_id}`}
+                  >
+                    {ownerTeamName}
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">{contract.owner_team_id || 'N/A'}</span>
+                )}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">API Ver:</Label>
+              <Badge variant="outline" className="text-xs">{contract.apiVersion}</Badge>
             </div>
-            <div className="space-y-1">
-              <Label>Project:</Label>
-              {(contract as any).project_id && projectName ? (
-                <span
-                  className="text-sm block cursor-pointer text-primary hover:underline"
-                  onClick={() => navigate(`/projects/${(contract as any).project_id}`)}
-                  title={`Project ID: ${(contract as any).project_id}`}
-                >
-                  {projectName}
-                </span>
-              ) : (
-                <span className="text-sm block">{(contract as any).project_id || 'N/A'}</span>
-              )}
-            </div>
-            <div className="space-y-1">
-              <Label>Tenant:</Label>
-              <span className="text-sm block">{contract.tenant || 'N/A'}</span>
-            </div>
-            <div className="space-y-1">
-              <Label>Owner:</Label>
-              {contract.owner_team_id && ownerTeamName ? (
-                <span
-                  className="text-sm block cursor-pointer text-primary hover:underline"
-                  onClick={() => navigate(`/teams/${contract.owner_team_id}`)}
-                  title={`Team ID: ${contract.owner_team_id}`}
-                >
-                  {ownerTeamName}
-                </span>
-              ) : (
-                <span className="text-sm block">{contract.owner_team_id || 'N/A'}</span>
-              )}
-            </div>
-            <div className="space-y-1">
-              <Label>API Version:</Label>
-              <Badge variant="outline" className="ml-1">{contract.apiVersion}</Badge>
-            </div>
-            <div className="space-y-1">
-              <Label>Created:</Label>
-              <span className="text-sm block">{contract.created || 'N/A'}</span>
-            </div>
-            <div className="space-y-1">
-              <Label>Updated:</Label>
-              <span className="text-sm block">{contract.updated || 'N/A'}</span>
-            </div>
+            {/* Hide Created if empty in minimal mode */}
+            {(viewMode !== 'minimal' || contract.created) && (
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">Created:</Label>
+                <span className="text-xs text-muted-foreground truncate">{contract.created || 'N/A'}</span>
+              </div>
+            )}
+            {/* Hide Updated if empty in minimal mode */}
+            {(viewMode !== 'minimal' || contract.updated) && (
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground min-w-[4rem]">Updated:</Label>
+                <span className="text-xs text-muted-foreground truncate">{contract.updated || 'N/A'}</span>
+              </div>
+            )}
           </div>
 
-          <div className="space-y-1">
-            <Label>Tags:</Label>
-            <div className="flex flex-wrap gap-1 mt-1">
-              {(contract.tags || []).length > 0 ? (
-                (contract.tags || []).map((tag, index) => (
-                  <TagChip key={index} tag={tag} size="sm" />
-                ))
-              ) : (
-                <span className="text-sm text-muted-foreground">No tags</span>
-              )}
+          <div className="pt-2 border-t">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 min-w-0">
+                <Label className="text-xs text-muted-foreground mb-1.5 block">Tags:</Label>
+                <div className="flex flex-wrap gap-1">
+                  {(contract.tags || []).length > 0 ? (
+                    (contract.tags || []).map((tag, index) => (
+                      <TagChip key={index} tag={tag} size="sm" />
+                    ))
+                  ) : (
+                    <span className="text-xs text-muted-foreground">No tags</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <Label className="text-xs text-muted-foreground mb-1.5 block">Linked Business Concepts:</Label>
+                <LinkedConceptChips
+                  links={links}
+                  onRemove={(id) => removeLink(id)}
+                  trailing={<Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)} className="h-6 text-xs">Add</Button>}
+                />
+              </div>
             </div>
-          </div>
-
-          <div className="space-y-1">
-            <Label>Linked Business Concepts:</Label>
-            <LinkedConceptChips
-              links={links}
-              onRemove={(id) => removeLink(id)}
-              trailing={<Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add Concept</Button>}
-            />
           </div>
         </CardContent>
       </Card>
 
       {/* Structured Description (ODCS) */}
-      {contract.description && (contract.description.purpose || contract.description.usage || contract.description.limitations) && (
+      {shouldShowSection('description') && contract.description && (contract.description.purpose || contract.description.usage || contract.description.limitations) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span className="flex items-center">
                 <FileText className="mr-2 h-5 w-5" />
-                Structured Description (ODCS)
+                Description
               </span>
               <Button size="sm" variant="outline" onClick={() => setIsBasicFormOpen(true)}>
                 <Pencil className="h-4 w-4" />
@@ -1406,8 +1532,9 @@ export default function DataContractDetails() {
       )}
 
       {/* Linked Data Products Section */}
-      <Card>
-        <CardHeader>
+      {shouldShowLinkedProducts() && (
+        <Card>
+          <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-xl flex items-center gap-2">
@@ -1499,6 +1626,7 @@ export default function DataContractDetails() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Schemas Section */}
       <Card>
@@ -1625,7 +1753,7 @@ export default function DataContractDetails() {
                 )}
 
                 {/* Schema Authoritative Definitions */}
-                {(() => {
+                {shouldShowSection('authoritative-definitions') && (() => {
                   const schemaId = (contract.schema[0] as any).id || contract.schema[0].name
                   const defs = schemaAuthDefs[schemaId] || []
                   return (
@@ -1755,7 +1883,7 @@ export default function DataContractDetails() {
                   )}
 
                   {/* Schema Authoritative Definitions */}
-                  {(() => {
+                  {shouldShowSection('authoritative-definitions') && (() => {
                     const schemaId = (contract.schema[selectedSchemaIndex] as any).id || contract.schema[selectedSchemaIndex].name
                     const defs = schemaAuthDefs[schemaId] || []
                     return (
@@ -1891,7 +2019,7 @@ export default function DataContractDetails() {
                   )}
 
                   {/* Schema Authoritative Definitions */}
-                  {(() => {
+                  {shouldShowSection('authoritative-definitions') && (() => {
                     const schemaId = (contract.schema[selectedSchemaIndex] as any).id || contract.schema[selectedSchemaIndex].name
                     const defs = schemaAuthDefs[schemaId] || []
                     return (
@@ -1959,8 +2087,9 @@ export default function DataContractDetails() {
       </Card>
 
       {/* Quality Rules Section */}
-      <Card>
-        <CardHeader>
+      {shouldShowSection('quality-rules') && (
+        <Card>
+          <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-xl">Quality Rules ({contract.qualityRules?.length || 0})</CardTitle>
@@ -2001,10 +2130,12 @@ export default function DataContractDetails() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Team & Roles Section */}
-      <Card>
-        <CardHeader>
+      {shouldShowSection('team-members') && (
+        <Card>
+          <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-xl">Team Members ({contract.team?.length || 0})</CardTitle>
@@ -2064,10 +2195,12 @@ export default function DataContractDetails() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* SLA & Infrastructure Section */}
-      <Card>
-        <CardHeader>
+      {shouldShowSection('sla') && (
+        <Card>
+          <CardHeader>
           <CardTitle className="text-xl">SLA & Infrastructure</CardTitle>
           <CardDescription>Service level agreements and server configurations</CardDescription>
         </CardHeader>
@@ -2151,9 +2284,10 @@ export default function DataContractDetails() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Access Control (read-only for now, can add edit later) */}
-      {contract.accessControl && (
+      {shouldShowSection('access-control') && contract.accessControl && (
         <Card>
           <CardHeader>
             <CardTitle className="text-xl">Access Control</CardTitle>
@@ -2176,7 +2310,7 @@ export default function DataContractDetails() {
       )}
 
       {/* Custom Properties (read-only for now) */}
-      {contract.customProperties && Object.keys(contract.customProperties).length > 0 && (
+      {shouldShowSection('custom-properties') && contract.customProperties && Object.keys(contract.customProperties).length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-xl">Custom Properties</CardTitle>
@@ -2195,7 +2329,7 @@ export default function DataContractDetails() {
       )}
 
       {/* Support Channels (read-only for now) */}
-      {contract.support && Object.keys(contract.support).length > 0 && (
+      {shouldShowSection('support') && contract.support && Object.keys(contract.support).length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-xl">Support</CardTitle>
@@ -2218,8 +2352,9 @@ export default function DataContractDetails() {
       )}
 
       {/* Authoritative Definitions - Contract Level (ODCS) */}
-      <Card>
-        <CardHeader>
+      {shouldShowSection('authoritative-definitions') && (
+        <Card>
+          <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-xl">Authoritative Definitions</CardTitle>
@@ -2283,9 +2418,10 @@ export default function DataContractDetails() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Metadata Panel */}
-      {contract.id && (
+      {shouldShowSection('metadata-panel') && contract.id && (
         <EntityMetadataPanel entityId={contract.id} entityType="data_contract" />
       )}
 

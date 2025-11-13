@@ -874,101 +874,104 @@ export default function DataProductDetails() {
             {product.description?.purpose || 'No description provided'}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid md:grid-cols-4 gap-4">
-            <div className="space-y-1">
-              <Label>Status:</Label>
-              <Badge variant={getStatusColor(product.status)} className="ml-1">
+        <CardContent className="space-y-3">
+          <div className="grid md:grid-cols-3 gap-x-6 gap-y-2">
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">Status:</Label>
+              <Badge variant={getStatusColor(product.status)} className="text-xs">
                 {product.status || 'N/A'}
               </Badge>
             </div>
-            <div className="space-y-1">
-              <Label>Version:</Label>
-              <Badge variant="secondary" className="ml-1">{product.version || 'N/A'}</Badge>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">Version:</Label>
+              <Badge variant="outline" className="text-xs">{product.version || 'N/A'}</Badge>
             </div>
-            <div className="space-y-1">
-              <Label>Domain:</Label>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">Domain:</Label>
               {product.domain && getDomainIdByName(domainLabel) ? (
                 <span
-                  className="text-sm block cursor-pointer text-primary hover:underline"
+                  className="text-xs cursor-pointer text-primary hover:underline truncate"
                   onClick={() => navigate(`/data-domains/${getDomainIdByName(domainLabel)}`)}
                 >
                   {domainLabel}
                 </span>
               ) : (
-                <span className="text-sm block">{domainLabel}</span>
+                <span className="text-xs text-muted-foreground">{domainLabel}</span>
               )}
             </div>
-            <div className="space-y-1">
-              <Label>Project:</Label>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">Project:</Label>
               {(product as any).project_id && projectName ? (
                 <span
-                  className="text-sm block cursor-pointer text-primary hover:underline"
+                  className="text-xs cursor-pointer text-primary hover:underline truncate"
                   onClick={() => navigate(`/projects/${(product as any).project_id}`)}
                   title={`Project ID: ${(product as any).project_id}`}
                 >
                   {projectName}
                 </span>
               ) : (
-                <span className="text-sm block">{(product as any).project_id || 'N/A'}</span>
+                <span className="text-xs text-muted-foreground">{(product as any).project_id || 'N/A'}</span>
               )}
             </div>
-            <div className="space-y-1">
-              <Label>Tenant:</Label>
-              <span className="text-sm block">{product.tenant || 'N/A'}</span>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">Tenant:</Label>
+              <span className="text-xs text-muted-foreground truncate">{product.tenant || 'N/A'}</span>
             </div>
-            <div className="space-y-1">
-              <Label>Owner:</Label>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">Owner:</Label>
               {product.owner_team_id && ownerTeamName ? (
                 <span
-                  className="text-sm block cursor-pointer text-primary hover:underline"
+                  className="text-xs cursor-pointer text-primary hover:underline truncate"
                   onClick={() => navigate(`/teams/${product.owner_team_id}`)}
                   title={`Team ID: ${product.owner_team_id}`}
                 >
                   {ownerTeamName}
                 </span>
               ) : (
-                <span className="text-sm block">{product.owner_team_id || 'N/A'}</span>
+                <span className="text-xs text-muted-foreground">{product.owner_team_id || 'N/A'}</span>
               )}
             </div>
-            <div className="space-y-1">
-              <Label>API Version:</Label>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">API Ver:</Label>
               {product.apiVersion ? (
-                <Badge variant="outline" className="ml-1">{product.apiVersion}</Badge>
+                <Badge variant="outline" className="text-xs">{product.apiVersion}</Badge>
               ) : (
-                <span className="text-sm block">N/A</span>
+                <span className="text-xs text-muted-foreground">N/A</span>
               )}
             </div>
-            <div className="space-y-1">
-              <Label>Created:</Label>
-              <span className="text-sm block">{formatDate(product.created_at)}</span>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">Created:</Label>
+              <span className="text-xs text-muted-foreground truncate">{formatDate(product.created_at)}</span>
             </div>
-            <div className="space-y-1">
-              <Label>Updated:</Label>
-              <span className="text-sm block">{formatDate(product.updated_at)}</span>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground min-w-[4rem]">Updated:</Label>
+              <span className="text-xs text-muted-foreground truncate">{formatDate(product.updated_at)}</span>
             </div>
           </div>
 
-          <div className="space-y-1">
-            <Label>Tags:</Label>
-            <div className="flex flex-wrap gap-1 mt-1">
-              {(product.tags || []).length > 0 ? (
-                (product.tags || []).map((tag, index) => (
-                  <TagChip key={index} tag={tag} size="sm" />
-                ))
-              ) : (
-                <span className="text-sm text-muted-foreground">No tags</span>
-              )}
+          <div className="pt-2 border-t">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 min-w-0">
+                <Label className="text-xs text-muted-foreground mb-1.5 block">Tags:</Label>
+                <div className="flex flex-wrap gap-1">
+                  {(product.tags || []).length > 0 ? (
+                    (product.tags || []).map((tag, index) => (
+                      <TagChip key={index} tag={tag} size="sm" />
+                    ))
+                  ) : (
+                    <span className="text-xs text-muted-foreground">No tags</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <Label className="text-xs text-muted-foreground mb-1.5 block">Linked Business Concepts:</Label>
+                <LinkedConceptChips
+                  links={links}
+                  onRemove={canWrite ? removeLink : undefined}
+                  trailing={canWrite ? <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)} className="h-6 text-xs">Add</Button> : undefined}
+                />
+              </div>
             </div>
-          </div>
-
-          <div className="space-y-1">
-            <Label>Linked Business Concepts:</Label>
-            <LinkedConceptChips
-              links={links}
-              onRemove={canWrite ? removeLink : undefined}
-              trailing={canWrite ? <Button size="sm" variant="outline" onClick={() => setIriDialogOpen(true)}>Add Concept</Button> : undefined}
-            />
           </div>
         </CardContent>
       </Card>
@@ -980,7 +983,7 @@ export default function DataProductDetails() {
             <CardTitle className="flex items-center justify-between">
               <span className="flex items-center">
                 <FileText className="mr-2 h-5 w-5" />
-                Structured Description (ODPS)
+                Description
               </span>
               {canWrite && <Button size="sm" variant="outline" onClick={handleEdit}><Pencil className="h-4 w-4" /></Button>}
             </CardTitle>

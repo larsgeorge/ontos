@@ -9,6 +9,16 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -49,6 +59,7 @@ export function DataDomainFormDialog({
   const api = useApi();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = React.useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -72,6 +83,20 @@ export function DataDomainFormDialog({
       });
     }
   }, [isOpen, domain, form, allDomains]);
+
+  const handleCloseAttempt = () => {
+    // Check if form has been modified
+    if (form.formState.isDirty && !isSubmitting) {
+      setShowDiscardConfirm(true);
+    } else {
+      onOpenChange(false);
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardConfirm(false);
+    onOpenChange(false);
+  };
 
   const handleFormSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
@@ -119,7 +144,18 @@ export function DataDomainFormDialog({
   const parentDomainOptions = allDomains.filter(d => d.id !== domain?.id);
 
   const dialogContent = (
-    <DialogContent className="sm:max-w-[525px]">
+    <DialogContent 
+      className="sm:max-w-[525px]"
+      onInteractOutside={(e) => {
+        // Prevent closing on outside click
+        e.preventDefault();
+      }}
+      onEscapeKeyDown={(e) => {
+        // Prevent closing on Escape key
+        e.preventDefault();
+        handleCloseAttempt();
+      }}
+    >
       <DialogHeader>
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogDescription>{dialogDescription}</DialogDescription>
@@ -218,7 +254,7 @@ export function DataDomainFormDialog({
             )}
           />
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+            <Button type="button" variant="outline" onClick={handleCloseAttempt} disabled={isSubmitting}>
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting || !form.formState.isValid}>
@@ -233,16 +269,50 @@ export function DataDomainFormDialog({
 
   if (trigger) {
     return (
-      <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogTrigger asChild>{trigger}</DialogTrigger>
-        {dialogContent}
-      </Dialog>
+      <>
+        <Dialog open={isOpen} onOpenChange={handleCloseAttempt}>
+          <DialogTrigger asChild>{trigger}</DialogTrigger>
+          {dialogContent}
+        </Dialog>
+
+        <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+              <AlertDialogDescription>
+                You have unsaved changes that will be lost if you close this dialog. Are you sure you want to discard them?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Continue Editing</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmDiscard}>Discard Changes</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
     );
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      {dialogContent}
-    </Dialog>
+    <>
+      <Dialog open={isOpen} onOpenChange={handleCloseAttempt}>
+        {dialogContent}
+      </Dialog>
+
+      <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes that will be lost if you close this dialog. Are you sure you want to discard them?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Continue Editing</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDiscard}>Discard Changes</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 } 

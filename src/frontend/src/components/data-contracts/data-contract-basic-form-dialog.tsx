@@ -1,5 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -39,6 +49,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   const { toast } = useToast()
   const { currentProject, availableProjects, fetchUserProjects, isLoading: projectsLoading } = useProjectContext()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false)
 
   // Form state
   const [name, setName] = useState('')
@@ -56,6 +67,9 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   // Teams state
   const [teams, setTeams] = useState<TeamSummary[]>([])
   const [teamsLoading, setTeamsLoading] = useState(false)
+
+  // Track initial form values to detect changes
+  const [initialFormValues, setInitialFormValues] = useState<any>(null)
 
   // Fetch teams and projects when dialog opens
   useEffect(() => {
@@ -80,34 +94,83 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   useEffect(() => {
     if (!isOpen) return; // Don't reset if dialog is closed
     
-    if (initial) {
-      setName(initial.name || '')
-      setVersion(initial.version || '0.0.1')
-      setStatus(initial.status || 'draft')
-      setOwnerTeamId(initial.owner_team_id || '')
-      setProjectId(initial.project_id || '')
-      setDomain(initial.domain || '')
-      setTenant(initial.tenant || '')
-      setDescriptionUsage(initial.descriptionUsage || '')
-      setDescriptionPurpose(initial.descriptionPurpose || '')
-      setDescriptionLimitations(initial.descriptionLimitations || '')
-      setTags(initial.tags || [])
-    } else {
-      // Reset to defaults for new contract, default to current project
-      setName('')
-      setVersion('0.0.1')
-      setStatus('draft')
-      setOwnerTeamId('')
-      setProjectId(currentProject?.id || '')
-      setDomain('')
-      setTenant('')
-      setDescriptionUsage('')
-      setDescriptionPurpose('')
-      setDescriptionLimitations('')
-      setTags([])
+    const initValues = initial ? {
+      name: initial.name || '',
+      version: initial.version || '0.0.1',
+      status: initial.status || 'draft',
+      ownerTeamId: initial.owner_team_id || '',
+      projectId: initial.project_id || '',
+      domain: initial.domain || '',
+      tenant: initial.tenant || '',
+      descriptionUsage: initial.descriptionUsage || '',
+      descriptionPurpose: initial.descriptionPurpose || '',
+      descriptionLimitations: initial.descriptionLimitations || '',
+      tags: initial.tags || [],
+    } : {
+      name: '',
+      version: '0.0.1',
+      status: 'draft',
+      ownerTeamId: '',
+      projectId: currentProject?.id || '',
+      domain: '',
+      tenant: '',
+      descriptionUsage: '',
+      descriptionPurpose: '',
+      descriptionLimitations: '',
+      tags: [],
     }
+    
+    setName(initValues.name)
+    setVersion(initValues.version)
+    setStatus(initValues.status)
+    setOwnerTeamId(initValues.ownerTeamId)
+    setProjectId(initValues.projectId)
+    setDomain(initValues.domain)
+    setTenant(initValues.tenant)
+    setDescriptionUsage(initValues.descriptionUsage)
+    setDescriptionPurpose(initValues.descriptionPurpose)
+    setDescriptionLimitations(initValues.descriptionLimitations)
+    setTags(initValues.tags)
+    setInitialFormValues(initValues)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
+
+  // Check if form has been modified
+  const isFormDirty = useMemo(() => {
+    if (!initialFormValues) return false
+    
+    // Normalize tags for comparison
+    const normalizeTag = (tag: any) => typeof tag === 'string' ? tag : (tag.tag_id || tag.fully_qualified_name || tag.tag_name || tag)
+    const currentTagsNormalized = tags.map(normalizeTag).sort().join(',')
+    const initialTagsNormalized = initialFormValues.tags.map(normalizeTag).sort().join(',')
+    
+    return (
+      name !== initialFormValues.name ||
+      version !== initialFormValues.version ||
+      status !== initialFormValues.status ||
+      ownerTeamId !== initialFormValues.ownerTeamId ||
+      projectId !== initialFormValues.projectId ||
+      domain !== initialFormValues.domain ||
+      tenant !== initialFormValues.tenant ||
+      descriptionUsage !== initialFormValues.descriptionUsage ||
+      descriptionPurpose !== initialFormValues.descriptionPurpose ||
+      descriptionLimitations !== initialFormValues.descriptionLimitations ||
+      currentTagsNormalized !== initialTagsNormalized
+    )
+  }, [initialFormValues, name, version, status, ownerTeamId, projectId, domain, tenant, descriptionUsage, descriptionPurpose, descriptionLimitations, tags])
+
+  const handleCloseAttempt = () => {
+    if (isFormDirty && !isSubmitting) {
+      setShowDiscardConfirm(true)
+    } else {
+      onOpenChange(false)
+    }
+  }
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardConfirm(false)
+    onOpenChange(false)
+  }
 
   const handleSubmit = async () => {
     // Validate required fields
@@ -163,8 +226,20 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <>
+      <Dialog open={isOpen} onOpenChange={handleCloseAttempt}>
+        <DialogContent 
+          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+          onInteractOutside={(e) => {
+            // Prevent closing on outside click
+            e.preventDefault()
+          }}
+          onEscapeKeyDown={(e) => {
+            // Prevent closing on Escape key
+            e.preventDefault()
+            handleCloseAttempt()
+          }}
+        >
         <DialogHeader>
           <DialogTitle>{initial ? 'Edit Contract Metadata' : 'Create New Data Contract'}</DialogTitle>
           <DialogDescription>
@@ -359,7 +434,7 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+          <Button variant="outline" onClick={handleCloseAttempt} disabled={isSubmitting}>
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting}>
@@ -368,5 +443,21 @@ export default function DataContractBasicFormDialog({ isOpen, onOpenChange, onSu
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+          <AlertDialogDescription>
+            You have unsaved changes that will be lost if you close this dialog. Are you sure you want to discard them?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Continue Editing</AlertDialogCancel>
+          <AlertDialogAction onClick={handleConfirmDiscard}>Discard Changes</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }

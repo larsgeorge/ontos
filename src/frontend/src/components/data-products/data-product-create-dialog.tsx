@@ -10,6 +10,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -69,6 +79,7 @@ export default function DataProductCreateDialog({
   const { teams, loading: teamsLoading } = useTeams();
   const { currentProject, availableProjects, isLoading: projectsLoading, fetchUserProjects } = useProjectContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(dataProductCreateSchema),
@@ -134,6 +145,20 @@ export default function DataProductCreateDialog({
       }
     }
   }, [open, mode, product, form, currentProject]);
+
+  const handleCloseAttempt = () => {
+    // Check if form has been modified
+    if (form.formState.isDirty && !isSubmitting) {
+      setShowDiscardConfirm(true);
+    } else {
+      onOpenChange(false);
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardConfirm(false);
+    onOpenChange(false);
+  };
 
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
@@ -280,8 +305,20 @@ export default function DataProductCreateDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <>
+      <Dialog open={open} onOpenChange={handleCloseAttempt}>
+        <DialogContent 
+          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+          onInteractOutside={(e) => {
+            // Prevent closing on outside click
+            e.preventDefault();
+          }}
+          onEscapeKeyDown={(e) => {
+            // Prevent closing on Escape key
+            e.preventDefault();
+            handleCloseAttempt();
+          }}
+        >
         <DialogHeader>
           <DialogTitle>
             {mode === 'edit' ? 'Edit Data Product Metadata' : 'Create Data Product (ODPS v1.0.0)'}
@@ -524,7 +561,7 @@ export default function DataProductCreateDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
+              onClick={handleCloseAttempt}
               disabled={isSubmitting}
             >
               Cancel
@@ -537,5 +574,21 @@ export default function DataProductCreateDialog({
         </form>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+          <AlertDialogDescription>
+            You have unsaved changes that will be lost if you close this dialog. Are you sure you want to discard them?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Continue Editing</AlertDialogCancel>
+          <AlertDialogAction onClick={handleConfirmDiscard}>Discard Changes</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
