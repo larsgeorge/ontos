@@ -907,7 +907,7 @@ contracts:
   name: IoT Sensor Data Contract
   version: '2.0.0'
   owner_team: data-science
-  status: archived
+  status: retired
   kind: DataContract
   apiVersion: v3.0.2
   domain_name: IoT

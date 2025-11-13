@@ -230,7 +230,7 @@ async def reject_contract(
     manager: DataContractsManager = Depends(get_data_contracts_manager),
     _: bool = Depends(ApprovalChecker('CONTRACTS')),
 ):
-    """Reject a contract (PROPOSED/UNDER_REVIEW → REJECTED)."""
+    """Reject a contract (PROPOSED/UNDER_REVIEW → DRAFT for revisions)."""
     try:
         # Check valid source status
         contract = data_contract_repo.get(db, id=contract_id)
@@ -238,13 +238,13 @@ async def reject_contract(
             raise HTTPException(status_code=404, detail="Contract not found")
         from_status = (contract.status or '').lower()
         if from_status not in ('proposed', 'under_review'):
-            raise HTTPException(status_code=409, detail=f"Invalid transition from {contract.status} to REJECTED")
+            raise HTTPException(status_code=409, detail=f"Invalid transition from {contract.status} to DRAFT")
         
-        # Business logic now in manager
+        # Business logic now in manager (ODCS: rejected contracts return to draft)
         updated = manager.transition_status(
             db=db,
             contract_id=contract_id,
-            new_status='rejected',
+            new_status='draft',
             current_user=current_user.username if current_user else None
         )
         

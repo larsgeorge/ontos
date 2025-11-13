@@ -80,7 +80,7 @@ Understanding these foundational concepts will help you effectively use Ontos.
 - **Schema Definition**: Column names, types, constraints, and descriptions
 - **Quality Guarantees**: Data quality rules and SLOs (Service Level Objectives)
 - **Semantic Linking**: Connect schemas and properties to business concepts
-- **Lifecycle**: Draft → Proposed → Under Review → Approved → Active → Deprecated
+- **Lifecycle**: Draft → Proposed → Under Review → Approved → Active → Certified → Deprecated → Retired
 - **Versioning**: Track contract evolution over time
 
 ### Data Products
@@ -648,12 +648,21 @@ Link individual columns to business properties.
 - **Actions**: Submit for review
 - **Visibility**: Visible to assigned Data Stewards
 
-**How to Propose**:
-1. Open contract details
-2. Click **Propose for Review**
-3. Select reviewer
-4. Add notes
-5. Submit
+**How to Submit for Review**:
+
+**Option 1: Quick Submit**:
+1. Open contract details (status must be Draft)
+2. Click **Submit for Review** button
+3. Contract transitions to Proposed status
+4. Data Stewards are notified
+
+**Option 2: Full Review Request** (recommended):
+1. Open contract details (status must be Draft)
+2. Click **Request...** button
+3. Select **Request Data Steward Review** from the dropdown
+4. Add optional message for the reviewer
+5. Click **Send Request**
+6. Creates formal review workflow with notifications and tracking
 
 #### 3. Under Review
 
@@ -697,7 +706,32 @@ Link individual columns to business properties.
 5. Admin approves deployment
 6. Contract is deployed to Unity Catalog
 
-#### 6. Deprecated
+**Production Operations**:
+- Monitor SLO compliance
+- Track data quality metrics
+- Handle consumer feedback
+- Maintain documentation
+
+#### 6. Certified
+
+- **Who**: Data Steward or Quality Assurance
+- **Actions**: Certify contract for high-value or regulated use cases
+- **Visibility**: Public with certification badge
+
+**What is Certification**:
+- Additional quality verification beyond standard approval
+- Indicates contract meets elevated standards
+- Required for sensitive data or critical applications
+- Optional step for standard contracts
+
+**Certification Criteria**:
+- All SLOs consistently met for 30+ days
+- Complete documentation
+- No outstanding data quality issues
+- Security requirements verified
+- Consumer feedback is positive
+
+#### 7. Deprecated
 
 - **Who**: Data Product Owner
 - **Actions**: Mark as deprecated, set sunset date
@@ -707,6 +741,33 @@ Link individual columns to business properties.
 - Replaced by newer version
 - Business requirements changed
 - Data source no longer available
+
+**Deprecation Process**:
+1. Announce deprecation with timeline (90 days recommended)
+2. Update status to Deprecated
+3. Communicate replacement contract
+4. Support consumer migration
+5. Monitor usage decline
+6. Transition to Retired when no longer in use
+
+#### 8. Retired
+
+- **Who**: Data Product Owner or Admin
+- **Actions**: Archive contract, maintain historical record
+- **Visibility**: Archive only (not visible in active catalogs)
+
+**Terminal State**: Retired is the final state. Contracts cannot transition out of Retired status.
+
+**What Happens**:
+- Contract metadata preserved for audit trail
+- No longer available for new implementations
+- Historical data access may be maintained
+- Documentation kept for compliance purposes
+
+**When to Retire**:
+- All consumers have migrated to replacement
+- Grace period after deprecation has elapsed
+- Data source has been decommissioned
 
 ### Versioning Contracts
 
@@ -1311,7 +1372,7 @@ ON_PASS ASSIGN_TAG last_compliance_check: '2025-01-15'
 
 ```
 MATCH (prod:data_product)
-WHERE prod.status IN ['active', 'published']
+WHERE prod.status IN ['active', 'certified']
 ASSERT prod.owner != 'unknown' AND LENGTH(prod.owner) > 0
 ON_FAIL FAIL 'Active data products must have a valid owner assigned'
 ON_FAIL ASSIGN_TAG needs_attention: 'missing_owner'

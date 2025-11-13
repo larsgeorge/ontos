@@ -3326,14 +3326,17 @@ class DataContractsManager(SearchableAsset):
         if not contract:
             raise ValueError("Contract not found")
         
-        # Define valid status transitions
+        # Define valid status transitions (ODCS lifecycle)
+        # Lifecycle: draft → proposed → under_review → approved → active → certified → deprecated → retired
         valid_transitions = {
-            'draft': ['under_review', 'published'],
-            'under_review': ['draft', 'approved', 'rejected'],
-            'approved': ['published'],
-            'rejected': ['draft'],
-            'published': ['archived'],
-            'archived': []
+            'draft': ['proposed', 'deprecated'],
+            'proposed': ['draft', 'under_review', 'deprecated'],
+            'under_review': ['draft', 'approved', 'deprecated'],
+            'approved': ['active', 'draft', 'deprecated'],
+            'active': ['certified', 'deprecated'],
+            'certified': ['deprecated', 'active'],
+            'deprecated': ['retired', 'active'],
+            'retired': []  # Terminal state
         }
         
         current_status = contract.status or 'draft'
@@ -4625,7 +4628,7 @@ class DataContractsManager(SearchableAsset):
         elif decision == 'reject':
             if from_status not in ('proposed', 'under_review'):
                 raise ValueError(f"Cannot reject from status {contract.status}")
-            contract.status = 'rejected'
+            contract.status = 'draft'  # ODCS: rejected contracts return to draft for revisions
             notification_title = "Contract Review Rejected"
             notification_desc = f"Your contract '{contract.name}' was rejected and needs revisions."
         else:  # clarify

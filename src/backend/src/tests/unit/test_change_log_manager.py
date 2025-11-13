@@ -92,10 +92,10 @@ class TestChangeLogManager:
             entity_id="contract-456",
             action="UPDATE",
             username="admin@example.com",
-            details_json='{"field": "status", "old": "draft", "new": "published"}',
+            details_json='{"field": "status", "old": "draft", "new": "proposed"}',
         )
 
-        assert result.details_json == '{"field": "status", "old": "draft", "new": "published"}'
+        assert result.details_json == '{"field": "status", "old": "draft", "new": "proposed"}'
 
     def test_log_change_without_username(self, manager):
         """Test logging a change without username (system action)."""

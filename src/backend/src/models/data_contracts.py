@@ -8,10 +8,15 @@ import yaml
 
 
 class ContractStatus(Enum):
+    """ODCS lifecycle status values."""
     DRAFT = "draft"
+    PROPOSED = "proposed"
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
     ACTIVE = "active"
+    CERTIFIED = "certified"
     DEPRECATED = "deprecated"
-    ARCHIVED = "archived"
+    RETIRED = "retired"
 
 
 class DataType(Enum):
