@@ -11,9 +11,13 @@ import { AssignedTag } from '@/components/ui/tag-chip';
 // ============================================================================
 
 export enum DataProductStatus {
-  PROPOSED = 'proposed',
   DRAFT = 'draft',
+  SANDBOX = 'sandbox',
+  PROPOSED = 'proposed',
+  UNDER_REVIEW = 'under_review',
+  APPROVED = 'approved',
   ACTIVE = 'active',
+  CERTIFIED = 'certified',
   DEPRECATED = 'deprecated',
   RETIRED = 'retired'
 }

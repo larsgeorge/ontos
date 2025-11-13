@@ -50,6 +50,41 @@ def get_data_products_manager(
 
 # --- Lifecycle transitions (minimal) ---
 
+@router.post('/data-products/{product_id}/move-to-sandbox')
+async def move_product_to_sandbox(
+    product_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
+):
+    """Move a draft product to sandbox for testing (draft → sandbox)."""
+    try:
+        updated_product = manager.move_to_sandbox(product_id, current_user.username if current_user else None)
+        
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action='MOVE_TO_SANDBOX',
+            success=True,
+            details={'product_id': product_id, 'status': updated_product.status}
+        )
+        
+        return {'status': updated_product.status}
+    except ValueError as e:
+        logger.error("Validation error moving product %s to sandbox: %s", product_id, e)
+        raise HTTPException(status_code=409, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Move to sandbox failed for product_id=%s", product_id)
+        raise HTTPException(status_code=500, detail="Failed to move product to sandbox")
+
+
 @router.post('/data-products/{product_id}/submit-certification')
 async def submit_product_certification(
     product_id: str,
@@ -60,12 +95,10 @@ async def submit_product_certification(
     manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
-    """Submit a draft product for certification (draft → proposed)."""
+    """Submit a draft/sandbox product for review (draft/sandbox → proposed)."""
     try:
-        # Delegate to manager
-        updated_product = manager.submit_for_certification(product_id)
-
-        # Audit logging
+        updated_product = manager.submit_for_certification(product_id, current_user.username if current_user else None)
+        
         audit_manager.log_action(
             db=db,
             username=current_user.username,
@@ -75,7 +108,7 @@ async def submit_product_certification(
             success=True,
             details={'product_id': product_id, 'status': updated_product.status}
         )
-
+        
         return {'status': updated_product.status}
     except ValueError as e:
         logger.error("Validation error submitting product %s: %s", product_id, e)
@@ -87,78 +120,74 @@ async def submit_product_certification(
         raise HTTPException(status_code=500, detail="Failed to submit product certification")
 
 
-@router.post('/data-products/{product_id}/certify')
-async def certify_product(
+@router.post('/data-products/{product_id}/approve')
+async def approve_product(
     product_id: str,
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(ApprovalChecker('PRODUCTS'))
 ):
+    """Approve a product under review (under_review → approved)."""
     try:
-        from src.db_models.data_products import DataProductDb
-        product = db.query(DataProductDb).filter(DataProductDb.id == product_id).first()
-        if not product or not product.info:
-            raise HTTPException(status_code=404, detail="Data product not found")
-        cur = (product.info.status or '').upper()
-        if cur != 'PENDING_CERTIFICATION':
-            raise HTTPException(status_code=409, detail=f"Invalid transition from {product.info.status} to CERTIFIED")
-        product.info.status = 'CERTIFIED'
-        db.add(product.info)
-        db.flush()
+        updated_product = manager.approve_product(product_id, current_user.username if current_user else None)
+        
         audit_manager.log_action(
             db=db,
             username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=DATA_PRODUCTS_FEATURE_ID,
-            action='CERTIFY',
+            action='APPROVE',
             success=True,
-            details={ 'product_id': product_id, 'from': cur, 'to': product.info.status }
+            details={'product_id': product_id, 'status': updated_product.status}
         )
-        return { 'status': product.info.status }
+        
+        return {'status': updated_product.status}
+    except ValueError as e:
+        logger.error("Validation error approving product %s: %s", product_id, e)
+        raise HTTPException(status_code=409, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Certify product failed for product_id=%s", product_id)
-        raise HTTPException(status_code=500, detail="Failed to certify product")
+        logger.exception("Approve product failed for product_id=%s", product_id)
+        raise HTTPException(status_code=500, detail="Failed to approve product")
 
 
-@router.post('/data-products/{product_id}/reject-certification')
-async def reject_product_certification(
+@router.post('/data-products/{product_id}/reject')
+async def reject_product(
     product_id: str,
     request: Request,
     db: DBSessionDep,
     audit_manager: AuditManagerDep,
     current_user: AuditCurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
     _: bool = Depends(ApprovalChecker('PRODUCTS'))
 ):
+    """Reject a product review, returning to draft (under_review → draft)."""
     try:
-        from src.db_models.data_products import DataProductDb
-        product = db.query(DataProductDb).filter(DataProductDb.id == product_id).first()
-        if not product or not product.info:
-            raise HTTPException(status_code=404, detail="Data product not found")
-        cur = (product.info.status or '').upper()
-        if cur != 'PENDING_CERTIFICATION':
-            raise HTTPException(status_code=409, detail=f"Invalid transition from {product.info.status} to SANDBOX")
-        product.info.status = 'SANDBOX'
-        db.add(product.info)
-        db.flush()
+        updated_product = manager.reject_product(product_id, current_user.username if current_user else None)
+        
         audit_manager.log_action(
             db=db,
             username=current_user.username,
             ip_address=request.client.host if request.client else None,
             feature=DATA_PRODUCTS_FEATURE_ID,
-            action='REJECT_CERTIFICATION',
+            action='REJECT',
             success=True,
-            details={ 'product_id': product_id, 'from': cur, 'to': product.info.status }
+            details={'product_id': product_id, 'status': updated_product.status}
         )
-        return { 'status': product.info.status }
+        
+        return {'status': updated_product.status}
+    except ValueError as e:
+        logger.error("Validation error rejecting product %s: %s", product_id, e)
+        raise HTTPException(status_code=409, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Reject product certification failed for product_id=%s", product_id)
-        raise HTTPException(status_code=500, detail="Failed to reject product certification")
+        logger.exception("Reject product failed for product_id=%s", product_id)
+        raise HTTPException(status_code=500, detail="Failed to reject product")
 
 
 @router.post('/data-products/{product_id}/publish')
@@ -172,16 +201,14 @@ async def publish_product(
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
     """
-    Publish a proposed product to make it active and available in the marketplace.
+    Publish an approved product to make it active and available in the marketplace.
 
     Validates that all output ports have dataContractId set before allowing publication.
-    ODPS v1.0.0: proposed → active
+    ODPS lifecycle (aligned with ODCS): approved → active
     """
     try:
-        # Delegate to manager
-        updated_product = manager.publish_product(product_id)
-
-        # Audit logging
+        updated_product = manager.publish_product(product_id, current_user.username if current_user else None)
+        
         audit_manager.log_action(
             db=db,
             username=current_user.username,
@@ -191,7 +218,7 @@ async def publish_product(
             success=True,
             details={'product_id': product_id, 'status': updated_product.status}
         )
-
+        
         return {'status': updated_product.status}
     except ValueError as e:
         logger.error("Validation error publishing product %s: %s", product_id, e)
@@ -202,6 +229,44 @@ async def publish_product(
     except Exception as e:
         logger.exception("Publish product failed for product_id=%s", product_id)
         raise HTTPException(status_code=500, detail="Failed to publish product")
+
+
+@router.post('/data-products/{product_id}/certify')
+async def certify_product(
+    product_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(ApprovalChecker('PRODUCTS'))
+):
+    """
+    Certify an active product (active → certified).
+    ODPS lifecycle (aligned with ODCS): Elevated status for high-value products.
+    """
+    try:
+        updated_product = manager.certify_product(product_id, current_user.username if current_user else None)
+        
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action='CERTIFY',
+            success=True,
+            details={'product_id': product_id, 'status': updated_product.status}
+        )
+        
+        return {'status': updated_product.status}
+    except ValueError as e:
+        logger.error("Validation error certifying product %s: %s", product_id, e)
+        raise HTTPException(status_code=409, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Certify product failed for product_id=%s", product_id)
+        raise HTTPException(status_code=500, detail="Failed to certify product")
 
 
 @router.post('/data-products/{product_id}/deprecate')
@@ -215,14 +280,12 @@ async def deprecate_product(
     _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
 ):
     """
-    Deprecate an active product to signal it will be retired soon.
-    ODPS v1.0.0: active → deprecated
+    Deprecate an active or certified product to signal it will be retired soon.
+    ODPS lifecycle: active/certified → deprecated
     """
     try:
-        # Delegate to manager
-        updated_product = manager.deprecate_product(product_id)
-
-        # Audit logging
+        updated_product = manager.deprecate_product(product_id, current_user.username if current_user else None)
+        
         audit_manager.log_action(
             db=db,
             username=current_user.username,
@@ -232,7 +295,7 @@ async def deprecate_product(
             success=True,
             details={'product_id': product_id, 'status': updated_product.status}
         )
-
+        
         return {'status': updated_product.status}
     except ValueError as e:
         logger.error("Validation error deprecating product %s: %s", product_id, e)
@@ -242,6 +305,59 @@ async def deprecate_product(
     except Exception as e:
         logger.exception("Deprecate product failed for product_id=%s", product_id)
         raise HTTPException(status_code=500, detail="Failed to deprecate product")
+
+
+@router.post('/data-products/{product_id}/request-review')
+async def request_product_review(
+    product_id: str,
+    request: Request,
+    db: DBSessionDep,
+    audit_manager: AuditManagerDep,
+    current_user: AuditCurrentUserDep,
+    manager: DataProductsManager = Depends(get_data_products_manager),
+    _: bool = Depends(PermissionChecker(DATA_PRODUCTS_FEATURE_ID, FeatureAccessLevel.READ_WRITE))
+):
+    """
+    Request a data steward review for a product.
+    Transitions draft/sandbox → proposed → under_review with notifications.
+    """
+    from pydantic import BaseModel
+    
+    class ReviewRequest(BaseModel):
+        reviewer_email: str
+        message: Optional[str] = None
+    
+    try:
+        body = await request.json()
+        review_request = ReviewRequest(**body)
+        
+        result = manager.request_review(
+            product_id=product_id,
+            reviewer_email=review_request.reviewer_email,
+            requester_email=current_user.username if current_user else "unknown",
+            message=review_request.message,
+            current_user=current_user.username if current_user else None
+        )
+        
+        audit_manager.log_action(
+            db=db,
+            username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            feature=DATA_PRODUCTS_FEATURE_ID,
+            action='REQUEST_REVIEW',
+            success=True,
+            details={'product_id': product_id, 'reviewer': review_request.reviewer_email}
+        )
+        
+        return result
+    except ValueError as e:
+        logger.error("Validation error requesting review for product %s: %s", product_id, e)
+        raise HTTPException(status_code=409, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Request review failed for product_id=%s", product_id)
+        raise HTTPException(status_code=500, detail="Failed to request product review")
 
 # --- Contract-Product Integration Endpoints ---
 

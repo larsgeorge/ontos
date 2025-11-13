@@ -371,9 +371,9 @@ class TestDataProductsManager:
     def test_publish_product_success(
         self, manager, db_session, sample_product_data
     ):
-        """Test publishing a product."""
+        """Test publishing an approved product."""
         # Arrange
-        sample_product_data["status"] = "proposed"
+        sample_product_data["status"] = "approved"
         # Add required output port with contract
         sample_product_data["outputPorts"] = [
             {
@@ -389,14 +389,14 @@ class TestDataProductsManager:
 
         # Assert
         assert result is not None
-        # Status should be active
+        assert result.status == DataProductStatus.ACTIVE.value
 
     def test_publish_product_missing_contracts_fails(
         self, manager, db_session, sample_product_data
     ):
         """Test that publishing without contracts fails."""
         # Arrange
-        sample_product_data["status"] = "proposed"
+        sample_product_data["status"] = "approved"
         # No output ports with contracts
         created = manager.create_product(sample_product_data, db=db_session)
 

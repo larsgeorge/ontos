@@ -1,36 +1,58 @@
 /**
- * ODPS v1.0.0 Lifecycle State Machine
+ * ODPS Lifecycle State Machine (aligned with ODCS)
  *
- * Implements the Open Data Product Standard lifecycle transitions.
+ * Implements the unified lifecycle transitions for Data Products.
  * Reference: https://github.com/bitol-io/open-data-product-standard
  */
 
 import { DataProductStatus } from '@/types/data-product';
 
 /**
- * Defines allowed status transitions for ODPS v1.0.0 lifecycle.
+ * Defines allowed status transitions for ODPS lifecycle (aligned with ODCS).
  *
  * Lifecycle flow:
- * proposed → draft → active → deprecated → retired
+ * draft → [sandbox] → proposed → under_review → approved → active → certified → deprecated → retired
  *
- * Additional rules:
- * - Can go back from draft to proposed (refinement)
- * - Can skip proposed and start at draft
- * - Can jump from any status to deprecated (emergency deprecation)
+ * Key rules:
+ * - Sandbox is optional for testing before review
+ * - Can return to draft from review states for revisions
+ * - Can jump to deprecated from any status (emergency deprecation)
+ * - Certified is elevated status after active
  * - Retired is terminal (no transitions out)
  */
 export const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  [DataProductStatus.PROPOSED]: [
-    DataProductStatus.DRAFT,
+  [DataProductStatus.DRAFT]: [
+    DataProductStatus.SANDBOX,
+    DataProductStatus.PROPOSED,
     DataProductStatus.DEPRECATED, // Emergency deprecation
   ],
-  [DataProductStatus.DRAFT]: [
-    DataProductStatus.PROPOSED, // Back to refinement
+  [DataProductStatus.SANDBOX]: [
+    DataProductStatus.DRAFT,
+    DataProductStatus.PROPOSED,
+    DataProductStatus.DEPRECATED, // Emergency deprecation
+  ],
+  [DataProductStatus.PROPOSED]: [
+    DataProductStatus.DRAFT, // Back for revisions
+    DataProductStatus.UNDER_REVIEW,
+    DataProductStatus.DEPRECATED, // Emergency deprecation
+  ],
+  [DataProductStatus.UNDER_REVIEW]: [
+    DataProductStatus.DRAFT, // Rejected, needs revisions
+    DataProductStatus.APPROVED,
+    DataProductStatus.DEPRECATED, // Emergency deprecation
+  ],
+  [DataProductStatus.APPROVED]: [
     DataProductStatus.ACTIVE,
+    DataProductStatus.DRAFT, // Back for revisions
     DataProductStatus.DEPRECATED, // Emergency deprecation
   ],
   [DataProductStatus.ACTIVE]: [
+    DataProductStatus.CERTIFIED, // Elevate to certified
     DataProductStatus.DEPRECATED,
+  ],
+  [DataProductStatus.CERTIFIED]: [
+    DataProductStatus.DEPRECATED,
+    DataProductStatus.ACTIVE, // Demote from certified
   ],
   [DataProductStatus.DEPRECATED]: [
     DataProductStatus.RETIRED,
@@ -50,23 +72,47 @@ export interface StatusConfig {
 }
 
 export const STATUS_CONFIG: Record<string, StatusConfig> = {
+  [DataProductStatus.DRAFT]: {
+    label: 'Draft',
+    description: 'Initial development, not yet in review',
+    variant: 'secondary',
+    icon: '✏️',
+  },
+  [DataProductStatus.SANDBOX]: {
+    label: 'Sandbox',
+    description: 'Testing and validation phase',
+    variant: 'secondary',
+    icon: '🧪',
+  },
   [DataProductStatus.PROPOSED]: {
     label: 'Proposed',
-    description: 'Initial proposal, not yet in development',
+    description: 'Submitted for review',
     variant: 'secondary',
     icon: '💡',
   },
-  [DataProductStatus.DRAFT]: {
-    label: 'Draft',
-    description: 'Under development, not yet published',
-    variant: 'secondary',
-    icon: '✏️',
+  [DataProductStatus.UNDER_REVIEW]: {
+    label: 'Under Review',
+    description: 'Being reviewed by data stewards',
+    variant: 'outline',
+    icon: '👀',
+  },
+  [DataProductStatus.APPROVED]: {
+    label: 'Approved',
+    description: 'Approved by stewards, ready to publish',
+    variant: 'default',
+    icon: '✔️',
   },
   [DataProductStatus.ACTIVE]: {
     label: 'Active',
     description: 'Published and available for consumption',
     variant: 'default',
     icon: '✅',
+  },
+  [DataProductStatus.CERTIFIED]: {
+    label: 'Certified',
+    description: 'Verified for high-value or regulated use',
+    variant: 'default',
+    icon: '🏅',
   },
   [DataProductStatus.DEPRECATED]: {
     label: 'Deprecated',
@@ -165,12 +211,20 @@ export function getRecommendedAction(currentStatus: string): string | null {
   const normalizedCurrent = currentStatus.toLowerCase();
 
   switch (normalizedCurrent) {
-    case DataProductStatus.PROPOSED:
-      return 'Move to Draft to start development';
     case DataProductStatus.DRAFT:
-      return 'Publish to Active when ready for production';
+      return 'Move to Sandbox for testing or submit for review';
+    case DataProductStatus.SANDBOX:
+      return 'Submit for review when testing is complete';
+    case DataProductStatus.PROPOSED:
+      return 'Wait for steward to initiate review';
+    case DataProductStatus.UNDER_REVIEW:
+      return 'Steward will approve or request revisions';
+    case DataProductStatus.APPROVED:
+      return 'Publish to Active to make available';
     case DataProductStatus.ACTIVE:
-      return 'Mark as Deprecated when planning retirement';
+      return 'Certify for elevated status or deprecate when retiring';
+    case DataProductStatus.CERTIFIED:
+      return 'Deprecate when planning retirement';
     case DataProductStatus.DEPRECATED:
       return 'Retire when no longer in use';
     case DataProductStatus.RETIRED:

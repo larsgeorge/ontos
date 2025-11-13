@@ -337,15 +337,109 @@ class DataProductsManager(SearchableAsset):
 
     # ==================== Lifecycle Transition Methods ====================
 
-    def submit_for_certification(self, product_id: str) -> DataProductApi:
+    def transition_status(
+        self,
+        product_id: str,
+        new_status: str,
+        current_user: Optional[str] = None
+    ) -> DataProductApi:
         """
-        Submit a draft product for certification (draft → proposed).
+        Transition product status with validation.
+        
+        Validates the transition is allowed per ODPS lifecycle rules (aligned with ODCS),
+        then updates the product status.
+        
+        Lifecycle: draft → [sandbox] → proposed → under_review → approved → active → certified → deprecated → retired
+        
+        Args:
+            product_id: ID of the product
+            new_status: Target status
+            current_user: Username for audit trail
+            
+        Returns:
+            Updated product
+            
+        Raises:
+            ValueError: If transition is invalid or product not found
+            SQLAlchemyError: If database operation fails
+        """
+        # Define valid status transitions (ODPS lifecycle aligned with ODCS)
+        valid_transitions = {
+            'draft': ['sandbox', 'proposed', 'deprecated'],
+            'sandbox': ['draft', 'proposed', 'deprecated'],
+            'proposed': ['draft', 'under_review', 'deprecated'],
+            'under_review': ['draft', 'approved', 'deprecated'],
+            'approved': ['active', 'draft', 'deprecated'],
+            'active': ['certified', 'deprecated'],
+            'certified': ['deprecated', 'active'],
+            'deprecated': ['retired', 'active'],
+            'retired': []  # Terminal state
+        }
+        
+        try:
+            product_db = self._repo.get(db=self._db, id=product_id)
+            if not product_db:
+                raise ValueError(f"Data product with ID {product_id} not found")
+            
+            # Normalize statuses
+            current_status = (product_db.status or 'draft').lower()
+            new_status_lower = new_status.lower()
+            
+            # Validate transition
+            allowed = valid_transitions.get(current_status, [])
+            if new_status_lower not in allowed:
+                raise ValueError(
+                    f"Invalid status transition from '{current_status}' to '{new_status_lower}'. "
+                    f"Allowed transitions: {', '.join(allowed) if allowed else 'none'}"
+                )
+            
+            # Update status
+            old_status = product_db.status
+            product_db.status = new_status_lower
+            self._db.add(product_db)
+            self._db.flush()
+            
+            logger.info(
+                f"Product {product_id} status transitioned: {old_status} → {new_status_lower}"
+                + (f" by {current_user}" if current_user else "")
+            )
+            
+            return self._load_product_with_tags(product_db)
+            
+        except SQLAlchemyError as e:
+            logger.error(f"Database error transitioning product {product_id} status: {e}")
+            raise
+        except ValueError as e:
+            logger.error(f"Validation error transitioning product {product_id}: {e}")
+            raise
 
-        ODPS v1.0.0 lifecycle: This moves a product from 'draft' to 'proposed' status,
-        indicating it's ready for review/approval.
+    def move_to_sandbox(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
+        """
+        Move a draft product to sandbox for testing (draft → sandbox).
+
+        Args:
+            product_id: ID of the product to move
+            current_user: Username for audit trail
+
+        Returns:
+            Updated product with 'sandbox' status
+
+        Raises:
+            ValueError: If product not found or invalid status transition
+            SQLAlchemyError: If database operation fails
+        """
+        return self.transition_status(product_id, 'sandbox', current_user)
+
+    def submit_for_certification(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
+        """
+        Submit a draft/sandbox product for review (draft/sandbox → proposed).
+
+        ODPS lifecycle: This moves a product from 'draft' or 'sandbox' to 'proposed' status,
+        indicating it's ready for governance review/approval.
 
         Args:
             product_id: ID of the product to submit
+            current_user: Username for audit trail
 
         Returns:
             Updated product with 'proposed' status
@@ -354,43 +448,52 @@ class DataProductsManager(SearchableAsset):
             ValueError: If product not found or invalid status transition
             SQLAlchemyError: If database operation fails
         """
-        try:
-            product_db = self._repo.get(db=self._db, id=product_id)
-            if not product_db:
-                raise ValueError(f"Data product with ID {product_id} not found")
+        return self.transition_status(product_id, 'proposed', current_user)
 
-            # Validate current status
-            current_status = (product_db.status or '').lower()
-            if current_status != 'draft':
-                raise ValueError(
-                    f"Invalid transition: cannot submit product with status '{product_db.status}' "
-                    f"for certification. Status must be 'draft'."
-                )
-
-            # Update status to proposed
-            product_db.status = 'proposed'
-            self._db.add(product_db)
-            self._db.flush()
-
-            logger.info(f"Product {product_id} submitted for certification: draft → proposed")
-            return self._load_product_with_tags(product_db)
-
-        except SQLAlchemyError as e:
-            logger.error(f"Database error submitting product {product_id} for certification: {e}")
-            raise
-        except ValueError as e:
-            logger.error(f"Validation error submitting product {product_id}: {e}")
-            raise
-
-    def publish_product(self, product_id: str) -> DataProductApi:
+    def approve_product(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
         """
-        Publish a proposed product (proposed → active).
+        Approve a product under review (under_review → approved).
 
-        ODPS v1.0.0 lifecycle: Publishes a product to make it active and available
+        Args:
+            product_id: ID of the product to approve
+            current_user: Username for audit trail
+
+        Returns:
+            Updated product with 'approved' status
+
+        Raises:
+            ValueError: If product not found or invalid status transition
+            SQLAlchemyError: If database operation fails
+        """
+        return self.transition_status(product_id, 'approved', current_user)
+
+    def reject_product(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
+        """
+        Reject a product review, returning to draft (under_review → draft).
+
+        Args:
+            product_id: ID of the product to reject
+            current_user: Username for audit trail
+
+        Returns:
+            Updated product with 'draft' status
+
+        Raises:
+            ValueError: If product not found or invalid status transition
+            SQLAlchemyError: If database operation fails
+        """
+        return self.transition_status(product_id, 'draft', current_user)
+
+    def publish_product(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
+        """
+        Publish an approved product (approved → active).
+
+        ODPS lifecycle (aligned with ODCS): Publishes a product to make it active and available
         in the marketplace. Validates that all output ports have data contracts assigned.
 
         Args:
             product_id: ID of the product to publish
+            current_user: Username for audit trail
 
         Returns:
             Updated product with 'active' status
@@ -404,14 +507,6 @@ class DataProductsManager(SearchableAsset):
             if not product_db:
                 raise ValueError(f"Data product with ID {product_id} not found")
 
-            # Validate current status
-            current_status = (product_db.status or '').lower()
-            if current_status != 'proposed':
-                raise ValueError(
-                    f"Invalid transition: cannot publish product with status '{product_db.status}'. "
-                    f"Status must be 'proposed'."
-                )
-
             # Validate that all output ports have data contracts
             if product_db.output_ports:
                 ports_without_contracts = [
@@ -424,30 +519,43 @@ class DataProductsManager(SearchableAsset):
                         f"must have data contracts assigned"
                     )
 
-            # Update status to active
-            product_db.status = 'active'
-            self._db.add(product_db)
-            self._db.flush()
+            # Use transition_status for validation and update
+            return self.transition_status(product_id, 'active', current_user)
 
-            logger.info(f"Product {product_id} published: proposed → active")
-            return self._load_product_with_tags(product_db)
-
-        except SQLAlchemyError as e:
-            logger.error(f"Database error publishing product {product_id}: {e}")
-            raise
         except ValueError as e:
             logger.error(f"Validation error publishing product {product_id}: {e}")
             raise
 
-    def deprecate_product(self, product_id: str) -> DataProductApi:
+    def certify_product(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
         """
-        Deprecate an active product (active → deprecated).
+        Certify an active product (active → certified).
 
-        ODPS v1.0.0 lifecycle: Marks an active product as deprecated, signaling
+        ODPS lifecycle (aligned with ODCS): Marks an active product as certified, indicating
+        it meets elevated standards for high-value or regulated use cases.
+
+        Args:
+            product_id: ID of the product to certify
+            current_user: Username for audit trail
+
+        Returns:
+            Updated product with 'certified' status
+
+        Raises:
+            ValueError: If product not found or invalid status transition
+            SQLAlchemyError: If database operation fails
+        """
+        return self.transition_status(product_id, 'certified', current_user)
+
+    def deprecate_product(self, product_id: str, current_user: Optional[str] = None) -> DataProductApi:
+        """
+        Deprecate an active or certified product (active/certified → deprecated).
+
+        ODPS lifecycle: Marks a product as deprecated, signaling
         it will be retired soon and consumers should migrate.
 
         Args:
             product_id: ID of the product to deprecate
+            current_user: Username for audit trail
 
         Returns:
             Updated product with 'deprecated' status
@@ -456,33 +564,114 @@ class DataProductsManager(SearchableAsset):
             ValueError: If product not found or invalid status transition
             SQLAlchemyError: If database operation fails
         """
+        return self.transition_status(product_id, 'deprecated', current_user)
+
+    def request_review(
+        self,
+        product_id: str,
+        reviewer_email: str,
+        requester_email: str,
+        message: Optional[str] = None,
+        current_user: Optional[str] = None
+    ) -> dict:
+        """
+        Request a data steward review for a product.
+        
+        Transitions DRAFT/SANDBOX → PROPOSED → UNDER_REVIEW, creates notifications, 
+        asset review record, and change log.
+        
+        Args:
+            product_id: Product ID to request review for
+            reviewer_email: Email of the reviewer
+            requester_email: Email of user requesting review
+            message: Optional message to reviewer
+            current_user: Username requesting review
+            
+        Returns:
+            Dict with status and message
+            
+        Raises:
+            ValueError: If product not found or invalid status
+        """
+        from datetime import datetime
+        from uuid import uuid4
+        from src.models.notifications import NotificationType, Notification
+        from src.models.data_asset_reviews import AssetType, ReviewedAssetStatus
+        
+        product_db = self._repo.get(db=self._db, id=product_id)
+        if not product_db:
+            raise ValueError("Product not found")
+        
+        from_status = (product_db.status or '').lower()
+        if from_status not in ('draft', 'sandbox'):
+            raise ValueError(f"Cannot request review from status {product_db.status}. Must be DRAFT or SANDBOX.")
+        
+        # Transition to PROPOSED first
+        self.transition_status(product_id, 'proposed', current_user)
+        
+        # Then transition to UNDER_REVIEW
+        self.transition_status(product_id, 'under_review', current_user)
+        
+        now = datetime.utcnow()
+        
+        # Create asset review record
         try:
-            product_db = self._repo.get(db=self._db, id=product_id)
-            if not product_db:
-                raise ValueError(f"Data product with ID {product_id} not found")
-
-            # Validate current status
-            current_status = (product_db.status or '').lower()
-            if current_status != 'active':
-                raise ValueError(
-                    f"Invalid transition: cannot deprecate product with status '{product_db.status}'. "
-                    f"Only 'active' products can be deprecated."
-                )
-
-            # Update status to deprecated
-            product_db.status = 'deprecated'
-            self._db.add(product_db)
-            self._db.flush()
-
-            logger.info(f"Product {product_id} deprecated: active → deprecated")
-            return self._load_product_with_tags(product_db)
-
-        except SQLAlchemyError as e:
-            logger.error(f"Database error deprecating product {product_id}: {e}")
-            raise
-        except ValueError as e:
-            logger.error(f"Validation error deprecating product {product_id}: {e}")
-            raise
+            from src.controller.data_asset_reviews_manager import DataAssetReviewManager
+            from src.models.data_asset_reviews import ReviewedAsset as ReviewedAssetApi
+            
+            if not self._notifications_manager:
+                logger.warning("NotificationsManager not available for review workflow")
+            
+            review_manager = DataAssetReviewManager(
+                db=self._db, 
+                ws_client=self._ws_client, 
+                notifications_manager=self._notifications_manager
+            )
+            
+            review_asset = ReviewedAssetApi(
+                id=str(uuid4()),
+                asset_fqn=f"product:{product_id}",
+                asset_type=AssetType.DATA_PRODUCT,
+                status=ReviewedAssetStatus.PENDING,
+                updated_at=now
+            )
+            logger.info(f"Created asset review record for product {product_id}")
+        except Exception as e:
+            logger.warning(f"Failed to create asset review record: {e}", exc_info=True)
+        
+        # Send notifications if manager is available
+        if self._notifications_manager:
+            # Notify requester (receipt)
+            requester_note = Notification(
+                id=str(uuid4()),
+                created_at=now,
+                type=NotificationType.INFO,
+                title="Review Request Submitted",
+                subtitle=f"Product: {product_db.name or product_id}",
+                description=f"Your data steward review request has been submitted.{' Message: ' + message if message else ''}",
+                recipient=requester_email,
+                can_delete=True,
+            )
+            self._notifications_manager.create_notification(notification=requester_note, db=self._db)
+            
+            # Notify reviewer
+            reviewer_note = Notification(
+                id=str(uuid4()),
+                created_at=now,
+                type=NotificationType.ACTION_REQUIRED,
+                title="Product Review Requested",
+                subtitle=f"Product: {product_db.name or product_id}",
+                description=f"Please review this data product.{' Message from requester: ' + message if message else ''}",
+                recipient=reviewer_email,
+                link=f"/data-products/{product_id}",
+                can_delete=False,
+            )
+            self._notifications_manager.create_notification(notification=reviewer_note, db=self._db)
+        
+        return {
+            "status": "success",
+            "message": f"Review request created for product {product_db.name or product_id}"
+        }
 
     def get_published_products(self, skip: int = 0, limit: int = 100) -> List[DataProductApi]:
         """

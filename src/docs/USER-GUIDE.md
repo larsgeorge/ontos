@@ -993,13 +993,19 @@ Links:
 
 ### Product Lifecycle
 
-Data Products follow a structured lifecycle with state transitions and governance checkpoints.
+Data Products follow a structured lifecycle aligned with Data Contracts (ODPS aligned with ODCS standard).
 
 #### Complete Lifecycle Flow
 
 ```
-DRAFT → SANDBOX → PENDING_CERTIFICATION → CERTIFIED → ACTIVE → DEPRECATED
+Draft → [Sandbox] → Proposed → Under Review → Approved → Active → Certified → Deprecated → Retired
 ```
+
+**Key Points**:
+- Sandbox is optional for testing before review
+- Same governance workflow as Data Contracts (Proposed → Under Review → Approved)
+- Certified is an elevated status after Active (not a prerequisite)
+- Retired is terminal
 
 #### 1. Draft
 
@@ -1017,7 +1023,7 @@ DRAFT → SANDBOX → PENDING_CERTIFICATION → CERTIFIED → ACTIVE → DEPRECA
 1. Navigate to **Products** → **Create Product**
 2. Or click **Create Data Product** from a contract details page
 
-#### 2. Sandbox
+#### 2. Sandbox (Optional)
 
 - **Who**: Data Engineers
 - **Actions**: Build and test product implementation
@@ -1031,31 +1037,48 @@ DRAFT → SANDBOX → PENDING_CERTIFICATION → CERTIFIED → ACTIVE → DEPRECA
 - Document usage
 - Deploy to sandbox environment
 
+**How to Move to Sandbox**:
+1. Open product details (status must be Draft)
+2. Click **Move to Sandbox** button
+3. Product transitions to Sandbox status
+
 **Key Requirement**: Each output port should have a data contract assigned via the `dataContractId` field.
 
-#### 3. Pending Certification
+**Note**: You can skip Sandbox and submit directly from Draft for review.
+
+#### 3. Proposed
 
 - **Who**: Data Product Owner
-- **Actions**: Submit for formal certification review
-- **Visibility**: Visible to Data Stewards and approvers
+- **Actions**: Submit for review
+- **Visibility**: Visible to assigned Data Stewards
 
-**How to Submit**:
-1. Open product details
-2. Click **Submit for Certification**
-3. System validates product is in SANDBOX status
-4. Status changes to PENDING_CERTIFICATION
+**How to Submit for Review**:
+
+**Option 1: Quick Submit**:
+1. Open product details (status must be Draft or Sandbox)
+2. Click **Submit for Review** button
+3. Product transitions to Proposed status
+
+**Option 2: Full Review Request** (recommended):
+1. Open product details (status must be Draft or Sandbox)
+2. Click **Request...** button
+3. Select **Request Data Steward Review** from the dropdown
+4. Add optional message for the reviewer
+5. Click **Send Request**
+6. Creates formal review workflow with notifications and tracking
+
+#### 4. Under Review
+
+- **Who**: Data Steward
+- **Actions**: Review product implementation and documentation
+- **Visibility**: Visible to Data Stewards and owner
 
 **What Happens**:
-- Product becomes visible to Data Stewards
-- Approval workflow is triggered
-- Team waits for certification decision
+- Product is being actively reviewed by Data Steward
+- Review workflow is in progress
+- Team waits for approval or rejection
 
-#### 4. Certification Review
-
-- **Who**: Data Steward (with approval authority)
-- **Actions**: Review and verify product meets standards
-
-**Certification Criteria**:
+**Review Criteria**:
 - ✓ All output ports have approved contracts linked
 - ✓ Implements contract specifications correctly
 - ✓ Passes data quality checks
@@ -1065,18 +1088,22 @@ DRAFT → SANDBOX → PENDING_CERTIFICATION → CERTIFIED → ACTIVE → DEPRECA
 - ✓ Monitoring is in place
 - ✓ SLOs are achievable
 
-**Review Actions**:
-1. Open product details
-2. Review implementation and documentation
-3. Choose action:
-   - **Certify**: Approve the product → status becomes CERTIFIED
-   - **Reject**: Send back to SANDBOX for fixes
+#### 5. Approved
 
-#### 5. Certified
-
-- **Who**: Data Product Owner
-- **Actions**: Prepare for production publication
+- **Who**: Data Steward (completes approval)
+- **Actions**: Product approved by governance, ready to publish
 - **Visibility**: Organization-wide (metadata visible)
+
+**Approval Actions**:
+1. Data Steward opens product details
+2. Reviews implementation and documentation
+3. Clicks **Approve** button
+4. Product transitions to Approved status
+
+**If Rejected**:
+- Data Steward clicks **Reject** button
+- Product returns to Draft status for revisions
+- Owner is notified with rejection reason
 
 **Ready for Publication**:
 - Product has been approved by governance
@@ -1093,12 +1120,12 @@ DRAFT → SANDBOX → PENDING_CERTIFICATION → CERTIFIED → ACTIVE → DEPRECA
 - **Visibility**: Public in catalog and marketplace
 
 **How to Publish**:
-1. Open product details
+1. Open product details (status must be Approved)
 2. Click **Publish to Marketplace**
 3. System validates:
-   - Status is CERTIFIED
+   - Status is Approved
    - All output ports have `dataContractId` set
-4. Status changes to ACTIVE
+4. Product transitions to Active status
 
 **What Happens**:
 - Product appears in Discovery/Marketplace section
@@ -1114,24 +1141,72 @@ DRAFT → SANDBOX → PENDING_CERTIFICATION → CERTIFIED → ACTIVE → DEPRECA
 - Plan iterations and improvements
 - Maintain linked contracts
 
-#### 7. Deprecated
+#### 7. Certified
+
+- **Who**: Data Steward or Quality Assurance
+- **Actions**: Certify product for high-value or regulated use cases
+- **Visibility**: Public with certification badge
+
+**What is Certification**:
+- Additional quality verification beyond standard approval
+- Indicates product meets elevated standards
+- Required for sensitive data or critical applications
+- Optional step for standard products
+
+**How to Certify**:
+1. Data Steward opens product details (status must be Active)
+2. Clicks **Certify** button
+3. Product transitions to Certified status
+
+**Certification Criteria**:
+- All SLOs consistently met for 30+ days
+- Complete documentation
+- No outstanding data quality issues
+- Security requirements verified
+- Consumer feedback is positive
+
+#### 8. Deprecated
 
 - **Who**: Data Product Owner
 - **Actions**: Mark as deprecated, communicate sunset
 - **Visibility**: Public with deprecation warning
 
+**When to Deprecate**:
+- Replaced by newer version
+- Business requirements changed
+- Data source no longer available
+
 **How to Deprecate**:
-1. Open product details
+1. Open product details (status must be Active or Certified)
 2. Click **Deprecate**
 3. Confirm deprecation
-4. Status changes to DEPRECATED
+4. Product transitions to Deprecated status
 
 **Deprecation Process**:
 1. Announce deprecation with timeline (90 days recommended)
 2. Communicate replacement product
 3. Support consumer migration
 4. Monitor usage decline
-5. Eventually retire and archive
+5. Transition to Retired when no longer in use
+
+#### 9. Retired
+
+- **Who**: Data Product Owner or Admin
+- **Actions**: Archive product, maintain historical record
+- **Visibility**: Archive only (not visible in active catalogs)
+
+**Terminal State**: Retired is the final state. Products cannot transition out of Retired status.
+
+**What Happens**:
+- Product metadata preserved for audit trail
+- No longer available for new implementations
+- Historical data access may be maintained
+- Documentation kept for compliance purposes
+
+**When to Retire**:
+- All consumers have migrated to replacement
+- Grace period after deprecation has elapsed
+- Data source has been decommissioned
 
 ### Tagging Products
 

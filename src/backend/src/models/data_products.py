@@ -25,12 +25,16 @@ logger = get_logger(__name__)
 # ============================================================================
 
 class DataProductStatus(str, Enum):
-    """ODPS v1.0.0 Status values"""
-    PROPOSED = "proposed"
+    """ODPS lifecycle status values (aligned with ODCS)."""
     DRAFT = "draft"
+    SANDBOX = "sandbox"  # Optional testing state
+    PROPOSED = "proposed"
+    UNDER_REVIEW = "under_review"  # Formal review
+    APPROVED = "approved"  # Approved but not yet active
     ACTIVE = "active"
+    CERTIFIED = "certified"  # Elevated status after active
     DEPRECATED = "deprecated"
-    RETIRED = "retired"
+    RETIRED = "retired"  # Terminal state
 
 
 # ============================================================================
