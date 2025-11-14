@@ -604,6 +604,7 @@ export default function SemanticModelsView() {
   // Tabs removed; show sections in a single view
   const [stats, setStats] = useState<TaxonomyStats | null>(null);
   const [showKnowledgeGraph, setShowKnowledgeGraph] = useState(false);
+  const [hiddenRoots, setHiddenRoots] = useState<Set<string>>(new Set());
   // const [graphExpanded, setGraphExpanded] = useState<Set<string>>(new Set());
 
   // Legacy form state removed - Phase 0 (read-only ontologies)
@@ -784,20 +785,114 @@ export default function SemanticModelsView() {
       (c) => c.concept_type === 'class' || c.concept_type === 'concept'
     );
 
+    // Identify root nodes (nodes with no parents)
+    const rootNodes = visibleConcepts.filter(
+      (c) => !c.parent_concepts || c.parent_concepts.length === 0
+    );
+
+    // Detect dark mode
+    const isDarkMode = document.documentElement.classList.contains('dark');
+
+    // Generate a distinct color for each root with better visibility in both modes
+    const generateColor = (index: number, total: number): string => {
+      const hue = (index * 360) / total;
+      // Use higher saturation and adjust lightness for dark mode
+      const saturation = 70 + (index % 2) * 10;
+      const lightness = isDarkMode ? (60 + (index % 2) * 5) : (45 + (index % 2) * 5);
+      return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    };
+
+    const rootColors = new Map<string, string>();
+    rootNodes.forEach((root, index) => {
+      rootColors.set(root.iri, generateColor(index, rootNodes.length));
+    });
+
+    // Build a map from each node to its root node
+    const nodeToRoot = new Map<string, string>();
+    const conceptMap = new Map(visibleConcepts.map(c => [c.iri, c]));
+
+    const findRoot = (iri: string, visited = new Set<string>()): string | null => {
+      if (visited.has(iri)) return null; // Prevent infinite loops
+      visited.add(iri);
+      
+      const concept = conceptMap.get(iri);
+      if (!concept) return null;
+      
+      // If no parents, this is a root
+      if (!concept.parent_concepts || concept.parent_concepts.length === 0) {
+        return iri;
+      }
+      
+      // Otherwise, find root of first parent
+      for (const parentIri of concept.parent_concepts) {
+        const root = findRoot(parentIri, visited);
+        if (root) return root;
+      }
+      
+      return null;
+    };
+
+    visibleConcepts.forEach(concept => {
+      const root = findRoot(concept.iri);
+      if (root) {
+        nodeToRoot.set(concept.iri, root);
+      }
+    });
+
+    // Get all descendants of a root (including the root itself)
+    const getRootDescendants = (rootIri: string): Set<string> => {
+      const descendants = new Set<string>([rootIri]);
+      const queue = [rootIri];
+      
+      while (queue.length > 0) {
+        const currentIri = queue.shift()!;
+        const concept = conceptMap.get(currentIri);
+        
+        if (concept?.child_concepts) {
+          concept.child_concepts.forEach(childIri => {
+            if (!descendants.has(childIri) && conceptMap.has(childIri)) {
+              descendants.add(childIri);
+              queue.push(childIri);
+            }
+          });
+        }
+      }
+      
+      return descendants;
+    };
+
+    // Filter nodes based on hidden roots
+    const visibleNodeIris = new Set<string>();
+    rootNodes.forEach(root => {
+      if (!hiddenRoots.has(root.iri)) {
+        const descendants = getRootDescendants(root.iri);
+        descendants.forEach(iri => visibleNodeIris.add(iri));
+      }
+    });
+
+    const filteredConcepts = visibleConcepts.filter(c => visibleNodeIris.has(c.iri));
+
     // Transform concepts to graph data
-    const graphNodes = visibleConcepts.map(concept => ({
-      id: concept.iri,
-      label: concept.label || concept.iri.split(/[/#]/).pop() || 'Unknown',
-      sourceContext: concept.source_context,
-      concept: concept,
-      childCount: concept.child_concepts?.length || 0,
-      parentCount: concept.parent_concepts?.length || 0
-    }));
+    const graphNodes = filteredConcepts.map(concept => {
+      const rootIri = nodeToRoot.get(concept.iri) || concept.iri;
+      const color = rootColors.get(rootIri) || '#64748b';
+      
+      return {
+        id: concept.iri,
+        label: concept.label || concept.iri.split(/[/#]/).pop() || 'Unknown',
+        sourceContext: concept.source_context,
+        concept: concept,
+        childCount: concept.child_concepts?.length || 0,
+        parentCount: concept.parent_concepts?.length || 0,
+        color: color,
+        rootIri: rootIri
+      };
+    });
 
     const graphLinks: any[] = [];
-    visibleConcepts.forEach(concept => {
+    filteredConcepts.forEach(concept => {
       concept.child_concepts.forEach(childIri => {
-        const childExists = visibleConcepts.some(c => c.iri === childIri);
+        const childExists = filteredConcepts.some(c => c.iri === childIri);
         if (childExists) {
           graphLinks.push({
             source: concept.iri,
@@ -807,85 +902,134 @@ export default function SemanticModelsView() {
       });
     });
 
-    const sourceColors = {
-      'corporate-global': '#3b82f6',
-      'manufacturing-lob': '#10b981', 
-      'retail-banking-dept': '#f59e0b',
-      'quality-assurance-dept': '#8b5cf6',
-      'financial-services-lob': '#ef4444',
-      'sporting_goods_skos.ttl': '#06b6d4',
-      'banking_skos.ttl': '#84cc16',
-      'health_science_rdfs.rdf': '#ec4899',
-      'banking_rdfs.rdf': '#f97316'
+    const toggleRootVisibility = (rootIri: string) => {
+      setHiddenRoots(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(rootIri)) {
+          newSet.delete(rootIri);
+        } else {
+          newSet.add(rootIri);
+        }
+        return newSet;
+      });
     };
 
     return (
-      <div className="h-full border rounded-lg bg-white overflow-hidden">
-        <ForceGraph2D
-              width={800}
-              height={800}
-              graphData={{
-                nodes: graphNodes,
-                links: graphLinks
-              }}
-              nodeAutoColorBy="sourceContext"
-              nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-                const label = node.label;
-                const fontSize = Math.max(8, Math.min(14, 12 / globalScale));
-                const nodeRadius = Math.max(4, Math.min(12, 8 / globalScale));
-                
-                // Get color based on source context
-                const color = sourceColors[node.sourceContext as keyof typeof sourceColors] || '#64748b';
-                
-                // Draw node circle
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, nodeRadius, 0, 2 * Math.PI);
-                ctx.fillStyle = color;
-                ctx.fill();
-                
-                // Add white border
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 2 / globalScale;
-                ctx.stroke();
-                
-                // Only show label on actual hover (not zoom)
-                if (node.__isHovered) {
-                  ctx.font = `${fontSize}px Inter, system-ui, sans-serif`;
-                  ctx.textAlign = 'center';
-                  ctx.textBaseline = 'middle';
-                  ctx.fillStyle = '#1f2937';
+      <div className="h-full flex flex-col border rounded-lg bg-background overflow-hidden">
+        {/* Dynamic Legend */}
+        <div className="px-6 py-3 border-b bg-muted/30">
+          <div className="flex flex-wrap gap-2 text-xs">
+            {rootNodes.map(root => {
+              const color = rootColors.get(root.iri) || '#64748b';
+              const label = root.label || root.iri.split(/[/#]/).pop() || 'Unknown';
+              const isHidden = hiddenRoots.has(root.iri);
+              const descendants = getRootDescendants(root.iri);
+              
+              return (
+                <button
+                  key={root.iri}
+                  onClick={() => toggleRootVisibility(root.iri)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all",
+                    "hover:shadow-md hover:scale-105",
+                    "bg-card border-2",
+                    isHidden ? "opacity-40 hover:opacity-60" : "opacity-100"
+                  )}
+                  style={{
+                    borderColor: color,
+                    backgroundColor: isHidden ? undefined : `${color}15`
+                  }}
+                  title={`${isHidden ? 'Show' : 'Hide'} ${label} (${descendants.size} concepts)`}
+                >
+                  <div 
+                    className="w-3 h-3 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: color }}
+                  />
+                  <span className={cn(
+                    "font-medium text-foreground",
+                    isHidden && "line-through"
+                  )}>
+                    {label}
+                  </span>
+                  <span className="text-muted-foreground">
+                    ({descendants.size})
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Graph Visualization */}
+        <div className="flex-1 bg-background">
+          <ForceGraph2D
+                width={800}
+                height={800}
+                graphData={{
+                  nodes: graphNodes,
+                  links: graphLinks
+                }}
+                nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+                  const label = node.label;
+                  const fontSize = Math.max(8, Math.min(14, 12 / globalScale));
+                  const nodeRadius = Math.max(4, Math.min(12, 8 / globalScale));
                   
-                  // Add text background for better readability
-                  const textWidth = ctx.measureText(label).width;
-                  const textHeight = fontSize;
-                  const padding = 4;
+                  // Use the pre-computed color from the node
+                  const color = node.color;
                   
-                  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-                  ctx.fillRect(
-                    node.x - textWidth / 2 - padding,
-                    node.y + nodeRadius + 4,
-                    textWidth + padding * 2,
-                    textHeight + padding
-                  );
+                  // Draw node circle
+                  ctx.beginPath();
+                  ctx.arc(node.x, node.y, nodeRadius, 0, 2 * Math.PI);
+                  ctx.fillStyle = color;
+                  ctx.fill();
                   
-                  // Add subtle border to text background
-                  ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-                  ctx.lineWidth = 1 / globalScale;
-                  ctx.strokeRect(
-                    node.x - textWidth / 2 - padding,
-                    node.y + nodeRadius + 4,
-                    textWidth + padding * 2,
-                    textHeight + padding
-                  );
+                  // Add border with dark mode awareness
+                  ctx.strokeStyle = isDarkMode ? 'rgba(30, 30, 30, 0.8)' : '#ffffff';
+                  ctx.lineWidth = 2 / globalScale;
+                  ctx.stroke();
                   
-                  // Draw text
-                  ctx.fillStyle = '#1f2937';
-                  ctx.fillText(label, node.x, node.y + nodeRadius + textHeight / 2 + 6);
-                }
-              }}
+                  // Only show label on actual hover (not zoom)
+                  if (node.__isHovered) {
+                    ctx.font = `${fontSize}px Inter, system-ui, sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    // Add text background for better readability
+                    const textWidth = ctx.measureText(label).width;
+                    const textHeight = fontSize;
+                    const padding = 4;
+                    
+                    // Use dark mode aware colors
+                    const bgColor = isDarkMode ? 'rgba(30, 30, 30, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+                    const textColor = isDarkMode ? '#f1f5f9' : '#1f2937';
+                    const borderColor = isDarkMode ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.2)';
+                    
+                    ctx.fillStyle = bgColor;
+                    ctx.fillRect(
+                      node.x - textWidth / 2 - padding,
+                      node.y + nodeRadius + 4,
+                      textWidth + padding * 2,
+                      textHeight + padding
+                    );
+                    
+                    // Add subtle border to text background
+                    ctx.strokeStyle = borderColor;
+                    ctx.lineWidth = 1 / globalScale;
+                    ctx.strokeRect(
+                      node.x - textWidth / 2 - padding,
+                      node.y + nodeRadius + 4,
+                      textWidth + padding * 2,
+                      textHeight + padding
+                    );
+                    
+                    // Draw text
+                    ctx.fillStyle = textColor;
+                    ctx.fillText(label, node.x, node.y + nodeRadius + textHeight / 2 + 6);
+                  }
+                }}
               linkDirectionalArrowLength={6}
               linkDirectionalArrowRelPos={1}
-              linkColor={() => '#64748b'}
+              linkColor={() => isDarkMode ? '#71717a' : '#64748b'}
               linkWidth={2}
               linkDirectionalParticles={0}
               onNodeHover={(node: any) => {
@@ -906,7 +1050,7 @@ export default function SemanticModelsView() {
               }}
               nodeLabel={(node: any) => {
                 const concept = node.concept as OntologyConcept;
-                const color = sourceColors[node.sourceContext as keyof typeof sourceColors] || '#64748b';
+                const color = node.color;
                 return `<div style="
                   background: ${color} !important; 
                   color: white !important; 
@@ -947,6 +1091,7 @@ export default function SemanticModelsView() {
               minZoom={0.1}
               maxZoom={8}
             />
+        </div>
       </div>
     );
   };
@@ -1310,44 +1455,18 @@ export default function SemanticModelsView() {
           {showKnowledgeGraph ? (
             <div className="h-full flex flex-col">
               <div className="p-6 border-b">
-                <div className="flex justify-between items-start mb-4">
+                <div className="flex justify-between items-start">
                   <div>
                     <h2 className="text-2xl font-semibold mb-2 flex items-center gap-2">
                       <Network className="h-6 w-6" />
                       Knowledge Graph
                     </h2>
                     <p className="text-muted-foreground">
-                      Interactive visualization of all concepts and their relationships
+                      Interactive visualization of all concepts and their relationships. Click legend items to toggle visibility.
                     </p>
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {Object.values(groupedConcepts).flat().filter(c => c.concept_type === 'class' || c.concept_type === 'concept').length} concepts
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-3 text-xs">
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                    <span>Corporate Global</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    <span>Manufacturing LOB</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                    <span>Financial Services LOB</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                    <span>Retail Banking Dept</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                    <span>Quality Assurance Dept</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-                    <span>Other Taxonomies</span>
                   </div>
                 </div>
               </div>

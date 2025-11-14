@@ -27,12 +27,15 @@ export interface OntologyConcept {
 }
 
 export interface SemanticModel {
+  id: string;
   name: string;
-  description?: string;
-  source_type: 'file' | 'database' | 'external' | 'schema';
-  format?: string;
-  concepts_count: number;
-  properties_count: number;
+  format: 'rdfs' | 'skos';
+  original_filename?: string;
+  content_type?: string;
+  size_bytes?: number;
+  enabled: boolean;
+  created_by?: string;
+  updated_by?: string;
   created_at?: string;
   updated_at?: string;
 }

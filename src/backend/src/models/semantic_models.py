@@ -14,6 +14,8 @@ class SemanticModel(BaseModel):
     content_type: Optional[str] = None
     size_bytes: Optional[int] = None
     enabled: bool = True
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
     created_at: Optional[datetime] = Field(default=None, alias="createdAt")
     updated_at: Optional[datetime] = Field(default=None, alias="updatedAt")
 

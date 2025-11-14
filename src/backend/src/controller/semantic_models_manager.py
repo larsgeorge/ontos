@@ -130,6 +130,22 @@ class SemanticModelsManager:
         return self._to_api(db_obj)
 
     def delete(self, model_id: str) -> bool:
+        # Get the model before deleting to check if we need to delete the physical file
+        model = semantic_models_repo.get(self._db, id=model_id)
+        if not model:
+            return False
+        
+        # If this was loaded from data/semantic_models/ directory, delete the physical file too
+        if model.created_by == 'system@startup' and model.original_filename:
+            try:
+                file_path = self._data_dir / "semantic_models" / model.original_filename
+                if file_path.exists() and file_path.is_file():
+                    file_path.unlink()
+                    logger.info(f"Deleted physical file: {file_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete physical file for model {model_id}: {e}")
+        
+        # Delete from database
         obj = semantic_models_repo.remove(self._db, id=model_id)
         return obj is not None
 
@@ -153,6 +169,8 @@ class SemanticModelsManager:
             content_type=db_obj.content_type,
             size_bytes=int(db_obj.size_bytes) if db_obj.size_bytes is not None and str(db_obj.size_bytes).isdigit() else None,
             enabled=db_obj.enabled,
+            created_by=db_obj.created_by,
+            updated_by=db_obj.updated_by,
             createdAt=db_obj.created_at,
             updatedAt=db_obj.updated_at,
         )
@@ -278,26 +296,8 @@ class SemanticModelsManager:
         except Exception as e:
             logger.error(f"Failed to load file-based taxonomies: {e}")
         
-        # Always-on ontologies from src/schemas/rdf
-        try:
-            rdf_dir = Path(__file__).parent.parent / "schemas" / "rdf"
-            if rdf_dir.exists() and rdf_dir.is_dir():
-                for f in rdf_dir.iterdir():
-                    if not f.is_file():
-                        continue
-                    name = f.name.lower()
-                    try:
-                        context_name = f"urn:schema:{f.stem}"
-                        context = self._graph.get_context(context_name)
-                        if name.endswith('.ttl'):
-                            context.parse(f.as_posix(), format='turtle')
-                        elif name.endswith('.rdf') or name.endswith('.xml'):
-                            context.parse(f.as_posix(), format='xml')
-                        logger.debug(f"Loaded schema '{f.name}' into context '{context_name}'")
-                    except Exception as e:
-                        logger.warning(f"Failed loading schema {f.name}: {e}")
-        except Exception as e:
-            logger.warning(f"Failed to load built-in schemas: {e}")
+        # Note: Loading from src/schemas/rdf/ has been disabled
+        # Ontologies should be managed via the UI or data/taxonomies/ directory
         
         # Load database glossaries into named graphs
         self._load_database_glossaries_into_graph()
