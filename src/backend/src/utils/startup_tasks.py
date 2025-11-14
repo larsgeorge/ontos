@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Optional, Dict, List
 import json # Import json for parsing
-import yaml
 
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
@@ -12,7 +11,6 @@ from src.common.database import init_db, get_session_factory, Base, engine, clea
 from src.common.workspace_client import get_workspace_client
 from src.common.features import FeatureAccessLevel, APP_FEATURES, get_feature_config
 from src.models.settings import AppRoleCreate, AppRole as AppRoleApi
-from src.common.config import Settings
 from src.controller.settings_manager import SettingsManager
 from src.controller.jobs_manager import JobsManager
 
@@ -29,8 +27,6 @@ from src.controller.audit_manager import AuditManager
 from src.controller.data_domains_manager import DataDomainManager # Import new manager
 from src.controller.tags_manager import TagsManager # Import TagsManager
 from src.controller.semantic_models_manager import SemanticModelsManager
-from src.controller.semantic_links_manager import SemanticLinksManager
-from src.models.semantic_links import EntitySemanticLinkCreate
 from src.controller.compliance_manager import ComplianceManager
 from src.controller.teams_manager import TeamsManager
 from src.controller.projects_manager import ProjectsManager
@@ -53,10 +49,6 @@ from src.db_models.data_asset_reviews import DataAssetReviewRequestDb
 from src.db_models.data_products import DataProductDb, InputPortDb, OutputPortDb
 from src.db_models.compliance import CompliancePolicyDb
 
-# Import Demo Data Loader
-# from src.utils.demo_data_loader import load_demo_data # Removed unused import
-# Import the search registry (decorator is still useful for intent)
-# from src.common.search_registry import SEARCHABLE_ASSET_MANAGERS # Not strictly needed for this approach
 # Import the CORRECT base class for type checking
 from src.common.search_interfaces import SearchableAsset
 
@@ -69,10 +61,6 @@ from src.repositories.tags_repository import (
 )
 
 from src.common.search_registry import SEARCHABLE_ASSET_MANAGERS
-from src.common.config import get_settings
-from src.common.logging import get_logger
-from src.utils.metadata_seed_loader import seed_metadata_from_yaml
-from src.utils.costs_seed_loader import seed_costs_from_yaml
 
 logger = get_logger(__name__)
 
@@ -280,79 +268,6 @@ def initialize_managers(app: FastAPI):
         # It will be managed at application shutdown.
         pass
 
-def load_demo_semantic_links(db: Session) -> None:
-    """Load demo semantic links between app entities and business concepts."""
-    logger.info("Loading demo semantic links...")
-
-    try:
-        semantic_links_manager = SemanticLinksManager(db)
-
-        # Load semantic links configuration
-        semantic_links_file = Path(__file__).parent.parent / "data" / "semantic_links_demo.yaml"
-        if not semantic_links_file.exists():
-            logger.warning(f"Semantic links demo file not found: {semantic_links_file}")
-            return
-
-        with open(semantic_links_file, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-
-        if not config or 'semantic_links' not in config:
-            logger.warning("No semantic_links section found in config")
-            return
-
-        # Load entity semantic links
-        links_created = 0
-        for link_config in config['semantic_links']:
-            try:
-                entity_type = link_config['entity_type']
-                entity_name = link_config['entity_name']
-                iri = link_config['iri']
-                label = link_config.get('label', '')
-
-                # Find entity ID by name and type
-                entity_id = None
-                if entity_type == 'data_domain':
-                    # Query data domains to find by name
-                    from src.db_models.data_domains import DataDomain
-                    domain = db.query(DataDomain).filter(DataDomain.name == entity_name).first()
-                    if domain:
-                        entity_id = str(domain.id)
-                elif entity_type == 'data_product':
-                    # Query data products to find by name (ODPS v1.0.0)
-                    product = db.query(DataProductDb).filter(DataProductDb.name == entity_name).first()
-                    if product:
-                        entity_id = str(product.id)
-                elif entity_type == 'data_contract':
-                    # Query data contracts to find by name
-                    from src.db_models.data_contracts import DataContractDb
-                    contract = db.query(DataContractDb).filter(DataContractDb.name == entity_name).first()
-                    if contract:
-                        entity_id = str(contract.id)
-
-                if entity_id:
-                    # Create semantic link
-                    link_data = EntitySemanticLinkCreate(
-                        entity_id=entity_id,
-                        entity_type=entity_type,
-                        iri=iri,
-                        label=label
-                    )
-                    semantic_links_manager.add(link_data, created_by="system")
-                    links_created += 1
-                    logger.debug(f"Created semantic link: {entity_type}:{entity_name} -> {iri}")
-                else:
-                    logger.warning(f"Entity not found: {entity_type} '{entity_name}'")
-
-            except Exception as e:
-                logger.warning(f"Failed to create semantic link for {link_config}: {e}")
-
-        db.commit()
-        logger.info(f"Successfully created {links_created} semantic links")
-
-    except Exception as e:
-        logger.exception(f"Error loading demo semantic links: {e}")
-        db.rollback()
-
 def load_initial_data(app: FastAPI) -> None:
     """Loads initial demo data if configured."""
     settings: Settings = get_settings()
@@ -365,93 +280,12 @@ def load_initial_data(app: FastAPI) -> None:
     if not db_session_factory:
         logger.error("Cannot load initial data: Database session factory not available.")
         return
-    
+
     db: Session = db_session_factory()
     try:
-        # Get managers directly from app.state
-        settings_manager = getattr(app.state, 'settings_manager', None)
-        auth_manager = getattr(app.state, 'authorization_manager', None)
-        data_asset_review_manager = getattr(app.state, 'data_asset_review_manager', None)
-        data_product_manager = getattr(app.state, 'data_products_manager', None) # Corrected name
-        data_domain_manager = getattr(app.state, 'data_domain_manager', None)
-        data_contracts_manager = getattr(app.state, 'data_contracts_manager', None) # Add
-        business_glossaries_manager = None
-        notifications_manager = getattr(app.state, 'notifications_manager', None) # Add this line
-        teams_manager = getattr(app.state, 'teams_manager', None)
-        projects_manager = getattr(app.state, 'projects_manager', None)
-        # Add other managers as needed
-
-        # Call load_initial_data for each manager that has it
-        if settings_manager and hasattr(settings_manager, 'load_initial_data'):
-            settings_manager.load_initial_data(db)
-        if auth_manager and hasattr(auth_manager, 'load_initial_data'):
-            auth_manager.load_initial_data(db)
-
-        # Load Data Domains FIRST (teams reference domains via domain_id)
-        if data_domain_manager and hasattr(data_domain_manager, 'load_initial_data'):
-            data_domain_manager.load_initial_data(db)
-
-        # Load Teams AFTER domains (teams belong to domains)
-        if teams_manager and hasattr(teams_manager, 'load_initial_data'):
-            teams_manager.load_initial_data(db)
-
-        # Load Projects after Teams (projects reference teams via owner_team_id and team assignments)
-        if projects_manager and hasattr(projects_manager, 'load_initial_data'):
-            projects_manager.load_initial_data(db)
-
-        # Now load other feature data that may depend on domains and teams
-        if data_contracts_manager and hasattr(data_contracts_manager, 'load_initial_data'):
-            data_contracts_manager.load_initial_data(db)
-        if data_product_manager and hasattr(data_product_manager, 'load_initial_data'):
-            data_product_manager.load_initial_data(db)
-        if data_asset_review_manager and hasattr(data_asset_review_manager, 'load_initial_data'):
-            data_asset_review_manager.load_initial_data(db)
-        # Glossaries initial data loading removed
-        semantic_models_manager = getattr(app.state, 'semantic_models_manager', None)
-        if semantic_models_manager and hasattr(semantic_models_manager, 'load_initial_data'):
-            semantic_models_manager.load_initial_data(db)
-            # After loading semantic models, make sure business glossaries manager is connected
-            pass
-        if notifications_manager and hasattr(notifications_manager, 'load_initial_data'):
-            notifications_manager.load_initial_data(db)
-        
-        # Load demo timeline entries after all entities are created
-        if data_domain_manager and hasattr(data_domain_manager, 'load_demo_timeline_entries'):
-            data_domain_manager.load_demo_timeline_entries(db)
-
-        # Load demo semantic links after all entities are created
-        load_demo_semantic_links(db)
-        # After loading demo links, ensure KG contains entities and links
-        try:
-            sm = getattr(app.state, 'semantic_models_manager', None)
-            if sm:
-                sm.on_models_changed()
-        except Exception:
-            pass
-
-        # Seed example metadata (rich text, links, documents) for products and domains
-        try:
-            yaml_path = Path(__file__).parent.parent / "data" / "metadata" / "product_metadata.yaml"
-            if yaml_path.exists():
-                seed_metadata_from_yaml(db, settings, yaml_path)
-                logger.info("Seeded example metadata from YAML during startup.")
-            else:
-                logger.debug(f"Metadata YAML not found at {yaml_path}; skipping metadata seeding.")
-        except Exception as e:
-            logger.error(f"Failed seeding example metadata at startup: {e}", exc_info=True)
-
-        # Seed example costs
-        try:
-            costs_yaml = Path(__file__).parent.parent / "data" / "costs.yaml"
-            if costs_yaml.exists():
-                seed_costs_from_yaml(db, costs_yaml)
-                logger.info("Seeded example cost items from YAML during startup.")
-            else:
-                logger.debug(f"Costs YAML not found at {costs_yaml}; skipping cost seeding.")
-        except Exception as e:
-            logger.error(f"Failed seeding example costs at startup: {e}", exc_info=True)
-
-        # No final commit needed here if managers commit internally or role creation already committed
+        # Use centralized demo data loader
+        from src.utils.demo_data_loader import load_all_demo_data
+        load_all_demo_data(app, db)
         logger.info("Initial data loading process completed for all managers.")
 
     except Exception as e:
