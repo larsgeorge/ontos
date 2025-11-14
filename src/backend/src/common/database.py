@@ -16,6 +16,7 @@ from sqlalchemy.engine import Connection, URL
 from alembic.config import Config as AlembicConfig
 from alembic.script import ScriptDirectory
 from alembic.runtime.migration import MigrationContext
+from alembic import command as alembic_command
 
 from .config import get_settings, Settings
 from .logging import get_logger
@@ -52,6 +53,14 @@ try:
     from src.db_models import comments
     from src.db_models import costs
     from src.db_models import change_log
+    # Add missing model imports for Alembic
+    from src.db_models import data_contracts
+    from src.db_models import workflow_configurations
+    from src.db_models import workflow_installations
+    from src.db_models import workflow_job_runs
+    from src.db_models import compliance
+    from src.db_models import projects
+    from src.db_models import teams
     # from src.db_models.data_products import DataProductDb, InfoDb, InputPortDb, OutputPortDb  # Already imported via module import above
     from src.db_models.settings import AppRoleDb
     # from src.db_models.users import UserActivityDb, UserSearchHistoryDb # Commented out due to missing file
@@ -740,9 +749,12 @@ def init_db() -> None:
 
         # --- Alembic Migration Logic --- #
         alembic_cfg_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..' , 'alembic.ini'))
+        alembic_script_location = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'alembic'))
         logger.info(f"Loading Alembic configuration from: {alembic_cfg_path}")
+        logger.info(f"Alembic script location: {alembic_script_location}")
         alembic_cfg = AlembicConfig(alembic_cfg_path)
         alembic_cfg.set_main_option("sqlalchemy.url", db_url.replace("%", "%%")) # Ensure Alembic uses the same URL
+        alembic_cfg.set_main_option("script_location", alembic_script_location) # Set absolute path to alembic directory
         script = ScriptDirectory.from_config(alembic_cfg)
         head_revision = script.get_current_head()
         logger.info(f"Alembic Head Revision: {head_revision}")
@@ -753,37 +765,17 @@ def init_db() -> None:
             db_revision = get_current_db_revision(connection, alembic_cfg)
             logger.info(f"Current Database Revision: {db_revision}")
 
-            # if db_revision != head_revision:
-            #     logger.warning(f"Database revision '{db_revision}' differs from head revision '{head_revision}'.")
-            #     if settings.APP_DEMO_MODE:
-            #         # WARNING: This wipes data in managed tables!
-            #         border = "=" * 50
-            #         logger.warning(border)
-            #         logger.warning("APP_DEMO_MODE: Database revision differs from head revision.")
-            #         logger.warning(f"DB: {db_revision}, Head: {head_revision}")
-            #         logger.warning("Performing Alembic downgrade to base and upgrade to head...")
-            #         logger.warning("THIS WILL WIPE ALL DATA IN MANAGED TABLES!")
-            #         logger.warning(border)
-            #         try:
-            #             # Remove logging around downgrade/upgrade
-            #             logger.info("Downgrading database to base version...")
-            #             command.downgrade(alembic_cfg, "base")
-            #             logger.info("Upgrading database to head version...")
-            #             command.upgrade(alembic_cfg, "head")
-            #             logger.info("Alembic downgrade/upgrade completed successfully.") # Keep completion message
-            #         except Exception as alembic_err:
-            #             logger.critical("Alembic downgrade/upgrade failed during demo mode reset!", exc_info=True)
-            #             raise RuntimeError("Failed to reset database schema for demo mode.") from alembic_err
-            #     else:
-            #         logger.info("Attempting Alembic upgrade to head...")
-            #         try:
-            #             command.upgrade(alembic_cfg, "head")
-            #             logger.info("Alembic upgrade to head COMPLETED.")
-            #         except Exception as alembic_err:
-            #             logger.critical("Alembic upgrade failed! Manual intervention may be required.", exc_info=True)
-            #             raise RuntimeError("Failed to upgrade database schema.") from alembic_err
-            # else:
-            #     logger.info("Database schema is up to date according to Alembic.")
+            if db_revision != head_revision:
+                logger.info(f"Database revision '{db_revision}' differs from head revision '{head_revision}'.")
+                logger.info("Attempting Alembic upgrade to head...")
+                try:
+                    alembic_command.upgrade(alembic_cfg, "head")
+                    logger.info("✓ Alembic upgrade to head COMPLETED.")
+                except Exception as alembic_err:
+                    logger.critical("Alembic upgrade failed! Manual intervention may be required.", exc_info=True)
+                    raise RuntimeError("Failed to upgrade database schema.") from alembic_err
+            else:
+                logger.info("✓ Database schema is up to date according to Alembic.")
 
         # Ensure all tables defined in Base metadata exist
         logger.info("Verifying/creating tables based on SQLAlchemy models...")
@@ -847,12 +839,21 @@ def init_db() -> None:
                     else:
                         logger.info(f"✓ Schema already exists: {schema_name}")
 
-        # Now, call create_all. It will operate on the potentially modified metadata.
-        logger.info("Executing Base.metadata.create_all()...")
-        Base.metadata.create_all(bind=_engine) # schema argument is not directly used here if search_path is set.
-                                               # If tables have schema set in their definition, that's used.
-                                               # Otherwise, the first schema in search_path is used.
-        logger.info("Database tables checked/created by create_all.")
+        # Only use create_all() for fresh databases without Alembic version table
+        # Once Alembic is tracking the schema, migrations handle all schema changes
+        if db_revision is None:
+            logger.info("Fresh database detected (no Alembic version). Using create_all() for initial setup...")
+            Base.metadata.create_all(bind=_engine)
+            logger.info("✓ Database tables created by create_all.")
+            # Stamp the database with the baseline migration
+            logger.info("Stamping database with baseline migration...")
+            try:
+                alembic_command.stamp(alembic_cfg, "head")
+                logger.info("✓ Database stamped with baseline migration.")
+            except Exception as stamp_err:
+                logger.error(f"Failed to stamp database: {stamp_err}", exc_info=True)
+        else:
+            logger.info("✓ Database schema is managed by Alembic migrations.")
     except Exception as e:
         logger.critical(f"Database initialization failed: {e}", exc_info=True)
         _engine = None
