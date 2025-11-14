@@ -1,0 +1,99 @@
+name: "Compliance Checks"
+description: "Run user-defined compliance DSL rules from compliance_policies table"
+format: "MULTI_TASK"
+environments:
+  - environment_key: "compliance-checks-env"
+    spec:
+      dependencies:
+        - "databricks-sdk>=0.60.0"
+        - "sqlalchemy"
+        - "psycopg2-binary"
+tasks:
+  - task_key: "compliance_checks"
+    spark_python_task:
+      python_file: "compliance_checks.py"
+      parameters:
+        - "--policy_filter"
+        - "{{job.parameters.policy_filter}}"
+        - "--policy_categories"
+        - "{{job.parameters.policy_categories}}"
+        - "--policy_severities"
+        - "{{job.parameters.policy_severities}}"
+        - "--entity_limit"
+        - "{{job.parameters.entity_limit}}"
+        - "--verbose"
+        - "{{job.parameters.verbose}}"
+        - "--lakebase_instance_name"
+        - "{{job.parameters.lakebase_instance_name}}"
+        - "--postgres_host"
+        - "{{job.parameters.postgres_host}}"
+        - "--postgres_db"
+        - "{{job.parameters.postgres_db}}"
+        - "--postgres_port"
+        - "{{job.parameters.postgres_port}}"
+        - "--postgres_schema"
+        - "{{job.parameters.postgres_schema}}"
+    environment_key: "compliance-checks-env"
+
+schedule:
+  quartz_cron_expression: "0 0 4 * * ?"  # Daily at 4 AM (after contract validation)
+  timezone_id: "UTC"
+  pause_status: "PAUSED"
+
+# Standard runtime parameters (defaults, overridden by configurable_parameters from UI)
+parameters:
+  policy_filter: "active"
+  policy_categories: "null"
+  policy_severities: "null"
+  entity_limit: "null"
+  verbose: "false"
+  lakebase_instance_name: ""
+  postgres_host: ""
+  postgres_db: ""
+  postgres_port: "5432"
+  postgres_schema: "public"
+
+# Configurable parameters (managed via UI)
+configurable_parameters:
+  - name: "policy_filter"
+    type: "select"
+    description: "Which policies to run"
+    required: true
+    default: "active"
+    options: ["all", "active"]
+    # Note: Can also be a JSON array of specific policy IDs like '["policy-id-1", "policy-id-2"]'
+
+  - name: "policy_categories"
+    type: "multi_select"
+    description: "Filter policies by categories (empty = all)"
+    required: false
+    default: null
+    options: ["Security", "Data Quality", "Privacy", "Governance"]
+
+  - name: "policy_severities"
+    type: "multi_select"
+    description: "Filter policies by severities (empty = all)"
+    required: false
+    default: null
+    options: ["low", "medium", "high", "critical"]
+
+  - name: "entity_limit"
+    type: "number"
+    description: "Limit number of entities checked per policy (for testing, null = no limit)"
+    required: false
+    default: null
+
+  - name: "verbose"
+    type: "boolean"
+    description: "Enable verbose logging"
+    required: false
+    default: false
+
+timeout_seconds: 7200  # 2 hours (policies can check many entities)
+max_concurrent_runs: 1
+
+tags:
+  environment: "production"
+  team: "compliance"
+  workflow_type: "compliance"
+  owner: "ontos"

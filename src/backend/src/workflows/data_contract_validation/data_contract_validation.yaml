@@ -1,12 +1,132 @@
 name: "Data Contract Validation"
-description: "Validate data contracts and quality rules across datasets."
+description: "Validate data contracts against Unity Catalog (schema drift, SLA, DQ status)"
 format: "MULTI_TASK"
+environments:
+  - environment_key: "contract-validation-env"
+    spec:
+      dependencies:
+        - "databricks-sdk>=0.60.0"
+        - "sqlalchemy"
+        - "psycopg2-binary"
 tasks:
   - task_key: "data_contract_validation"
     spark_python_task:
       python_file: "data_contract_validation.py"
-    # existing_cluster_id will be injected from settings if not present
+      parameters:
+        - "--catalog"
+        - "{{job.parameters.catalog}}"
+        - "--schema"
+        - "{{job.parameters.schema}}"
+        - "--contract_statuses"
+        - "{{job.parameters.contract_statuses}}"
+        - "--schema_drift_check_enabled"
+        - "{{job.parameters.schema_drift_check_enabled}}"
+        - "--sla_check_enabled"
+        - "{{job.parameters.sla_check_enabled}}"
+        - "--sla_max_age_hours"
+        - "{{job.parameters.sla_max_age_hours}}"
+        - "--dq_check_enabled"
+        - "{{job.parameters.dq_check_enabled}}"
+        - "--dq_score_threshold"
+        - "{{job.parameters.dq_score_threshold}}"
+        - "--verbose"
+        - "{{job.parameters.verbose}}"
+        - "--lakebase_instance_name"
+        - "{{job.parameters.lakebase_instance_name}}"
+        - "--postgres_host"
+        - "{{job.parameters.postgres_host}}"
+        - "--postgres_db"
+        - "{{job.parameters.postgres_db}}"
+        - "--postgres_port"
+        - "{{job.parameters.postgres_port}}"
+        - "--postgres_schema"
+        - "{{job.parameters.postgres_schema}}"
+    environment_key: "contract-validation-env"
+
+schedule:
+  quartz_cron_expression: "0 0 3 * * ?"  # Daily at 3 AM (after DQ checks)
+  timezone_id: "UTC"
+  pause_status: "PAUSED"
+
+# Standard runtime parameters (defaults, overridden by configurable_parameters from UI)
+parameters:
+  catalog: ""
+  schema: ""
+  contract_statuses: '["active", "certified"]'
+  schema_drift_check_enabled: "true"
+  sla_check_enabled: "true"
+  sla_max_age_hours: "24"
+  dq_check_enabled: "true"
+  dq_score_threshold: "95.0"
+  verbose: "false"
+  lakebase_instance_name: ""
+  postgres_host: ""
+  postgres_db: ""
+  postgres_port: "5432"
+  postgres_schema: "public"
+
+# Configurable parameters (managed via UI)
+configurable_parameters:
+  - name: "contract_statuses"
+    type: "multi_select"
+    description: "Contract statuses to validate"
+    required: true
+    default: ["active", "certified"]
+    options: ["draft", "active", "certified", "deprecated", "retired"]
+
+  - name: "catalog"
+    type: "string"
+    description: "Default catalog for unqualified table names"
+    required: false
+    default: null
+
+  - name: "schema"
+    type: "string"
+    description: "Default schema for unqualified table names"
+    required: false
+    default: null
+
+  - name: "schema_drift_check_enabled"
+    type: "boolean"
+    description: "Enable schema drift detection"
+    required: false
+    default: true
+
+  - name: "sla_check_enabled"
+    type: "boolean"
+    description: "Enable SLA/freshness checks"
+    required: false
+    default: true
+
+  - name: "sla_max_age_hours"
+    type: "number"
+    description: "Maximum age in hours for table freshness"
+    required: false
+    default: 24
+
+  - name: "dq_check_enabled"
+    type: "boolean"
+    description: "Enable data quality report status checks"
+    required: false
+    default: true
+
+  - name: "dq_score_threshold"
+    type: "number"
+    description: "Minimum DQ score threshold (%)"
+    required: false
+    default: 95.0
+
+  - name: "verbose"
+    type: "boolean"
+    description: "Enable verbose logging"
+    required: false
+    default: false
+
+timeout_seconds: 3600
+max_concurrent_runs: 1
 
 tags:
-  environment: "development"
+  environment: "production"
+  team: "data_governance"
+  workflow_type: "validation"
   owner: "ontos"

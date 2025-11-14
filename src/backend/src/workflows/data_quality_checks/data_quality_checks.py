@@ -4,15 +4,226 @@ import json
 import argparse
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from uuid import uuid4
 
 import yaml
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql import functions as F
+from sqlalchemy import text, create_engine
+from sqlalchemy.engine import Engine
+
+from databricks.sdk import WorkspaceClient
 
 
-def load_active_contracts_from_uc(spark: SparkSession, catalog: str, schema: str) -> List[Dict[str, Any]]:
+# ============================================================================
+# OAuth Token Generation & Database Connection (for Lakebase Postgres)
+# ============================================================================
+
+def get_oauth_token(ws_client: WorkspaceClient, instance_name: str) -> Tuple[str, str]:
+    """Generate OAuth token for the service principal to access Lakebase Postgres."""
+    if not instance_name or instance_name == 'None' or instance_name == '':
+        raise RuntimeError(
+            "Lakebase instance name is required but was not provided.\n"
+            "This is auto-detected from the Databricks App resources.\n"
+            "Ensure your app has a Lakebase database resource configured."
+        )
+
+    print(f"  Generating OAuth token for instance: {instance_name}")
+
+    # Get current service principal
+    current_user = ws_client.current_user.me().user_name
+    print(f"  Service Principal: {current_user}")
+
+    # Generate token
+    try:
+        cred = ws_client.database.generate_database_credential(
+            request_id=str(uuid4()),
+            instance_names=[instance_name],
+        )
+    except AttributeError as e:
+        raise RuntimeError(
+            f"Failed to generate OAuth token: {e}\n"
+            "This may indicate that the Databricks SDK version doesn't support database OAuth,\n"
+            "or that the workspace client is not properly initialized.\n"
+            "Please ensure you're using a recent version of the databricks-sdk package."
+        )
+
+    print(f"  ✓ Successfully generated OAuth token")
+    return current_user, cred.token
+
+
+def build_db_url(
+    host: str,
+    db: str,
+    port: str,
+    schema: str,
+    instance_name: str,
+    ws_client: WorkspaceClient
+) -> Tuple[str, str]:
+    """Build PostgreSQL connection URL using OAuth authentication.
+
+    Returns: (connection_url, auth_user)
+    """
+
+    print(f"  POSTGRES_HOST: {host}")
+    print(f"  POSTGRES_DB: {db}")
+    print(f"  POSTGRES_PORT: {port}")
+    print(f"  POSTGRES_DB_SCHEMA: {schema}")
+    print(f"  LAKEBASE_INSTANCE_NAME: {instance_name}")
+    print(f"  Authentication: OAuth (Lakebase Postgres)")
+
+    # Generate OAuth token
+    oauth_user, oauth_token = get_oauth_token(ws_client, instance_name)
+    print(f"  Using OAuth user: {oauth_user}")
+
+    if not all([host, oauth_user, oauth_token, db]):
+        missing = []
+        if not host: missing.append("host")
+        if not oauth_user: missing.append("oauth_user")
+        if not oauth_token: missing.append("oauth_token")
+        if not db: missing.append("db")
+        raise RuntimeError(f"Missing required Postgres parameters: {', '.join(missing)}")
+
+    query = f"?options=-csearch_path%3D{schema}" if schema else ""
+    connection_url = f"postgresql+psycopg2://{oauth_user}:****@{host}:{port}/{db}{query}"
+    print(f"  Connection URL (token redacted): {connection_url}")
+
+    actual_url = f"postgresql+psycopg2://{oauth_user}:{oauth_token}@{host}:{port}/{db}{query}"
+    return actual_url, oauth_user
+
+
+def create_engine_from_params(
+    ws_client: WorkspaceClient,
+    host: str,
+    db: str,
+    port: str,
+    schema: str,
+    instance_name: str
+) -> Engine:
+    """Create SQLAlchemy engine using OAuth authentication."""
+    if not instance_name:
+        raise RuntimeError("lakebase_instance_name parameter is required")
+
+    url, auth_user = build_db_url(host, db, port, schema, instance_name, ws_client)
+    return create_engine(url, pool_pre_ping=True)
+
+
+# ============================================================================
+# Data Quality Check Result Storage
+# ============================================================================
+
+def create_dq_run(engine: Engine, contract_id: str) -> str:
+    """Create a new DQ check run record and return its ID."""
+    run_id = str(uuid4())
+    sql = text("""
+        INSERT INTO data_quality_check_runs (
+            id, contract_id, status, started_at, checks_passed, checks_failed, score
+        ) VALUES (
+            :id, :contract_id, :status, :started_at, :checks_passed, :checks_failed, :score
+        )
+    """)
+
+    with engine.connect() as conn:
+        conn.execute(sql, {
+            "id": run_id,
+            "contract_id": contract_id,
+            "status": "running",
+            "started_at": datetime.utcnow(),
+            "checks_passed": 0,
+            "checks_failed": 0,
+            "score": 0.0
+        })
+        conn.commit()
+
+    return run_id
+
+
+def store_dq_result(
+    engine: Engine,
+    run_id: str,
+    contract_id: str,
+    object_name: str,
+    check_type: str,
+    column_name: Optional[str],
+    passed: bool,
+    violations_count: int,
+    message: str
+) -> None:
+    """Store a single DQ check result."""
+    result_id = str(uuid4())
+    sql = text("""
+        INSERT INTO data_quality_check_results (
+            id, run_id, contract_id, object_name, check_type, column_name,
+            passed, violations_count, message, created_at
+        ) VALUES (
+            :id, :run_id, :contract_id, :object_name, :check_type, :column_name,
+            :passed, :violations_count, :message, :created_at
+        )
+    """)
+
+    with engine.connect() as conn:
+        conn.execute(sql, {
+            "id": result_id,
+            "run_id": run_id,
+            "contract_id": contract_id,
+            "object_name": object_name,
+            "check_type": check_type,
+            "column_name": column_name,
+            "passed": passed,
+            "violations_count": violations_count,
+            "message": message,
+            "created_at": datetime.utcnow()
+        })
+        conn.commit()
+
+
+def complete_dq_run(
+    engine: Engine,
+    run_id: str,
+    checks_passed: int,
+    checks_failed: int,
+    score: float,
+    error_message: Optional[str] = None
+) -> None:
+    """Complete a DQ check run with final counts and score."""
+    status = "succeeded" if error_message is None else "failed"
+    sql = text("""
+        UPDATE data_quality_check_runs
+        SET status = :status,
+            finished_at = :finished_at,
+            checks_passed = :checks_passed,
+            checks_failed = :checks_failed,
+            score = :score,
+            error_message = :error_message
+        WHERE id = :id
+    """)
+
+    with engine.connect() as conn:
+        conn.execute(sql, {
+            "id": run_id,
+            "status": status,
+            "finished_at": datetime.utcnow(),
+            "checks_passed": checks_passed,
+            "checks_failed": checks_failed,
+            "score": score,
+            "error_message": error_message
+        })
+        conn.commit()
+
+
+# ============================================================================
+# Contract Loading & DQ Checks (existing logic)
+# ============================================================================
+
+def load_active_contracts_from_uc(spark: SparkSession, catalog: str, schema: str, statuses: List[str]) -> List[Dict[str, Any]]:
     """Load active contracts and their schema/properties from UC-backed Lakehouse tables."""
     cte = f"{catalog}.{schema}"
+
+    # Build status filter
+    status_list = "','".join(s.lower() for s in statuses)
+    status_filter = f"lower(c.status) IN ('{status_list}')"
+
     df = spark.sql(
         f"""
         SELECT c.id AS contract_id,
@@ -29,7 +240,7 @@ def load_active_contracts_from_uc(spark: SparkSession, catalog: str, schema: str
           ON o.contract_id = c.id
         LEFT JOIN {cte}.data_contract_schema_properties p
           ON p.object_id = o.id
-        WHERE lower(c.status) = 'active'
+        WHERE {status_filter}
         """
     )
 
@@ -95,10 +306,7 @@ def load_active_contracts_from_uc(spark: SparkSession, catalog: str, schema: str
 
 
 def qualify_uc_name(physical_name: str, default_catalog: Optional[str], default_schema: Optional[str]) -> Optional[str]:
-    """Return a fully qualified UC table name catalog.schema.table if possible.
-
-    Respects already-qualified names and uses defaults when partial.
-    """
+    """Return a fully qualified UC table name catalog.schema.table if possible."""
     if not physical_name:
         return None
     parts = physical_name.split(".")
@@ -200,76 +408,135 @@ def evaluate_regex_patterns(df: DataFrame, specs: List[Tuple[str, str]]) -> List
     return results
 
 
-def run_contract_checks(spark: SparkSession, contract: Dict[str, Any], default_catalog: Optional[str], default_schema: Optional[str]) -> None:
-    contract_name = contract.get("name") or contract.get("id") or "unknown"
+def run_contract_checks(
+    spark: SparkSession,
+    engine: Engine,
+    contract: Dict[str, Any],
+    default_catalog: Optional[str],
+    default_schema: Optional[str]
+) -> Tuple[int, int]:
+    """Run DQ checks for a contract and store results. Returns (passed_count, failed_count)."""
+    contract_id = contract.get("id") or "unknown"
+    contract_name = contract.get("name") or contract_id
     schema_objs: List[Dict[str, Any]] = contract.get("schema") or []
 
-    for schema_obj in schema_objs:
-        physical_name = schema_obj.get("physicalName") or schema_obj.get("physical_name")
-        qualified = qualify_uc_name(str(physical_name) if physical_name else "", default_catalog, default_schema)
-        if not qualified:
-            print(f"[SKIP] {contract_name}: schema '{schema_obj.get('name')}' has no resolvable physicalName")
-            continue
+    # Create run record
+    run_id = create_dq_run(engine, contract_id)
 
-        try:
-            df = spark.table(qualified)
-        except Exception as e:
-            print(f"[ERROR] {contract_name}: failed to read table {qualified}: {e}")
-            continue
+    checks_passed = 0
+    checks_failed = 0
 
-        properties: List[Dict[str, Any]] = schema_obj.get("properties") or []
-        required_cols = [str(p.get("name")) for p in properties if p.get("required") is True and p.get("name")]
-        unique_cols = [str(p.get("name")) for p in properties if p.get("unique") is True and p.get("name")]
-        range_specs: List[Tuple[str, Optional[float], Optional[float]]] = []
-        length_specs: List[Tuple[str, Optional[int], Optional[int]]] = []
-        pattern_specs: List[Tuple[str, str]] = []
-
-        for p in properties:
-            col_name = p.get("name")
-            if not col_name:
+    try:
+        for schema_obj in schema_objs:
+            physical_name = schema_obj.get("physicalName") or schema_obj.get("physical_name")
+            qualified = qualify_uc_name(str(physical_name) if physical_name else "", default_catalog, default_schema)
+            if not qualified:
+                print(f"[SKIP] {contract_name}: schema '{schema_obj.get('name')}' has no resolvable physicalName")
                 continue
-            min_val = p.get("minimum")
-            max_val = p.get("maximum")
-            if min_val is not None or max_val is not None:
-                try:
-                    range_specs.append((str(col_name), float(min_val) if min_val is not None else None, float(max_val) if max_val is not None else None))
-                except Exception:
-                    pass
-            min_len = p.get("minLength")
-            max_len = p.get("maxLength")
-            if min_len is not None or max_len is not None:
-                try:
-                    length_specs.append((str(col_name), int(min_len) if min_len is not None else None, int(max_len) if max_len is not None else None))
-                except Exception:
-                    pass
-            pattern_val = p.get("pattern")
-            if isinstance(pattern_val, str) and pattern_val:
-                pattern_specs.append((str(col_name), pattern_val))
 
-        results: List[str] = []
+            try:
+                df = spark.table(qualified)
+            except Exception as e:
+                print(f"[ERROR] {contract_name}: failed to read table {qualified}: {e}")
+                store_dq_result(
+                    engine, run_id, contract_id, qualified, "table_access", None,
+                    False, 0, f"Failed to read table: {e}"
+                )
+                checks_failed += 1
+                continue
 
-        # Required
-        for col_name, passed, nulls in evaluate_required_columns(df, required_cols):
-            results.append(f"required({col_name})={'OK' if passed else 'FAIL'} nulls={nulls}")
+            properties: List[Dict[str, Any]] = schema_obj.get("properties") or []
+            required_cols = [str(p.get("name")) for p in properties if p.get("required") is True and p.get("name")]
+            unique_cols = [str(p.get("name")) for p in properties if p.get("unique") is True and p.get("name")]
+            range_specs: List[Tuple[str, Optional[float], Optional[float]]] = []
+            length_specs: List[Tuple[str, Optional[int], Optional[int]]] = []
+            pattern_specs: List[Tuple[str, str]] = []
 
-        # Unique
-        for col_name, passed, dup_groups in evaluate_unique_columns(df, unique_cols):
-            results.append(f"unique({col_name})={'OK' if passed else 'FAIL'} duplicate_groups={dup_groups}")
+            for p in properties:
+                col_name = p.get("name")
+                if not col_name:
+                    continue
+                min_val = p.get("minimum")
+                max_val = p.get("maximum")
+                if min_val is not None or max_val is not None:
+                    try:
+                        range_specs.append((str(col_name), float(min_val) if min_val is not None else None, float(max_val) if max_val is not None else None))
+                    except Exception:
+                        pass
+                min_len = p.get("minLength")
+                max_len = p.get("maxLength")
+                if min_len is not None or max_len is not None:
+                    try:
+                        length_specs.append((str(col_name), int(min_len) if min_len is not None else None, int(max_len) if max_len is not None else None))
+                    except Exception:
+                        pass
+                pattern_val = p.get("pattern")
+                if isinstance(pattern_val, str) and pattern_val:
+                    pattern_specs.append((str(col_name), pattern_val))
 
-        # Ranges
-        for col_name, passed, violations in evaluate_numeric_ranges(df, range_specs):
-            results.append(f"range({col_name})={'OK' if passed else 'FAIL'} violations={violations}")
+            # Required
+            for col_name, passed, nulls in evaluate_required_columns(df, required_cols):
+                msg = f"required({col_name})={'OK' if passed else 'FAIL'} nulls={nulls}"
+                print(f"[DQ] {contract_name} | {qualified} -> {msg}")
+                store_dq_result(engine, run_id, contract_id, qualified, "required", col_name, passed, nulls, msg)
+                if passed:
+                    checks_passed += 1
+                else:
+                    checks_failed += 1
 
-        # Lengths
-        for col_name, passed, violations in evaluate_string_lengths(df, length_specs):
-            results.append(f"length({col_name})={'OK' if passed else 'FAIL'} violations={violations}")
+            # Unique
+            for col_name, passed, dup_groups in evaluate_unique_columns(df, unique_cols):
+                msg = f"unique({col_name})={'OK' if passed else 'FAIL'} duplicate_groups={dup_groups}"
+                print(f"[DQ] {contract_name} | {qualified} -> {msg}")
+                store_dq_result(engine, run_id, contract_id, qualified, "unique", col_name, passed, dup_groups, msg)
+                if passed:
+                    checks_passed += 1
+                else:
+                    checks_failed += 1
 
-        # Patterns
-        for col_name, passed, violations in evaluate_regex_patterns(df, pattern_specs):
-            results.append(f"pattern({col_name})={'OK' if passed else 'FAIL'} violations={violations}")
+            # Ranges
+            for col_name, passed, violations in evaluate_numeric_ranges(df, range_specs):
+                msg = f"range({col_name})={'OK' if passed else 'FAIL'} violations={violations}"
+                print(f"[DQ] {contract_name} | {qualified} -> {msg}")
+                store_dq_result(engine, run_id, contract_id, qualified, "range", col_name, passed, violations, msg)
+                if passed:
+                    checks_passed += 1
+                else:
+                    checks_failed += 1
 
-        summary = "; ".join(results) if results else "no checks defined"
-        print(f"[DQ] {contract_name} | {qualified} -> {summary}")
+            # Lengths
+            for col_name, passed, violations in evaluate_string_lengths(df, length_specs):
+                msg = f"length({col_name})={'OK' if passed else 'FAIL'} violations={violations}"
+                print(f"[DQ] {contract_name} | {qualified} -> {msg}")
+                store_dq_result(engine, run_id, contract_id, qualified, "length", col_name, passed, violations, msg)
+                if passed:
+                    checks_passed += 1
+                else:
+                    checks_failed += 1
+
+            # Patterns
+            for col_name, passed, violations in evaluate_regex_patterns(df, pattern_specs):
+                msg = f"pattern({col_name})={'OK' if passed else 'FAIL'} violations={violations}"
+                print(f"[DQ] {contract_name} | {qualified} -> {msg}")
+                store_dq_result(engine, run_id, contract_id, qualified, "pattern", col_name, passed, violations, msg)
+                if passed:
+                    checks_passed += 1
+                else:
+                    checks_failed += 1
+
+        # Complete run
+        total = max(1, checks_passed + checks_failed)
+        score = round(100.0 * (checks_passed / total), 2)
+        complete_dq_run(engine, run_id, checks_passed, checks_failed, score)
+
+        return (checks_passed, checks_failed)
+
+    except Exception as e:
+        # Complete run with error
+        total = max(1, checks_passed + checks_failed)
+        score = round(100.0 * (checks_passed / total), 2) if total > 0 else 0.0
+        complete_dq_run(engine, run_id, checks_passed, checks_failed, score, str(e))
+        raise
 
 
 def main() -> None:
@@ -278,9 +545,26 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run data quality checks for active contracts")
     parser.add_argument("--catalog", type=str, default=os.environ.get("DATABRICKS_CATALOG"))
     parser.add_argument("--schema", type=str, default=os.environ.get("DATABRICKS_SCHEMA"))
+    parser.add_argument("--contract_statuses", type=str, default='["active", "certified"]')
+    parser.add_argument("--verbose", type=str, default="false")
+
+    # Database connection parameters
+    parser.add_argument("--lakebase_instance_name", type=str, required=True)
+    parser.add_argument("--postgres_host", type=str, required=True)
+    parser.add_argument("--postgres_db", type=str, required=True)
+    parser.add_argument("--postgres_port", type=str, default="5432")
+    parser.add_argument("--postgres_schema", type=str, default="public")
+
     args, _ = parser.parse_known_args()
 
-    spark = SparkSession.builder.appName("Ontos-DQX-Example").getOrCreate()
+    # Parse arguments
+    try:
+        contract_statuses = json.loads(args.contract_statuses)
+    except Exception:
+        contract_statuses = ["active", "certified"]
+    verbose = args.verbose.lower() == "true"
+
+    spark = SparkSession.builder.appName("Ontos-DataQuality-Checks").getOrCreate()
 
     # Defaults for partially-qualified physical names
     default_catalog = args.catalog or os.environ.get("DATABRICKS_CATALOG")
@@ -290,25 +574,60 @@ def main() -> None:
         print("Catalog/schema not provided; set --catalog/--schema or DATABRICKS_CATALOG/SCHEMA.")
         return
 
+    # Initialize workspace client
+    print("\nInitializing workspace client...")
+    ws = WorkspaceClient()
+    print("  ✓ Workspace client initialized")
+
+    # Connect to database
+    print("\nConnecting to database...")
+    engine = create_engine_from_params(
+        ws_client=ws,
+        host=args.postgres_host,
+        db=args.postgres_db,
+        port=args.postgres_port,
+        schema=args.postgres_schema,
+        instance_name=args.lakebase_instance_name
+    )
+    print("  ✓ Database connection established")
+
     # Load from Lakehouse federated UC tables
+    print(f"\nLoading contracts with statuses: {contract_statuses}")
     try:
-        contracts = load_active_contracts_from_uc(spark, default_catalog, default_schema)
+        contracts = load_active_contracts_from_uc(spark, default_catalog, default_schema, contract_statuses)
     except Exception as e:
         print(f"Failed loading contracts from UC: {e}")
         return
 
     if not contracts:
-        print("No active contracts found in UC. Exiting.")
+        print("No contracts found matching criteria. Exiting.")
         return
+
+    print(f"Found {len(contracts)} contracts to check")
+
+    total_passed = 0
+    total_failed = 0
 
     for contract in contracts:
         try:
-            run_contract_checks(spark, contract, default_catalog, default_schema)
+            passed, failed = run_contract_checks(spark, engine, contract, default_catalog, default_schema)
+            total_passed += passed
+            total_failed += failed
         except Exception as e:
             name = contract.get("name") or contract.get("id") or "unknown"
             print(f"[ERROR] Contract {name} failed with error: {e}")
+            total_failed += 1
 
+    total = max(1, total_passed + total_failed)
+    overall_score = round(100.0 * (total_passed / total), 2)
+
+    print("\n" + "=" * 80)
     print("Data Quality Checks workflow completed")
+    print("=" * 80)
+    print(f"Total checks passed: {total_passed}")
+    print(f"Total checks failed: {total_failed}")
+    print(f"Overall score: {overall_score}%")
+    print("")
 
 
 if __name__ == "__main__":
