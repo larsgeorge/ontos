@@ -39,36 +39,48 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
+
+    /* Sidebar background for light mode (slightly different from main bg) */
+    --sidebar-background: 0 0% 98%;
   }
- 
+
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
- 
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
- 
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
- 
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
- 
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
- 
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
- 
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
- 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
- 
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
+    /* Databricks exact dark mode colors */
+    /* Main content background - darkest (#11171c) */
+    --background: 211 24% 9%;
+    --foreground: 210 20% 93%;
+
+    --card: 211 24% 9%;
+    --card-foreground: 210 20% 93%;
+
+    --popover: 203 14% 18%;
+    --popover-foreground: 210 20% 93%;
+
+    --primary: 210 20% 93%;
+    --primary-foreground: 211 24% 9%;
+
+    /* Secondary elements (#283035) */
+    --secondary: 203 14% 18%;
+    --secondary-foreground: 210 20% 93%;
+
+    /* Muted/disabled elements (#37444f) */
+    --muted: 208 18% 26%;
+    --muted-foreground: 210 16% 65%;
+
+    --accent: 208 18% 26%;
+    --accent-foreground: 210 20% 93%;
+
+    --destructive: 349 67% 55%;
+    --destructive-foreground: 210 20% 93%;
+
+    /* Borders (#37444f) */
+    --border: 208 18% 26%;
+    --input: 208 18% 26%;
+    --ring: 199 89% 48%;
+
+    /* Sidebar/header background - LIGHTER than main (#1f272d) */
+    --sidebar-background: 206 18% 15%;
+
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
