@@ -15,15 +15,14 @@ import { useNotificationsStore } from '@/stores/notifications-store';
 import { NotificationType } from '@/types/notification';
 
 export default function NotificationBell() {
-  const {
-    notifications,
-    unreadCount,
-    isLoading,
-    error,
-    fetchNotifications,
-    markAsRead,
-    deleteNotification
-  } = useNotificationsStore();
+  // Use selective subscriptions to avoid unnecessary re-renders
+  const notifications = useNotificationsStore(state => state.notifications);
+  const unreadCount = useNotificationsStore(state => state.unreadCount);
+  const isLoading = useNotificationsStore(state => state.isLoading);
+  const error = useNotificationsStore(state => state.error);
+  const fetchNotifications = useNotificationsStore(state => state.fetchNotifications);
+  const markAsRead = useNotificationsStore(state => state.markAsRead);
+  const deleteNotification = useNotificationsStore(state => state.deleteNotification);
 
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [selectedNotificationPayload, setSelectedNotificationPayload] = useState<Record<string, any> | null>(null);

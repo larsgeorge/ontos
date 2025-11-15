@@ -72,10 +72,13 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   error: null,
 
   fetchNotifications: async () => {
+    const currentState = get();
+    
     // Only set loading if not already loading (prevent visual flicker during polling)
-    if (!get().isLoading) {
+    if (!currentState.isLoading) {
       set({ isLoading: true, error: null });
     }
+    
     try {
       const response = await apiGet<Notification[]>('/api/notifications');
 
@@ -86,23 +89,27 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
       const fetchedNotifications = response.data;
       const unread = fetchedNotifications.filter(n => !n.read).length;
 
-      // Only update state if data has changed to prevent unnecessary re-renders
-      if (JSON.stringify(fetchedNotifications) !== JSON.stringify(get().notifications) || unread !== get().unreadCount) {
+      // Only update state if data has changed OR if we're currently loading
+      const dataChanged = JSON.stringify(fetchedNotifications) !== JSON.stringify(currentState.notifications) || 
+                         unread !== currentState.unreadCount;
+      
+      if (dataChanged || currentState.isLoading) {
         set({
             notifications: fetchedNotifications,
             unreadCount: unread,
             isLoading: false,
             error: null,
         });
-      } else {
-         // If no change, just ensure loading is false
-         set({ isLoading: false, error: null }); 
       }
+      // Don't call set() at all if nothing changed and not loading
 
     } catch (error: any) {
       console.error("Error fetching notifications:", error);
-      // Don't clear notifications on a failed poll, keep stale data + error
-      set({ isLoading: false, error: error.message || 'An unknown error occurred' });
+      const errorMessage = error.message || 'An unknown error occurred';
+      // Only update if error or loading state actually changed
+      if (currentState.error !== errorMessage || currentState.isLoading) {
+        set({ isLoading: false, error: errorMessage });
+      }
     }
   },
 
