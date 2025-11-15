@@ -29,3 +29,4 @@ rdflib>=7.1.0
 jsonschema>=4.22.0
 bleach>=6.0.0
 pip-licenses>=5.1.0
+filelock>=3.13.0

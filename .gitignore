@@ -24,6 +24,9 @@ yarn-error.log*
 venv
 __pycache__
 
+# Backend cache directory
+src/backend/src/data/cache/
+
 .databricks
 .env
 

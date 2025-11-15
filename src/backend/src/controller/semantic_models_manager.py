@@ -7,6 +7,9 @@ from rdflib import URIRef, Literal, Namespace
 from sqlalchemy.orm import Session
 import signal
 from contextlib import contextmanager
+import json
+import shutil
+from filelock import FileLock
 
 from src.db_models.semantic_models import SemanticModelDb
 from src.models.semantic_models import (
@@ -314,6 +317,209 @@ class SemanticModelsManager:
                 context.add((subj, RDFS.seeAlso, obj))
         except Exception as e:
             logger.warning(f"Failed to incorporate semantic entity links into graph: {e}")
+
+        # Build persistent caches after graph is rebuilt
+        try:
+            self._build_persistent_caches_atomic()
+        except Exception as e:
+            logger.error(f"Failed to build persistent caches: {e}", exc_info=True)
+
+    def _build_persistent_caches_atomic(self) -> None:
+        """Build and save persistent caches atomically to disk.
+
+        Uses atomic directory swap to prevent partial cache reads.
+        Cache files are JSON-serialized for fast loading.
+        """
+        cache_dir = self._data_dir / "cache"
+        temp_dir = self._data_dir / "cache_building"
+        lock_file = self._data_dir / "cache" / "rebuild.lock"
+
+        # Ensure lock directory exists
+        lock_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Prevent concurrent cache builds
+        with FileLock(str(lock_file), timeout=300):
+            logger.info("Building persistent caches...")
+
+            # Clean temp directory
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
+            temp_dir.mkdir(parents=True)
+
+            try:
+                # Build all caches in temp directory
+                # 1. All concepts
+                logger.info("Computing all concepts for cache...")
+                all_concepts = self._compute_all_concepts()
+                concepts_data = [c.model_dump() for c in all_concepts]
+                with open(temp_dir / "concepts_all.json", "w") as f:
+                    json.dump(concepts_data, f)
+                logger.info(f"Cached {len(all_concepts)} concepts")
+
+                # 2. Taxonomies
+                logger.info("Computing taxonomies for cache...")
+                taxonomies = self._compute_taxonomies()
+                taxonomies_data = [t.model_dump() for t in taxonomies]
+                with open(temp_dir / "taxonomies.json", "w") as f:
+                    json.dump(taxonomies_data, f)
+                logger.info(f"Cached {len(taxonomies)} taxonomies")
+
+                # 3. Stats (depends on concepts and taxonomies)
+                logger.info("Computing stats for cache...")
+                stats = self._compute_stats(all_concepts, taxonomies)
+                with open(temp_dir / "stats.json", "w") as f:
+                    json.dump(stats.model_dump(), f)
+                logger.info("Cached stats")
+
+                # Atomic swap: move temp files to final location
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                for file in temp_dir.glob("*.json"):
+                    final_path = cache_dir / file.name
+                    # Remove old file if exists
+                    if final_path.exists():
+                        final_path.unlink()
+                    # Move new file
+                    file.rename(final_path)
+
+                # Remove temp directory
+                temp_dir.rmdir()
+
+                logger.info("Persistent caches built successfully")
+
+            except Exception as e:
+                # Clean up temp directory on failure
+                if temp_dir.exists():
+                    shutil.rmtree(temp_dir)
+                raise
+
+    def _compute_taxonomies(self) -> List:
+        """Compute taxonomies without caching - used for building persistent cache"""
+        from src.models.ontology import SemanticModel as SemanticModelOntology
+
+        taxonomies = []
+
+        # Check if graph has any triples
+        total_triples = len(self._graph)
+        context_count = len(list(self._graph.contexts()))
+        logger.info(f"Graph has {total_triples} total triples and {context_count} contexts")
+
+        # Get contexts from the graph
+        for context in self._graph.contexts():
+            logger.debug(f"Processing context: {context} (type: {type(context)})")
+
+            # Get the context identifier
+            if hasattr(context, 'identifier'):
+                context_id = context.identifier
+            else:
+                logger.debug(f"Context has no identifier attribute: {context}")
+                continue
+
+            if not isinstance(context_id, URIRef):
+                logger.debug(f"Context identifier is not URIRef: {context_id} ({type(context_id)})")
+                continue
+
+            context_str = str(context_id)
+            logger.debug(f"Processing context with identifier: {context_str}")
+
+            # Count concepts and properties in this context
+            try:
+                class_count_query = """
+                PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+                PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+                PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                SELECT (COUNT(DISTINCT ?concept) AS ?count) WHERE {
+                    {
+                        ?concept a rdfs:Class .
+                    } UNION {
+                        ?concept a skos:Concept .
+                    } UNION {
+                        ?concept a skos:ConceptScheme .
+                    } UNION {
+                        # Include any resource that is used as a class (has instances or subclasses)
+                        ?concept rdfs:subClassOf ?parent .
+                    } UNION {
+                        ?instance a ?concept .
+                        FILTER(?concept != rdfs:Class && ?concept != skos:Concept && ?concept != rdf:Property)
+                    } UNION {
+                        # Include resources with semantic properties that make them conceptual
+                        ?concept rdfs:label ?someLabel .
+                        ?concept rdfs:comment ?someComment .
+                    }
+                    # Filter out basic RDF/RDFS/SKOS vocabulary terms
+                    FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/1999/02/22-rdf-syntax-ns#"))
+                    FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2000/01/rdf-schema#"))
+                    FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2004/02/skos/core#"))
+                }
+                """
+
+                count_results = list(context.query(class_count_query))
+                concepts_count = int(count_results[0][0]) if count_results and count_results[0][0] is not None else 0
+
+                properties_count = len(list(context.subjects(RDF.type, RDF.Property)))
+
+                logger.debug(f"Context {context_str}: {concepts_count} concepts, {properties_count} properties")
+
+            except Exception as e:
+                logger.warning(f"Error counting concepts in context {context_str}: {e}")
+                concepts_count = 0
+                properties_count = 0
+
+            # Determine taxonomy type and name
+            if context_str.startswith("urn:taxonomy:"):
+                source_type = "file"
+                name = context_str.replace("urn:taxonomy:", "")
+                format_str = "ttl"
+            elif context_str.startswith("urn:semantic-model:"):
+                source_type = "database"
+                name = context_str.replace("urn:semantic-model:", "")
+                format_str = "rdfs"
+            elif context_str.startswith("urn:schema:"):
+                source_type = "schema"
+                name = context_str.replace("urn:schema:", "")
+                format_str = "ttl"
+            elif context_str.startswith("urn:glossary:"):
+                source_type = "database"
+                name = context_str.replace("urn:glossary:", "")
+                format_str = "rdfs"
+            else:
+                source_type = "external"
+                name = context_str
+                format_str = None
+
+            taxonomies.append(SemanticModelOntology(
+                name=name,
+                description=f"{source_type.title()} taxonomy: {name}",
+                source_type=source_type,
+                format=format_str,
+                concepts_count=concepts_count,
+                properties_count=properties_count
+            ))
+
+        return sorted(taxonomies, key=lambda t: (t.source_type, t.name))
+
+    def _compute_stats(self, all_concepts: List, taxonomies: List) -> Any:
+        """Compute stats without caching - used for building persistent cache"""
+        from src.models.ontology import TaxonomyStats
+
+        total_concepts = sum(t.concepts_count for t in taxonomies)
+        total_properties = sum(t.properties_count for t in taxonomies)
+
+        # Get concepts by type
+        concepts_by_type = {}
+        for concept in all_concepts:
+            concept_type = concept.concept_type
+            concepts_by_type[concept_type] = concepts_by_type.get(concept_type, 0) + 1
+
+        # Count top-level concepts (those without parents)
+        top_level_concepts = sum(1 for concept in all_concepts if not concept.parent_concepts)
+
+        return TaxonomyStats(
+            total_concepts=total_concepts,
+            total_properties=total_properties,
+            taxonomies=taxonomies,
+            concepts_by_type=concepts_by_type,
+            top_level_concepts=top_level_concepts
+        )
 
     # Call after create/update/delete/enable/disable
     def on_models_changed(self) -> None:
@@ -762,125 +968,23 @@ class SemanticModelsManager:
     
     def get_taxonomies(self) -> List[SemanticModelOntology]:
         """Get all available taxonomies/ontologies with their metadata"""
-        # Check cache first
-        cache_key = "taxonomies"
-        cached = self._get_cached(cache_key)
-        if cached is not None:
-            return cached
-
-        taxonomies = []
-
-        # Check if graph has any triples at all
-        total_triples = len(self._graph)
-        context_count = len(list(self._graph.contexts()))
-        logger.info(f"Graph has {total_triples} total triples and {context_count} contexts")
-        
-        # Get contexts from the graph
-        for context in self._graph.contexts():
-            logger.debug(f"Processing context: {context} (type: {type(context)})")
-            
-            # Get the context identifier
-            if hasattr(context, 'identifier'):
-                context_id = context.identifier
-            else:
-                logger.debug(f"Context has no identifier attribute: {context}")
-                continue
-            
-            if not isinstance(context_id, URIRef):
-                logger.debug(f"Context identifier is not URIRef: {context_id} ({type(context_id)})")
-                continue
-            
-            context_str = str(context_id)
-            logger.debug(f"Processing context with identifier: {context_str}")
-            
-            # Count concepts and properties in this context using comprehensive SPARQL query
+        # Check persistent cache first
+        cache_file = self._data_dir / "cache" / "taxonomies.json"
+        if cache_file.exists():
             try:
-                # Use the same comprehensive query as in get_concepts_by_taxonomy for consistency
-                class_count_query = """
-                PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-                PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
-                PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-                SELECT (COUNT(DISTINCT ?concept) AS ?count) WHERE {
-                    {
-                        ?concept a rdfs:Class .
-                    } UNION {
-                        ?concept a skos:Concept .
-                    } UNION {
-                        ?concept a skos:ConceptScheme .
-                    } UNION {
-                        # Include any resource that is used as a class (has instances or subclasses)
-                        ?concept rdfs:subClassOf ?parent .
-                    } UNION {
-                        ?instance a ?concept .
-                        FILTER(?concept != rdfs:Class && ?concept != skos:Concept && ?concept != rdf:Property)
-                    } UNION {
-                        # Include resources with semantic properties that make them conceptual
-                        ?concept rdfs:label ?someLabel .
-                        ?concept rdfs:comment ?someComment .
-                    }
-                    # Filter out basic RDF/RDFS/SKOS vocabulary terms
-                    FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/1999/02/22-rdf-syntax-ns#"))
-                    FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2000/01/rdf-schema#"))
-                    FILTER(!STRSTARTS(STR(?concept), "http://www.w3.org/2004/02/skos/core#"))
-                }
-                """
-                
-                count_results = list(context.query(class_count_query))
-                concepts_count = int(count_results[0][0]) if count_results and count_results[0][0] is not None else 0
-                
-                properties_count = len(list(context.subjects(RDF.type, RDF.Property)))
-                
-                logger.debug(f"Context {context_str}: {concepts_count} concepts, {properties_count} properties")
-                
+                with open(cache_file, "r") as f:
+                    data = json.load(f)
+                    return [SemanticModelOntology(**item) for item in data]
             except Exception as e:
-                logger.warning(f"Error counting concepts in context {context_str}: {e}")
-                concepts_count = 0
-                properties_count = 0
-            
-            # Determine taxonomy type and name
-            if context_str.startswith("urn:taxonomy:"):
-                source_type = "file"
-                name = context_str.replace("urn:taxonomy:", "")
-                format_str = "ttl"
-            elif context_str.startswith("urn:semantic-model:"):
-                source_type = "database" 
-                name = context_str.replace("urn:semantic-model:", "")
-                format_str = "rdfs"
-            elif context_str.startswith("urn:schema:"):
-                source_type = "schema"
-                name = context_str.replace("urn:schema:", "")
-                format_str = "ttl"
-            elif context_str.startswith("urn:glossary:"):
-                source_type = "database"
-                name = context_str.replace("urn:glossary:", "")
-                format_str = "rdfs"
-            else:
-                source_type = "external"
-                name = context_str
-                format_str = None
-            
-            taxonomies.append(SemanticModelOntology(
-                name=name,
-                description=f"{source_type.title()} taxonomy: {name}",
-                source_type=source_type,
-                format=format_str,
-                concepts_count=concepts_count,
-                properties_count=properties_count
-            ))
+                logger.warning(f"Failed to load taxonomies from persistent cache: {e}")
 
-        result = sorted(taxonomies, key=lambda t: (t.source_type, t.name))
-        # Cache for 5 minutes
-        self._set_cached(cache_key, result, ttl_seconds=300)
-        return result
-    
-    def get_concepts_by_taxonomy(self, taxonomy_name: str = None) -> List[OntologyConcept]:
-        """Get concepts, optionally filtered by taxonomy"""
-        # Check cache first
-        cache_key = f"concepts_by_taxonomy:{taxonomy_name or 'all'}"
-        cached = self._get_cached(cache_key)
-        if cached is not None:
-            return cached
+        # Fallback to live computation
+        logger.warning("Persistent cache not found for taxonomies, computing live")
+        taxonomies = self._compute_taxonomies()
+        return taxonomies
 
+    def _compute_all_concepts(self, taxonomy_name: str = None) -> List[OntologyConcept]:
+        """Compute all concepts without caching - used for building persistent cache"""
         concepts = []
 
         # Determine which contexts to search
@@ -889,7 +993,7 @@ class SemanticModelsManager:
             # Find the specific context
             target_contexts = [
                 f"urn:taxonomy:{taxonomy_name}",
-                f"urn:semantic-model:{taxonomy_name}", 
+                f"urn:semantic-model:{taxonomy_name}",
                 f"urn:schema:{taxonomy_name}",
                 f"urn:glossary:{taxonomy_name}"
             ]
@@ -898,10 +1002,10 @@ class SemanticModelsManager:
                     contexts_to_search.append((str(context.identifier), context))
         else:
             # Search all contexts
-            contexts_to_search = [(str(context.identifier), context) 
-                                for context in self._graph.contexts() 
+            contexts_to_search = [(str(context.identifier), context)
+                                for context in self._graph.contexts()
                                 if hasattr(context, 'identifier')]
-        
+
         for context_name, context in contexts_to_search:
             # Find all classes and concepts in this context - expanded to catch all defined resources
             class_query = """
@@ -944,17 +1048,17 @@ class SemanticModelsManager:
             }
             ORDER BY ?concept
             """
-            
+
             try:
                 results = context.query(class_query)
                 results_list = list(results)
                 logger.debug(f"SPARQL query returned {len(results_list)} results for context {context_name}")
-                
+
                 # Process results
                 results = results_list
                 for row in results:
                     logger.debug(f"Processing SPARQL row: {row} (type: {type(row)}, length: {len(row) if hasattr(row, '__len__') else 'N/A'})")
-                    
+
                     # Handle different ways SPARQL results can be accessed
                     try:
                         if hasattr(row, 'concept'):
@@ -969,13 +1073,13 @@ class SemanticModelsManager:
                     except Exception as e:
                         logger.warning(f"Failed to parse SPARQL result row {row}: {e}")
                         continue
-                    
+
                     if not concept_iri:
                         logger.debug("Skipping row with no concept IRI")
                         continue
-                    
+
                     concept_uri = URIRef(concept_iri)
-                    
+
                     # Determine concept type
                     if (concept_uri, RDF.type, RDFS.Class) in context:
                         concept_type = "class"
@@ -983,7 +1087,7 @@ class SemanticModelsManager:
                         concept_type = "concept"
                     else:
                         concept_type = "individual"
-                    
+
                     # Get parent concepts
                     parent_concepts = []
                     # Handle rdfs:subClassOf relationships (class-to-class)
@@ -998,11 +1102,11 @@ class SemanticModelsManager:
                         parent_type_str = str(parent_type)
                         if not any(parent_type_str.startswith(prefix) for prefix in [
                             "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-                            "http://www.w3.org/2000/01/rdf-schema#", 
+                            "http://www.w3.org/2000/01/rdf-schema#",
                             "http://www.w3.org/2004/02/skos/core#"
                         ]):
                             parent_concepts.append(parent_type_str)
-                    
+
                     # Extract source context name
                     source_context = None
                     if context_name.startswith("urn:taxonomy:"):
@@ -1013,7 +1117,7 @@ class SemanticModelsManager:
                         source_context = context_name.replace("urn:schema:", "")
                     elif context_name.startswith("urn:glossary:"):
                         source_context = context_name.replace("urn:glossary:", "")
-                    
+
                     concepts.append(OntologyConcept(
                         iri=concept_iri,
                         label=label,
@@ -1024,15 +1128,29 @@ class SemanticModelsManager:
                     ))
             except Exception as e:
                 logger.warning(f"Failed to query concepts in context {context_name}: {e}")
-        
-        # Second pass: populate child_concepts
+
+        # Second pass: populate child_concepts using O(n) dictionary lookup
         concept_map = {concept.iri: concept for concept in concepts}
         for concept in concepts:
-            # Find all concepts that list this concept as a parent
-            for other_concept in concepts:
-                if concept.iri in other_concept.parent_concepts:
-                    if other_concept.iri not in concept.child_concepts:
-                        concept.child_concepts.append(other_concept.iri)
+            # For each parent of this concept, add this concept as a child
+            for parent_iri in concept.parent_concepts:
+                if parent_iri in concept_map:
+                    parent_concept = concept_map[parent_iri]
+                    if concept.iri not in parent_concept.child_concepts:
+                        parent_concept.child_concepts.append(concept.iri)
+
+        return concepts
+
+    def get_concepts_by_taxonomy(self, taxonomy_name: str = None) -> List[OntologyConcept]:
+        """Get concepts, optionally filtered by taxonomy"""
+        # Check cache first
+        cache_key = f"concepts_by_taxonomy:{taxonomy_name or 'all'}"
+        cached = self._get_cached(cache_key)
+        if cached is not None:
+            return cached
+
+        # Compute concepts
+        concepts = self._compute_all_concepts(taxonomy_name)
 
         # Cache for 5 minutes
         self._set_cached(cache_key, concepts, ttl_seconds=300)
@@ -1241,38 +1359,22 @@ class SemanticModelsManager:
     
     def get_taxonomy_stats(self) -> TaxonomyStats:
         """Get statistics about loaded taxonomies"""
-        # Check cache first
-        cache_key = "taxonomy_stats"
-        cached = self._get_cached(cache_key)
-        if cached is not None:
-            return cached
+        # Check persistent cache first
+        cache_file = self._data_dir / "cache" / "stats.json"
+        if cache_file.exists():
+            try:
+                with open(cache_file, "r") as f:
+                    data = json.load(f)
+                    return TaxonomyStats(**data)
+            except Exception as e:
+                logger.warning(f"Failed to load stats from persistent cache: {e}")
 
+        # Fallback to live computation
+        logger.warning("Persistent cache not found for stats, computing live")
         taxonomies = self.get_taxonomies()
-
-        total_concepts = sum(t.concepts_count for t in taxonomies)
-        total_properties = sum(t.properties_count for t in taxonomies)
-
-        # Get concepts by type
-        concepts_by_type = {}
         all_concepts = self.get_concepts_by_taxonomy()
-        for concept in all_concepts:
-            concept_type = concept.concept_type
-            concepts_by_type[concept_type] = concepts_by_type.get(concept_type, 0) + 1
-
-        # Count top-level concepts (those without parents)
-        top_level_concepts = sum(1 for concept in all_concepts if not concept.parent_concepts)
-
-        result = TaxonomyStats(
-            total_concepts=total_concepts,
-            total_properties=total_properties,
-            taxonomies=taxonomies,
-            concepts_by_type=concepts_by_type,
-            top_level_concepts=top_level_concepts
-        )
-
-        # Cache for 5 minutes
-        self._set_cached(cache_key, result, ttl_seconds=300)
-        return result
+        stats = self._compute_stats(all_concepts, taxonomies)
+        return stats
 
     def get_grouped_concepts(self) -> Dict[str, List[OntologyConcept]]:
         """Return all concepts grouped by their source context name.
@@ -1280,25 +1382,32 @@ class SemanticModelsManager:
         Group key is derived from OntologyConcept.source_context, or 'Unassigned' when missing.
         Concepts in each group are sorted by label (fallback to IRI).
         """
-        # Check cache first
-        cache_key = "grouped_concepts"
-        cached = self._get_cached(cache_key)
-        if cached is not None:
-            return cached
+        # Check persistent cache first
+        cache_file = self._data_dir / "cache" / "concepts_all.json"
+        if cache_file.exists():
+            try:
+                with open(cache_file, "r") as f:
+                    data = json.load(f)
+                    concepts = [OntologyConcept(**item) for item in data]
+            except Exception as e:
+                logger.warning(f"Failed to load concepts from persistent cache: {e}")
+                concepts = self.get_concepts_by_taxonomy()
+        else:
+            # Fallback to live computation
+            logger.warning("Persistent cache not found for concepts, computing live")
+            concepts = self.get_concepts_by_taxonomy()
 
-        concepts = self.get_concepts_by_taxonomy()
+        # Group concepts by source_context
         grouped: Dict[str, List[OntologyConcept]] = {}
-
         for concept in concepts:
             source = concept.source_context or "Unassigned"
             if source not in grouped:
                 grouped[source] = []
             grouped[source].append(concept)
 
+        # Sort concepts within each group
         for source in grouped:
             grouped[source].sort(key=lambda c: (c.label or c.iri))
 
-        # Cache for 5 minutes
-        self._set_cached(cache_key, grouped, ttl_seconds=300)
         return grouped
 
