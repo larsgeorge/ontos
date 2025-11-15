@@ -106,25 +106,41 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    # Use a dictionary to pass the URL directly
-    configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = DB_URL # <--- Set the URL here
-
-    connectable = engine_from_config(
-        configuration, # Pass the modified configuration
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-
-    with connectable.connect() as connection:
+    # Check if a connection was provided via config.attributes
+    # This allows database.py to pass an existing connection to avoid connection issues
+    connectable = config.attributes.get('connection', None)
+    
+    if connectable is not None:
+        # Use the provided connection directly
         context.configure(
-            connection=connection, 
+            connection=connectable,
             target_metadata=target_metadata,
-            include_object=include_object # Pass the hook function
+            include_object=include_object
         )
-
+        
         with context.begin_transaction():
             context.run_migrations()
+    else:
+        # Create our own engine and connection (normal standalone mode)
+        # Use a dictionary to pass the URL directly
+        configuration = config.get_section(config.config_ini_section, {})
+        configuration["sqlalchemy.url"] = DB_URL # <--- Set the URL here
+
+        connectable = engine_from_config(
+            configuration, # Pass the modified configuration
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+        )
+
+        with connectable.connect() as connection:
+            context.configure(
+                connection=connection, 
+                target_metadata=target_metadata,
+                include_object=include_object # Pass the hook function
+            )
+
+            with context.begin_transaction():
+                context.run_migrations()
 
 
 if context.is_offline_mode():
