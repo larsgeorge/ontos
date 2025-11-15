@@ -815,86 +815,23 @@ def init_db() -> None:
         # Once Alembic is tracking the schema, migrations handle all schema changes
         if db_revision is None:
             logger.info("Fresh database detected (no Alembic version). Using create_all() for initial setup...")
-            # Debug: Check what tables are registered in Base.metadata
-            logger.info(f"Base.metadata has {len(Base.metadata.tables)} tables registered: {list(Base.metadata.tables.keys())[:10]}...")
-            # Use explicit connection context to ensure proper schema targeting
             target_schema = settings.POSTGRES_DB_SCHEMA or 'public'
-            try:
-                with _engine.begin() as connection:
-                    # Explicitly set search_path before creating tables
-                    logger.info(f"Setting search_path to '{target_schema}' before creating tables...")
-                    connection.execute(text(f'SET search_path TO "{target_schema}"'))
-                    
-                    # Verify search_path is set
-                    result = connection.execute(text("SHOW search_path"))
-                    current_path = result.scalar()
-                    logger.info(f"Current search_path: {current_path}")
-                    
-                    logger.info(f"Creating tables in schema '{target_schema}'...")
-                    Base.metadata.create_all(bind=connection, checkfirst=True)
-                    
-                    # Verify tables were created
-                    result = connection.execute(text(
-                        "SELECT COUNT(*) FROM information_schema.tables "
-                        "WHERE table_schema = :schema AND table_type = 'BASE TABLE'"
-                    ), {"schema": target_schema})
-                    table_count = result.scalar()
-                    logger.info(f"After create_all(): {table_count} tables exist in schema '{target_schema}'")
-                    
-                    if table_count == 0:
-                        logger.error("create_all() completed but no tables were created! Investigating...")
-                        # Check if schema exists
-                        result = connection.execute(text(
-                            "SELECT schema_name FROM information_schema.schemata WHERE schema_name = :schema"
-                        ), {"schema": target_schema})
-                        schema_exists = result.scalar()
-                        logger.error(f"Schema '{target_schema}' exists: {schema_exists is not None}")
-                        raise RuntimeError(f"create_all() failed to create tables in schema '{target_schema}'")
-                    
-                    logger.info(f"create_all() completed. Transaction will auto-commit on context exit.")
-                # Context manager exits here - transaction should commit
-                logger.info("✓ Transaction context exited. Commit should have occurred.")
-                
-                # Verify tables persisted after commit using a NEW connection
-                with _engine.connect() as verify_conn:
-                    verify_conn.execute(text(f'SET search_path TO "{target_schema}"'))
-                    result = verify_conn.execute(text(
-                        "SELECT COUNT(*) FROM information_schema.tables "
-                        "WHERE table_schema = :schema AND table_type = 'BASE TABLE'"
-                    ), {"schema": target_schema})
-                    post_commit_count = result.scalar()
-                    logger.info(f"POST-COMMIT verification: {post_commit_count} tables exist in '{target_schema}'")
-                    
-                    if post_commit_count == 0:
-                        logger.critical("TRANSACTION ROLLBACK DETECTED! Tables disappeared after transaction context exit!")
-                        raise RuntimeError("Tables were created but rolled back - check database logs for errors")
-            except Exception as e:
-                logger.error(f"Error during create_all(): {e}", exc_info=True)
-                raise
+            
+            # Create all tables in the target schema
+            with _engine.begin() as connection:
+                # Explicitly set search_path to ensure tables are created in correct schema
+                connection.execute(text(f'SET search_path TO "{target_schema}"'))
+                Base.metadata.create_all(bind=connection, checkfirst=True)
             logger.info("✓ Database tables created by create_all.")
+            
             # Stamp the database with the baseline migration
             logger.info("Stamping database with baseline migration...")
             try:
-                # Use explicit connection context for stamping to avoid hangs
                 with _engine.begin() as connection:
-                    # Ensure search_path is set for stamping too
                     connection.execute(text(f'SET search_path TO "{target_schema}"'))
                     alembic_cfg.attributes['connection'] = connection
                     alembic_command.stamp(alembic_cfg, "head")
                 logger.info("✓ Database stamped with baseline migration.")
-                
-                # Verify tables STILL exist after stamping
-                with _engine.connect() as verify_conn:
-                    result = verify_conn.execute(text(
-                        "SELECT COUNT(*) FROM information_schema.tables "
-                        "WHERE table_schema = :schema AND table_type = 'BASE TABLE'"
-                    ), {"schema": target_schema})
-                    post_stamp_count = result.scalar()
-                    logger.info(f"POST-STAMP verification: {post_stamp_count} tables exist in '{target_schema}'")
-                    
-                    if post_stamp_count == 0:
-                        logger.critical("TABLES DISAPPEARED AFTER STAMP! Something deleted them!")
-                        raise RuntimeError("Tables were deleted after Alembic stamp operation")
             except Exception as stamp_err:
                 logger.error(f"Failed to stamp database: {stamp_err}", exc_info=True)
                 raise

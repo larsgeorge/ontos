@@ -90,7 +90,7 @@ def _load_domains(db: Session) -> None:
     from src.models.data_domains import DataDomainCreate
 
     manager = DataDomainManager(repository=DataDomainRepository())
-    domains_data = config.get("data_domains", [])
+    domains_data = config.get("domains", [])
 
     # Create domains in order (parents before children)
     created_domains = {}
