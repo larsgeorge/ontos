@@ -407,135 +407,159 @@ def get_db_url(settings: Settings) -> str:
 def ensure_database_and_schema_exist(settings: Settings):
     """
     Ensure the target database and schema exist. If not, create them.
-    Only runs in OAuth mode (non-LOCAL). Connects to default postgres database
-    to create target database, then creates schema within it.
+    Works in both LOCAL and OAuth modes (authentication differs but logic is unified).
     
-    The app (as service principal) becomes the owner of what it creates,
+    If APP_DB_DROP_ON_START=true, drops the schema CASCADE before creating it.
+    Connects to default postgres database to create target database (OAuth mode only),
+    then creates schema within it.
+    
+    The app (as service principal) becomes the owner of what it creates in OAuth mode,
     eliminating permission issues.
     
     Security: All PostgreSQL identifiers are validated to prevent SQL injection.
     """
-    if settings.ENV.upper().startswith("LOCAL"):
-        logger.debug("LOCAL mode: Skipping database auto-creation (assuming pre-existing)")
-        return
+    is_local_mode = settings.ENV.upper().startswith("LOCAL")
     
-    logger.info("Checking if database and schema need to be created...")
+    logger.info(f"Ensuring database and schema exist ({'LOCAL' if is_local_mode else 'OAuth'} mode)...")
     
-    # Get service principal username
-    ws_client = get_workspace_client(settings)
-    username = (
-        os.getenv("DATABRICKS_CLIENT_ID")
-        or ws_client.current_user.me().user_name
-    )
+    # Determine username based on mode
+    if is_local_mode:
+        username = settings.POSTGRES_USER
+    else:
+        # Get service principal username for OAuth mode
+        ws_client = get_workspace_client(settings)
+        username = (
+            os.getenv("DATABRICKS_CLIENT_ID")
+            or ws_client.current_user.me().user_name
+        )
     
     if not username:
-        raise ValueError("Could not determine service principal username")
+        raise ValueError("Could not determine username/service principal")
     
     # Validate all PostgreSQL identifiers to prevent SQL injection
-    # These come from configuration but defense-in-depth is important
     try:
         target_db = sanitize_postgres_identifier(settings.POSTGRES_DB)
         target_schema = sanitize_postgres_identifier(settings.POSTGRES_DB_SCHEMA) if settings.POSTGRES_DB_SCHEMA else None
         username = sanitize_postgres_identifier(username)
     except ValueError as e:
         raise ValueError(
-            f"Invalid PostgreSQL identifier in configuration or service principal: {e}. "
-            "Please check POSTGRES_DB, POSTGRES_DB_SCHEMA, and service principal name."
+            f"Invalid PostgreSQL identifier in configuration: {e}. "
+            "Please check POSTGRES_DB, POSTGRES_DB_SCHEMA, and username."
         ) from e
     
-    logger.info(f"Service Principal: {username}")
+    logger.info(f"Username: {username}")
     logger.debug(f"Target database: {target_db}, schema: {target_schema}")
     
-    # Generate initial OAuth token
-    refresh_oauth_token(settings)
+    # Generate initial OAuth token for OAuth mode
+    if not is_local_mode:
+        refresh_oauth_token(settings)
     
-    # Build URL for default postgres database
-    default_db_url = URL.create(
+    # Build URL for default postgres database (for DB creation in OAuth mode)
+    # or target database (for LOCAL mode - DB should already exist)
+    db_for_connection = target_db if is_local_mode else "postgres"
+    connection_url = URL.create(
         drivername="postgresql+psycopg2",
         username=username,
-        password="",
+        password=settings.POSTGRES_PASSWORD if is_local_mode else "",
         host=settings.POSTGRES_HOST,
         port=settings.POSTGRES_PORT,
-        database="postgres",  # Connect to default database first
+        database=db_for_connection,
     )
     
-    # Create temporary engine for postgres database
+    # Create temporary engine
     temp_engine = create_engine(
-        default_db_url.render_as_string(hide_password=False),
-        isolation_level="AUTOCOMMIT"  # Needed for CREATE DATABASE
+        connection_url.render_as_string(hide_password=False),
+        isolation_level="AUTOCOMMIT"  # Needed for CREATE DATABASE/SCHEMA
     )
     
-    # Inject OAuth token for connections
-    @event.listens_for(temp_engine, "do_connect")
-    def inject_token_temp(dialect, conn_rec, cargs, cparams):
-        global _oauth_token
-        if _oauth_token:
-            cparams["password"] = _oauth_token
-    
-    try:
-        with temp_engine.connect() as conn:
-            # Check if target database exists (using parameterized query)
-            result = conn.execute(
-                text("SELECT 1 FROM pg_database WHERE datname = :dbname"),
-                {"dbname": target_db}
-            )
-            db_exists = result.scalar() is not None
-            
-            if not db_exists:
-                logger.info(f"Database does not exist, attempting to create: {target_db}")
-                try:
-                    # CREATE DATABASE cannot be parameterized, but identifier is validated
-                    conn.execute(text(f'CREATE DATABASE "{target_db}"'))
-                    logger.info(f"✓ Database created: {target_db} (owner: {username})")
-                except Exception as e:
-                    if "permission denied" in str(e).lower():
-                        logger.warning(f"Cannot create database (insufficient privileges). "
-                                     f"Database '{target_db}' must be created manually.")
-                        logger.warning(f"Run this as a Lakebase admin: CREATE DATABASE \"{target_db}\";")
-                        raise RuntimeError(
-                            f"Database '{target_db}' does not exist and service principal lacks CREATEDB privilege. "
-                            f"Please create the database manually first."
-                        ) from e
-                    else:
-                        raise
-            else:
-                logger.info(f"✓ Database already exists: {target_db}")
-        
-        # Now connect to target database to create schema
-        target_db_url = URL.create(
-            drivername="postgresql+psycopg2",
-            username=username,
-            password="",
-            host=settings.POSTGRES_HOST,
-            port=settings.POSTGRES_PORT,
-            database=target_db,
-        )
-        
-        target_engine = create_engine(target_db_url.render_as_string(hide_password=False))
-        
-        @event.listens_for(target_engine, "do_connect")
-        def inject_token_target(dialect, conn_rec, cargs, cparams):
+    # Inject OAuth token for connections in OAuth mode
+    if not is_local_mode:
+        @event.listens_for(temp_engine, "do_connect")
+        def inject_token_temp(dialect, conn_rec, cargs, cparams):
             global _oauth_token
             if _oauth_token:
                 cparams["password"] = _oauth_token
+    
+    try:
+        # In OAuth mode, check/create database first
+        if not is_local_mode:
+            with temp_engine.connect() as conn:
+                # Check if target database exists (using parameterized query)
+                result = conn.execute(
+                    text("SELECT 1 FROM pg_database WHERE datname = :dbname"),
+                    {"dbname": target_db}
+                )
+                db_exists = result.scalar() is not None
+                
+                if not db_exists:
+                    logger.info(f"Database does not exist, attempting to create: {target_db}")
+                    try:
+                        # CREATE DATABASE cannot be parameterized, but identifier is validated
+                        conn.execute(text(f'CREATE DATABASE "{target_db}"'))
+                        logger.info(f"✓ Database created: {target_db} (owner: {username})")
+                    except Exception as e:
+                        if "permission denied" in str(e).lower():
+                            logger.warning(f"Cannot create database (insufficient privileges). "
+                                         f"Database '{target_db}' must be created manually.")
+                            logger.warning(f"Run this as a Lakebase admin: CREATE DATABASE \"{target_db}\";")
+                            raise RuntimeError(
+                                f"Database '{target_db}' does not exist and service principal lacks CREATEDB privilege. "
+                                f"Please create the database manually first."
+                            ) from e
+                        else:
+                            raise
+                else:
+                    logger.info(f"✓ Database already exists: {target_db}")
+            
+            # Dispose temp engine and create new one for target database
+            temp_engine.dispose()
+            
+            target_db_url = URL.create(
+                drivername="postgresql+psycopg2",
+                username=username,
+                password="",
+                host=settings.POSTGRES_HOST,
+                port=settings.POSTGRES_PORT,
+                database=target_db,
+            )
+            
+            temp_engine = create_engine(
+                target_db_url.render_as_string(hide_password=False),
+                isolation_level="AUTOCOMMIT"
+            )
+            
+            @event.listens_for(temp_engine, "do_connect")
+            def inject_token_target(dialect, conn_rec, cargs, cparams):
+                global _oauth_token
+                if _oauth_token:
+                    cparams["password"] = _oauth_token
         
-        try:
-            with target_engine.connect() as conn:
-                if target_schema and target_schema != "public":
-                    # Check if schema exists (using parameterized query)
-                    result = conn.execute(
-                        text("SELECT 1 FROM information_schema.schemata WHERE schema_name = :schemaname"),
-                        {"schemaname": target_schema}
-                    )
-                    schema_exists = result.scalar() is not None
+        # Now handle schema (works for both LOCAL and OAuth modes)
+        with temp_engine.connect() as conn:
+            if target_schema and target_schema != "public":
+                # Handle APP_DB_DROP_ON_START: Drop schema CASCADE before creating
+                if settings.APP_DB_DROP_ON_START:
+                    logger.warning(f"APP_DB_DROP_ON_START=true: Dropping schema '{target_schema}' CASCADE...")
+                    # DROP SCHEMA cannot be parameterized, but identifier is validated
+                    conn.execute(text(f'DROP SCHEMA IF EXISTS "{target_schema}" CASCADE'))
+                    conn.commit()
+                    logger.warning(f"✓ Schema '{target_schema}' dropped CASCADE. Will be recreated.")
+                
+                # Check if schema exists (using parameterized query)
+                result = conn.execute(
+                    text("SELECT 1 FROM information_schema.schemata WHERE schema_name = :schemaname"),
+                    {"schemaname": target_schema}
+                )
+                schema_exists = result.scalar() is not None
+                
+                if not schema_exists:
+                    logger.info(f"Creating schema: {target_schema}")
+                    # CREATE SCHEMA cannot be parameterized, but identifier is validated
+                    conn.execute(text(f'CREATE SCHEMA "{target_schema}"'))
+                    logger.info(f"✓ Schema created: {target_schema} (owner: {username})")
                     
-                    if not schema_exists:
-                        logger.info(f"Creating schema: {target_schema}")
-                        # CREATE SCHEMA cannot be parameterized, but identifier is validated
-                        conn.execute(text(f'CREATE SCHEMA "{target_schema}"'))
-                        logger.info(f"✓ Schema created: {target_schema} (owner: {username})")
-                        
-                        # Set default privileges for future objects
+                    # Set default privileges for future objects (OAuth mode only)
+                    if not is_local_mode:
                         # ALTER statements cannot be parameterized, but identifiers are validated
                         logger.info(f"Setting default privileges in schema: {target_schema}")
                         conn.execute(text(
@@ -547,40 +571,23 @@ def ensure_database_and_schema_exist(settings: Settings):
                             f'GRANT ALL ON SEQUENCES TO "{username}"'
                         ))
                         logger.info(f"✓ Default privileges configured")
-                    else:
-                        logger.info(f"Schema already exists: {target_schema}")
-        except Exception as e:
-            if "permission denied for database" in str(e).lower():
-                logger.error(
-                    f"❌ Cannot create schema in database '{target_db}' - service principal lacks permissions."
-                )
-                logger.error(
-                    f"The database exists but CREATE privilege was not granted to the service principal."
-                )
-                logger.error(
-                    f"To fix this, run as a Lakebase admin:"
-                )
-                logger.error(
-                    f'  DROP DATABASE IF EXISTS "{target_db}";'
-                )
-                logger.error(
-                    f'  CREATE DATABASE "{target_db}";'
-                )
-                logger.error(
-                    f'  GRANT CREATE ON DATABASE "{target_db}" TO "{username}";'
-                )
-                raise RuntimeError(
-                    f"Database '{target_db}' exists but service principal '{username}' lacks CREATE privilege. "
-                    f"Please grant CREATE privilege to the service principal."
-                ) from e
+                    
+                    conn.commit()
+                else:
+                    logger.info(f"✓ Schema already exists: {target_schema}")
             else:
-                raise
-            
-            conn.commit()
-        
-        target_engine.dispose()
+                logger.info(f"Using public schema (no custom schema specified)")
         
     except Exception as e:
+        if "permission denied" in str(e).lower():
+            logger.error(
+                f"❌ Permission denied - check database/schema privileges for user '{username}'"
+            )
+            if not is_local_mode:
+                logger.error(f"To fix this, run as a Lakebase admin:")
+                logger.error(f'  DROP DATABASE IF EXISTS "{target_db}";')
+                logger.error(f'  CREATE DATABASE "{target_db}";')
+                logger.error(f'  GRANT CREATE ON DATABASE "{target_db}" TO "{username}";')
         logger.error(f"Error ensuring database/schema exist: {e}", exc_info=True)
         raise
     finally:
@@ -765,7 +772,12 @@ def init_db() -> None:
             db_revision = get_current_db_revision(connection, alembic_cfg)
             logger.info(f"Current Database Revision: {db_revision}")
 
-            if db_revision != head_revision:
+            # Handle migrations based on database state
+            if db_revision is None:
+                # Fresh database - will use create_all() + stamp later
+                logger.info("Fresh database detected (no Alembic version table). Will initialize with create_all() and stamp.")
+            elif db_revision != head_revision:
+                # Existing database needs migration
                 logger.info(f"Database revision '{db_revision}' differs from head revision '{head_revision}'.")
                 logger.info("Attempting Alembic upgrade to head...")
                 try:
@@ -795,49 +807,9 @@ def init_db() -> None:
             logger.info(f"PostgreSQL: Tables will be targeted for schema '{schema_to_create_in}' via search_path or model definitions.")
 
         # No Databricks-specific metadata modifications required
-
-        # Ensure schema exists (always) and optionally drop/recreate if APP_DB_DROP_ON_START=true
-        schema_name = settings.POSTGRES_DB_SCHEMA or 'public'
         
-        # Validate schema name to prevent SQL injection in DROP/CREATE commands
-        try:
-            schema_name = sanitize_postgres_identifier(schema_name)
-        except ValueError as e:
-            logger.error(f"Invalid PostgreSQL schema name for drop/create: {e}")
-            raise ValueError(
-                f"Invalid PostgreSQL schema identifier in POSTGRES_DB_SCHEMA: {e}. "
-                "Please check configuration."
-            ) from e
-        
-        with _engine.connect() as connection:
-            if settings.APP_DB_DROP_ON_START:
-                # Drop and recreate schema (for development)
-                logger.warning("APP_DB_DROP_ON_START=true: Dropping all existing tables with CASCADE...")
-                logger.warning(f"Dropping schema '{schema_name}' CASCADE and recreating...")
-                # DROP/CREATE SCHEMA cannot be parameterized, but identifier is validated
-                connection.execute(text(f"DROP SCHEMA IF EXISTS {schema_name} CASCADE"))
-                connection.execute(text(f"CREATE SCHEMA {schema_name}"))
-                connection.commit()
-                logger.warning("Schema dropped and recreated. This will recreate all tables from scratch.")
-            else:
-                # Ensure schema exists (don't drop if it already exists)
-                if schema_name != 'public':
-                    logger.info(f"Ensuring schema '{schema_name}' exists...")
-                    # Check if schema exists (using parameterized query)
-                    result = connection.execute(
-                        text("SELECT 1 FROM information_schema.schemata WHERE schema_name = :schemaname"),
-                        {"schemaname": schema_name}
-                    )
-                    schema_exists = result.scalar() is not None
-                    
-                    if not schema_exists:
-                        logger.info(f"Schema does not exist, creating: {schema_name}")
-                        # CREATE SCHEMA cannot be parameterized, but identifier is validated
-                        connection.execute(text(f"CREATE SCHEMA {schema_name}"))
-                        connection.commit()
-                        logger.info(f"✓ Schema created: {schema_name}")
-                    else:
-                        logger.info(f"✓ Schema already exists: {schema_name}")
+        # Note: Schema creation and APP_DB_DROP_ON_START handling is done in 
+        # ensure_database_and_schema_exist() before Alembic migrations run
 
         # Only use create_all() for fresh databases without Alembic version table
         # Once Alembic is tracking the schema, migrations handle all schema changes
