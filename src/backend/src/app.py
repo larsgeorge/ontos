@@ -218,6 +218,9 @@ costs_routes.register_routes(app)
 from src.routes import approvals_routes
 approvals_routes.register_routes(app)
 
+from src.routes import debug_routes
+debug_routes.register_routes(app)
+
 # Define other specific API routes BEFORE the catch-all
 @app.get("/api/time")
 async def get_current_time():
