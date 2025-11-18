@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Bell, Info, AlertCircle, CheckCircle2, X, CheckSquare, Loader2 } from 'lucide-react';
 import { Button } from './button';
 import { Progress } from './progress';
@@ -35,9 +35,7 @@ export default function NotificationBell() {
   const [isDeployDialogOpen, setIsDeployDialogOpen] = useState(false);
   const [selectedDeployPayload, setSelectedDeployPayload] = useState<Record<string, any> | null>(null);
 
-  useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+  // Removed useEffect that was causing duplicate fetches - notifications are fetched when dropdown opens
 
   const handleDelete = async (id: string) => {
     await deleteNotification(id);

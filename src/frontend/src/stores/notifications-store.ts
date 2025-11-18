@@ -65,6 +65,11 @@ const apiDelete = async (endpoint: string): Promise<{ error?: string }> => {
 let pollingIntervalId: NodeJS.Timeout | null = null;
 const POLLING_INTERVAL = 60 * 1000; // 60 seconds
 
+// Guard flag to prevent concurrent fetches
+let isFetching = false;
+// Store the current fetch promise so we can await it
+let currentFetchPromise: Promise<void> | null = null;
+
 export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   notifications: [],
   unreadCount: 0,
@@ -72,45 +77,55 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   error: null,
 
   fetchNotifications: async () => {
-    const currentState = get();
-    
-    // Only set loading if not already loading (prevent visual flicker during polling)
-    if (!currentState.isLoading) {
-      set({ isLoading: true, error: null });
+    // If a fetch is already in progress, wait for it to complete
+    // Don't set loading state since we're just waiting
+    if (isFetching && currentFetchPromise) {
+      console.debug('[NotificationsStore] Fetch already in progress, waiting for completion');
+      await currentFetchPromise;
+      return;
     }
     
-    try {
-      const response = await apiGet<Notification[]>('/api/notifications');
-
-      if (response.error || !response.data) {
-        throw new Error(response.error || 'Failed to fetch notifications: No data received');
-      }
-
-      const fetchedNotifications = response.data;
-      const unread = fetchedNotifications.filter(n => !n.read).length;
-
-      // Only update state if data has changed OR if we're currently loading
-      const dataChanged = JSON.stringify(fetchedNotifications) !== JSON.stringify(currentState.notifications) || 
-                         unread !== currentState.unreadCount;
+    // Set loading state immediately before creating the promise
+    set({ isLoading: true, error: null });
+    
+    // Create the fetch promise
+    const fetchPromise = (async () => {
+      isFetching = true;
       
-      if (dataChanged || currentState.isLoading) {
-        set({
-            notifications: fetchedNotifications,
-            unreadCount: unread,
-            isLoading: false,
-            error: null,
-        });
-      }
-      // Don't call set() at all if nothing changed and not loading
+      try {
+        
+        const response = await apiGet<Notification[]>('/api/notifications');
 
-    } catch (error: any) {
-      console.error("Error fetching notifications:", error);
-      const errorMessage = error.message || 'An unknown error occurred';
-      // Only update if error or loading state actually changed
-      if (currentState.error !== errorMessage || currentState.isLoading) {
+        if (response.error || !response.data) {
+          throw new Error(response.error || 'Failed to fetch notifications: No data received');
+        }
+
+        const fetchedNotifications = response.data;
+        const unread = fetchedNotifications.filter(n => !n.read).length;
+
+        // Always update with fetched data and reset loading state
+        set({
+          notifications: fetchedNotifications,
+          unreadCount: unread,
+          isLoading: false,
+          error: null,
+        });
+
+      } catch (error: any) {
+        console.error("Error fetching notifications:", error);
+        const errorMessage = error.message || 'An unknown error occurred';
+        // Always update error state and reset loading
         set({ isLoading: false, error: errorMessage });
+      } finally {
+        // Always reset the fetch guard flag and promise
+        isFetching = false;
+        currentFetchPromise = null;
       }
-    }
+    })();
+    
+    // Store the promise so other calls can wait for it
+    currentFetchPromise = fetchPromise;
+    return fetchPromise;
   },
 
   refreshNotifications: () => {
