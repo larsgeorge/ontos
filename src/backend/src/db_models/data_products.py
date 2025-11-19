@@ -64,7 +64,7 @@ class DataProductDb(Base):
 
 class DescriptionDb(Base):
     """ODPS v1.0.0 Structured Description"""
-    __tablename__ = 'product_descriptions'
+    __tablename__ = 'data_product_descriptions'
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     product_id = Column(String, ForeignKey('data_products.id'), unique=True, nullable=False)
@@ -85,7 +85,7 @@ class DescriptionDb(Base):
 
 class AuthoritativeDefinitionDb(Base):
     """ODPS v1.0.0 Authoritative Definition - Links to business definitions, implementations, tutorials"""
-    __tablename__ = 'product_authoritative_definitions'
+    __tablename__ = 'data_product_authoritative_definitions'
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     product_id = Column(String, ForeignKey('data_products.id'), nullable=False, index=True)
@@ -106,7 +106,7 @@ class AuthoritativeDefinitionDb(Base):
 
 class CustomPropertyDb(Base):
     """ODPS v1.0.0 Custom Property - Key/value pairs for extensibility"""
-    __tablename__ = 'product_custom_properties'
+    __tablename__ = 'data_product_custom_properties'
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     product_id = Column(String, ForeignKey('data_products.id'), nullable=False, index=True)
@@ -127,7 +127,7 @@ class CustomPropertyDb(Base):
 
 class InputPortDb(Base):
     """ODPS v1.0.0 Input Port - Describes data product inputs"""
-    __tablename__ = 'input_ports'
+    __tablename__ = 'data_product_input_ports'
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     product_id = Column(String, ForeignKey('data_products.id'), nullable=False, index=True)
@@ -153,7 +153,7 @@ class InputPortDb(Base):
 
 class OutputPortDb(Base):
     """ODPS v1.0.0 Output Port - Describes data product outputs"""
-    __tablename__ = 'output_ports'
+    __tablename__ = 'data_product_output_ports'
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     product_id = Column(String, ForeignKey('data_products.id'), nullable=False, index=True)
@@ -189,10 +189,10 @@ class OutputPortDb(Base):
 
 class SBOMDb(Base):
     """ODPS v1.0.0 SBOM - Software Bill of Materials for output ports"""
-    __tablename__ = 'output_port_sbom'
+    __tablename__ = 'data_product_output_port_sbom'
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    output_port_id = Column(String, ForeignKey('output_ports.id'), nullable=False, index=True)
+    output_port_id = Column(String, ForeignKey('data_product_output_ports.id'), nullable=False, index=True)
 
     type = Column(String, default="external")
     url = Column(String, nullable=False)
@@ -209,10 +209,10 @@ class SBOMDb(Base):
 
 class InputContractDb(Base):
     """ODPS v1.0.0 Input Contract - Dependencies for output ports"""
-    __tablename__ = 'output_port_input_contracts'
+    __tablename__ = 'data_product_output_port_input_contracts'
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    output_port_id = Column(String, ForeignKey('output_ports.id'), nullable=False, index=True)
+    output_port_id = Column(String, ForeignKey('data_product_output_ports.id'), nullable=False, index=True)
 
     contract_id = Column(String, nullable=False, index=True)
     contract_version = Column(String, nullable=False)
@@ -229,7 +229,7 @@ class InputContractDb(Base):
 
 class ManagementPortDb(Base):
     """ODPS v1.0.0 Management Port - Endpoints for managing the data product"""
-    __tablename__ = 'management_ports'
+    __tablename__ = 'data_product_management_ports'
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     product_id = Column(String, ForeignKey('data_products.id'), nullable=False, index=True)
@@ -256,7 +256,7 @@ class ManagementPortDb(Base):
 
 class SupportDb(Base):
     """ODPS v1.0.0 Support Channel - Communication channels for support"""
-    __tablename__ = 'product_support_channels'
+    __tablename__ = 'data_product_support_channels'
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     product_id = Column(String, ForeignKey('data_products.id'), nullable=False, index=True)
@@ -283,7 +283,7 @@ class SupportDb(Base):
 
 class DataProductTeamDb(Base):
     """ODPS v1.0.0 Team - Team information for the data product"""
-    __tablename__ = 'product_teams'
+    __tablename__ = 'data_product_teams'
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     product_id = Column(String, ForeignKey('data_products.id'), unique=True, nullable=False)
@@ -304,10 +304,10 @@ class DataProductTeamDb(Base):
 
 class DataProductTeamMemberDb(Base):
     """ODPS v1.0.0 Team Member - Individual team member information"""
-    __tablename__ = 'product_team_members'
+    __tablename__ = 'data_product_team_members'
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    team_id = Column(String, ForeignKey('product_teams.id'), nullable=False, index=True)
+    team_id = Column(String, ForeignKey('data_product_teams.id'), nullable=False, index=True)
 
     # ==================== ODPS v1.0.0 Required Fields ====================
     username = Column(String, nullable=False)  # Email or username
