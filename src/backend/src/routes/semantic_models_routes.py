@@ -477,15 +477,15 @@ async def get_concepts_grouped(
         logger.error("Error retrieving grouped concepts", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve grouped concepts")
 
-@router.get('/semantic-models/concepts/{concept_iri:path}/hierarchy')
+@router.get('/semantic-models/concepts/hierarchy')
 async def get_concept_hierarchy(
-    concept_iri: str,
+    iri: str = Query(..., description="Concept IRI"),
     manager: SemanticModelsManager = Depends(get_semantic_models_manager)
 ) -> dict:
     """Get hierarchical relationships for a concept"""
     try:
-        logger.info(f"Retrieving hierarchy for concept: {concept_iri}")
-        hierarchy = manager.get_concept_hierarchy(concept_iri)
+        logger.info(f"Retrieving hierarchy for concept: {iri}")
+        hierarchy = manager.get_concept_hierarchy(iri)
         
         if not hierarchy:
             raise HTTPException(status_code=404, detail="Concept not found")

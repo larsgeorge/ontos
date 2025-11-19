@@ -700,7 +700,7 @@ export default function SemanticModelsView() {
     
     // Fetch hierarchy information
     try {
-      const response = await fetch(`/api/semantic-models/concepts/${encodeURIComponent(concept.iri)}/hierarchy`);
+      const response = await fetch(`/api/semantic-models/concepts/hierarchy?iri=${encodeURIComponent(concept.iri)}`);
       if (response.ok) {
         const data = await response.json();
         setSelectedHierarchy(data.hierarchy);

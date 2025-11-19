@@ -204,7 +204,6 @@ from src.routes import metadata_routes as generic_metadata_routes
 generic_metadata_routes.register_routes(app)
 settings_routes.register_routes(app)
 access_requests_routes.register_routes(app)
-semantic_models_routes.register_routes(app)
 semantic_links_routes.register_routes(app)
 user_routes.register_routes(app)
 audit_routes.register_routes(app)
