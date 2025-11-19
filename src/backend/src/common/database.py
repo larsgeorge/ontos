@@ -782,10 +782,12 @@ def init_db() -> None:
                 logger.info("Attempting Alembic upgrade to head...")
                 try:
                     target_schema = settings.POSTGRES_DB_SCHEMA or 'public'
-                    # Use explicit connection context to avoid hanging (same pattern as stamp)
-                    with _engine.begin() as connection:
+                    # Use .connect() not .begin() - let Alembic manage its own transaction
+                    # to avoid nested transaction timeout issues in Databricks Apps/Lakebase
+                    with _engine.connect() as connection:
                         # Set search_path to ensure migrations run in correct schema
                         connection.execute(text(f'SET search_path TO "{target_schema}"'))
+                        connection.commit()  # Commit the SET command
                         # Pass connection to Alembic to prevent it from creating its own
                         alembic_cfg.attributes['connection'] = connection
                         alembic_command.upgrade(alembic_cfg, "head")
@@ -834,8 +836,10 @@ def init_db() -> None:
             # Stamp the database with the baseline migration
             logger.info("Stamping database with baseline migration...")
             try:
-                with _engine.begin() as connection:
+                # Use .connect() not .begin() - let Alembic manage its own transaction
+                with _engine.connect() as connection:
                     connection.execute(text(f'SET search_path TO "{target_schema}"'))
+                    connection.commit()  # Commit the SET command
                     alembic_cfg.attributes['connection'] = connection
                     alembic_command.stamp(alembic_cfg, "head")
                 logger.info("✓ Database stamped with baseline migration.")
