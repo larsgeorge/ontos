@@ -1,3 +1,4 @@
+from io import BytesIO
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body, Request
@@ -196,8 +197,8 @@ async def upload_document(
         except Exception:
             pass
 
-        # Upload file bytes to the UC Volume path (path, file_bytes, overwrite)
-        ws.files.upload(dest_path, content)
+        # Upload file bytes to the UC Volume path (path, file-like object, overwrite)
+        ws.files.upload(dest_path, BytesIO(content))
 
         payload = DocumentCreate(
             entity_type=entity_type,

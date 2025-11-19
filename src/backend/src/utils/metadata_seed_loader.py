@@ -1,5 +1,6 @@
 import os
 import mimetypes
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -109,7 +110,7 @@ def _upload_document(
         except Exception:
             pass
 
-        ws.files.upload(dest_path, content)
+        ws.files.upload(dest_path, BytesIO(content))
 
         # Infer content type from sanitized filename
         guessed_type, _ = mimetypes.guess_type(safe_filename)
