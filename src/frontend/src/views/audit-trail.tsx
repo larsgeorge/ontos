@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
+import { useTranslation } from 'react-i18next';
 import {
   Table,
   TableBody,
@@ -39,6 +40,7 @@ import { Search, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 const ITEMS_PER_PAGE = 50;
 
 export default function AuditTrail() {
+  const { t } = useTranslation('audit-trail');
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -88,8 +90,8 @@ export default function AuditTrail() {
       setTotal(data.total);
     } catch (error) {
       toast({
-        title: 'Error',
-        description: 'Failed to load audit logs',
+        title: t('messages.loadErrorTitle'),
+        description: t('messages.loadError'),
         variant: 'destructive',
       });
       console.error('Error fetching audit logs:', error);
@@ -160,62 +162,62 @@ export default function AuditTrail() {
     window.URL.revokeObjectURL(url);
 
     toast({
-      title: 'Success',
-      description: 'Audit logs exported to CSV',
+      title: t('messages.exportSuccessTitle'),
+      description: t('messages.exportSuccess'),
     });
   };
 
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Audit Trail</h1>
+        <h1 className="text-3xl font-bold">{t('title')}</h1>
         <p className="text-muted-foreground mt-2">
-          View and filter application audit logs
+          {t('description')}
         </p>
       </div>
 
       {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Filters</CardTitle>
-          <CardDescription>Filter audit logs by criteria</CardDescription>
+          <CardTitle>{t('filters.title')}</CardTitle>
+          <CardDescription>{t('filters.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <label className="text-sm font-medium mb-2 block">Username</label>
+              <label className="text-sm font-medium mb-2 block">{t('filters.username')}</label>
               <Input
-                placeholder="Filter by username"
+                placeholder={t('filters.usernamePlaceholder')}
                 value={searchUsername}
                 onChange={(e) => setSearchUsername(e.target.value)}
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">Feature</label>
+              <label className="text-sm font-medium mb-2 block">{t('filters.feature')}</label>
               <Input
-                placeholder="Filter by feature"
+                placeholder={t('filters.featurePlaceholder')}
                 value={searchFeature}
                 onChange={(e) => setSearchFeature(e.target.value)}
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">Action</label>
+              <label className="text-sm font-medium mb-2 block">{t('filters.action')}</label>
               <Input
-                placeholder="Filter by action"
+                placeholder={t('filters.actionPlaceholder')}
                 value={searchAction}
                 onChange={(e) => setSearchAction(e.target.value)}
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">Success</label>
+              <label className="text-sm font-medium mb-2 block">{t('filters.success')}</label>
               <Select value={successFilter} onValueChange={setSuccessFilter}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="true">Success Only</SelectItem>
-                  <SelectItem value="false">Failures Only</SelectItem>
+                  <SelectItem value="all">{t('filters.successOptions.all')}</SelectItem>
+                  <SelectItem value="true">{t('filters.successOptions.successOnly')}</SelectItem>
+                  <SelectItem value="false">{t('filters.successOptions.failuresOnly')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -223,14 +225,14 @@ export default function AuditTrail() {
           <div className="flex gap-2">
             <Button onClick={handleApplyFilters} className="gap-2">
               <Search className="h-4 w-4" />
-              Apply Filters
+              {t('filters.applyButton')}
             </Button>
             <Button onClick={handleClearFilters} variant="outline">
-              Clear Filters
+              {t('filters.clearButton')}
             </Button>
             <Button onClick={handleExportCSV} variant="outline" className="ml-auto gap-2">
               <Download className="h-4 w-4" />
-              Export CSV
+              {t('filters.exportButton')}
             </Button>
           </div>
         </CardContent>
@@ -239,28 +241,28 @@ export default function AuditTrail() {
       {/* Results */}
       <Card>
         <CardHeader>
-          <CardTitle>Audit Logs</CardTitle>
+          <CardTitle>{t('results.title')}</CardTitle>
           <CardDescription>
-            Showing {logs.length} of {total} log entries
+            {t('results.showing', { count: logs.length, total })}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading...</div>
+            <div className="text-center py-8 text-muted-foreground">{t('results.loading')}</div>
           ) : logs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">No audit logs found</div>
+            <div className="text-center py-8 text-muted-foreground">{t('results.noLogs')}</div>
           ) : (
             <>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Timestamp</TableHead>
-                    <TableHead>Username</TableHead>
-                    <TableHead>IP Address</TableHead>
-                    <TableHead>Feature</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Details</TableHead>
+                    <TableHead>{t('table.timestamp')}</TableHead>
+                    <TableHead>{t('table.username')}</TableHead>
+                    <TableHead>{t('table.ipAddress')}</TableHead>
+                    <TableHead>{t('table.feature')}</TableHead>
+                    <TableHead>{t('table.action')}</TableHead>
+                    <TableHead>{t('table.status')}</TableHead>
+                    <TableHead>{t('table.details')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -271,7 +273,7 @@ export default function AuditTrail() {
                       </TableCell>
                       <TableCell>{log.username}</TableCell>
                       <TableCell className="text-muted-foreground">
-                        {log.ip_address || 'N/A'}
+                        {log.ip_address || t('table.notAvailable')}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">{log.feature}</Badge>
@@ -281,7 +283,7 @@ export default function AuditTrail() {
                       </TableCell>
                       <TableCell>
                         <Badge variant={log.success ? 'default' : 'destructive'}>
-                          {log.success ? 'Success' : 'Failed'}
+                          {log.success ? t('table.success') : t('table.failed')}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -291,7 +293,7 @@ export default function AuditTrail() {
                             size="sm"
                             onClick={() => handleViewDetails(log)}
                           >
-                            View
+                            {t('table.viewButton')}
                           </Button>
                         )}
                       </TableCell>
@@ -304,7 +306,7 @@ export default function AuditTrail() {
               {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-4">
                   <div className="text-sm text-muted-foreground">
-                    Page {currentPage} of {totalPages}
+                    {t('pagination.page', { current: currentPage, total: totalPages })}
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -314,7 +316,7 @@ export default function AuditTrail() {
                       disabled={currentPage === 1}
                     >
                       <ChevronLeft className="h-4 w-4" />
-                      Previous
+                      {t('pagination.previous')}
                     </Button>
                     <Button
                       variant="outline"
@@ -322,7 +324,7 @@ export default function AuditTrail() {
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
                     >
-                      Next
+                      {t('pagination.next')}
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
@@ -337,7 +339,7 @@ export default function AuditTrail() {
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Audit Log Details</DialogTitle>
+            <DialogTitle>{t('detailsDialog.title')}</DialogTitle>
             <DialogDescription>
               {selectedLog && format(new Date(selectedLog.timestamp), 'PPpp')}
             </DialogDescription>

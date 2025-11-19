@@ -1,0 +1,56 @@
+{
+  "title": "Registro di controllo",
+  "description": "Visualizza e filtra i registri di controllo dell'applicazione",
+  "filters": {
+    "title": "Filtri",
+    "description": "Filtra i registri di controllo per criteri",
+    "username": "Nome utente",
+    "usernamePlaceholder": "Filtra per nome utente",
+    "feature": "Funzionalità",
+    "featurePlaceholder": "Filtra per funzionalità",
+    "action": "Azione",
+    "actionPlaceholder": "Filtra per azione",
+    "success": "Successo",
+    "successOptions": {
+      "all": "Tutti",
+      "successOnly": "Solo successi",
+      "failuresOnly": "Solo errori"
+    },
+    "applyButton": "Applica filtri",
+    "clearButton": "Cancella filtri",
+    "exportButton": "Esporta CSV"
+  },
+  "results": {
+    "title": "Registri di controllo",
+    "showing": "Mostrando {{count}} di {{total}} voci di registro",
+    "loading": "Caricamento...",
+    "noLogs": "Nessun registro di controllo trovato"
+  },
+  "table": {
+    "timestamp": "Timestamp",
+    "username": "Nome utente",
+    "ipAddress": "Indirizzo IP",
+    "feature": "Funzionalità",
+    "action": "Azione",
+    "status": "Stato",
+    "details": "Dettagli",
+    "viewButton": "Visualizza",
+    "success": "Successo",
+    "failed": "Fallito",
+    "notAvailable": "Non disponibile"
+  },
+  "pagination": {
+    "page": "Pagina {{current}} di {{total}}",
+    "previous": "Precedente",
+    "next": "Successivo"
+  },
+  "detailsDialog": {
+    "title": "Dettagli del registro di controllo"
+  },
+  "messages": {
+    "exportSuccess": "Registri di controllo esportati in CSV",
+    "exportSuccessTitle": "Successo",
+    "loadError": "Errore nel caricamento dei registri di controllo",
+    "loadErrorTitle": "Errore"
+  }
+}

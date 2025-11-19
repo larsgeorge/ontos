@@ -1,0 +1,56 @@
+{
+  "title": "Audit Trail",
+  "description": "View and filter application audit logs",
+  "filters": {
+    "title": "Filters",
+    "description": "Filter audit logs by criteria",
+    "username": "Username",
+    "usernamePlaceholder": "Filter by username",
+    "feature": "Feature",
+    "featurePlaceholder": "Filter by feature",
+    "action": "Action",
+    "actionPlaceholder": "Filter by action",
+    "success": "Success",
+    "successOptions": {
+      "all": "All",
+      "successOnly": "Success Only",
+      "failuresOnly": "Failures Only"
+    },
+    "applyButton": "Apply Filters",
+    "clearButton": "Clear Filters",
+    "exportButton": "Export CSV"
+  },
+  "results": {
+    "title": "Audit Logs",
+    "showing": "Showing {{count}} of {{total}} log entries",
+    "loading": "Loading...",
+    "noLogs": "No audit logs found"
+  },
+  "table": {
+    "timestamp": "Timestamp",
+    "username": "Username",
+    "ipAddress": "IP Address",
+    "feature": "Feature",
+    "action": "Action",
+    "status": "Status",
+    "details": "Details",
+    "viewButton": "View",
+    "success": "Success",
+    "failed": "Failed",
+    "notAvailable": "N/A"
+  },
+  "pagination": {
+    "page": "Page {{current}} of {{total}}",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "detailsDialog": {
+    "title": "Audit Log Details"
+  },
+  "messages": {
+    "exportSuccess": "Audit logs exported to CSV",
+    "exportSuccessTitle": "Success",
+    "loadError": "Failed to load audit logs",
+    "loadErrorTitle": "Error"
+  }
+}

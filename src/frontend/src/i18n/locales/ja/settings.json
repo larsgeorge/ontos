@@ -9,6 +9,43 @@
     "semanticModels": "セマンティックモデル",
     "tags": "タグ"
   },
+  "general": {
+    "title": "一般設定",
+    "description": "基本的なアプリケーション設定を構成",
+    "enableBackgroundJobs": "バックグラウンドジョブを有効化"
+  },
+  "databricks": {
+    "title": "Databricks設定",
+    "description": "Databricks接続設定を構成",
+    "labels": {
+      "host": "ホスト",
+      "token": "トークン",
+      "warehouseId": "ウェアハウスID",
+      "catalog": "カタログ",
+      "schema": "スキーマ"
+    },
+    "placeholders": {
+      "host": "https://<your-workspace>.cloud.databricks.com",
+      "token": "dapi...",
+      "warehouseId": "1234abcd5678efgh",
+      "catalog": "main",
+      "schema": "uc_swiss_knife"
+    }
+  },
+  "git": {
+    "title": "Git設定",
+    "description": "YAML保存用Gitリポジトリを構成",
+    "labels": {
+      "repoUrl": "リポジトリURL",
+      "branch": "ブランチ",
+      "token": "トークン"
+    },
+    "placeholders": {
+      "repoUrl": "https://github.com/your-org/your-repo.git",
+      "branch": "main",
+      "token": "ghp_... または類似"
+    }
+  },
   "jobs": {
     "title": "ジョブとワークフローの設定",
     "description": "Databricksジョブクラスタを設定し、バックグラウンドワークフローを有効化",

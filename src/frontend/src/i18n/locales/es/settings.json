@@ -9,6 +9,43 @@
     "semanticModels": "Modelos semánticos",
     "tags": "Etiquetas"
   },
+  "general": {
+    "title": "Configuración general",
+    "description": "Configurar ajustes básicos de la aplicación",
+    "enableBackgroundJobs": "Habilitar jobs en segundo plano"
+  },
+  "databricks": {
+    "title": "Configuración de Databricks",
+    "description": "Configurar ajustes de conexión a Databricks",
+    "labels": {
+      "host": "Host",
+      "token": "Token",
+      "warehouseId": "ID del Warehouse",
+      "catalog": "Catálogo",
+      "schema": "Esquema"
+    },
+    "placeholders": {
+      "host": "https://<su-workspace>.cloud.databricks.com",
+      "token": "dapi...",
+      "warehouseId": "1234abcd5678efgh",
+      "catalog": "main",
+      "schema": "uc_swiss_knife"
+    }
+  },
+  "git": {
+    "title": "Configuración de Git",
+    "description": "Configurar repositorio Git para almacenamiento YAML",
+    "labels": {
+      "repoUrl": "URL del repositorio",
+      "branch": "Rama",
+      "token": "Token"
+    },
+    "placeholders": {
+      "repoUrl": "https://github.com/su-org/su-repo.git",
+      "branch": "main",
+      "token": "ghp_... o similar"
+    }
+  },
   "jobs": {
     "title": "Configuración de jobs y workflows",
     "description": "Configura el clúster de jobs Databricks y habilita workflows en segundo plano",

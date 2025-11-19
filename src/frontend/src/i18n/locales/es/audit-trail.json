@@ -1,0 +1,56 @@
+{
+  "title": "Registro de Auditoría",
+  "description": "Ver y filtrar registros de auditoría de la aplicación",
+  "filters": {
+    "title": "Filtros",
+    "description": "Filtrar registros de auditoría por criterios",
+    "username": "Nombre de usuario",
+    "usernamePlaceholder": "Filtrar por nombre de usuario",
+    "feature": "Característica",
+    "featurePlaceholder": "Filtrar por característica",
+    "action": "Acción",
+    "actionPlaceholder": "Filtrar por acción",
+    "success": "Éxito",
+    "successOptions": {
+      "all": "Todos",
+      "successOnly": "Solo éxitos",
+      "failuresOnly": "Solo fallos"
+    },
+    "applyButton": "Aplicar filtros",
+    "clearButton": "Limpiar filtros",
+    "exportButton": "Exportar CSV"
+  },
+  "results": {
+    "title": "Registros de auditoría",
+    "showing": "Mostrando {{count}} de {{total}} entradas de registro",
+    "loading": "Cargando...",
+    "noLogs": "No se encontraron registros de auditoría"
+  },
+  "table": {
+    "timestamp": "Marca de tiempo",
+    "username": "Nombre de usuario",
+    "ipAddress": "Dirección IP",
+    "feature": "Característica",
+    "action": "Acción",
+    "status": "Estado",
+    "details": "Detalles",
+    "viewButton": "Ver",
+    "success": "Éxito",
+    "failed": "Fallido",
+    "notAvailable": "No disponible"
+  },
+  "pagination": {
+    "page": "Página {{current}} de {{total}}",
+    "previous": "Anterior",
+    "next": "Siguiente"
+  },
+  "detailsDialog": {
+    "title": "Detalles del registro de auditoría"
+  },
+  "messages": {
+    "exportSuccess": "Registros de auditoría exportados a CSV",
+    "exportSuccessTitle": "Éxito",
+    "loadError": "Error al cargar registros de auditoría",
+    "loadErrorTitle": "Error"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "title": "Prüfpfad",
+  "description": "Anwendungs-Audit-Protokolle anzeigen und filtern",
+  "filters": {
+    "title": "Filter",
+    "description": "Audit-Protokolle nach Kriterien filtern",
+    "username": "Benutzername",
+    "usernamePlaceholder": "Nach Benutzername filtern",
+    "feature": "Feature",
+    "featurePlaceholder": "Nach Feature filtern",
+    "action": "Aktion",
+    "actionPlaceholder": "Nach Aktion filtern",
+    "success": "Erfolg",
+    "successOptions": {
+      "all": "Alle",
+      "successOnly": "Nur Erfolge",
+      "failuresOnly": "Nur Fehler"
+    },
+    "applyButton": "Filter anwenden",
+    "clearButton": "Filter löschen",
+    "exportButton": "Als CSV exportieren"
+  },
+  "results": {
+    "title": "Audit-Protokolle",
+    "showing": "{{count}} von {{total}} Protokolleinträgen angezeigt",
+    "loading": "Wird geladen...",
+    "noLogs": "Keine Audit-Protokolle gefunden"
+  },
+  "table": {
+    "timestamp": "Zeitstempel",
+    "username": "Benutzername",
+    "ipAddress": "IP-Adresse",
+    "feature": "Feature",
+    "action": "Aktion",
+    "status": "Status",
+    "details": "Details",
+    "viewButton": "Anzeigen",
+    "success": "Erfolg",
+    "failed": "Fehlgeschlagen",
+    "notAvailable": "Nicht verfügbar"
+  },
+  "pagination": {
+    "page": "Seite {{current}} von {{total}}",
+    "previous": "Zurück",
+    "next": "Weiter"
+  },
+  "detailsDialog": {
+    "title": "Audit-Protokoll Details"
+  },
+  "messages": {
+    "exportSuccess": "Audit-Protokolle als CSV exportiert",
+    "exportSuccessTitle": "Erfolg",
+    "loadError": "Fehler beim Laden der Audit-Protokolle",
+    "loadErrorTitle": "Fehler"
+  }
+}

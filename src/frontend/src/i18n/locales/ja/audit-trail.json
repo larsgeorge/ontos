@@ -1,0 +1,56 @@
+{
+  "title": "監査証跡",
+  "description": "アプリケーション監査ログを表示およびフィルタリング",
+  "filters": {
+    "title": "フィルタ",
+    "description": "条件で監査ログをフィルタリング",
+    "username": "ユーザー名",
+    "usernamePlaceholder": "ユーザー名でフィルタ",
+    "feature": "機能",
+    "featurePlaceholder": "機能でフィルタ",
+    "action": "アクション",
+    "actionPlaceholder": "アクションでフィルタ",
+    "success": "成功",
+    "successOptions": {
+      "all": "すべて",
+      "successOnly": "成功のみ",
+      "failuresOnly": "失敗のみ"
+    },
+    "applyButton": "フィルタを適用",
+    "clearButton": "フィルタをクリア",
+    "exportButton": "CSVにエクスポート"
+  },
+  "results": {
+    "title": "監査ログ",
+    "showing": "{{total}}件中{{count}}件のログエントリを表示",
+    "loading": "読み込み中...",
+    "noLogs": "監査ログが見つかりません"
+  },
+  "table": {
+    "timestamp": "タイムスタンプ",
+    "username": "ユーザー名",
+    "ipAddress": "IPアドレス",
+    "feature": "機能",
+    "action": "アクション",
+    "status": "ステータス",
+    "details": "詳細",
+    "viewButton": "表示",
+    "success": "成功",
+    "failed": "失敗",
+    "notAvailable": "利用不可"
+  },
+  "pagination": {
+    "page": "{{total}}ページ中{{current}}ページ",
+    "previous": "前へ",
+    "next": "次へ"
+  },
+  "detailsDialog": {
+    "title": "監査ログの詳細"
+  },
+  "messages": {
+    "exportSuccess": "監査ログをCSVにエクスポートしました",
+    "exportSuccessTitle": "成功",
+    "loadError": "監査ログの読み込みに失敗しました",
+    "loadErrorTitle": "エラー"
+  }
+}

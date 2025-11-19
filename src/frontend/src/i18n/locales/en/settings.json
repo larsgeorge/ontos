@@ -9,6 +9,43 @@
     "semanticModels": "Semantic Models",
     "tags": "Tags"
   },
+  "general": {
+    "title": "General Settings",
+    "description": "Configure basic application settings",
+    "enableBackgroundJobs": "Enable Background Jobs"
+  },
+  "databricks": {
+    "title": "Databricks Settings",
+    "description": "Configure Databricks connection settings",
+    "labels": {
+      "host": "Host",
+      "token": "Token",
+      "warehouseId": "Warehouse ID",
+      "catalog": "Catalog",
+      "schema": "Schema"
+    },
+    "placeholders": {
+      "host": "https://<your-workspace>.cloud.databricks.com",
+      "token": "dapi...",
+      "warehouseId": "1234abcd5678efgh",
+      "catalog": "main",
+      "schema": "uc_swiss_knife"
+    }
+  },
+  "git": {
+    "title": "Git Settings",
+    "description": "Configure Git repository for YAML storage",
+    "labels": {
+      "repoUrl": "Repository URL",
+      "branch": "Branch",
+      "token": "Token"
+    },
+    "placeholders": {
+      "repoUrl": "https://github.com/your-org/your-repo.git",
+      "branch": "main",
+      "token": "ghp_... or similar"
+    }
+  },
   "jobs": {
     "title": "Jobs & Workflows Configuration",
     "description": "Configure Databricks job cluster and enable background workflows",

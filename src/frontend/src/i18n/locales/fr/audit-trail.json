@@ -1,0 +1,56 @@
+{
+  "title": "Journal d'audit",
+  "description": "Afficher et filtrer les journaux d'audit de l'application",
+  "filters": {
+    "title": "Filtres",
+    "description": "Filtrer les journaux d'audit par critères",
+    "username": "Nom d'utilisateur",
+    "usernamePlaceholder": "Filtrer par nom d'utilisateur",
+    "feature": "Fonctionnalité",
+    "featurePlaceholder": "Filtrer par fonctionnalité",
+    "action": "Action",
+    "actionPlaceholder": "Filtrer par action",
+    "success": "Succès",
+    "successOptions": {
+      "all": "Tous",
+      "successOnly": "Succès uniquement",
+      "failuresOnly": "Échecs uniquement"
+    },
+    "applyButton": "Appliquer les filtres",
+    "clearButton": "Effacer les filtres",
+    "exportButton": "Exporter en CSV"
+  },
+  "results": {
+    "title": "Journaux d'audit",
+    "showing": "Affichage de {{count}} sur {{total}} entrées de journal",
+    "loading": "Chargement...",
+    "noLogs": "Aucun journal d'audit trouvé"
+  },
+  "table": {
+    "timestamp": "Horodatage",
+    "username": "Nom d'utilisateur",
+    "ipAddress": "Adresse IP",
+    "feature": "Fonctionnalité",
+    "action": "Action",
+    "status": "Statut",
+    "details": "Détails",
+    "viewButton": "Voir",
+    "success": "Succès",
+    "failed": "Échoué",
+    "notAvailable": "Non disponible"
+  },
+  "pagination": {
+    "page": "Page {{current}} sur {{total}}",
+    "previous": "Précédent",
+    "next": "Suivant"
+  },
+  "detailsDialog": {
+    "title": "Détails du journal d'audit"
+  },
+  "messages": {
+    "exportSuccess": "Journaux d'audit exportés en CSV",
+    "exportSuccessTitle": "Succès",
+    "loadError": "Échec du chargement des journaux d'audit",
+    "loadErrorTitle": "Erreur"
+  }
+}

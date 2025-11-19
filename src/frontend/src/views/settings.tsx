@@ -84,8 +84,8 @@ export default function Settings() {
         <TabsContent value="general">
           <Card>
             <CardHeader>
-              <CardTitle>General Settings</CardTitle>
-              <CardDescription>Configure basic application settings</CardDescription>
+              <CardTitle>{t('settings:general.title')}</CardTitle>
+              <CardDescription>{t('settings:general.description')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center space-x-2">
@@ -94,7 +94,7 @@ export default function Settings() {
                   checked={settings.enableBackgroundJobs}
                   onCheckedChange={handleSwitchChange}
                 />
-                <Label htmlFor="background-jobs">Enable Background Jobs</Label>
+                <Label htmlFor="background-jobs">{t('settings:general.enableBackgroundJobs')}</Label>
               </div>
             </CardContent>
           </Card>
@@ -103,59 +103,59 @@ export default function Settings() {
         <TabsContent value="databricks">
           <Card>
             <CardHeader>
-              <CardTitle>Databricks Settings</CardTitle>
-              <CardDescription>Configure Databricks connection settings</CardDescription>
+              <CardTitle>{t('settings:databricks.title')}</CardTitle>
+              <CardDescription>{t('settings:databricks.description')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="host">Host</Label>
+                <Label htmlFor="host">{t('settings:databricks.labels.host')}</Label>
                 <Input
                   id="host"
                   name="databricksHost"
                   value={settings.databricksHost}
                   onChange={handleChange}
-                  placeholder="https://<your-workspace>.cloud.databricks.com"
+                  placeholder={t('settings:databricks.placeholders.host')}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="token">Token</Label>
+                <Label htmlFor="token">{t('settings:databricks.labels.token')}</Label>
                 <Input
                   id="token"
                   name="databricksToken"
                   type="password"
                   value={settings.databricksToken}
                   onChange={handleChange}
-                  placeholder="dapi..."
+                  placeholder={t('settings:databricks.placeholders.token')}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="warehouse">Warehouse ID</Label>
+                <Label htmlFor="warehouse">{t('settings:databricks.labels.warehouseId')}</Label>
                 <Input
                   id="warehouse"
                   name="databricksWarehouseId"
                   value={settings.databricksWarehouseId}
                   onChange={handleChange}
-                  placeholder="1234abcd5678efgh"
+                  placeholder={t('settings:databricks.placeholders.warehouseId')}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="catalog">Catalog</Label>
+                <Label htmlFor="catalog">{t('settings:databricks.labels.catalog')}</Label>
                 <Input
                   id="catalog"
                   name="databricksCatalog"
                   value={settings.databricksCatalog}
                   onChange={handleChange}
-                  placeholder="main"
+                  placeholder={t('settings:databricks.placeholders.catalog')}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="schema">Schema</Label>
+                <Label htmlFor="schema">{t('settings:databricks.labels.schema')}</Label>
                 <Input
                   id="schema"
                   name="databricksSchema"
                   value={settings.databricksSchema}
                   onChange={handleChange}
-                  placeholder="uc_swiss_knife"
+                  placeholder={t('settings:databricks.placeholders.schema')}
                 />
               </div>
             </CardContent>
@@ -165,39 +165,39 @@ export default function Settings() {
         <TabsContent value="git">
           <Card>
             <CardHeader>
-              <CardTitle>Git Settings</CardTitle>
-              <CardDescription>Configure Git repository for YAML storage</CardDescription>
+              <CardTitle>{t('settings:git.title')}</CardTitle>
+              <CardDescription>{t('settings:git.description')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="repo">Repository URL</Label>
+                <Label htmlFor="repo">{t('settings:git.labels.repoUrl')}</Label>
                 <Input
                   id="repo"
                   name="gitRepoUrl"
                   value={settings.gitRepoUrl}
                   onChange={handleChange}
-                  placeholder="https://github.com/your-org/your-repo.git"
+                  placeholder={t('settings:git.placeholders.repoUrl')}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="branch">Branch</Label>
+                <Label htmlFor="branch">{t('settings:git.labels.branch')}</Label>
                 <Input
                   id="branch"
                   name="gitBranch"
                   value={settings.gitBranch}
                   onChange={handleChange}
-                  placeholder="main"
+                  placeholder={t('settings:git.placeholders.branch')}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="git-token">Token</Label>
+                <Label htmlFor="git-token">{t('settings:git.labels.token')}</Label>
                 <Input
                   id="git-token"
                   name="gitToken"
                   type="password"
                   value={settings.gitToken}
                   onChange={handleChange}
-                  placeholder="ghp_... or similar"
+                  placeholder={t('settings:git.placeholders.token')}
                 />
               </div>
             </CardContent>

@@ -9,6 +9,43 @@
     "semanticModels": "Modèles sémantiques",
     "tags": "Tags"
   },
+  "general": {
+    "title": "Paramètres généraux",
+    "description": "Configurer les paramètres de base de l'application",
+    "enableBackgroundJobs": "Activer les jobs en arrière-plan"
+  },
+  "databricks": {
+    "title": "Paramètres Databricks",
+    "description": "Configurer les paramètres de connexion Databricks",
+    "labels": {
+      "host": "Hôte",
+      "token": "Token",
+      "warehouseId": "ID du Warehouse",
+      "catalog": "Catalogue",
+      "schema": "Schéma"
+    },
+    "placeholders": {
+      "host": "https://<votre-workspace>.cloud.databricks.com",
+      "token": "dapi...",
+      "warehouseId": "1234abcd5678efgh",
+      "catalog": "main",
+      "schema": "uc_swiss_knife"
+    }
+  },
+  "git": {
+    "title": "Paramètres Git",
+    "description": "Configurer le dépôt Git pour le stockage YAML",
+    "labels": {
+      "repoUrl": "URL du dépôt",
+      "branch": "Branche",
+      "token": "Token"
+    },
+    "placeholders": {
+      "repoUrl": "https://github.com/votre-org/votre-repo.git",
+      "branch": "main",
+      "token": "ghp_... ou similaire"
+    }
+  },
   "jobs": {
     "title": "Configuration des jobs & workflows",
     "description": "Configurez le cluster de jobs Databricks et activez les workflows en arrière-plan",
