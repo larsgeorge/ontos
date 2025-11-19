@@ -781,7 +781,14 @@ def init_db() -> None:
                 logger.info(f"Database revision '{db_revision}' differs from head revision '{head_revision}'.")
                 logger.info("Attempting Alembic upgrade to head...")
                 try:
-                    alembic_command.upgrade(alembic_cfg, "head")
+                    target_schema = settings.POSTGRES_DB_SCHEMA or 'public'
+                    # Use explicit connection context to avoid hanging (same pattern as stamp)
+                    with _engine.begin() as connection:
+                        # Set search_path to ensure migrations run in correct schema
+                        connection.execute(text(f'SET search_path TO "{target_schema}"'))
+                        # Pass connection to Alembic to prevent it from creating its own
+                        alembic_cfg.attributes['connection'] = connection
+                        alembic_command.upgrade(alembic_cfg, "head")
                     logger.info("✓ Alembic upgrade to head COMPLETED.")
                 except Exception as alembic_err:
                     logger.critical("Alembic upgrade failed! Manual intervention may be required.", exc_info=True)
