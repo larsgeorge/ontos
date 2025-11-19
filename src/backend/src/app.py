@@ -200,8 +200,6 @@ comments_routes.register_routes(app)
 notifications_routes.register_routes(app)
 search_routes.register_routes(app)
 jobs_routes.register_routes(app)
-from src.routes import metadata_routes as generic_metadata_routes
-generic_metadata_routes.register_routes(app)
 settings_routes.register_routes(app)
 access_requests_routes.register_routes(app)
 semantic_links_routes.register_routes(app)
