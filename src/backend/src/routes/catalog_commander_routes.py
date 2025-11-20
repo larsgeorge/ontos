@@ -1,7 +1,7 @@
 from databricks.sdk import WorkspaceClient
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
-from src.common.workspace_client import get_workspace_client
+from src.common.workspace_client import get_obo_workspace_client
 from src.controller.catalog_commander_manager import CatalogCommanderManager
 # Import permission checker and feature level
 from src.common.authorization import PermissionChecker
@@ -16,13 +16,21 @@ router = APIRouter(prefix="/api", tags=["catalog-commander"])
 # Define the feature ID for permission checks
 CATALOG_COMMANDER_FEATURE_ID = 'catalog-commander'
 
-# Modify dependency injector to return manager (no auth check needed here)
-def get_catalog_manager(client: WorkspaceClient = Depends(get_workspace_client)) -> CatalogCommanderManager:
-    """Get a configured catalog commander manager instance.
-    
+# Modify dependency injector to return manager using OBO token
+def get_catalog_manager(
+    request: Request,
+    client: WorkspaceClient = Depends(get_obo_workspace_client)
+) -> CatalogCommanderManager:
+    """Get a configured catalog commander manager instance using OBO token.
+
+    This creates a manager with a workspace client authenticated using the user's
+    token (from x-forwarded-access-token header), ensuring catalog operations
+    respect the user's permissions.
+
     Args:
-        client: Databricks workspace client (injected by FastAPI)
-        
+        request: FastAPI request object (injected by FastAPI)
+        client: Databricks workspace client with user's token (injected by FastAPI)
+
     Returns:
         Configured catalog commander manager instance
     """

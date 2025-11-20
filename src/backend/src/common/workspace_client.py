@@ -5,7 +5,8 @@ from typing import Any, Callable, Dict, Optional, final
 
 from databricks import sql
 from databricks.sdk import WorkspaceClient
-from fastapi import Depends
+from fastapi import Depends, Header, Request
+from typing import Optional as OptionalType
 
 from .config import Settings, get_settings
 from src import __version__
@@ -224,11 +225,61 @@ def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30)
 
 def get_workspace_client_dependency(timeout: int = 30):
     """Returns the actual dependency function for FastAPI."""
-    
+
     def _get_ws_client() -> Optional[WorkspaceClient]:
         """The actual FastAPI dependency function that gets the client."""
         client = get_workspace_client(timeout=timeout)
         return client
 
     return _get_ws_client
+
+def get_obo_workspace_client(
+    request: Request,
+    settings: Optional[Settings] = None,
+    timeout: int = 30
+) -> WorkspaceClient:
+    """Get a workspace client using the OBO (On-Behalf-Of) token from headers.
+
+    This creates a workspace client using the user's access token from the
+    x-forwarded-access-token header, allowing the app to perform operations
+    on behalf of the user with their permissions.
+
+    Args:
+        request: FastAPI request object containing headers
+        settings: Application settings (optional, will be fetched if not provided)
+        timeout: Timeout in seconds for API calls
+
+    Returns:
+        Workspace client instance configured with the user's token
+
+    Raises:
+        HTTPException: If the OBO token is not present in headers
+    """
+    from fastapi import HTTPException
+
+    if settings is None:
+        settings = get_settings()
+
+    # Extract OBO token from header
+    obo_token = request.headers.get('x-forwarded-access-token')
+
+    if not obo_token:
+        logger.warning("OBO token not found in request headers, falling back to service principal")
+        # Fall back to service principal client
+        return get_workspace_client(settings, timeout)
+
+    # Log with obfuscated token
+    masked_token = f"{obo_token[:4]}...{obo_token[-4:]}" if obo_token else None
+    logger.info(f"Initializing OBO workspace client with host: {settings.DATABRICKS_HOST}, user token: {masked_token}, timeout: {timeout}s")
+
+    # Create client with user's token
+    client = WorkspaceClient(
+        host=settings.DATABRICKS_HOST,
+        token=obo_token
+    )
+
+    # Verify connectivity and set telemetry headers
+    verified_client = _verify_workspace_client(client)
+
+    return CachingWorkspaceClient(verified_client, timeout=timeout)
 

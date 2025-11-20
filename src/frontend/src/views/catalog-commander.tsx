@@ -1,28 +1,40 @@
 import React, { useEffect, useState } from 'react';
 import { TreeView } from '@/components/ui/tree-view';
-import { 
-  Folder, 
-  FolderOpen, 
-  Table, 
-  Layout, 
-  FolderKanban, 
-  Pencil, 
-  Trash2, 
+import {
+  Folder,
+  FolderOpen,
+  Table,
+  Layout,
+  FolderKanban,
+  Pencil,
+  Trash2,
   Eye,
   ArrowRight,
   ArrowLeft,
   Info,
-  Loader2
+  Loader2,
+  MessageSquare,
+  PanelRightClose,
+  PanelRightOpen,
+  Copy,
+  GitCompare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { usePermissions } from '@/stores/permissions-store';
 import { FeatureAccessLevel } from '@/types/feature-access-levels';
 import useBreadcrumbStore from '@/stores/breadcrumb-store';
+import { CommentTimeline } from '@/components/comments/comment-timeline';
+import { cn } from '@/lib/utils';
+import EntityMetadataPanel from '@/components/metadata/entity-metadata-panel';
 
 interface CatalogItem {
   id: string;
@@ -60,6 +72,8 @@ interface Estate {
   is_enabled: boolean;
 }
 
+type RightPanelMode = 'hidden' | 'dual-tree' | 'info' | 'comments';
+
 const CatalogCommander: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -78,6 +92,16 @@ const CatalogCommander: React.FC = () => {
   const [estates, setEstates] = useState<Estate[]>([]);
   const [selectedSourceEstate, setSelectedSourceEstate] = useState<string>('');
   const [selectedTargetEstate, setSelectedTargetEstate] = useState<string>('');
+  const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('info');
+
+  // Draggable divider state - default to 420px, load from localStorage
+  const [leftPaneWidth, setLeftPaneWidth] = useState<number>(() => {
+    const stored = localStorage.getItem('catalog-commander-split');
+    return stored ? parseInt(stored, 10) : 420;
+  });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartX, setDragStartX] = useState(0);
+  const [dragStartWidth, setDragStartWidth] = useState(0);
 
   const { hasPermission } = usePermissions();
   const canPerformWriteActions = hasPermission('catalog-commander', FeatureAccessLevel.FULL);
@@ -247,6 +271,41 @@ const CatalogCommander: React.FC = () => {
     setSelectedObjectInfo({ id: item.id });
   };
 
+  // Draggable divider handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    setDragStartX(e.clientX);
+    setDragStartWidth(leftPaneWidth);
+  };
+
+  const handleMouseMove = React.useCallback((e: MouseEvent) => {
+    if (!isDragging) return;
+
+    const delta = e.clientX - dragStartX;
+    const newWidth = Math.max(300, Math.min(800, dragStartWidth + delta));
+    setLeftPaneWidth(newWidth);
+  }, [isDragging, dragStartX, dragStartWidth]);
+
+  const handleMouseUp = React.useCallback(() => {
+    if (isDragging) {
+      setIsDragging(false);
+      localStorage.setItem('catalog-commander-split', leftPaneWidth.toString());
+    }
+  }, [isDragging, leftPaneWidth]);
+
+  // Add mouse event listeners for dragging
+  React.useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
   const getIcon = (type: string) => {
     switch (type) {
       case 'catalog':
@@ -309,157 +368,370 @@ const CatalogCommander: React.FC = () => {
         <FolderKanban className="w-8 h-8" /> Catalog Commander
       </h1>
 
-      <div className="flex justify-between items-center mb-6">
+      {/* Action Toolbar */}
+      <div className="flex justify-between items-center mb-4">
         <div className="flex gap-2">
-          <Button onClick={() => handleViewDataset(getSelectedNodeDetails()?.id || '')} 
-                  disabled={!selectedItems.length || getSelectedNodeDetails()?.type !== 'table'}>
+          <Button
+            onClick={() => handleViewDataset(getSelectedNodeDetails()?.id || '')}
+            disabled={!selectedItems.length || getSelectedNodeDetails()?.type !== 'table'}
+            variant="outline"
+            size="sm"
+            className="h-9"
+          >
             <Eye className="h-4 w-4 mr-2" />
-            View
+            View Data
           </Button>
           {canPerformWriteActions && (
             <>
-              <Button onClick={() => handleOperation('move')}>
+              <Button
+                onClick={() => handleOperation('move')}
+                variant="outline"
+                size="sm"
+                className="h-9"
+              >
                 <ArrowRight className="h-4 w-4 mr-2" />
                 Move
               </Button>
-              <Button onClick={() => handleOperation('delete')} variant="destructive">
+              <Button
+                onClick={() => handleOperation('delete')}
+                variant="outline"
+                size="sm"
+                className="h-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete
               </Button>
-              <Button onClick={() => handleOperation('rename')}>
+              <Button
+                onClick={() => handleOperation('rename')}
+                variant="outline"
+                size="sm"
+                className="h-9"
+              >
                 <Pencil className="h-4 w-4 mr-2" />
                 Rename
               </Button>
             </>
           )}
-          <Button onClick={() => handleOperation('info')}>
-            <Info className="h-4 w-4 mr-2" />
-            Info
-          </Button>
+        </div>
+
+        {/* Right Panel Mode Toggle */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 border rounded-lg p-1 bg-muted/30">
+            <Button
+              variant={rightPanelMode === 'info' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setRightPanelMode(rightPanelMode === 'info' ? 'hidden' : 'info')}
+              className={cn(
+                "h-8 px-3",
+                rightPanelMode === 'info' && "shadow-sm"
+              )}
+            >
+              <Info className="h-4 w-4 mr-1.5" />
+              Info
+            </Button>
+            {canPerformWriteActions && (
+              <Button
+                variant={rightPanelMode === 'dual-tree' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setRightPanelMode(rightPanelMode === 'dual-tree' ? 'hidden' : 'dual-tree')}
+                className={cn(
+                  "h-8 px-3",
+                  rightPanelMode === 'dual-tree' && "shadow-sm"
+                )}
+              >
+                <GitCompare className="h-4 w-4 mr-1.5" />
+                Operations
+              </Button>
+            )}
+            <Button
+              variant={rightPanelMode === 'comments' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setRightPanelMode(rightPanelMode === 'comments' ? 'hidden' : 'comments')}
+              className={cn(
+                "h-8 px-3",
+                rightPanelMode === 'comments' && "shadow-sm"
+              )}
+            >
+              <MessageSquare className="h-4 w-4 mr-1.5" />
+              Comments
+            </Button>
+          </div>
+          {rightPanelMode !== 'hidden' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setRightPanelMode('hidden')}
+              className="h-8 w-8 p-0"
+            >
+              <PanelRightClose className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
-      <div className="flex gap-6 h-[calc(100vh-12rem)]">
-        <Card className="flex-1 flex flex-col h-full min-w-0">
-          <CardHeader className="flex-none">
-            <CardTitle>Source</CardTitle>
+      {/* Main Layout: Resizable Left Tree + Variable Right Panel */}
+      <div className="flex gap-4 h-[calc(100vh-12rem)]">
+        {/* Resizable Left Tree View with horizontal and vertical scrolling */}
+        <Card
+          className="flex-shrink-0 flex flex-col h-full shadow-sm border-border/50"
+          style={{ width: `${leftPaneWidth}px` }}
+        >
+          <CardHeader className="flex-none pb-3 border-b">
+            <CardTitle className="text-lg font-semibold">Catalog Browser</CardTitle>
           </CardHeader>
-          <CardContent className="flex-1 flex flex-col h-full min-h-0">
-            <div className="mb-2">
-              <Select
-                value={selectedSourceEstate}
-                onValueChange={setSelectedSourceEstate}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Estate" />
-                </SelectTrigger>
-                <SelectContent>
-                  {estates.map(estate => (
-                    <SelectItem key={estate.id} value={estate.id}>
-                      {estate.name} <span className="text-xs text-muted-foreground ml-1">({estate.metastore_name})</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <CardContent className="flex-1 flex flex-col h-full min-h-0 p-4 space-y-3">
+            {estates.length > 1 && (
+              <div className="space-y-2 flex-none">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Metastore</Label>
+                <Select
+                  value={selectedSourceEstate}
+                  onValueChange={setSelectedSourceEstate}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Select Estate" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {estates.map(estate => (
+                      <SelectItem key={estate.id} value={estate.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{estate.name}</span>
+                          <span className="text-xs text-muted-foreground">({estate.metastore_name})</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <Input
-              placeholder="Search"
+              placeholder="Filter catalogs..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="mb-4 flex-none"
+              className="h-9 flex-none"
             />
-            <div className="flex-1 overflow-auto">
-              <TreeView
-                data={renderTree(sourceItems, true)}
-                className="border rounded p-2 h-full"
-                onSelectChange={(item) => handleItemSelect(item as unknown as CatalogItem)}
-              />
+            <div className="flex-1 min-h-0 overflow-auto border rounded-md bg-muted/20">
+              <div className="min-w-max text-xs leading-none [&_*]:!leading-none [&_button]:!py-0 [&_button]:!px-1 [&_button]:!h-4 [&_button]:!min-h-4 [&_button]:!my-0 [&_ul]:!space-y-0 [&_ul]:!gap-0 [&_li]:!my-0 [&_li]:!py-0 [&_div]:!leading-none">
+                <TreeView
+                  data={renderTree(sourceItems, true)}
+                  className="p-1 !space-y-0 !gap-0"
+                  onSelectChange={(item) => handleItemSelect(item as unknown as CatalogItem)}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {canPerformWriteActions && (
-          <div className="flex flex-col justify-center gap-4">
-            <Button onClick={() => handleOperation('copy')}>
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-            <Button onClick={() => handleOperation('move')}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </div>
+        {/* Draggable Divider - Only visible on hover */}
+        {rightPanelMode !== 'hidden' && (
+          <div
+            className={cn(
+              "w-1 bg-transparent hover:bg-border cursor-col-resize transition-colors flex-shrink-0 -mx-2",
+              isDragging && "bg-primary"
+            )}
+            onMouseDown={handleMouseDown}
+            title="Drag to resize"
+          />
         )}
 
-        <Card className="flex-1 flex flex-col h-full min-w-0">
-          <CardHeader className="flex-none">
-            <CardTitle>Target</CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 flex flex-col h-full min-h-0">
-            <div className="mb-2">
-              <Select
-                value={selectedTargetEstate}
-                onValueChange={setSelectedTargetEstate}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Estate" />
-                </SelectTrigger>
-                <SelectContent>
-                  {estates.map(estate => (
-                    <SelectItem key={estate.id} value={estate.id}>
-                      {estate.name} <span className="text-xs text-muted-foreground ml-1">({estate.metastore_name})</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Input
-              placeholder="Search"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="mb-4 flex-none"
-            />
-            <div className="flex-1 overflow-auto">
-              <TreeView
-                data={renderTree(targetItems, false)}
-                className="border rounded p-2 h-full"
-                onSelectChange={(item) => handleItemSelect(item as unknown as CatalogItem)}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        {/* Variable Right Panel */}
+        {rightPanelMode !== 'hidden' && (
+          <>
+            {/* Operations Panel: Transfer Arrows + Target Tree */}
+            {rightPanelMode === 'dual-tree' && canPerformWriteActions && (
+              <>
+                <div className="flex flex-col justify-center gap-2">
+                  <Button
+                    onClick={() => handleOperation('copy')}
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 hover:bg-primary hover:text-primary-foreground transition-colors"
+                    title="Copy to target"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    onClick={() => handleOperation('move')}
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 hover:bg-primary hover:text-primary-foreground transition-colors"
+                    title="Move to target"
+                  >
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    onClick={() => handleOperation('move')}
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 hover:bg-primary hover:text-primary-foreground transition-colors"
+                    title="Move from target"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                </div>
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Object Information</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {selectedObjectInfo ? (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h3 className="text-sm font-medium mb-2">Basic Information</h3>
-                {(() => {
-                  const node = getSelectedNodeDetails();
-                  return node ? (
-                    <div className="space-y-1">
-                      <p className="text-sm">Name: {node.name}</p>
-                      <p className="text-sm">Type: {node.type.charAt(0).toUpperCase() + node.type.slice(1)}</p>
-                      <p className="text-sm">Full Path: {node.id}</p>
+                <Card className="flex-1 flex flex-col h-full min-w-0 shadow-sm border-border/50">
+                  <CardHeader className="flex-none pb-3 border-b">
+                    <CardTitle className="text-lg font-semibold">Target</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex-1 flex flex-col h-full min-h-0 p-4 space-y-3">
+                    {estates.length > 1 && (
+                      <div className="space-y-2 flex-none">
+                        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Metastore</Label>
+                        <Select
+                          value={selectedTargetEstate}
+                          onValueChange={setSelectedTargetEstate}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Select Estate" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {estates.map(estate => (
+                              <SelectItem key={estate.id} value={estate.id}>
+                                <div className="flex items-center gap-2">
+                                  <span>{estate.name}</span>
+                                  <span className="text-xs text-muted-foreground">({estate.metastore_name})</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    <Input
+                      placeholder="Filter catalogs..."
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      className="h-9 flex-none"
+                    />
+                    <div className="flex-1 min-h-0 overflow-auto border rounded-md bg-muted/20">
+                      <div className="min-w-max text-xs leading-none [&_*]:!leading-none [&_button]:!py-0 [&_button]:!px-1 [&_button]:!h-4 [&_button]:!min-h-4 [&_button]:!my-0 [&_ul]:!space-y-0 [&_ul]:!gap-0 [&_li]:!my-0 [&_li]:!py-0 [&_div]:!leading-none">
+                        <TreeView
+                          data={renderTree(targetItems, false)}
+                          className="p-1 !space-y-0 !gap-0"
+                          onSelectChange={(item) => handleItemSelect(item as unknown as CatalogItem)}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {/* Info Panel */}
+            {rightPanelMode === 'info' && (
+              <Card className="flex-1 flex flex-col h-full min-w-0 shadow-sm border-border/50">
+                <CardHeader className="flex-none pb-3 border-b">
+                  <CardTitle className="text-lg font-semibold">Object Information</CardTitle>
+                </CardHeader>
+                <CardContent className="flex-1 overflow-auto p-4">
+                  {selectedObjectInfo ? (
+                    <div className="space-y-4">
+                      {/* Basic Information Card */}
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-sm font-medium flex items-center gap-2">
+                            <Info className="h-4 w-4" />
+                            Basic Information
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          {(() => {
+                            const node = getSelectedNodeDetails();
+                            return node ? (
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-3 gap-2 items-center">
+                                  <span className="text-sm text-muted-foreground">Name:</span>
+                                  <span className="text-sm font-medium col-span-2">{node.name}</span>
+                                </div>
+                                <Separator />
+                                <div className="grid grid-cols-3 gap-2 items-center">
+                                  <span className="text-sm text-muted-foreground">Type:</span>
+                                  <div className="col-span-2">
+                                    <Badge variant="outline" className="font-mono">{node.type}</Badge>
+                                  </div>
+                                </div>
+                                <Separator />
+                                <div className="grid grid-cols-3 gap-2">
+                                  <span className="text-sm text-muted-foreground">Full Path:</span>
+                                  <code className="text-xs bg-muted p-2 rounded border break-all col-span-2 font-mono">{node.id}</code>
+                                </div>
+                                {node.type === 'table' && (
+                                  <>
+                                    <Separator />
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm text-muted-foreground">Actions:</span>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleViewDataset(node.id)}
+                                        className="h-8"
+                                      >
+                                        <Eye className="h-3 w-3 mr-1" />
+                                        View Data
+                                      </Button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">Loading details...</p>
+                            );
+                          })()}
+                        </CardContent>
+                      </Card>
+
+                      {/* Entity Metadata Panel - Notes, Links, Documents */}
+                      {getSelectedNodeDetails() && (
+                        <EntityMetadataPanel
+                          entityId={getSelectedNodeDetails()?.id || ''}
+                          entityType={'data_product' as any}
+                        />
+                      )}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">Loading details...</p>
-                  );
-                })()}
-              </div>
-              <div>
-                <h3 className="text-sm font-medium mb-2">Properties</h3>
-                {/* Add specific properties based on node type */}
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Select an object to view its information</p>
-          )}
-        </CardContent>
-      </Card>
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <Info className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                        <p className="text-sm text-muted-foreground">Select an object to view its information</p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Comments Panel */}
+            {rightPanelMode === 'comments' && (
+              <Card className="flex-1 flex flex-col h-full min-w-0 shadow-sm border-border/50">
+                <CardHeader className="flex-none pb-3 border-b">
+                  <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                    <MessageSquare className="h-5 w-5" />
+                    Comments & Activity
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="flex-1 overflow-hidden p-4">
+                  {selectedObjectInfo && getSelectedNodeDetails()?.id ? (
+                    <CommentTimeline
+                      entityType="catalog-object"
+                      entityId={getSelectedNodeDetails()?.id || ''}
+                      showHeader={false}
+                      showFilters={true}
+                      className="h-full"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                        <p className="text-sm text-muted-foreground">Select an object to view comments</p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
+      </div>
 
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
         <DialogContent className="max-w-[90vw] max-h-[90vh] flex flex-col">
