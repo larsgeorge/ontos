@@ -202,9 +202,21 @@ export const DataDomainMiniGraph: React.FC<DataDomainMiniGraphProps> = ({ curren
     // Or, the isSimpleHorizontalLayout condition for C-only implicitly means it will render a single node.
   // }
 
+  // Detect dark mode
+  const isDarkMode = document.documentElement.classList.contains('dark');
+
   const defaultEdgeOptions = {
     // animated: false, // No longer animated
-    markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15 }, // Removed color, default size
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 15,
+      height: 15,
+      color: isDarkMode ? '#94a3b8' : '#64748b'
+    },
+    style: {
+      stroke: isDarkMode ? '#94a3b8' : '#64748b',
+      strokeWidth: 1.5
+    }
   };
 
   return (

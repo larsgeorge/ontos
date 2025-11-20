@@ -76,9 +76,12 @@ const getLayoutedElements = (domains: DataDomain[], direction = 'LR') => {
     const edges: Edge[] = [];
     if (!domains || domains.length === 0) return { nodes, edges };
 
+    // Detect dark mode
+    const isDarkMode = document.documentElement.classList.contains('dark');
+
     const domainMap = new Map(domains.map(d => [d.id, d]));
 
-    const nodeHeight = 80; 
+    const nodeHeight = 80;
     const nodeWidth = 240; 
 
     // Create all nodes first
@@ -107,11 +110,14 @@ const getLayoutedElements = (domains: DataDomain[], direction = 'LR') => {
                 source: domain.parent_id,
                 target: domain.id,
                 type: 'smoothstep',
-                markerEnd: { 
-                    type: MarkerType.ArrowClosed, 
-                    color: '#333333'
+                markerEnd: {
+                    type: MarkerType.ArrowClosed,
+                    color: isDarkMode ? '#94a3b8' : '#333333'
                 },
-                style: { stroke: '#666666', strokeWidth: 1.5 }
+                style: {
+                    stroke: isDarkMode ? '#94a3b8' : '#666666',
+                    strokeWidth: 1.5
+                }
             });
         }
     });
@@ -152,6 +158,9 @@ const DataDomainGraphView: React.FC<DataDomainGraphViewProps> = ({ domains }) =>
     const [nodes, setNodes, onNodesChange] = useNodesState(memoizedElements.nodes);
     const [edges, setEdges, onEdgesChange] = useEdgesState(memoizedElements.edges);
 
+    // Detect dark mode
+    const isDarkMode = document.documentElement.classList.contains('dark');
+
     useEffect(() => {
         // Pass 'LR' explicitly to ensure horizontal layout
         const { nodes: newNodes, edges: newEdges } = getLayoutedElements(domains, 'LR');
@@ -173,7 +182,7 @@ const DataDomainGraphView: React.FC<DataDomainGraphViewProps> = ({ domains }) =>
             >
                 <Controls />
                 <MiniMap nodeStrokeWidth={3} zoomable pannable />
-                <Background color="#ccc" gap={16} />
+                <Background color={isDarkMode ? '#334155' : '#e2e8f0'} gap={16} />
             </ReactFlow>
         </div>
     );

@@ -97,3 +97,29 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* React Flow dark mode styles */
+.dark .react-flow__controls {
+  @apply shadow-lg;
+}
+
+.dark .react-flow__controls-button {
+  @apply bg-secondary border-border text-foreground;
+}
+
+.dark .react-flow__controls-button:hover {
+  @apply bg-accent;
+}
+
+.dark .react-flow__minimap {
+  @apply bg-secondary border border-border;
+}
+
+.dark .react-flow__minimap-mask {
+  fill: hsl(var(--muted));
+}
+
+.dark .react-flow__minimap-node {
+  fill: hsl(var(--muted-foreground));
+  stroke: hsl(var(--border));
+}

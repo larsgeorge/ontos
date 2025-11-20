@@ -1100,7 +1100,10 @@ export default function SemanticModelsView() {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
     const allConcepts = Object.values(groupedConcepts).flat();
-    
+
+    // Detect dark mode
+    const isDarkMode = document.documentElement.classList.contains('dark');
+
     // Helper function to find concept by IRI or create a minimal concept object
     const findConceptByIri = (iri: string): OntologyConcept | null => {
       // First, check if it's the current concept
@@ -1138,14 +1141,15 @@ export default function SemanticModelsView() {
     const centerY = 250;
     nodes.push({
       id: hierarchy.concept.iri,
-      data: { 
+      data: {
         label: hierarchy.concept.label || hierarchy.concept.iri.split(/[/#]/).pop(),
         sourceContext: hierarchy.concept.source_context
       },
       position: { x: 400, y: centerY },
       type: 'default',
       style: {
-        background: '#fff',
+        background: isDarkMode ? '#1e293b' : '#fff',
+        color: isDarkMode ? '#f1f5f9' : '#0f172a',
         border: '2px solid #2563eb',
         borderRadius: '8px',
         padding: '12px',
@@ -1164,14 +1168,15 @@ export default function SemanticModelsView() {
         const nodeId = parent.iri;
         nodes.push({
           id: nodeId,
-          data: { 
+          data: {
             label: parent.label || parent.iri.split(/[/#]/).pop(),
             sourceContext: parent.source_context
           },
           position: { x: 400 + (index - allParentIris.length / 2 + 0.5) * 160, y: centerY - 150 },
           style: {
-            background: '#dbeafe',
-            border: '1px solid #3b82f6',
+            background: isDarkMode ? '#1e3a5f' : '#dbeafe',
+            color: isDarkMode ? '#bfdbfe' : '#1e3a8a',
+            border: `1px solid ${isDarkMode ? '#60a5fa' : '#3b82f6'}`,
             borderRadius: '6px',
             padding: '10px',
             fontSize: '12px',
@@ -1187,9 +1192,9 @@ export default function SemanticModelsView() {
           type: 'smoothstep',
           markerEnd: {
             type: MarkerType.ArrowClosed,
-            color: '#64748b'
+            color: isDarkMode ? '#94a3b8' : '#64748b'
           },
-          style: { stroke: '#64748b' }
+          style: { stroke: isDarkMode ? '#94a3b8' : '#64748b' }
         });
       }
     });
@@ -1204,14 +1209,15 @@ export default function SemanticModelsView() {
         const nodeId = child.iri;
         nodes.push({
           id: nodeId,
-          data: { 
+          data: {
             label: child.label || child.iri.split(/[/#]/).pop(),
             sourceContext: child.source_context
           },
           position: { x: 400 + (index - allChildIris.length / 2 + 0.5) * 160, y: centerY + 150 },
           style: {
-            background: '#dcfce7',
-            border: '1px solid #16a34a',
+            background: isDarkMode ? '#14532d' : '#dcfce7',
+            color: isDarkMode ? '#bbf7d0' : '#15803d',
+            border: `1px solid ${isDarkMode ? '#22c55e' : '#16a34a'}`,
             borderRadius: '6px',
             padding: '10px',
             fontSize: '12px',
@@ -1227,9 +1233,9 @@ export default function SemanticModelsView() {
           type: 'smoothstep',
           markerEnd: {
             type: MarkerType.ArrowClosed,
-            color: '#64748b'
+            color: isDarkMode ? '#94a3b8' : '#64748b'
           },
-          style: { stroke: '#64748b' }
+          style: { stroke: isDarkMode ? '#94a3b8' : '#64748b' }
         });
       }
     });
@@ -1243,21 +1249,21 @@ export default function SemanticModelsView() {
         const nodeId = sibling.iri;
         nodes.push({
           id: nodeId,
-          data: { 
+          data: {
             label: sibling.label || sibling.iri.split(/[/#]/).pop(),
             sourceContext: sibling.source_context
           },
           position: { x: 700 + (index * 180), y: centerY },
           style: {
-            background: '#f5f5f5',
-            border: '1px solid #d1d5db',
+            background: isDarkMode ? '#334155' : '#f5f5f5',
+            color: isDarkMode ? '#94a3b8' : '#9ca3af',
+            border: `1px solid ${isDarkMode ? '#475569' : '#d1d5db'}`,
             borderRadius: '6px',
             padding: '10px',
             fontSize: '12px',
             minWidth: '120px',
             textAlign: 'center',
-            opacity: 0.6,
-            color: '#9ca3af'
+            opacity: 0.6
           }
         });
         
@@ -1273,15 +1279,15 @@ export default function SemanticModelsView() {
             source: sharedParent,
             target: nodeId,
             type: 'smoothstep',
-            style: { 
-              stroke: '#d1d5db', 
-              strokeWidth: 1, 
+            style: {
+              stroke: isDarkMode ? '#475569' : '#d1d5db',
+              strokeWidth: 1,
               opacity: 0.5,
               strokeDasharray: '5,5'
             },
             markerEnd: {
               type: MarkerType.ArrowClosed,
-              color: '#d1d5db'
+              color: isDarkMode ? '#475569' : '#d1d5db'
             }
           });
         }
@@ -1324,10 +1330,16 @@ export default function SemanticModelsView() {
           }}
           minZoom={0.5}
           maxZoom={1.5}
-          style={{ background: '#ffffff' }}
+          className="bg-background"
           defaultEdgeOptions={{
-            style: { strokeWidth: 1.5 },
-            markerEnd: { type: MarkerType.ArrowClosed }
+            style: {
+              strokeWidth: 1.5,
+              stroke: isDarkMode ? '#94a3b8' : '#64748b'
+            },
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              color: isDarkMode ? '#94a3b8' : '#64748b'
+            }
           }}
           nodesDraggable={false}
           nodesConnectable={false}
@@ -1343,7 +1355,7 @@ export default function SemanticModelsView() {
           connectionMode={ConnectionMode.Strict}
         >
           <Controls />
-          <Background />
+          <Background color={isDarkMode ? '#334155' : '#e2e8f0'} gap={16} />
         </ReactFlow>
       </div>
     );

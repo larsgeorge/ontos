@@ -72,11 +72,14 @@ const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
 
 const getLayoutedElements = (
-    estates: Estate[], 
+    estates: Estate[],
     localInstanceNodeData: Partial<Estate>,
     onNodeClick: (estateId: string) => void,
     direction = 'TB' // Top-to-Bottom layout might be better for a central node
 ) => {
+    // Detect dark mode
+    const isDarkMode = document.documentElement.classList.contains('dark');
+
     dagreGraph.setGraph({ rankdir: direction, nodesep: 60, ranksep: 90 }); // Increased ranksep
 
     const initialNodes: Node<EstateNodeData | any>[] = [];
@@ -112,8 +115,14 @@ const getLayoutedElements = (
                 target: estate.id,
                 type: 'smoothstep',
                 animated: true,
-                markerEnd: { type: MarkerType.ArrowClosed, color: '#888' },
-                style: { strokeWidth: 1.5, stroke: '#888' },
+                markerEnd: {
+                    type: MarkerType.ArrowClosed,
+                    color: isDarkMode ? '#94a3b8' : '#888'
+                },
+                style: {
+                    strokeWidth: 1.5,
+                    stroke: isDarkMode ? '#94a3b8' : '#888'
+                },
             });
             dagreGraph.setEdge('local-instance', estate.id);
         }
@@ -143,6 +152,9 @@ const EstateGraphView: React.FC<EstateGraphViewProps> = ({ estates, onNodeClick 
   const [nodes, setNodes, onNodesChange] = useNodesState<EstateNodeData | any>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const reactFlowWrapper = React.useRef<HTMLDivElement>(null);
+
+  // Detect dark mode
+  const isDarkMode = document.documentElement.classList.contains('dark');
 
   useEffect(() => {
     if (!estates || !reactFlowWrapper.current) {
@@ -192,7 +204,7 @@ const EstateGraphView: React.FC<EstateGraphViewProps> = ({ estates, onNodeClick 
       >
         <Controls />
         <MiniMap nodeStrokeWidth={3} zoomable pannable />
-        <Background color="#aaa" gap={20} />
+        <Background color={isDarkMode ? '#334155' : '#e2e8f0'} gap={16} />
       </ReactFlow>
     </div>
   );

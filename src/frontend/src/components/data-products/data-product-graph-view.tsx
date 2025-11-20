@@ -266,6 +266,9 @@ interface DataProductGraphViewProps {
 }
 
 const DataProductGraphView: React.FC<DataProductGraphViewProps> = ({ products, viewMode, setViewMode, navigate }) => {
+    // Detect dark mode
+    const isDarkMode = document.documentElement.classList.contains('dark');
+
     const initialElements = useMemo(() => {
         const validProducts = products.filter(p => p.id);
         const productNodes: Node<DataProductNodeData>[] = validProducts.map((product) => {
@@ -394,15 +397,21 @@ const DataProductGraphView: React.FC<DataProductGraphViewProps> = ({ products, v
                     fitView
                     attributionPosition="bottom-left"
                      defaultEdgeOptions={{
-                        style: { strokeWidth: 1.5, stroke: '#888' },
-                        markerEnd: { type: MarkerType.ArrowClosed, color: '#888' },
+                        style: {
+                            strokeWidth: 1.5,
+                            stroke: isDarkMode ? '#94a3b8' : '#888'
+                        },
+                        markerEnd: {
+                            type: MarkerType.ArrowClosed,
+                            color: isDarkMode ? '#94a3b8' : '#888'
+                        },
                     }}
                     nodesDraggable={true}
                     nodesConnectable={false}
                     elementsSelectable={false}
                 >
                     <Controls />
-                    <Background />
+                    <Background color={isDarkMode ? '#334155' : '#e2e8f0'} gap={16} />
                 </ReactFlow>
             </TooltipProvider>
         </div>

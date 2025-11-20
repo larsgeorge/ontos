@@ -204,6 +204,9 @@ export default function DatabaseSchema() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
+  // Detect dark mode
+  const isDarkMode = document.documentElement.classList.contains('dark');
+
   const setStaticSegments = useBreadcrumbStore((state: any) => state.setStaticSegments);
   const setDynamicTitle = useBreadcrumbStore((state: any) => state.setDynamicTitle);
 
@@ -361,7 +364,7 @@ export default function DatabaseSchema() {
             markerEnd: { type: MarkerType.ArrowClosed },
           }}
         >
-          <Background />
+          <Background color={isDarkMode ? '#334155' : '#e2e8f0'} gap={16} />
           <Controls />
           <MiniMap
             nodeColor={() => '#3b82f6'}
