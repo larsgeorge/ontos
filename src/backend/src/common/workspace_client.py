@@ -1,3 +1,4 @@
+import hashlib
 import signal
 import time
 from functools import cached_property, wraps
@@ -15,6 +16,36 @@ from src import __version__
 from src.common.logging import get_logger
 logger = get_logger(__name__)
 
+# Module-level cache for workspace clients (persists across requests)
+# Key: hash of token, Value: (CachingWorkspaceClient, last_access_time)
+_CLIENT_CACHE: Dict[str, tuple[Any, float]] = {}
+_CACHE_CLEANUP_INTERVAL = 300  # Clean up every 5 minutes
+_CACHE_MAX_AGE = 600  # Keep clients for max 10 minutes of inactivity
+_LAST_CLEANUP_TIME = time.time()
+
+def _cleanup_client_cache():
+    """Remove stale client instances from cache."""
+    global _LAST_CLEANUP_TIME
+    current_time = time.time()
+
+    # Only cleanup if interval has passed
+    if current_time - _LAST_CLEANUP_TIME < _CACHE_CLEANUP_INTERVAL:
+        return
+
+    _LAST_CLEANUP_TIME = current_time
+    stale_keys = [
+        key for key, (_, last_access) in _CLIENT_CACHE.items()
+        if current_time - last_access > _CACHE_MAX_AGE
+    ]
+
+    for key in stale_keys:
+        del _CLIENT_CACHE[key]
+        logger.info(f"Cleaned up stale workspace client from cache")
+
+def _get_token_hash(token: str) -> str:
+    """Generate a hash of the token for use as cache key."""
+    return hashlib.sha256(token.encode()).hexdigest()[:16]
+
 class TimeoutError(Exception):
     """Exception raised when a function times out."""
 
@@ -23,11 +54,22 @@ class CachingWorkspaceClient(WorkspaceClient):
         self._client = client
         self._cache: Dict[str, Any] = {}
         self._cache_times: Dict[str, float] = {}
-        self._cache_duration = 300  # 5 minutes in seconds
+        self._cache_duration = 60  # 1 minute in seconds
         self._timeout = timeout
 
     def __call__(self, timeout: int = 30):
         return CachingWorkspaceClient(self._client, timeout=timeout)
+
+    def clear_cache(self, key: Optional[str] = None):
+        """Clear the cache. If key is provided, clear only that key."""
+        if key:
+            self._cache.pop(key, None)
+            self._cache_times.pop(key, None)
+            logger.info(f"Cleared cache for {key}")
+        else:
+            self._cache.clear()
+            self._cache_times.clear()
+            logger.info("Cleared all cache")
 
     def _make_api_call(self, func: Callable, *args, **kwargs) -> Any:
         """Execute a function with a timeout.
@@ -209,19 +251,42 @@ def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30)
     if settings is None:
         settings = get_settings()
 
+    # Cleanup stale clients periodically
+    _cleanup_client_cache()
+
+    # Use token as cache key
+    token = settings.DATABRICKS_TOKEN
+    if not token:
+        raise ValueError("DATABRICKS_TOKEN not configured")
+
+    cache_key = _get_token_hash(token)
+
+    # Check if we have a cached client
+    if cache_key in _CLIENT_CACHE:
+        cached_client, _ = _CLIENT_CACHE[cache_key]
+        # Update last access time
+        _CLIENT_CACHE[cache_key] = (cached_client, time.time())
+        logger.info(f"Reusing cached workspace client")
+        return cached_client
+
     # Log environment values with obfuscated token
-    masked_token = f"{settings.DATABRICKS_TOKEN[:4]}...{settings.DATABRICKS_TOKEN[-4:]}" if settings.DATABRICKS_TOKEN else None
-    logger.info(f"Initializing workspace client with host: {settings.DATABRICKS_HOST}, token: {masked_token}, timeout: {timeout}s")
+    masked_token = f"{token[:4]}...{token[-4:]}"
+    logger.info(f"Initializing NEW workspace client with host: {settings.DATABRICKS_HOST}, token: {masked_token}, timeout: {timeout}s")
 
     client = WorkspaceClient(
         host=settings.DATABRICKS_HOST,
-        token=settings.DATABRICKS_TOKEN
+        token=token
     )
 
     # Verify connectivity and set telemetry headers
     verified_client = _verify_workspace_client(client)
 
-    return CachingWorkspaceClient(verified_client, timeout=timeout)
+    caching_client = CachingWorkspaceClient(verified_client, timeout=timeout)
+
+    # Store in cache
+    _CLIENT_CACHE[cache_key] = (caching_client, time.time())
+
+    return caching_client
 
 def get_workspace_client_dependency(timeout: int = 30):
     """Returns the actual dependency function for FastAPI."""
@@ -260,6 +325,9 @@ def get_obo_workspace_client(
     if settings is None:
         settings = get_settings()
 
+    # Cleanup stale clients periodically
+    _cleanup_client_cache()
+
     # Extract OBO token from header
     obo_token = request.headers.get('x-forwarded-access-token')
 
@@ -268,9 +336,21 @@ def get_obo_workspace_client(
         # Fall back to service principal client
         return get_workspace_client(settings, timeout)
 
+    # Use OBO token hash as cache key
+    cache_key = f"obo_{_get_token_hash(obo_token)}"
+
+    # Check if we have a cached client for this user
+    if cache_key in _CLIENT_CACHE:
+        cached_client, _ = _CLIENT_CACHE[cache_key]
+        # Update last access time
+        _CLIENT_CACHE[cache_key] = (cached_client, time.time())
+        masked_token = f"{obo_token[:4]}...{obo_token[-4:]}"
+        logger.info(f"Reusing cached OBO workspace client for user token: {masked_token}")
+        return cached_client
+
     # Log with obfuscated token
-    masked_token = f"{obo_token[:4]}...{obo_token[-4:]}" if obo_token else None
-    logger.info(f"Initializing OBO workspace client with host: {settings.DATABRICKS_HOST}, user token: {masked_token}, timeout: {timeout}s")
+    masked_token = f"{obo_token[:4]}...{obo_token[-4:]}"
+    logger.info(f"Initializing NEW OBO workspace client with host: {settings.DATABRICKS_HOST}, user token: {masked_token}, timeout: {timeout}s")
 
     # Create client with user's token
     client = WorkspaceClient(
@@ -281,5 +361,10 @@ def get_obo_workspace_client(
     # Verify connectivity and set telemetry headers
     verified_client = _verify_workspace_client(client)
 
-    return CachingWorkspaceClient(verified_client, timeout=timeout)
+    caching_client = CachingWorkspaceClient(verified_client, timeout=timeout)
+
+    # Store in cache
+    _CLIENT_CACHE[cache_key] = (caching_client, time.time())
+
+    return caching_client
 

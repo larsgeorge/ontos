@@ -39,10 +39,16 @@ def get_catalog_manager(
 # --- Read-Only Routes (Require READ_ONLY or higher) ---
 
 @router.get('/catalogs', dependencies=[Depends(PermissionChecker(CATALOG_COMMANDER_FEATURE_ID, FeatureAccessLevel.READ_ONLY))])
-async def list_catalogs(catalog_manager: CatalogCommanderManager = Depends(get_catalog_manager)):
+async def list_catalogs(
+    catalog_manager: CatalogCommanderManager = Depends(get_catalog_manager),
+    force_refresh: bool = False
+):
     """List all catalogs in the Databricks workspace."""
     try:
-        logger.info("Starting to fetch catalogs")
+        logger.info(f"Starting to fetch catalogs (force_refresh={force_refresh})")
+        if force_refresh:
+            # Clear the catalogs cache
+            catalog_manager.client.clear_cache('catalogs.list')
         catalogs = catalog_manager.list_catalogs()
         logger.info(f"Successfully fetched {len(catalogs)} catalogs")
         return catalogs

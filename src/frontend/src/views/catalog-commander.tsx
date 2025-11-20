@@ -17,7 +17,8 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Copy,
-  GitCompare
+  GitCompare,
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -248,11 +249,12 @@ const CatalogCommander: React.FC = () => {
     }
   };
 
-  const fetchCatalogs = async () => {
+  const fetchCatalogs = async (forceRefresh: boolean = false) => {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch('/api/catalogs');
+      const url = forceRefresh ? '/api/catalogs?force_refresh=true' : '/api/catalogs';
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`Failed to fetch catalogs: ${response.status}`);
       }
@@ -264,6 +266,11 @@ const CatalogCommander: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleRefresh = (event: React.MouseEvent) => {
+    const forceRefresh = event.shiftKey;
+    fetchCatalogs(forceRefresh);
   };
 
   const handleItemSelect = (item: CatalogItem) => {
@@ -503,14 +510,26 @@ const CatalogCommander: React.FC = () => {
                 </Select>
               </div>
             )}
-            <Input
-              placeholder="Filter catalogs..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="h-9 flex-none"
-            />
+            <div className="flex gap-2 flex-none">
+              <Input
+                placeholder="Filter catalogs..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="h-9 flex-1"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 flex-shrink-0"
+                onClick={handleRefresh}
+                disabled={isLoading}
+                title="Refresh (hold Shift for force refresh)"
+              >
+                <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+              </Button>
+            </div>
             <div className="flex-1 min-h-0 overflow-auto border rounded-md bg-muted/20">
-              <div className="min-w-max text-xs leading-none [&_*]:!leading-none [&_button]:!py-0 [&_button]:!px-1 [&_button]:!h-4 [&_button]:!min-h-4 [&_button]:!my-0 [&_ul]:!space-y-0 [&_ul]:!gap-0 [&_li]:!my-0 [&_li]:!py-0 [&_div]:!leading-none">
+              <div className="min-w-max text-sm [&_button]:!py-0.5 [&_button]:!my-0 [&_ul]:!space-y-0 [&_ul]:!gap-0 [&_li]:!my-0 [&_li]:!py-0">
                 <TreeView
                   data={renderTree(sourceItems, true)}
                   className="p-1 !space-y-0 !gap-0"
@@ -597,14 +616,26 @@ const CatalogCommander: React.FC = () => {
                         </Select>
                       </div>
                     )}
-                    <Input
-                      placeholder="Filter catalogs..."
-                      value={searchInput}
-                      onChange={(e) => setSearchInput(e.target.value)}
-                      className="h-9 flex-none"
-                    />
+                    <div className="flex gap-2 flex-none">
+                      <Input
+                        placeholder="Filter catalogs..."
+                        value={searchInput}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                        className="h-9 flex-1"
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 flex-shrink-0"
+                        onClick={handleRefresh}
+                        disabled={isLoading}
+                        title="Refresh (hold Shift for force refresh)"
+                      >
+                        <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+                      </Button>
+                    </div>
                     <div className="flex-1 min-h-0 overflow-auto border rounded-md bg-muted/20">
-                      <div className="min-w-max text-xs leading-none [&_*]:!leading-none [&_button]:!py-0 [&_button]:!px-1 [&_button]:!h-4 [&_button]:!min-h-4 [&_button]:!my-0 [&_ul]:!space-y-0 [&_ul]:!gap-0 [&_li]:!my-0 [&_li]:!py-0 [&_div]:!leading-none">
+                      <div className="min-w-max text-sm [&_button]:!py-0.5 [&_button]:!my-0 [&_ul]:!space-y-0 [&_ul]:!gap-0 [&_li]:!my-0 [&_li]:!py-0">
                         <TreeView
                           data={renderTree(targetItems, false)}
                           className="p-1 !space-y-0 !gap-0"
