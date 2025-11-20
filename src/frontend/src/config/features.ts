@@ -8,7 +8,7 @@ import {
     Lock, // Using Lock icon from About for Security for now
     Shield,
     RefreshCw, // Using RefreshCw icon from About for Entitlements Sync for now
-    GitBranch, // Using GitBranch icon from About for Catalog Commander for now
+    FolderKanban, // Icon for Catalog Commander
     Settings,
     Info,
     ClipboardCheck, // Added icon for Data Asset Review
@@ -143,7 +143,7 @@ import {
       name: 'Catalog Commander',
       path: '/catalog-commander',
       description: 'Side-by-side catalog explorer for asset management.',
-      icon: GitBranch,
+      icon: FolderKanban,
       group: 'Operations',
       maturity: 'ga',
       showInLanding: true,
