@@ -279,12 +279,11 @@ def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30)
         logger.info(f"Initializing NEW service principal workspace client with host: {settings.DATABRICKS_HOST}, token: {masked_token}, timeout: {timeout}s")
         
         # Create client with explicit token
-        # Explicitly disable OAuth to prevent conflicts with env vars (DATABRICKS_CLIENT_ID, DATABRICKS_CLIENT_SECRET)
+        # Explicitly set auth_type to 'pat' to prevent SDK from using OAuth env vars
         client = WorkspaceClient(
             host=settings.DATABRICKS_HOST,
             token=token,
-            client_id=None,  # Override env var to prevent OAuth conflict
-            client_secret=None  # Override env var to prevent OAuth conflict
+            auth_type="pat"  # Force PAT authentication, ignore OAuth env vars
         )
         
         cache_identifier = token_hash
@@ -400,12 +399,11 @@ def get_obo_workspace_client(
     logger.info(f"Initializing NEW OBO workspace client for user: {user_email or 'unknown'}, host: {settings.DATABRICKS_HOST}, token: {masked_token}, timeout: {timeout}s")
 
     # Create client with user's token
-    # Explicitly disable OAuth to prevent conflicts with env vars (DATABRICKS_CLIENT_ID, DATABRICKS_CLIENT_SECRET)
+    # Explicitly set auth_type to 'pat' to prevent SDK from using OAuth env vars
     client = WorkspaceClient(
         host=settings.DATABRICKS_HOST,
         token=obo_token,
-        client_id=None,  # Override env var to prevent OAuth conflict
-        client_secret=None  # Override env var to prevent OAuth conflict
+        auth_type="pat"  # Force PAT authentication, ignore OAuth env vars
     )
 
     # Verify connectivity and set telemetry headers
