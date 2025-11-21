@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, CheckSquare, XCircle } from 'lucide-react';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Link } from 'react-router-dom';
+import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request-dialog';
 
 interface ApprovalsQueue {
   contracts: { id: string; name?: string; status?: string }[];
@@ -18,6 +19,8 @@ export default function RequiredActionsSection() {
   const [approvals, setApprovals] = useState<ApprovalsQueue>({ contracts: [], products: [] });
   const [loadingApprovals, setLoadingApprovals] = useState<boolean>(true);
   const [approvalsError, setApprovalsError] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogPayload, setDialogPayload] = useState<Record<string, any> | null>(null);
 
   useEffect(() => {
     fetchNotifications();
@@ -45,7 +48,26 @@ export default function RequiredActionsSection() {
     fetchApprovals();
   }, []);
 
-  const actionItems = notifications.filter(n => n.type === 'action_required');
+  // Filter role access requests separately
+  const roleRequests = notifications.filter(
+    n => n.type === 'action_required' && n.action_type === 'handle_role_request'
+  );
+
+  // Filter other action items (excluding role requests)
+  const actionItems = notifications.filter(
+    n => n.type === 'action_required' && n.action_type !== 'handle_role_request'
+  );
+
+  const handleOpenConfirmDialog = (payload: Record<string, any> | null) => {
+    setDialogPayload(payload);
+    setDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setDialogPayload(null);
+    fetchNotifications(); // Refresh notifications after approval/denial
+  };
 
   return (
     <section className="mb-16">
@@ -91,12 +113,66 @@ export default function RequiredActionsSection() {
             <CardTitle>Approvals</CardTitle>
           </CardHeader>
           <CardContent className="p-6">
-            {loadingApprovals ? (
+            {loadingApprovals || isLoading ? (
               <div className="flex justify-center items-center h-32">{t('requiredActionsSection.loading')}</div>
             ) : approvalsError ? (
               <div className="text-sm text-destructive">{approvalsError}</div>
             ) : (
               <div className="space-y-6">
+                {/* Role Access Requests */}
+                <div>
+                  <div className="text-sm font-medium mb-2">Role access requests</div>
+                  {roleRequests.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">None</div>
+                  ) : (
+                    <ul className="space-y-3">
+                      {roleRequests.slice(0, 10).map(req => (
+                        <li key={req.id} className="border rounded-lg p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium">
+                                {req.action_payload?.requester_email || 'Unknown user'}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Requesting: <span className="font-medium">{req.action_payload?.role_name || 'Unknown role'}</span>
+                              </div>
+                              {req.action_payload?.requester_message && (
+                                <div className="text-sm text-muted-foreground mt-1 italic">
+                                  "{req.action_payload.requester_message}"
+                                </div>
+                              )}
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {new Date(req.created_at).toLocaleString(i18n.language)}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="gap-1"
+                              onClick={() => handleOpenConfirmDialog(req.action_payload)}
+                            >
+                              <CheckSquare className="h-3.5 w-3.5" />
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1"
+                              onClick={() => handleOpenConfirmDialog(req.action_payload)}
+                            >
+                              <XCircle className="h-3.5 w-3.5" />
+                              Deny
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Contracts */}
                 <div>
                   <div className="text-sm font-medium mb-2">Contracts awaiting approval</div>
                   {approvals.contracts.length === 0 ? (
@@ -114,6 +190,8 @@ export default function RequiredActionsSection() {
                     </ul>
                   )}
                 </div>
+
+                {/* Products */}
                 <div>
                   <div className="text-sm font-medium mb-2">Products pending certification</div>
                   {approvals.products.length === 0 ? (
@@ -140,6 +218,19 @@ export default function RequiredActionsSection() {
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>{t('requiredActionsSection.alertMessage')}</AlertDescription>
       </Alert>
+
+      {/* Role Request Confirmation Dialog */}
+      {dialogPayload && (
+        <ConfirmRoleRequestDialog
+          isOpen={dialogOpen}
+          onOpenChange={setDialogOpen}
+          requesterEmail={dialogPayload.requester_email || ''}
+          roleId={dialogPayload.role_id || ''}
+          roleName={dialogPayload.role_name || ''}
+          requesterMessage={dialogPayload.requester_message}
+          onDecisionMade={handleCloseDialog}
+        />
+      )}
     </section>
   );
 }
