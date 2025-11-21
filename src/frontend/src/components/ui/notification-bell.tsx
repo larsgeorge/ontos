@@ -296,6 +296,9 @@ export default function NotificationBell() {
                     {new Date(notification.created_at).toLocaleString()}
                   </p>
                 </div>
+                {!notification.read && (
+                  <div className="h-2 w-2 rounded-full bg-primary shrink-0" />
+                )}
                 {notification.can_delete && (
                   <Button
                     variant="ghost"
@@ -308,9 +311,6 @@ export default function NotificationBell() {
                   >
                     <X className="h-4 w-4" />
                   </Button>
-                )}
-                {!notification.read && (
-                  <div className="h-2 w-2 rounded-full bg-primary absolute right-2 top-2" />
                 )}
               </DropdownMenuItem>
             ))
