@@ -1,4 +1,5 @@
 import hashlib
+import os
 import signal
 import time
 from functools import cached_property, wraps
@@ -412,12 +413,21 @@ def get_obo_workspace_client(
     logger.info(f"Initializing NEW OBO workspace client for user: {user_email or 'unknown'}, host: {settings.DATABRICKS_HOST}, token: {masked_token}, timeout: {timeout}s")
 
     # Create client with user's token
-    # Explicitly set auth_type to 'pat' to prevent SDK from using OAuth env vars
-    client = WorkspaceClient(
-        host=settings.DATABRICKS_HOST,
-        token=obo_token,
-        auth_type="pat"  # Force PAT authentication, ignore OAuth env vars
-    )
+    # Temporarily clear OAuth env vars to prevent SDK from using them
+    saved_client_id = os.environ.pop('DATABRICKS_CLIENT_ID', None)
+    saved_client_secret = os.environ.pop('DATABRICKS_CLIENT_SECRET', None)
+    
+    try:
+        client = WorkspaceClient(
+            host=settings.DATABRICKS_HOST,
+            token=obo_token
+        )
+    finally:
+        # Restore OAuth env vars
+        if saved_client_id:
+            os.environ['DATABRICKS_CLIENT_ID'] = saved_client_id
+        if saved_client_secret:
+            os.environ['DATABRICKS_CLIENT_SECRET'] = saved_client_secret
 
     # Verify connectivity and set telemetry headers
     # Use lighter verification for OBO tokens (skip cluster check due to limited scopes)
