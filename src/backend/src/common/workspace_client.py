@@ -216,10 +216,14 @@ class CachingWorkspaceClient(WorkspaceClient):
 
 @staticmethod
 @final
-def _verify_workspace_client(ws: WorkspaceClient) -> WorkspaceClient:
+def _verify_workspace_client(ws: WorkspaceClient, skip_cluster_check: bool = False) -> WorkspaceClient:
     """
     Verify the Databricks WorkspaceClient configuration and connectivity.
     Sets product info for telemetry tracking.
+    
+    Args:
+        ws: WorkspaceClient to verify
+        skip_cluster_check: If True, skip cluster API verification (useful for OBO tokens with limited scopes)
     """
     # Using reflection to set right value for _product_info as ontos for telemetry
     product_info = getattr(ws.config, '_product_info')
@@ -227,14 +231,23 @@ def _verify_workspace_client(ws: WorkspaceClient) -> WorkspaceClient:
         setattr(ws.config, '_product_info', ('ontos', __version__))
         logger.info(f"Set workspace client product info to: ontos {__version__}")
 
-    # make sure Databricks workspace is accessible
-    # use api that works on all workspaces and clusters including group assigned clusters
-    try:
-        ws.clusters.select_spark_version()
-        logger.info("Workspace connectivity verified successfully")
-    except Exception as e:
-        logger.error(f"Failed to verify workspace connectivity: {e}")
-        raise
+    # Verify Databricks workspace is accessible
+    if skip_cluster_check:
+        # For OBO tokens with limited scopes, use a lighter verification
+        try:
+            ws.current_user.me()
+            logger.info("Workspace connectivity verified successfully (OBO mode)")
+        except Exception as e:
+            logger.error(f"Failed to verify workspace connectivity: {e}")
+            raise
+    else:
+        # For service principal tokens, use cluster API which works on all workspace types
+        try:
+            ws.clusters.select_spark_version()
+            logger.info("Workspace connectivity verified successfully")
+        except Exception as e:
+            logger.error(f"Failed to verify workspace connectivity: {e}")
+            raise
 
     return ws
 
@@ -407,7 +420,8 @@ def get_obo_workspace_client(
     )
 
     # Verify connectivity and set telemetry headers
-    verified_client = _verify_workspace_client(client)
+    # Use lighter verification for OBO tokens (skip cluster check due to limited scopes)
+    verified_client = _verify_workspace_client(client, skip_cluster_check=True)
 
     caching_client = CachingWorkspaceClient(verified_client, timeout=timeout)
 
