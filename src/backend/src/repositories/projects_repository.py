@@ -5,7 +5,7 @@ from src.models.projects import ProjectCreate, ProjectUpdate
 from src.common.logging import get_logger
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import and_, delete, or_
+from sqlalchemy import and_, delete, or_, func
 from typing import List, Optional
 
 logger = get_logger(__name__)
@@ -69,10 +69,10 @@ class ProjectRepository(CRUDBase[ProjectDb, ProjectCreate, ProjectUpdate]):
             # Get projects where user is a team member (either directly or via group)
             from src.db_models.teams import TeamMemberDb
 
-            # Build filter for user identifier and groups
-            member_filters = [TeamMemberDb.member_identifier == user_identifier]
+            # Build filter for user identifier and groups (case-insensitive)
+            member_filters = [func.lower(TeamMemberDb.member_identifier) == user_identifier.lower()]
             for group in user_groups:
-                member_filters.append(TeamMemberDb.member_identifier == group)
+                member_filters.append(func.lower(TeamMemberDb.member_identifier) == group.lower())
 
             return (
                 db.query(self.model)
@@ -189,10 +189,10 @@ class ProjectRepository(CRUDBase[ProjectDb, ProjectCreate, ProjectUpdate]):
             from src.db_models.teams import TeamMemberDb
             from src.db_models.data_domains import DataDomain
             
-            # Get user's team IDs
-            member_filters = [TeamMemberDb.member_identifier == user_identifier]
+            # Get user's team IDs (case-insensitive)
+            member_filters = [func.lower(TeamMemberDb.member_identifier) == user_identifier.lower()]
             for group in user_groups:
-                member_filters.append(TeamMemberDb.member_identifier == group)
+                member_filters.append(func.lower(TeamMemberDb.member_identifier) == group.lower())
             
             user_team_ids_query = (
                 db.query(TeamDb.id)

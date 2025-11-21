@@ -77,7 +77,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
         home_sections: initialRole?.home_sections || [],
         approval_privileges: initialRole?.approval_privileges || {},
         deployment_policy: initialRole?.deployment_policy || null,
-    };
+    } as AppRole;
 
     const {
         register,
@@ -150,14 +150,20 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
     const onSubmit = async (data: AppRole) => {
         setFormError(null);
 
-        // Prepare payload
+        // Prepare payload - convert assigned_groups string to array
+        let assignedGroupsArray: string[] = [];
+        if (Array.isArray(data.assigned_groups)) {
+            assignedGroupsArray = data.assigned_groups;
+        } else if (typeof data.assigned_groups === 'string') {
+            assignedGroupsArray = (data.assigned_groups as string)
+                .split(',')
+                .map(g => g.trim())
+                .filter(Boolean);
+        }
+
         const basePayload: AppRole = {
             ...data,
-            assigned_groups: Array.isArray(data.assigned_groups)
-                ? data.assigned_groups
-                : typeof (data.assigned_groups as unknown) === 'string'
-                    ? (data.assigned_groups as unknown as string).split(',').map((g: string) => g.trim()).filter(Boolean)
-                    : [],
+            assigned_groups: assignedGroupsArray,
             approval_privileges: data.approval_privileges || {},
         } as AppRole;
 
@@ -223,7 +229,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                         {/* General Tab */}
                         <TabsContent value="general" className="flex-1 mt-4">
                             <ScrollArea className="h-[calc(90vh-280px)]">
-                                <div className="space-y-4 pr-4">
+                                <div className="space-y-4 pr-4 px-1 py-1">
                                     {/* Basic Role Info */}
                                     <div>
                                         <Label htmlFor="name">{t('roles.general.roleName')}</Label>
@@ -246,17 +252,25 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                                         <Controller
                                             name="assigned_groups"
                                             control={control}
-                                            render={({ field }) => (
-                                                <Input
-                                                    id="assigned_groups"
-                                                    placeholder={t('roles.general.assignedGroupsPlaceholder')}
-                                                    value={Array.isArray(field.value) ? field.value.join(', ') : ''}
-                                                    onChange={(e) => {
-                                                        const groups = e.target.value.split(',').map(g => g.trim()).filter(Boolean);
-                                                        field.onChange(groups);
-                                                    }}
-                                                />
-                                            )}
+                                            render={({ field }) => {
+                                                // Convert array to string for display, keep as string for editing
+                                                const displayValue = Array.isArray(field.value) 
+                                                    ? field.value.join(', ') 
+                                                    : (field.value || '');
+                                                
+                                                return (
+                                                    <Input
+                                                        id="assigned_groups"
+                                                        placeholder={t('roles.general.assignedGroupsPlaceholder')}
+                                                        value={displayValue}
+                                                        onChange={(e) => {
+                                                            // Store as string, will be split on submit
+                                                            field.onChange(e.target.value);
+                                                        }}
+                                                        className="focus:ring-2 focus:ring-offset-2"
+                                                    />
+                                                );
+                                            }}
                                         />
                                         {errors.assigned_groups && <p className="text-sm text-red-600 mt-1">{errors.assigned_groups.message}</p>}
                                         <p className="text-xs text-muted-foreground mt-1">{t('roles.general.assignedGroupsHelp')}</p>
@@ -268,7 +282,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                         {/* Privileges Tab */}
                         <TabsContent value="privileges" className="flex-1 mt-4">
                             <ScrollArea className="h-[calc(90vh-280px)]">
-                                <div className="space-y-4 pr-4">
+                                <div className="space-y-4 pr-4 px-1 py-1">
                                     {/* Home Sections Selection */}
                                     <div className="space-y-3">
                                         <h4 className="font-medium">{t('roles.privileges.homeSections.title')}</h4>
@@ -312,7 +326,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                         {/* Permissions Tab */}
                         <TabsContent value="permissions" className="flex-1 mt-4">
                             <ScrollArea className="h-[calc(90vh-280px)]">
-                                <div className="space-y-4 pr-4">
+                                <div className="space-y-4 pr-4 px-1 py-1">
                                     {/* Feature Permissions */}
                                     <div className="space-y-3">
                                         <h4 className="font-medium">{t('roles.permissions.featurePermissions.title')}</h4>
@@ -377,7 +391,7 @@ const RoleFormDialog: React.FC<RoleFormDialogProps> = ({
                         {/* Deployment Tab */}
                         <TabsContent value="deployment" className="flex-1 mt-4">
                             <ScrollArea className="h-[calc(90vh-280px)]">
-                                <div className="space-y-4 pr-4">
+                                <div className="space-y-4 pr-4 px-1 py-1">
                                     <div className="space-y-3">
                                         <h4 className="font-medium">{t('roles.deployment.title')}</h4>
                                         <p className="text-xs text-muted-foreground">

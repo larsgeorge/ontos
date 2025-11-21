@@ -177,6 +177,9 @@ async def get_user_team_role_overrides(user_identifier: str, user_groups: List[s
             # Get teams where user is a member
             user_teams = teams_manager.get_teams_for_user(db, user_identifier)
 
+            # Normalize user groups to lowercase for case-insensitive matching
+            user_groups_lower = set(g.lower() for g in user_groups)
+
             # Collect all role overrides for this user across teams
             role_overrides = []
             for team in user_teams:
@@ -184,10 +187,10 @@ async def get_user_team_role_overrides(user_identifier: str, user_groups: List[s
                     if member.member_identifier == user_identifier and member.app_role_override:
                         role_overrides.append(member.app_role_override)
 
-            # Also check group memberships
+            # Also check group memberships (case-insensitive)
             for team in user_teams:
                 for member in team.members:
-                    if member.member_identifier in user_groups and member.app_role_override:
+                    if member.member_identifier.lower() in user_groups_lower and member.app_role_override:
                         role_overrides.append(member.app_role_override)
 
             if not role_overrides:
@@ -394,12 +397,14 @@ class ApprovalChecker:
                 approval = bool(ap.get(self.entity, False))
             else:
                 # Union across roles assigned to user's groups
-                user_groups = set(user_details.groups or [])
+                # Normalize to lowercase for case-insensitive matching
+                user_groups = set(g.lower() for g in (user_details.groups or []))
                 roles = settings_manager.list_app_roles()
                 ap_union: dict[ApprovalEntity, bool] = {}
                 for role in roles:
                     try:
-                        role_groups = set(role.assigned_groups or [])
+                        # Normalize role groups to lowercase for case-insensitive matching
+                        role_groups = set(g.lower() for g in (role.assigned_groups or []))
                         if not role_groups.intersection(user_groups):
                             continue
                         for k, v in (role.approval_privileges or {}).items():

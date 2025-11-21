@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 
 from src.repositories.projects_repository import project_repo
 from src.repositories.teams_repository import team_repo
@@ -255,10 +256,10 @@ class ProjectsManager:
                 logger.debug(f"Project {project_id} has no teams assigned")
                 return False
             
-            # Build member filters
-            member_filters = [TeamMemberDb.member_identifier == user_identifier]
+            # Build member filters (case-insensitive)
+            member_filters = [func.lower(TeamMemberDb.member_identifier) == user_identifier.lower()]
             for group in user_groups:
-                member_filters.append(TeamMemberDb.member_identifier == group)
+                member_filters.append(func.lower(TeamMemberDb.member_identifier) == group.lower())
             
             # Check if user is member of any project team
             from sqlalchemy import and_, or_

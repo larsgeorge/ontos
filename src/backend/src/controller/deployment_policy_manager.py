@@ -38,11 +38,13 @@ class DeploymentPolicyManager:
         
         # 2. Collect policies from all user's group roles
         policies = []
-        user_groups = set(user.groups or [])
+        # Normalize to lowercase for case-insensitive matching
+        user_groups = set(g.lower() for g in (user.groups or []))
         
         all_roles = self.settings_manager.list_app_roles()
         for role in all_roles:
-            role_groups = set(role.assigned_groups or [])
+            # Normalize role groups to lowercase for case-insensitive matching
+            role_groups = set(g.lower() for g in (role.assigned_groups or []))
             if role_groups.intersection(user_groups):
                 if role.deployment_policy:
                     policies.append(role.deployment_policy)

@@ -4,6 +4,7 @@ from src.models.teams import TeamCreate, TeamUpdate, TeamMemberCreate, TeamMembe
 from src.common.logging import get_logger
 from sqlalchemy.orm import Session, selectinload, joinedload
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import func
 from typing import List, Optional
 
 logger = get_logger(__name__)
@@ -100,11 +101,11 @@ class TeamRepository(CRUDBase[TeamDb, TeamCreate, TeamUpdate]):
         try:
             from sqlalchemy import or_
             
-            # Build filters for user identifier and groups
-            member_filters = [TeamMemberDb.member_identifier == user_identifier]
+            # Build filters for user identifier and groups (case-insensitive)
+            member_filters = [func.lower(TeamMemberDb.member_identifier) == user_identifier.lower()]
             if user_groups:
                 for group in user_groups:
-                    member_filters.append(TeamMemberDb.member_identifier == group)
+                    member_filters.append(func.lower(TeamMemberDb.member_identifier) == group.lower())
             
             return (
                 db.query(self.model)

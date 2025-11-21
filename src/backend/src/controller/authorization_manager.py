@@ -33,7 +33,8 @@ class AuthorizationManager:
         else:
             logger.debug(f"Calculating effective permissions for user groups: {user_groups}") # Log received groups
 
-        user_group_set = set(user_groups)
+        # Normalize user groups to lowercase for case-insensitive matching
+        user_group_set = set(g.lower() for g in user_groups)
         effective_permissions: Dict[str, FeatureAccessLevel] = defaultdict(lambda: FeatureAccessLevel.NONE)
 
         # Log before fetching roles
@@ -70,7 +71,8 @@ class AuthorizationManager:
         matching_roles = []
         logger.debug("Identifying matching roles based on group intersection...")
         for role in all_roles:
-            role_assigned_groups_set = set(role.assigned_groups or []) # Ensure it's a set, handle None
+            # Normalize role groups to lowercase for case-insensitive matching
+            role_assigned_groups_set = set(g.lower() for g in (role.assigned_groups or []))
             # Check for intersection
             if user_group_set.intersection(role_assigned_groups_set):
                 matching_roles.append(role)
