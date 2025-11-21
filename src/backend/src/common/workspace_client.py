@@ -241,6 +241,9 @@ def _verify_workspace_client(ws: WorkspaceClient) -> WorkspaceClient:
 def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30) -> WorkspaceClient:
     """Get a configured Databricks workspace client with caching.
 
+    Supports both explicit token authentication (for local development) and implicit
+    authentication (for Databricks Apps where credentials are provided by the platform).
+
     Args:
         settings: Application settings (optional, will be fetched if not provided)
         timeout: Timeout in seconds for API calls
@@ -254,39 +257,60 @@ def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30)
     # Cleanup stale clients periodically
     _cleanup_client_cache()
 
-    # Use token hash as cache key for service principal
+    # Determine authentication mode and cache key
     token = settings.DATABRICKS_TOKEN
-    if not token:
-        raise ValueError("DATABRICKS_TOKEN not configured")
-
-    token_hash = _get_token_hash(token)
-    cache_key = f"sp_{token_hash}"  # sp = service principal
-
-    # Check if we have a cached client with matching token
-    if cache_key in _CLIENT_CACHE:
-        cached_client, cached_token_hash, _ = _CLIENT_CACHE[cache_key]
-        if cached_token_hash == token_hash:
+    
+    if token:
+        # Explicit token authentication (e.g., local development)
+        token_hash = _get_token_hash(token)
+        cache_key = f"sp_{token_hash}"  # sp = service principal
+        
+        # Check if we have a cached client with matching token
+        if cache_key in _CLIENT_CACHE:
+            cached_client, cached_token_hash, _ = _CLIENT_CACHE[cache_key]
+            if cached_token_hash == token_hash:
+                # Update last access time
+                _CLIENT_CACHE[cache_key] = (cached_client, token_hash, time.time())
+                logger.info(f"Reusing cached service principal workspace client")
+                return cached_client
+        
+        # Log environment values with obfuscated token
+        masked_token = f"{token[:4]}...{token[-4:]}"
+        logger.info(f"Initializing NEW service principal workspace client with host: {settings.DATABRICKS_HOST}, token: {masked_token}, timeout: {timeout}s")
+        
+        # Create client with explicit token
+        client = WorkspaceClient(
+            host=settings.DATABRICKS_HOST,
+            token=token
+        )
+        
+        cache_identifier = token_hash
+    else:
+        # Implicit authentication (e.g., Databricks Apps)
+        cache_key = "implicit_auth"
+        
+        # Check if we have a cached implicit auth client
+        if cache_key in _CLIENT_CACHE:
+            cached_client, cached_identifier, _ = _CLIENT_CACHE[cache_key]
             # Update last access time
-            _CLIENT_CACHE[cache_key] = (cached_client, token_hash, time.time())
-            logger.info(f"Reusing cached service principal workspace client")
+            _CLIENT_CACHE[cache_key] = (cached_client, cached_identifier, time.time())
+            logger.info(f"Reusing cached implicit auth workspace client")
             return cached_client
-
-    # Log environment values with obfuscated token
-    masked_token = f"{token[:4]}...{token[-4:]}"
-    logger.info(f"Initializing NEW service principal workspace client with host: {settings.DATABRICKS_HOST}, token: {masked_token}, timeout: {timeout}s")
-
-    client = WorkspaceClient(
-        host=settings.DATABRICKS_HOST,
-        token=token
-    )
+        
+        logger.info(f"Initializing NEW implicit auth workspace client with host: {settings.DATABRICKS_HOST}, timeout: {timeout}s")
+        
+        # Create client with implicit authentication (no token parameter)
+        client = WorkspaceClient(host=settings.DATABRICKS_HOST)
+        
+        cache_identifier = "implicit"
 
     # Verify connectivity and set telemetry headers
     verified_client = _verify_workspace_client(client)
 
     caching_client = CachingWorkspaceClient(verified_client, timeout=timeout)
 
-    # Store in cache with token hash
-    _CLIENT_CACHE[cache_key] = (caching_client, token_hash, time.time())
+    # Store in cache
+    _CLIENT_CACHE[cache_key] = (caching_client, cache_identifier, time.time())
 
     return caching_client
 
