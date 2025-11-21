@@ -9,6 +9,7 @@ from databricks.sdk.errors import NotFound
 from src.models.users import UserInfo
 from src.models.users import UserPermissions
 from src.models.notifications import Notification, NotificationType
+from src.models.settings import RoleAccessRequest
 from src.common.config import get_settings, Settings
 from src.controller.authorization_manager import AuthorizationManager
 from src.common.dependencies import get_auth_manager, get_db # Import get_db
@@ -154,17 +155,18 @@ async def get_actual_role(
     role = settings_manager.get_canonical_role_for_groups(user_details.groups)
     return {"role": role.dict() if role else None}
 
-# --- Role Access Request Endpoint --- 
+# --- Role Access Request Endpoint ---
 @router.post("/user/request-role/{role_id}")
 async def request_role_access(
     role_id: str,
+    request_body: RoleAccessRequest,
     request: Request,
     db: Session = Depends(get_db), # Inject DB session
     user_details: UserInfo = Depends(get_user_details_from_sdk),
     settings_manager: SettingsManager = Depends(get_settings_manager),
     notifications_manager: NotificationsManager = Depends(get_notifications_manager)
-): 
-    """Initiates a request for a user to be added to an application role."""
+):
+    """Initiates a request for a user to be added to an application role with optional reason."""
     logger.info(f"User '{user_details.email}' requesting access to role ID: {role_id}")
 
     requester_email = user_details.email
@@ -181,20 +183,55 @@ async def request_role_access(
         logger.error(f"Error retrieving role {role_id}: {e}")
         raise HTTPException(status_code=500, detail="Error retrieving role details.")
 
+    # Check for duplicate pending requests
+    from src.db_models.notifications import NotificationDb
+    import json
+
+    try:
+        existing_requests = db.query(NotificationDb).filter(
+            NotificationDb.action_type == "handle_role_request",
+            NotificationDb.read == False
+        ).all()
+
+        # Check if any match this user and role
+        for existing in existing_requests:
+            if existing.action_payload:
+                try:
+                    payload = json.loads(existing.action_payload)
+                    if (payload.get("requester_email") == requester_email and
+                        payload.get("role_id") == role_id):
+                        logger.warning(f"Duplicate role request detected for user '{requester_email}' and role '{role_id}'")
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"You already have a pending request for the role '{role_name}'. Please wait for admin review."
+                        )
+                except json.JSONDecodeError:
+                    continue  # Skip malformed payload
+    except HTTPException:
+        raise  # Re-raise HTTPException
+    except Exception as e:
+        logger.error(f"Error checking for duplicate requests: {e}", exc_info=True)
+        # Don't fail the request if duplicate check fails, just log it
+
     # Generate placeholder values for required fields
     placeholder_id = str(uuid.uuid4()) # Generate a unique placeholder ID
     now = datetime.utcnow()
 
     try:
         # 1. Create notification for the requester
+        user_message = request_body.message.strip() if request_body.message else None
+        user_desc = f"Your request to access the role '{role_name}' has been submitted for review."
+        if user_message:
+            user_desc += f"\n\nYour message: {user_message}"
+
         user_notification = Notification(
             id=placeholder_id, # Provide placeholder
             created_at=now, # Provide placeholder
             type=NotificationType.INFO,
             title="Role Access Request Submitted",
             subtitle=f"Role: {role_name}",
-            description=f"Your request to access the role '{role_name}' has been submitted for review.",
-            recipient=requester_email, 
+            description=user_desc,
+            recipient=requester_email,
             can_delete=True
         )
         # Pass db session to the manager
@@ -202,17 +239,26 @@ async def request_role_access(
         logger.info(f"Created notification for requester '{requester_email}'")
 
         # 2. Create notification for Admins
+        admin_desc = f"User '{requester_email}' has requested access to the role '{role_name}'."
+        if user_message:
+            admin_desc += f"\n\nRequester's message: {user_message}"
+
         admin_notification = Notification(
             id=str(uuid.uuid4()), # Generate another placeholder ID
             created_at=now, # Provide placeholder
             type=NotificationType.ACTION_REQUIRED,
             title="Role Access Request Received",
             subtitle=f"User: {requester_email}",
-            description=f"User '{requester_email}' has requested access to the role '{role_name}'.",
-            recipient="Admin", 
-            can_delete=False, 
+            description=admin_desc,
+            recipient="Admin",
+            can_delete=False,
             action_type="handle_role_request",
-            action_payload={"requester_email": requester_email, "role_id": role_id, "role_name": role_name}
+            action_payload={
+                "requester_email": requester_email,
+                "role_id": role_id,
+                "role_name": role_name,
+                "requester_message": user_message  # Include the requester's message
+            }
         )
         # Pass db session to the manager
         notifications_manager.create_notification(db=db, notification=admin_notification)

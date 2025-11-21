@@ -1298,13 +1298,14 @@ class SettingsManager:
         self,
         db: Session,
         request_data: 'HandleRoleRequest',
-        notifications_manager: 'NotificationsManager'
+        notifications_manager: 'NotificationsManager',
+        change_log_manager: 'ChangeLogManager'
     ) -> Dict[str, str]:
         """Handle admin decision (approve/deny) for a role access request.
 
         Manages the complete workflow:
         - Validates role exists
-        - Logs approval/denial (TODO: actual group assignment logic)
+        - Logs approval/denial to change log
         - Creates notification for requester
         - Marks original admin notification as handled
 
@@ -1312,6 +1313,7 @@ class SettingsManager:
             db: Database session
             request_data: Request data with requester email, role_id, approved flag, optional message
             notifications_manager: NotificationsManager instance for creating notifications
+            change_log_manager: ChangeLogManager instance for logging decisions
 
         Returns:
             Dict with success message
@@ -1335,23 +1337,41 @@ class SettingsManager:
             f"and role '{role_name}'. Approved: {request_data.approved}"
         )
 
-        # 2. TODO: Implement actual access grant/modification logic here if needed
-        #    This might involve:
-        #    - Updating AppRoleDb.assigned_groups (if groups are managed directly)
-        #    - Triggering an external workflow (e.g., ITSM ticket, Databricks SCIM API call)
-        #    - For now, we only send the notification.
+        # 2. Log decision to change log
+        try:
+            decision_action = "approved" if request_data.approved else "denied"
+            change_log_details = {
+                "requester_email": request_data.requester_email,
+                "role_name": role_name,
+                "role_id": request_data.role_id,
+                "decision": decision_action,
+                "admin_message": request_data.message
+            }
+
+            change_log_manager.log_change_with_details(
+                db=db,
+                entity_type="role_access_request",
+                entity_id=f"{request_data.requester_email}:{request_data.role_id}",
+                action=f"request_{decision_action}",
+                username="admin",  # Could be enhanced to get actual admin username
+                details=change_log_details
+            )
+            logger.info(f"Logged role request decision to change log: {decision_action}")
+        except Exception as e:
+            logger.error(f"Failed to log role request decision to change log: {e}", exc_info=True)
+            # Don't fail the request if logging fails
+
+        # 3. Log decision (admin feedback only, no actual group assignment)
         if request_data.approved:
             logger.info(
                 f"Role request APPROVED for {request_data.requester_email} (Role: {role_name}). "
-                f"(Actual group assignment logic is currently skipped)."
+                f"(Actual group assignment should be handled via external ITSM process)."
             )
-            # Example (if managing groups directly):
-            # self.add_user_group_to_role(request_data.role_id, request_data.requester_group)
         else:
             logger.info(f"Role request DENIED for {request_data.requester_email} (Role: {role_name}).")
 
         try:
-            # 3. Create notification for the requester
+            # 4. Create notification for the requester
             decision_title = f"Role Request {'Approved' if request_data.approved else 'Denied'}"
             decision_subtitle = f"Role: {role_name}"
             decision_description = (
@@ -1379,7 +1399,7 @@ class SettingsManager:
             notifications_manager.create_notification(db=db, notification=requester_notification)
             logger.info(f"Sent decision notification to requester '{request_data.requester_email}'")
 
-            # 4. Mark the original admin notification as handled (read)
+            # 5. Mark the original admin notification as handled (read)
             handled_payload = {
                 "requester_email": request_data.requester_email,
                 "role_id": request_data.role_id

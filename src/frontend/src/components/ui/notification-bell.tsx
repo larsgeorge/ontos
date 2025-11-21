@@ -325,6 +325,7 @@ export default function NotificationBell() {
         requesterEmail={selectedNotificationPayload?.requester_email ?? 'Unknown User'}
         roleId={selectedNotificationPayload?.role_id ?? 'Unknown Role ID'}
         roleName={selectedNotificationPayload?.role_name ?? 'Unknown Role Name'}
+        requesterMessage={selectedNotificationPayload?.requester_message}
         onDecisionMade={handleDecisionMade}
       />
     )}

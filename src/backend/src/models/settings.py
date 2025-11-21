@@ -109,6 +109,10 @@ class AppRole(AppRoleBase):
 
 # --- Role Request Handling Model --- 
 
+class RoleAccessRequest(BaseModel):
+    """Model for the request body when a user requests access to a role."""
+    message: Optional[str] = Field(None, description="Optional message/reason from the user explaining why they need this role.")
+
 class HandleRoleRequest(BaseModel):
     """Model for the request body when handling a role access request."""
     requester_email: str = Field(..., description="Email address of the user who requested the role.")

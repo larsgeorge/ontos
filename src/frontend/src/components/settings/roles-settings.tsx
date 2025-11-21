@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus, Pencil, Trash2, AlertCircle, MoreHorizontal, ChevronDown, UserPlus } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import RoleFormDialog from './role-form-dialog'; // Uncomment and import
+import RequestRoleAccessDialog from './request-role-access-dialog'; // Import role access request dialog
 import { useNotificationsStore } from '@/stores/notifications-store'; // Import notification store
 import { useUserStore } from '@/stores/user-store'; // Import user store
 
@@ -38,6 +39,8 @@ export default function RolesSettings() {
     const [error, setError] = useState<string | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [roleToEdit, setRoleToEdit] = useState<AppRole | null>(null);
+    const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
+    const [roleToRequest, setRoleToRequest] = useState<AppRole | null>(null);
     const { hasPermission, fetchPermissions, fetchAvailableRoles } = usePermissions(); // Get userGroups & availableRoles
     const { userInfo } = useUserStore(); // Get user info from user store
     const userGroups = userInfo?.groups ?? []; // Extract groups, default to empty array
@@ -110,21 +113,9 @@ export default function RolesSettings() {
         }
     };
 
-    const handleRequestAccess = async (role: AppRole) => {
-        if (!confirm(`Request access to the role "${role.name}"?`)) return;
-
-        toast({ title: 'Sending Request', description: `Requesting access to role ${role.name}...` });
-        try {
-            const response = await post(`/api/user/request-role/${role.id}`, {});
-            if (response.error) {
-                throw new Error(response.error);
-            }
-            toast({ title: 'Request Sent', description: `Your request for the role "${role.name}" has been submitted.` });
-            refreshNotifications();
-        } catch (err: any) {
-            console.error("Error requesting role access:", err);
-            toast({ title: 'Request Failed', description: err.message || 'Failed to submit access request.', variant: 'destructive' });
-        }
+    const handleRequestAccess = (role: AppRole) => {
+        setRoleToRequest(role);
+        setIsRequestDialogOpen(true);
     };
 
     const handleDeleteRole = async (roleId: string, roleName: string) => {
@@ -304,6 +295,16 @@ export default function RolesSettings() {
                     initialRole={roleToEdit}
                     featuresConfig={features} // Use featuresConfig prop for the dialog
                     onSubmitSuccess={handleDialogSubmitSuccess}
+                />
+            )}
+
+            {isRequestDialogOpen && roleToRequest && (
+                <RequestRoleAccessDialog
+                    isOpen={isRequestDialogOpen}
+                    onOpenChange={setIsRequestDialogOpen}
+                    roleId={roleToRequest.id}
+                    roleName={roleToRequest.name}
+                    roleDescription={roleToRequest.description}
                 />
             )}
         </Card>

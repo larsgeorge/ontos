@@ -13,6 +13,7 @@ from ..common.database import get_db
 from ..common.dependencies import (
     get_settings_manager,
     get_notifications_manager,
+    get_change_log_manager,
     AuditManagerDep,
     AuditCurrentUserDep,
     DBSessionDep,
@@ -296,7 +297,8 @@ async def handle_role_request_decision(
     request_data: HandleRoleRequest = Body(...),
     db: Session = Depends(get_db),
     settings_manager: SettingsManager = Depends(get_settings_manager),
-    notifications_manager: NotificationsManager = Depends(get_notifications_manager)
+    notifications_manager: NotificationsManager = Depends(get_notifications_manager),
+    change_log_manager = Depends(get_change_log_manager)
 ):
     """Handles the admin decision (approve/deny) for a role access request."""
     try:
@@ -304,7 +306,8 @@ async def handle_role_request_decision(
         result = settings_manager.handle_role_request_decision(
             db=db,
             request_data=request_data,
-            notifications_manager=notifications_manager
+            notifications_manager=notifications_manager,
+            change_log_manager=change_log_manager
         )
         return result
     except ValueError as e:

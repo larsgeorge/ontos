@@ -22,6 +22,7 @@ from src.controller.metadata_manager import MetadataManager
 from src.controller.comments_manager import CommentsManager
 from src.controller.jobs_manager import JobsManager
 from src.controller.workspace_manager import WorkspaceManager
+from src.controller.change_log_manager import ChangeLogManager
 
 # Import other dependencies needed by these providers
 from src.common.database import get_db
@@ -159,6 +160,15 @@ def get_jobs_manager(request: Request) -> JobsManager:
         raise HTTPException(status_code=503, detail="Jobs service not configured.")
 
     return jobs_manager
+
+def get_change_log_manager(request: Request) -> ChangeLogManager:
+    manager = getattr(request.app.state, 'change_log_manager', None)
+    if not manager:
+        # Instantiate lazily and cache on app.state
+        manager = ChangeLogManager()
+        setattr(request.app.state, 'change_log_manager', manager)
+        logger.info("Initialized ChangeLogManager and stored on app.state.change_log_manager")
+    return manager
 
 # Add getters for Compliance, Estate, MDM, Security, Entitlements, Catalog Commander managers when they are added
 

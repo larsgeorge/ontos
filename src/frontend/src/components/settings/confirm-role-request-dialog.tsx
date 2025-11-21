@@ -21,6 +21,7 @@ interface ConfirmRoleRequestDialogProps {
   requesterEmail: string;
   roleId: string;
   roleName: string;
+  requesterMessage?: string; // Optional message from the requester
   onDecisionMade: () => void; // Callback after decision is submitted
 }
 
@@ -30,6 +31,7 @@ const ConfirmRoleRequestDialog: React.FC<ConfirmRoleRequestDialogProps> = ({
   requesterEmail,
   roleId,
   roleName,
+  requesterMessage,
   onDecisionMade,
 }) => {
   const [decisionMessage, setDecisionMessage] = useState('');
@@ -46,12 +48,9 @@ const ConfirmRoleRequestDialog: React.FC<ConfirmRoleRequestDialogProps> = ({
             approved: approved,
             message: decisionMessage,
         };
-        
-        // Wrap the payload under the key expected by the backend
-        const requestBody = { request_data: payload };
 
-        // Send the nested request body
-        const response = await post('/api/settings/roles/handle-request', requestBody);
+        // Send the request directly (backend expects HandleRoleRequest model)
+        const response = await post('/api/settings/roles/handle-request', payload);
         if (response.error) {
              throw new Error(response.error);
         }
@@ -82,16 +81,30 @@ const ConfirmRoleRequestDialog: React.FC<ConfirmRoleRequestDialogProps> = ({
             Review the request from <strong>{requesterEmail}</strong> for the role <strong>{roleName}</strong>.
           </DialogDescription>
         </DialogHeader>
-        <div className="py-4">
+
+        <div className="space-y-4 py-4">
+          {/* Display requester's message if available */}
+          {requesterMessage && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Requester's Reason</Label>
+              <div className="p-3 bg-muted/50 rounded-lg border text-sm">
+                {requesterMessage}
+              </div>
+            </div>
+          )}
+
+          {/* Admin's response message */}
+          <div className="space-y-2">
             <Label htmlFor="decision-message">Optional Message to Requester</Label>
             <Textarea
                 id="decision-message"
                 value={decisionMessage}
                 onChange={(e) => setDecisionMessage(e.target.value)}
                 placeholder="Provide a reason for approval or denial (optional)"
-                className="mt-1"
+                className="resize-none"
                 disabled={isSubmitting}
             />
+          </div>
         </div>
         <DialogFooter className="gap-2 sm:justify-between">
             <Button

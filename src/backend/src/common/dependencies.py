@@ -19,6 +19,7 @@ from src.controller.semantic_models_manager import SemanticModelsManager
 from src.controller.search_manager import SearchManager
 from src.controller.tags_manager import TagsManager # Import TagsManager
 from src.controller.workspace_manager import WorkspaceManager # Import WorkspaceManager
+from src.controller.change_log_manager import ChangeLogManager # Import ChangeLogManager
 
 # Import base dependencies
 from src.common.database import get_session_factory # Import the factory function
@@ -31,9 +32,9 @@ from src.common.logging import get_logger
 from src.common.authorization import PermissionChecker, get_user_details_from_sdk # Import checker and user getter
 # Import manager getters from the new file
 from src.common.manager_dependencies import (
-    get_auth_manager, 
-    get_settings_manager, 
-    get_audit_manager, 
+    get_auth_manager,
+    get_settings_manager,
+    get_audit_manager,
     get_users_manager,
     get_data_asset_review_manager,
     get_notifications_manager,
@@ -43,6 +44,7 @@ from src.common.manager_dependencies import (
     get_semantic_models_manager,
     get_search_manager,
     get_workspace_manager,
+    get_change_log_manager,
 )
 # Import workspace client getter separately as it might be structured differently
 from src.common.workspace_client import get_workspace_client # Added
@@ -114,6 +116,7 @@ DataContractsManagerDep = Annotated[DataContractsManager, Depends(get_data_contr
 SemanticModelsManagerDep = Annotated[SemanticModelsManager, Depends(get_semantic_models_manager)]
 SearchManagerDep = Annotated[SearchManager, Depends(get_search_manager)]
 WorkspaceManagerDep = Annotated[WorkspaceManager, Depends(get_workspace_manager)]
+ChangeLogManagerDep = Annotated[ChangeLogManager, Depends(get_change_log_manager)]
 
 # Permission Checker Dependency
 PermissionCheckerDep = AuthorizationManagerDep 
