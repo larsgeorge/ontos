@@ -17,8 +17,8 @@ from src.common.logging import get_logger
 logger = get_logger(__name__)
 
 # Module-level cache for workspace clients (persists across requests)
-# Key: hash of token, Value: (CachingWorkspaceClient, last_access_time)
-_CLIENT_CACHE: Dict[str, tuple[Any, float]] = {}
+# Key: user identifier (email or token hash), Value: (CachingWorkspaceClient, token_hash, last_access_time)
+_CLIENT_CACHE: Dict[str, tuple[Any, str, float]] = {}
 _CACHE_CLEANUP_INTERVAL = 300  # Clean up every 5 minutes
 _CACHE_MAX_AGE = 600  # Keep clients for max 10 minutes of inactivity
 _LAST_CLEANUP_TIME = time.time()
@@ -34,16 +34,16 @@ def _cleanup_client_cache():
 
     _LAST_CLEANUP_TIME = current_time
     stale_keys = [
-        key for key, (_, last_access) in _CLIENT_CACHE.items()
+        key for key, (_, _, last_access) in _CLIENT_CACHE.items()
         if current_time - last_access > _CACHE_MAX_AGE
     ]
 
     for key in stale_keys:
         del _CLIENT_CACHE[key]
-        logger.info(f"Cleaned up stale workspace client from cache")
+        logger.info(f"Cleaned up stale workspace client for user: {key}")
 
 def _get_token_hash(token: str) -> str:
-    """Generate a hash of the token for use as cache key."""
+    """Generate a hash of the token for cache comparison."""
     return hashlib.sha256(token.encode()).hexdigest()[:16]
 
 class TimeoutError(Exception):
@@ -254,24 +254,26 @@ def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30)
     # Cleanup stale clients periodically
     _cleanup_client_cache()
 
-    # Use token as cache key
+    # Use token hash as cache key for service principal
     token = settings.DATABRICKS_TOKEN
     if not token:
         raise ValueError("DATABRICKS_TOKEN not configured")
 
-    cache_key = _get_token_hash(token)
+    token_hash = _get_token_hash(token)
+    cache_key = f"sp_{token_hash}"  # sp = service principal
 
-    # Check if we have a cached client
+    # Check if we have a cached client with matching token
     if cache_key in _CLIENT_CACHE:
-        cached_client, _ = _CLIENT_CACHE[cache_key]
-        # Update last access time
-        _CLIENT_CACHE[cache_key] = (cached_client, time.time())
-        logger.info(f"Reusing cached workspace client")
-        return cached_client
+        cached_client, cached_token_hash, _ = _CLIENT_CACHE[cache_key]
+        if cached_token_hash == token_hash:
+            # Update last access time
+            _CLIENT_CACHE[cache_key] = (cached_client, token_hash, time.time())
+            logger.info(f"Reusing cached service principal workspace client")
+            return cached_client
 
     # Log environment values with obfuscated token
     masked_token = f"{token[:4]}...{token[-4:]}"
-    logger.info(f"Initializing NEW workspace client with host: {settings.DATABRICKS_HOST}, token: {masked_token}, timeout: {timeout}s")
+    logger.info(f"Initializing NEW service principal workspace client with host: {settings.DATABRICKS_HOST}, token: {masked_token}, timeout: {timeout}s")
 
     client = WorkspaceClient(
         host=settings.DATABRICKS_HOST,
@@ -283,8 +285,8 @@ def get_workspace_client(settings: Optional[Settings] = None, timeout: int = 30)
 
     caching_client = CachingWorkspaceClient(verified_client, timeout=timeout)
 
-    # Store in cache
-    _CLIENT_CACHE[cache_key] = (caching_client, time.time())
+    # Store in cache with token hash
+    _CLIENT_CACHE[cache_key] = (caching_client, token_hash, time.time())
 
     return caching_client
 
@@ -308,6 +310,9 @@ def get_obo_workspace_client(
     This creates a workspace client using the user's access token from the
     x-forwarded-access-token header, allowing the app to perform operations
     on behalf of the user with their permissions.
+
+    Uses user email as cache key to handle token refresh efficiently - when a user's
+    token is refreshed, the old cached client is automatically replaced.
 
     Args:
         request: FastAPI request object containing headers
@@ -336,21 +341,36 @@ def get_obo_workspace_client(
         # Fall back to service principal client
         return get_workspace_client(settings, timeout)
 
-    # Use OBO token hash as cache key
-    cache_key = f"obo_{_get_token_hash(obo_token)}"
+    # Extract user email for stable cache key
+    user_email = request.headers.get('X-Forwarded-Email') or request.headers.get('X-Forwarded-User')
+
+    if not user_email:
+        logger.warning("User email not found in headers, using token hash as cache key")
+        # Fallback to token-based caching if no email available
+        cache_key = f"obo_{_get_token_hash(obo_token)}"
+    else:
+        # Use email as cache key (stable across token refreshes)
+        cache_key = f"user_{user_email}"
+
+    token_hash = _get_token_hash(obo_token)
 
     # Check if we have a cached client for this user
     if cache_key in _CLIENT_CACHE:
-        cached_client, _ = _CLIENT_CACHE[cache_key]
-        # Update last access time
-        _CLIENT_CACHE[cache_key] = (cached_client, time.time())
-        masked_token = f"{obo_token[:4]}...{obo_token[-4:]}"
-        logger.info(f"Reusing cached OBO workspace client for user token: {masked_token}")
-        return cached_client
+        cached_client, cached_token_hash, _ = _CLIENT_CACHE[cache_key]
+
+        # Check if token has changed (e.g., after refresh)
+        if cached_token_hash == token_hash:
+            # Same token, reuse client
+            _CLIENT_CACHE[cache_key] = (cached_client, token_hash, time.time())
+            logger.info(f"Reusing cached OBO workspace client for user: {user_email or 'unknown'}")
+            return cached_client
+        else:
+            # Token changed, need to create new client
+            logger.info(f"Token changed for user {user_email or 'unknown'}, creating new workspace client")
 
     # Log with obfuscated token
     masked_token = f"{obo_token[:4]}...{obo_token[-4:]}"
-    logger.info(f"Initializing NEW OBO workspace client with host: {settings.DATABRICKS_HOST}, user token: {masked_token}, timeout: {timeout}s")
+    logger.info(f"Initializing NEW OBO workspace client for user: {user_email or 'unknown'}, host: {settings.DATABRICKS_HOST}, token: {masked_token}, timeout: {timeout}s")
 
     # Create client with user's token
     client = WorkspaceClient(
@@ -363,8 +383,8 @@ def get_obo_workspace_client(
 
     caching_client = CachingWorkspaceClient(verified_client, timeout=timeout)
 
-    # Store in cache
-    _CLIENT_CACHE[cache_key] = (caching_client, time.time())
+    # Store in cache with token hash for token change detection
+    _CLIENT_CACHE[cache_key] = (caching_client, token_hash, time.time())
 
     return caching_client
 
