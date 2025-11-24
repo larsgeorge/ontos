@@ -1,7 +1,7 @@
 from databricks.sdk import WorkspaceClient
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from src.common.workspace_client import get_obo_workspace_client
+from src.common.workspace_client import get_obo_workspace_client, get_workspace_client_dependency
 from src.controller.catalog_commander_manager import CatalogCommanderManager
 # Import permission checker and feature level
 from src.common.authorization import PermissionChecker
@@ -16,25 +16,29 @@ router = APIRouter(prefix="/api", tags=["catalog-commander"])
 # Define the feature ID for permission checks
 CATALOG_COMMANDER_FEATURE_ID = 'catalog-commander'
 
-# Modify dependency injector to return manager using OBO token
 def get_catalog_manager(
     request: Request,
-    client: WorkspaceClient = Depends(get_obo_workspace_client)
+    sp_client: WorkspaceClient = Depends(get_workspace_client_dependency()),
+    obo_client: WorkspaceClient = Depends(get_obo_workspace_client)
 ) -> CatalogCommanderManager:
-    """Get a configured catalog commander manager instance using OBO token.
+    """Get a configured catalog commander manager instance with both SP and OBO clients.
 
-    This creates a manager with a workspace client authenticated using the user's
-    token (from x-forwarded-access-token header), ensuring catalog operations
-    respect the user's permissions.
+    The manager uses two workspace clients:
+    - SP (Service Principal) client: For administrative operations, jobs, etc.
+    - OBO (On-Behalf-Of) client: For browsing catalogs/schemas/tables with user permissions
+    
+    This ensures that catalog browsing respects the user's Unity Catalog permissions
+    while administrative operations use the service principal's elevated privileges.
 
     Args:
         request: FastAPI request object (injected by FastAPI)
-        client: Databricks workspace client with user's token (injected by FastAPI)
+        sp_client: Service principal workspace client (injected by FastAPI)
+        obo_client: OBO workspace client with user's token (injected by FastAPI)
 
     Returns:
-        Configured catalog commander manager instance
+        Configured catalog commander manager instance with both clients
     """
-    return CatalogCommanderManager(client)
+    return CatalogCommanderManager(sp_client=sp_client, obo_client=obo_client)
 
 # --- Read-Only Routes (Require READ_ONLY or higher) ---
 

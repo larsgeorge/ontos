@@ -10,24 +10,31 @@ logger = get_logger(__name__)
 class CatalogCommanderManager:
     """Manages catalog operations and queries."""
 
-    def __init__(self, client: WorkspaceClient):
+    def __init__(self, sp_client: WorkspaceClient, obo_client: WorkspaceClient):
         """Initialize the catalog commander manager.
         
         Args:
-            client: Databricks workspace client
+            sp_client: Service principal workspace client for administrative operations
+            obo_client: OBO workspace client for user-specific catalog browsing operations
         """
         logger.debug("Initializing CatalogCommanderManager...")
-        self.client = client
-        logger.debug("CatalogCommanderManager initialized successfully")
+        self.sp_client = sp_client  # For administrative operations, jobs, etc.
+        self.obo_client = obo_client  # For browsing catalogs with user permissions
+        # Keep 'client' alias pointing to obo_client for backward compatibility
+        self.client = obo_client
+        logger.debug("CatalogCommanderManager initialized successfully with SP and OBO clients")
 
     def list_catalogs(self) -> List[Dict[str, Any]]:
         """List all catalogs in the Databricks workspace.
+        
+        Uses the OBO client to ensure only catalogs the user has permission to see are returned.
         
         Returns:
             List of catalog information dictionaries
         """
         try:
-            logger. debug("Fetching all catalogs from Databricks workspace")
+            logger.debug("Fetching all catalogs from Databricks workspace using OBO client")
+            # Use OBO client (self.client) to respect user permissions
             catalogs = list(self.client.catalogs.list())  # Convert generator to list
             logger.debug(f"Retrieved {len(catalogs)} catalogs from Databricks")
 
