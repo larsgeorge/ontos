@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -38,6 +38,13 @@ const ConfirmRoleRequestDialog: React.FC<ConfirmRoleRequestDialogProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { post } = useApi();
   const { toast } = useToast();
+
+  // Reset the decision message when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setDecisionMessage('');
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (approved: boolean) => {
     setIsSubmitting(true);

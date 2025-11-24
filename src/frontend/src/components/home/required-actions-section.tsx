@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, CheckSquare, XCircle } from 'lucide-react';
+import { AlertCircle, CheckSquare, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNotificationsStore } from '@/stores/notifications-store';
 import { Link } from 'react-router-dom';
 import ConfirmRoleRequestDialog from '@/components/settings/confirm-role-request-dialog';
@@ -21,6 +21,7 @@ export default function RequiredActionsSection() {
   const [approvalsError, setApprovalsError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogPayload, setDialogPayload] = useState<Record<string, any> | null>(null);
+  const [roleRequestPage, setRoleRequestPage] = useState(0);
 
   useEffect(() => {
     fetchNotifications();
@@ -58,6 +59,47 @@ export default function RequiredActionsSection() {
     n => n.type === 'action_required' && n.action_type !== 'handle_role_request'
   );
 
+  // Create unified approvals list
+  type UnifiedApproval = {
+    id: string;
+    type: 'role_request' | 'contract' | 'product';
+    title: string;
+    subtitle?: string;
+    date: string;
+    link?: string;
+    payload?: Record<string, any>;
+  };
+
+  const unifiedApprovals: UnifiedApproval[] = [
+    // Role requests
+    ...roleRequests.map(req => ({
+      id: req.id,
+      type: 'role_request' as const,
+      title: req.action_payload?.requester_email || 'Unknown user',
+      subtitle: req.action_payload?.role_name || 'Unknown role',
+      date: req.created_at,
+      payload: req.action_payload,
+    })),
+    // Contracts
+    ...approvals.contracts.map(c => ({
+      id: c.id,
+      type: 'contract' as const,
+      title: c.name || c.id,
+      subtitle: c.status,
+      date: new Date().toISOString(), // Contracts don't have date from API
+      link: `/data-contracts/${c.id}`,
+    })),
+    // Products
+    ...approvals.products.map(p => ({
+      id: p.id,
+      type: 'product' as const,
+      title: p.title || p.id,
+      subtitle: p.status,
+      date: new Date().toISOString(), // Products don't have date from API
+      link: `/data-products/${p.id}`,
+    })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
   const handleOpenConfirmDialog = (payload: Record<string, any> | null) => {
     setDialogPayload(payload);
     setDialogOpen(true);
@@ -69,151 +111,171 @@ export default function RequiredActionsSection() {
     fetchNotifications(); // Refresh notifications after approval/denial
   };
 
+  // Type badge helper
+  const getTypeBadge = (type: UnifiedApproval['type']) => {
+    const badges = {
+      role_request: { label: 'Role Request', className: 'bg-blue-500/10 text-blue-600' },
+      contract: { label: 'Contract', className: 'bg-purple-500/10 text-purple-600' },
+      product: { label: 'Product', className: 'bg-green-500/10 text-green-600' },
+    };
+    const badge = badges[type];
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${badge.className}`}>
+        {badge.label}
+      </span>
+    );
+  };
+
   return (
     <section className="mb-16">
       <h2 className="text-2xl font-semibold mb-4">{t('requiredActionsSection.title')}</h2>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('requiredActionsSection.pendingNotifications')}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            {isLoading ? (
-              <div className="flex justify-center items-center h-32">{t('requiredActionsSection.loading')}</div>
-            ) : actionItems.length === 0 ? (
-              <p className="text-center text-muted-foreground">{t('requiredActionsSection.noActions')}</p>
-            ) : (
-              <ul className="divide-y">
-                {actionItems.slice(0, 10).map(n => (
-                  <li key={n.id} className="py-3 flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{n.title}</div>
-                      {n.subtitle ? <div className="text-sm text-muted-foreground truncate">{n.subtitle}</div> : null}
-                      <div className="text-xs text-muted-foreground mt-1">{n.created_at ? new Date(n.created_at).toLocaleString(i18n.language) : ''}</div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {n.link ? (
-                        <Button asChild size="sm" variant="outline"><Link to={n.link}>{t('requiredActionsSection.openButton')}</Link></Button>
-                      ) : null}
-                      {!n.read ? (
-                        <Button size="sm" onClick={() => markAsRead(n.id)}>{t('requiredActionsSection.markReadButton')}</Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">{t('requiredActionsSection.readLabel')}</span>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Approvals</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            {loadingApprovals || isLoading ? (
-              <div className="flex justify-center items-center h-32">{t('requiredActionsSection.loading')}</div>
-            ) : approvalsError ? (
-              <div className="text-sm text-destructive">{approvalsError}</div>
-            ) : (
-              <div className="space-y-6">
-                {/* Role Access Requests */}
-                <div>
-                  <div className="text-sm font-medium mb-2">Role access requests</div>
-                  {roleRequests.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">None</div>
-                  ) : (
-                    <ul className="space-y-3">
-                      {roleRequests.slice(0, 10).map(req => (
-                        <li key={req.id} className="border rounded-lg p-3 space-y-2">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="min-w-0 flex-1">
-                              <div className="font-medium">
-                                {req.action_payload?.requester_email || 'Unknown user'}
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                Requesting: <span className="font-medium">{req.action_payload?.role_name || 'Unknown role'}</span>
-                              </div>
-                              {req.action_payload?.requester_message && (
-                                <div className="text-sm text-muted-foreground mt-1 italic">
-                                  "{req.action_payload.requester_message}"
-                                </div>
-                              )}
-                              <div className="text-xs text-muted-foreground mt-1">
-                                {new Date(req.created_at).toLocaleString(i18n.language)}
-                              </div>
-                            </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Approvals & Actions</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loadingApprovals || isLoading ? (
+            <div className="flex justify-center items-center h-32">{t('requiredActionsSection.loading')}</div>
+          ) : approvalsError ? (
+            <div className="text-sm text-destructive p-6">{approvalsError}</div>
+          ) : unifiedApprovals.length === 0 && actionItems.length === 0 ? (
+            <p className="text-center text-muted-foreground p-12">{t('requiredActionsSection.noActions')}</p>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/30 border-b">
+                    <tr>
+                      <th className="text-left p-2.5 font-medium">Type</th>
+                      <th className="text-left p-2.5 font-medium">Requester / Name</th>
+                      <th className="text-left p-2.5 font-medium">Role / Status / Reason</th>
+                      <th className="text-left p-2.5 font-medium">Date</th>
+                      <th className="text-right p-2.5 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {/* Unified approvals */}
+                    {unifiedApprovals.slice(roleRequestPage * 10, (roleRequestPage + 1) * 10).map(item => (
+                      <tr key={item.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="p-2.5">
+                          {getTypeBadge(item.type)}
+                        </td>
+                        <td className="p-2.5">
+                          <div className="font-medium truncate max-w-[250px]">
+                            {item.title}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="default"
-                              className="gap-1"
-                              onClick={() => handleOpenConfirmDialog(req.action_payload)}
-                            >
-                              <CheckSquare className="h-3.5 w-3.5" />
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1"
-                              onClick={() => handleOpenConfirmDialog(req.action_payload)}
-                            >
-                              <XCircle className="h-3.5 w-3.5" />
-                              Deny
-                            </Button>
+                        </td>
+                        <td className="p-2.5">
+                          <div className="text-muted-foreground truncate max-w-[250px]">
+                            {item.type === 'role_request' ? (
+                              <>
+                                <div className="font-medium text-foreground">{item.subtitle}</div>
+                                {item.payload?.requester_message && (
+                                  <div className="text-xs italic" title={item.payload.requester_message}>
+                                    "{item.payload.requester_message}"
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <span>{item.subtitle || '-'}</span>
+                            )}
                           </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                {/* Contracts */}
-                <div>
-                  <div className="text-sm font-medium mb-2">Contracts awaiting approval</div>
-                  {approvals.contracts.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">None</div>
-                  ) : (
-                    <ul className="space-y-2">
-                      {approvals.contracts.slice(0, 10).map(c => (
-                        <li key={c.id} className="flex items-center justify-between">
-                          <span className="truncate">{c.name || c.id} <span className="text-muted-foreground">({c.status})</span></span>
-                          <Button asChild size="sm" variant="outline">
-                            <Link to={`/data-contracts/${c.id}`}>Open</Link>
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                {/* Products */}
-                <div>
-                  <div className="text-sm font-medium mb-2">Products pending certification</div>
-                  {approvals.products.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">None</div>
-                  ) : (
-                    <ul className="space-y-2">
-                      {approvals.products.slice(0, 10).map(p => (
-                        <li key={p.id} className="flex items-center justify-between">
-                          <span className="truncate">{p.title || p.id} <span className="text-muted-foreground">({p.status})</span></span>
-                          <Button asChild size="sm" variant="outline">
-                            <Link to={`/data-products/${p.id}`}>Open</Link>
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+                        </td>
+                        <td className="p-2.5 text-muted-foreground whitespace-nowrap text-xs">
+                          {new Date(item.date).toLocaleDateString(i18n.language)}
+                        </td>
+                        <td className="p-2.5">
+                          <div className="flex items-center justify-end gap-1">
+                            {item.type === 'role_request' ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2"
+                                  onClick={() => handleOpenConfirmDialog(item.payload!)}
+                                  title="Approve/Deny request"
+                                >
+                                  <CheckSquare className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            ) : (
+                              <Button asChild size="sm" variant="ghost" className="h-7 px-2">
+                                <Link to={item.link!}>Open</Link>
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {/* Other action items (notifications) */}
+                    {actionItems.slice(0, 10 - Math.min(10, unifiedApprovals.length)).map(n => (
+                      <tr key={n.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="p-2.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/10 text-orange-600">
+                            Notification
+                          </span>
+                        </td>
+                        <td className="p-2.5">
+                          <div className="font-medium truncate max-w-[250px]">{n.title}</div>
+                        </td>
+                        <td className="p-2.5">
+                          <div className="text-muted-foreground truncate max-w-[250px]">{n.subtitle || '-'}</div>
+                        </td>
+                        <td className="p-2.5 text-muted-foreground whitespace-nowrap text-xs">
+                          {n.created_at ? new Date(n.created_at).toLocaleDateString(i18n.language) : '-'}
+                        </td>
+                        <td className="p-2.5">
+                          <div className="flex items-center justify-end gap-1">
+                            {n.link && (
+                              <Button asChild size="sm" variant="ghost" className="h-7 px-2">
+                                <Link to={n.link}>Open</Link>
+                              </Button>
+                            )}
+                            {!n.read && (
+                              <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => markAsRead(n.id)}>
+                                Mark Read
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              {/* Pagination */}
+              {(unifiedApprovals.length > 10 || actionItems.length > 10) && (
+                <div className="flex items-center justify-between p-3 border-t bg-muted/10">
+                  <div className="text-xs text-muted-foreground">
+                    Showing {roleRequestPage * 10 + 1} to {Math.min((roleRequestPage + 1) * 10, unifiedApprovals.length + actionItems.length)} of {unifiedApprovals.length + actionItems.length}
+                  </div>
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setRoleRequestPage(p => Math.max(0, p - 1))}
+                      disabled={roleRequestPage === 0}
+                      className="h-7"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setRoleRequestPage(p => Math.min(Math.ceil((unifiedApprovals.length + actionItems.length) / 10) - 1, p + 1))}
+                      disabled={(roleRequestPage + 1) * 10 >= unifiedApprovals.length + actionItems.length}
+                      className="h-7"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
       <Alert variant="default" className="mt-4">
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>{t('requiredActionsSection.alertMessage')}</AlertDescription>
