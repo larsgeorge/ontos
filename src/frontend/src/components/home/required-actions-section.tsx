@@ -114,9 +114,18 @@ export default function RequiredActionsSection() {
   // Type badge helper
   const getTypeBadge = (type: UnifiedApproval['type']) => {
     const badges = {
-      role_request: { label: 'Role Request', className: 'bg-blue-500/10 text-blue-600' },
-      contract: { label: 'Contract', className: 'bg-purple-500/10 text-purple-600' },
-      product: { label: 'Product', className: 'bg-green-500/10 text-green-600' },
+      role_request: {
+        label: 'Role Request',
+        className: 'bg-blue-500/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
+      },
+      contract: {
+        label: 'Contract',
+        className: 'bg-purple-500/15 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300'
+      },
+      product: {
+        label: 'Product',
+        className: 'bg-green-500/15 text-green-700 dark:bg-green-500/20 dark:text-green-300'
+      },
     };
     const badge = badges[type];
     return (
@@ -212,7 +221,7 @@ export default function RequiredActionsSection() {
                     {actionItems.slice(0, 10 - Math.min(10, unifiedApprovals.length)).map(n => (
                       <tr key={n.id} className="hover:bg-muted/20 transition-colors">
                         <td className="p-2.5">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/10 text-orange-600">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-500/15 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
                             Notification
                           </span>
                         </td>
