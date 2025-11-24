@@ -296,22 +296,24 @@ export default function NotificationBell() {
                     {new Date(notification.created_at).toLocaleString()}
                   </p>
                 </div>
-                {!notification.read && (
-                  <div className="h-2 w-2 rounded-full bg-primary shrink-0" />
-                )}
-                {notification.can_delete && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(notification.id);
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
+                <div className="flex items-center gap-1 shrink-0">
+                  {!notification.read && (
+                    <div className="h-2 w-2 rounded-full bg-primary" />
+                  )}
+                  {notification.can_delete && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(notification.id);
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </DropdownMenuItem>
             ))
           )}
