@@ -115,6 +115,37 @@ async def get_current_user_permissions(
             detail="Error calculating user permissions."
         )
 
+@router.get("/user/actual-permissions", response_model=UserPermissions)
+async def get_actual_user_permissions(
+    request: Request,
+    user_details: UserInfo = Depends(get_user_details_from_sdk),
+    auth_manager: AuthorizationManager = Depends(get_auth_manager)
+) -> Dict[str, FeatureAccessLevel]:
+    """Get actual feature permissions based on user groups, ignoring any role overrides.
+
+    This endpoint always returns permissions computed from the user's group memberships,
+    never applying role overrides. It's used for UI authorization decisions like determining
+    if a user should be able to switch roles, regardless of their current role override.
+    """
+    logger.info(f"Request received for /api/user/actual-permissions for user '{user_details.user or user_details.email}'")
+
+    if not user_details.groups:
+        logger.warning(f"User '{user_details.user or user_details.email}' has no groups. Returning empty actual permissions.")
+        return {}
+
+    try:
+        # Always compute from groups, never apply overrides
+        return auth_manager.get_user_effective_permissions(user_details.groups)
+
+    except HTTPException:
+        raise # Re-raise exceptions from dependencies
+    except Exception as e:
+        logger.error(f"Unexpected error calculating actual permissions for user '{user_details.user or user_details.email}': {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Error calculating actual user permissions."
+        )
+
 # --- Role override endpoints ---
 class RoleOverrideRequest(BaseModel):
     role_id: Optional[str] = None

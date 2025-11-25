@@ -71,6 +71,7 @@ export default function UserInfo() {
   const { showBeta, showAlpha, actions: visibilityActions } = useFeatureVisibilityStore();
   const {
       permissions,
+      actualPermissions,
       isLoading: permissionsLoading,
       availableRoles,
       appliedRoleId,
@@ -148,7 +149,7 @@ export default function UserInfo() {
 
   // Determine if user can switch roles (use ACTUAL permissions, not overridden)
   const isLocalDev = userInfo?.username === 'localdev';
-  const actualSettingsLevel = permissions['settings'] ?? FeatureAccessLevel.NONE;
+  const actualSettingsLevel = actualPermissions['settings'] ?? FeatureAccessLevel.NONE;
   const isAdminActual = ACCESS_LEVEL_ORDER[actualSettingsLevel] >= ACCESS_LEVEL_ORDER[FeatureAccessLevel.ADMIN];
   const canSwitchRoles = !permissionsLoading && (isLocalDev || isAdminActual);
 

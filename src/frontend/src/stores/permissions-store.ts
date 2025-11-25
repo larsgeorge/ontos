@@ -4,13 +4,15 @@ import { UserPermissions, FeatureAccessLevel, AppRole } from '@/types/settings';
 import { ACCESS_LEVEL_ORDER } from '@/lib/permissions';
 
 interface PermissionsState {
-    permissions: UserPermissions; // User's actual permissions based on groups
+    permissions: UserPermissions; // User's effective permissions (may be overridden)
+    actualPermissions: UserPermissions; // User's actual permissions based on groups (never overridden)
     isLoading: boolean;
     error: string | null;
     availableRoles: AppRole[];    // List of all possible roles
     appliedRoleId: string | null; // ID of the role currently being impersonated/applied
     _isInitializing: boolean; // Internal flag to prevent concurrent initializations
     fetchPermissions: () => Promise<void>;
+    fetchActualPermissions: () => Promise<void>; // Fetch actual non-overridden permissions
     fetchAvailableRoles: () => Promise<void>; // New action
     fetchAppliedOverride: () => Promise<void>; // New action to read persisted override
     setRoleOverride: (roleId: string | null) => void; // New action
@@ -36,6 +38,7 @@ const getPermissionLevelFromState = (
 
 const usePermissionsStore = create<PermissionsState>((set, get) => ({
     permissions: {},
+    actualPermissions: {},
     isLoading: false,
     error: null,
     availableRoles: [],
@@ -58,6 +61,26 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
         } catch (error: any) {
             console.error("Failed to fetch user permissions:", error);
             set({ permissions: {}, error: error.message || 'Failed to load permissions.' });
+            throw error;
+        }
+    },
+
+    fetchActualPermissions: async () => {
+        try {
+            const response = await fetch('/api/user/actual-permissions', { cache: 'no-store' });
+            if (!response.ok) {
+                let errorMsg = `HTTP error! status: ${response.status}`;
+                try {
+                     const errData = await response.json();
+                     errorMsg = errData.detail || errorMsg;
+                } catch (e) { /* Ignore JSON parsing error */ }
+                throw new Error(errorMsg);
+            }
+            const data: UserPermissions = await response.json();
+            set({ actualPermissions: data, error: null });
+        } catch (error: any) {
+            console.error("Failed to fetch actual user permissions:", error);
+            set({ actualPermissions: {}, error: error.message || 'Failed to load actual permissions.' });
             throw error;
         }
     },
@@ -104,8 +127,8 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
 
         // --- Guard 2: Already successfully loaded? ---
         // Check if *not* loading AND permissions OR roles exist
-        const { isLoading, permissions, availableRoles } = get();
-        const alreadyLoaded = !isLoading && (Object.keys(permissions).length > 0 || availableRoles.length > 0);
+        const { isLoading, permissions, actualPermissions, availableRoles } = get();
+        const alreadyLoaded = !isLoading && (Object.keys(permissions).length > 0 || Object.keys(actualPermissions).length > 0 || availableRoles.length > 0);
         if (alreadyLoaded) {
             return;
         }
@@ -117,6 +140,7 @@ const usePermissionsStore = create<PermissionsState>((set, get) => ({
             // Use the instance methods from get() to ensure the latest state is used
             await Promise.all([
                 get().fetchPermissions(),
+                get().fetchActualPermissions(),
                 get().fetchAvailableRoles(),
                 get().fetchAppliedOverride()
             ]);
@@ -180,11 +204,12 @@ export const usePermissions = () => {
     const state = usePermissionsStore();
     
     // --- Refined useEffect for Initialization ---
-    useEffect(() => {        
+    useEffect(() => {
         // Determine if data is needed
         const hasPermissionsData = Object.keys(state.permissions).length > 0;
+        const hasActualPermissionsData = Object.keys(state.actualPermissions).length > 0;
         const hasRolesData = state.availableRoles.length > 0;
-        const needsData = !hasPermissionsData && !hasRolesData;
+        const needsData = !hasPermissionsData && !hasActualPermissionsData && !hasRolesData;
 
         // Determine if initialization can start
         const canInitialize = !state.isLoading && !state._isInitializing;
@@ -195,11 +220,12 @@ export const usePermissions = () => {
 
     }, [
         // Keep dependencies that signal when state *changes* relevant to initialization
-        state.initializeStore, // The function itself
-        state.isLoading,       // Whether a load is active
-        state._isInitializing, // The lock flag
-        state.permissions,     // The permissions data
-        state.availableRoles   // The roles data
+        state.initializeStore,     // The function itself
+        state.isLoading,           // Whether a load is active
+        state._isInitializing,     // The lock flag
+        state.permissions,         // The permissions data
+        state.actualPermissions,   // The actual permissions data
+        state.availableRoles       // The roles data
     ]); 
 
     return state;
