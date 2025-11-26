@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 
 from src.common.logging import get_logger
 from src.common.dependencies import DBSessionDep, CurrentUserDep, get_tags_manager, AuditManagerDep, AuditCurrentUserDep
+from src.common.authorization import PermissionChecker
+from src.common.features import FeatureAccessLevel
 from src.controller.tags_manager import TagsManager
 from src.models.users import UserInfo # For CurrentUserDep
 from src.models.tags import (
@@ -174,7 +176,8 @@ async def create_tag(
     current_user: CurrentUserDep,
     audit_manager: AuditManagerDep,
     audit_user: AuditCurrentUserDep,
-    manager: TagsManager = Depends(get_tags_manager)
+    manager: TagsManager = Depends(get_tags_manager),
+    _: None = Depends(PermissionChecker('tags', FeatureAccessLevel.READ_WRITE))
 ):
     success = False
     details = {

@@ -20,6 +20,8 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import TagChip, { AssignedTag } from './tag-chip';
 import { useApi } from '@/hooks/use-api';
+import { usePermissions } from '@/stores/permissions-store';
+import { FeatureAccessLevel } from '@/types/settings';
 
 // Available tag from the backend
 interface Tag {
@@ -66,6 +68,11 @@ const TagSelector: React.FC<TagSelectorProps> = ({
   const [availableTags, setAvailableTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(false);
   const { get } = useApi();
+
+  // Check if user has permission to create tags
+  const { hasPermission } = usePermissions();
+  const canCreateTags = hasPermission('tags', FeatureAccessLevel.READ_WRITE);
+  const effectiveAllowCreate = allowCreate && canCreateTags;
 
   // Fetch available tags from backend
   useEffect(() => {
@@ -139,7 +146,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
 
   // Handle creating a new tag (simple string)
   const handleCreateTag = () => {
-    if (!allowCreate || !searchValue.trim()) return;
+    if (!effectiveAllowCreate || !searchValue.trim()) return;
 
     const newTag = searchValue.trim();
     if (!isTagSelected(newTag)) {
@@ -149,14 +156,14 @@ const TagSelector: React.FC<TagSelectorProps> = ({
 
   // Filter available tags based on search
   const filteredTags = availableTags.filter(tag =>
-    tag.fully_qualified_name.toLowerCase().includes(searchValue.toLowerCase()) ||
-    tag.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-    tag.namespace_name.toLowerCase().includes(searchValue.toLowerCase())
+    (tag.fully_qualified_name?.toLowerCase() || '').includes(searchValue.toLowerCase()) ||
+    (tag.name?.toLowerCase() || '').includes(searchValue.toLowerCase()) ||
+    (tag.namespace_name?.toLowerCase() || '').includes(searchValue.toLowerCase())
   );
 
   // Check if search value matches any existing tag
   const exactMatch = filteredTags.some(tag =>
-    tag.fully_qualified_name.toLowerCase() === searchValue.toLowerCase()
+    tag.fully_qualified_name?.toLowerCase() === searchValue.toLowerCase()
   );
 
   return (
@@ -213,11 +220,11 @@ const TagSelector: React.FC<TagSelectorProps> = ({
                 <CommandEmpty>Loading tags...</CommandEmpty>
               ) : (
                 <>
-                  {filteredTags.length === 0 && !allowCreate && (
+                  {filteredTags.length === 0 && !effectiveAllowCreate && (
                     <CommandEmpty>No tags found.</CommandEmpty>
                   )}
 
-                  {filteredTags.length === 0 && allowCreate && searchValue && !exactMatch && (
+                  {filteredTags.length === 0 && effectiveAllowCreate && searchValue && !exactMatch && (
                     <CommandGroup>
                       <CommandItem onSelect={handleCreateTag}>
                         <Plus className="mr-2 h-4 w-4" />
@@ -259,7 +266,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
                     </CommandGroup>
                   )}
 
-                  {allowCreate && searchValue && !exactMatch && filteredTags.length > 0 && (
+                  {effectiveAllowCreate && searchValue && !exactMatch && filteredTags.length > 0 && (
                     <CommandGroup>
                       <CommandItem onSelect={handleCreateTag}>
                         <Plus className="mr-2 h-4 w-4" />

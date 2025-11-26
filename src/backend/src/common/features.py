@@ -120,7 +120,7 @@ APP_FEATURES: Dict[str, Dict[str, str | List[FeatureAccessLevel]]] = {
     },
     'tags': {
         'name': 'Tags',
-        'allowed_levels': ADMIN_ONLY_LEVELS # Only admins can manage the tag taxonomy
+        'allowed_levels': READ_WRITE_ADMIN_LEVELS # READ_WRITE can create tags, ADMIN can manage taxonomy
     },
     # 'about': { ... } # About page doesn't need explicit permissions here
 
