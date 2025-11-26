@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import TagSelector from '@/components/ui/tag-selector';
+import type { AssignedTag } from '@/components/ui/tag-chip';
 import {
   Dialog,
   DialogContent,
@@ -37,11 +39,16 @@ import { ProjectRead, ProjectCreate, ProjectUpdate } from '@/types/project';
 import { TeamSummary } from '@/types/team';
 
 // Form schema
+const tagSchema = z.union([
+  z.string(),
+  z.record(z.any()), // Allows object tags during form state
+]);
+
 const projectFormSchema = z.object({
   name: z.string().min(1, 'Project name is required'),
   title: z.string().optional(),
   description: z.string().optional(),
-  tags: z.array(z.string()).optional(),
+  tags: z.array(tagSchema).optional(),
   team_ids: z.array(z.string()).optional(),
   project_type: z.enum(['PERSONAL', 'TEAM']).optional(),
 });
@@ -78,11 +85,6 @@ export function ProjectFormDialog({
       team_ids: [],
       project_type: 'TEAM',
     },
-  });
-
-  const { fields: tagFields, append: addTag, remove: removeTag } = useFieldArray<any>({
-    control: form.control,
-    name: 'tags' as const,
   });
 
   // Fetch data when dialog opens
@@ -125,17 +127,26 @@ export function ProjectFormDialog({
     }
   };
 
-  const handleAddTag = () => {
-    addTag('' as any);
+  // Normalize tags for backend submission (supports both string and AssignedTag)
+  const normalizeTagsForSubmission = (tags: any[]): string[] => {
+    if (!tags || tags.length === 0) return [];
+
+    return tags.map((tag) => {
+      if (typeof tag === 'string') return tag;
+      if (typeof tag === 'object' && tag.id) return tag.id;
+      return tag.tag_id || tag.fully_qualified_name || tag.name || tag;
+    });
   };
 
   const handleSubmit = async (data: ProjectFormData) => {
     setIsSubmitting(true);
     try {
-      // Filter out empty tags and clean up data
+      // Normalize tags for backend compatibility
+      const normalizedTags = normalizeTagsForSubmission(data.tags || []);
+
       const cleanedData = {
         ...data,
-        tags: data.tags?.filter(tag => tag.trim() !== '') || [],
+        tags: normalizedTags,
         team_ids: data.team_ids || [],
         project_type: data.project_type || 'TEAM',
       };
@@ -365,75 +376,26 @@ export function ProjectFormDialog({
 
             {/* Tags */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium">{t('projects:form.sections.tags')}</h3>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddTag}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  {t('projects:form.buttons.addTag')}
-                </Button>
-              </div>
+              <h3 className="text-lg font-medium">{t('projects:form.sections.tags')}</h3>
 
-              {tagFields.length === 0 ? (
-                <div className="text-center py-4 text-muted-foreground">{t('projects:form.placeholders.noTagsHelp')}</div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {tagFields.map((field, index) => {
-                    const tagValue = form.watch(`tags.${index}`) || '';
-                    if (!tagValue.trim()) {
-                      return (
-                        <div key={field.id} className="flex items-center gap-1">
-                          <FormField
-                            control={form.control}
-                            name={`tags.${index}`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <Input
-                                    placeholder={t('projects:form.placeholders.enterTag')}
-                                    className="w-24 h-8 text-xs"
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeTag(index)}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                          >
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      );
-                    }
-                    return (
-                      <Badge
-                        key={field.id}
-                        variant="outline"
-                        className="flex items-center gap-1 px-2 py-1"
-                      >
-                        {tagValue}
-                        <button
-                          type="button"
-                          onClick={() => removeTag(index)}
-                          className="ml-1 hover:bg-destructive hover:text-destructive-foreground rounded-full p-0.5"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </Badge>
-                    );
-                  })}
-                </div>
-              )}
+              <FormField
+                control={form.control}
+                name="tags"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('projects:form.labels.tags')}</FormLabel>
+                    <FormControl>
+                      <TagSelector
+                        value={field.value || []}
+                        onChange={field.onChange}
+                        placeholder={t('projects:form.placeholders.selectTags')}
+                        allowCreate={true}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             <DialogFooter>
