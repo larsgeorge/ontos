@@ -21,7 +21,8 @@
       "description": "Description",
       "projectType": "Project Type",
       "assignTeams": "Assign Teams",
-      "assignedTeams": "Assigned Teams:"
+      "assignedTeams": "Assigned Teams:",
+      "tags": "Tags"
     },
     "placeholders": {
       "name": "Enter project name",
@@ -31,6 +32,7 @@
       "assignTeams": "Select teams to assign to this project",
       "noTeamsAvailable": "No teams available",
       "allTeamsAssigned": "All teams already assigned",
+      "selectTags": "Select tags...",
       "enterTag": "Enter tag",
       "noTagsHelp": "No tags added yet. Click \"Add Tag\" to add project tags."
     },

@@ -21,7 +21,8 @@
       "description": "Beschreibung",
       "projectType": "Projekttyp",
       "assignTeams": "Teams zuweisen",
-      "assignedTeams": "Zugewiesene Teams:"
+      "assignedTeams": "Zugewiesene Teams:",
+      "tags": "Tags"
     },
     "placeholders": {
       "name": "Projektnamen eingeben",
@@ -31,6 +32,7 @@
       "assignTeams": "Teams für dieses Projekt auswählen",
       "noTeamsAvailable": "Keine Teams verfügbar",
       "allTeamsAssigned": "Alle Teams bereits zugewiesen",
+      "selectTags": "Tags auswählen...",
       "enterTag": "Tag eingeben",
       "noTagsHelp": "Noch keine Tags hinzugefügt. Klicken Sie auf \"Tag hinzufügen\", um Tags hinzuzufügen."
     },

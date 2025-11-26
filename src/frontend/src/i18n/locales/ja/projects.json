@@ -21,7 +21,8 @@
       "description": "説明",
       "projectType": "プロジェクト種別",
       "assignTeams": "チームを割り当て",
-      "assignedTeams": "割り当て済みのチーム:"
+      "assignedTeams": "割り当て済みのチーム:",
+      "tags": "タグ"
     },
     "placeholders": {
       "name": "プロジェクト名を入力",
@@ -31,6 +32,7 @@
       "assignTeams": "このプロジェクトに割り当てるチームを選択",
       "noTeamsAvailable": "利用可能なチームはありません",
       "allTeamsAssigned": "すべてのチームがすでに割り当て済みです",
+      "selectTags": "タグを選択...",
       "enterTag": "タグを入力",
       "noTagsHelp": "まだタグが追加されていません。\"タグを追加\"をクリックしてプロジェクトタグを追加してください。"
     },

@@ -21,7 +21,8 @@
       "description": "Description",
       "projectType": "Type de projet",
       "assignTeams": "Affecter des équipes",
-      "assignedTeams": "Équipes attribuées :"
+      "assignedTeams": "Équipes attribuées :",
+      "tags": "Étiquettes"
     },
     "placeholders": {
       "name": "Saisir le nom du projet",
@@ -31,6 +32,7 @@
       "assignTeams": "Sélectionner des équipes à attribuer à ce projet",
       "noTeamsAvailable": "Aucune équipe disponible",
       "allTeamsAssigned": "Toutes les équipes déjà attribuées",
+      "selectTags": "Sélectionner des étiquettes...",
       "enterTag": "Saisir une étiquette",
       "noTagsHelp": "Aucune étiquette ajoutée pour le moment. Cliquez sur \"Ajouter une étiquette\" pour ajouter des étiquettes de projet."
     },

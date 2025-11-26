@@ -21,7 +21,8 @@
       "description": "Descripción",
       "projectType": "Tipo de proyecto",
       "assignTeams": "Asignar equipos",
-      "assignedTeams": "Equipos asignados:"
+      "assignedTeams": "Equipos asignados:",
+      "tags": "Etiquetas"
     },
     "placeholders": {
       "name": "Ingrese el nombre del proyecto",
@@ -31,6 +32,7 @@
       "assignTeams": "Seleccione equipos para asignar a este proyecto",
       "noTeamsAvailable": "No hay equipos disponibles",
       "allTeamsAssigned": "Todos los equipos ya asignados",
+      "selectTags": "Seleccionar etiquetas...",
       "enterTag": "Ingrese etiqueta",
       "noTagsHelp": "Aún no se han agregado etiquetas. Haga clic en \"Agregar etiqueta\" para agregar etiquetas del proyecto."
     },
