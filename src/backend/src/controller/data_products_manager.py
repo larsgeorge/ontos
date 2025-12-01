@@ -39,6 +39,8 @@ from src.models.data_products import (
 from src.models.users import UserInfo
 from src.repositories.data_products_repository import data_product_repo
 from src.repositories.teams_repository import team_repo
+from src.repositories.genie_spaces_repository import genie_space_repo
+from src.models.genie_spaces import GenieSpaceCreate
 from src.common.search_interfaces import SearchableAsset, SearchIndexItem
 from src.common.search_registry import searchable_asset
 from src.controller.notifications_manager import NotificationsManager
@@ -47,6 +49,7 @@ from src.repositories.tags_repository import entity_tag_repo
 from src.models.tags import AssignedTagCreate
 from src.common.logging import get_logger
 from src.common.database import get_session_factory
+from src.common import genie_client
 
 logger = get_logger(__name__)
 
@@ -880,42 +883,115 @@ class DataProductsManager(SearchableAsset):
             logger.error(f"Failed to send initial Genie Space notification: {e}", exc_info=True)
 
         # Schedule background task
-        asyncio.create_task(self._simulate_genie_space_completion(request.product_ids, user_email))
-        logger.info(f"Genie Space background simulation scheduled for: {product_ids_str}")
+        asyncio.create_task(self._create_genie_space_task(request.product_ids, user_email))
+        logger.info(f"Genie Space creation task scheduled for: {product_ids_str}")
 
-    async def _simulate_genie_space_completion(self, product_ids: List[str], user_email: str):
-        """Simulates Genie Space completion and sends notification."""
-        logger.info(f"Starting Genie Space simulation for products: {product_ids}. Waiting...")
-        await asyncio.sleep(15)
-        logger.info(f"Simulation wait complete for products: {product_ids}.")
+    async def _create_genie_space_task(self, product_ids: List[str], user_email: str):
+        """Real Genie Space creation with Databricks API."""
+        logger.info(f"Starting Genie Space creation for products: {product_ids}")
 
-        product_ids_str = ", ".join(product_ids)
-        mock_genie_space_url = f"https://<databricks-host>/genie-space/{uuid.uuid4()}"
-        logger.info(f"Simulated Genie Space creation completed. Mock URL: {mock_genie_space_url}")
-
-        if not self._notifications_manager:
-            logger.error("Cannot send Genie Space completion notification: NotificationsManager not configured.")
-            return
-
+        # Get new database session for background task
         session_factory = get_session_factory()
         if not session_factory:
-            logger.error("Cannot send notification: Database session factory not available.")
+            logger.error("Cannot create Genie Space: Database session factory not available.")
             return
 
         try:
-            with session_factory() as db_session:
-                logger.info(f"Creating completion notification for {user_email}...")
-                await self._notifications_manager.create_notification(
-                    db=db_session,
-                    user_id=user_email,
-                    title="Genie Space Ready",
-                    description=f"Your Genie Space for Data Product(s) {product_ids_str} is ready.",
-                    link=mock_genie_space_url,
-                    status="success"
+            with session_factory() as db:
+                # Step 1: Collect datasets from output ports
+                logger.info("Collecting datasets from output ports...")
+                datasets = genie_client.collect_datasets_from_products(product_ids, db)
+
+                if not datasets:
+                    logger.warning("No datasets found in output ports")
+                    raise ValueError("No datasets found to add to Genie Space")
+
+                logger.info(f"Found {len(datasets)} datasets: {datasets}")
+
+                # Step 2: Collect rich text metadata
+                logger.info("Collecting rich text metadata...")
+                metadata_map = genie_client.collect_rich_text_metadata(product_ids, db)
+
+                # Step 3: Get product details for formatting
+                products = [self._repo.get(db, id=pid) for pid in product_ids if self._repo.get(db, id=pid)]
+
+                # Step 4: Format metadata as instructions
+                instructions = genie_client.format_metadata_for_genie(metadata_map, products)
+                logger.info(f"Formatted {len(instructions)} characters of metadata")
+
+                # Step 5: Create Genie Space via API
+                space_name = f"Data Product Space ({len(products)} products)"
+                if len(products) == 1:
+                    space_name = f"{products[0].name} - Genie Space"
+
+                logger.info(f"Creating Genie Space: {space_name}")
+                result = await genie_client.create_genie_space(
+                    ws_client=self._ws_client,
+                    name=space_name,
+                    datasets=datasets,
+                    description=f"Genie Space for {len(products)} Data Product(s)",
+                    instructions=instructions
                 )
-                logger.info(f"Completion notification created for {user_email}.")
+
+                # Step 6: Persist to database
+                genie_space_create = GenieSpaceCreate(
+                    space_id=result['space_id'],
+                    space_name=space_name,
+                    space_url=result['space_url'],
+                    status=result['status'],
+                    datasets=datasets,
+                    product_ids=product_ids,
+                    instructions=instructions,
+                    created_by=user_email
+                )
+                genie_space_db = genie_space_repo.create(db, obj_in=genie_space_create)
+                db.commit()
+
+                logger.info(f"Genie Space persisted: {genie_space_db.id}")
+
+                # Step 7: Send success notification
+                if self._notifications_manager:
+                    await self._notifications_manager.create_notification(
+                        db=db,
+                        user_id=user_email,
+                        title="Genie Space Ready",
+                        description=f"Your Genie Space '{space_name}' has been created with {len(datasets)} datasets.",
+                        link=result['space_url'],
+                        status="success"
+                    )
+
         except Exception as e:
-            logger.error(f"Failed to send Genie Space completion notification: {e}", exc_info=True)
+            logger.error(f"Failed to create Genie Space: {e}", exc_info=True)
+
+            # Send failure notification
+            if self._notifications_manager:
+                try:
+                    with session_factory() as db:
+                        await self._notifications_manager.create_notification(
+                            db=db,
+                            user_id=user_email,
+                            title="Genie Space Creation Failed",
+                            description=f"Failed to create Genie Space: {str(e)}",
+                            status="error"
+                        )
+                except Exception as notify_error:
+                    logger.error(f"Failed to send error notification: {notify_error}")
+
+            # Persist failed attempt
+            try:
+                with session_factory() as db:
+                    genie_space_create = GenieSpaceCreate(
+                        space_id=f"failed-{uuid.uuid4()}",
+                        space_name="Failed Space",
+                        status="failed",
+                        product_ids=product_ids,
+                        created_by=user_email,
+                        error_message=str(e)
+                    )
+                    genie_space_repo.create(db, obj_in=genie_space_create)
+                    db.commit()
+            except Exception as persist_error:
+                logger.error(f"Failed to persist error: {persist_error}")
 
     def load_initial_data(self, db: Session) -> bool:
         """Load ODPS v1.0.0 data products from YAML file into the database if empty."""

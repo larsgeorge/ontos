@@ -8,6 +8,7 @@ from .data_domains import DataDomain
 from .tags import TagDb, TagNamespaceDb, TagNamespacePermissionDb, EntityTagAssociationDb
 from .teams import TeamDb, TeamMemberDb
 from .projects import ProjectDb, project_team_association
+from .genie_spaces import GenieSpaceDb
 
 __all__ = [
     "DataProductDb",
@@ -24,4 +25,5 @@ __all__ = [
     "TeamMemberDb",
     "ProjectDb",
     "project_team_association",
+    "GenieSpaceDb",
 ] 
