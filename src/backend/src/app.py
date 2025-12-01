@@ -243,9 +243,9 @@ async def get_app_version():
 if not os.environ.get('TESTING'):
     @app.get("/{full_path:path}")
     def serve_spa(full_path: str):
-        # Only catch routes that aren't API routes or static files
+        # Only catch routes that aren't API routes, static files, or API docs
         # This check might be redundant now due to ordering, but safe to keep
-        if not full_path.startswith("api/") and not full_path.startswith("static/"):
+        if not full_path.startswith("api/") and not full_path.startswith("static/") and full_path not in ["docs", "redoc", "openapi.json"]:
             # Ensure the path exists before serving
             spa_index = STATIC_ASSETS_PATH / "index.html"
             if spa_index.is_file():
